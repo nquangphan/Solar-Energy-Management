@@ -1,0 +1,10 @@
+/* GENERATED from design-system/icons/icons.json — do not edit by hand. */
+
+/* Base icon: 18px, inherits the context text colour via currentColor
+   (teal when active, muted otherwise). Do NOT hard-code an icon colour. */
+svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fill:none;stroke:currentColor}
+svg.icn.icn-22{width:22px;height:22px}
+svg.icn.icn-16{width:16px;height:16px}
+svg.icn.icn-15{width:15px;height:15px}
+svg.icn.icn-14{width:14px;height:14px}
+svg.icn.icn-xs{width:13px;height:13px}

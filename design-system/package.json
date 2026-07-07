@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Single source of truth for Phương Nam Solar design tokens; generates web + mobile outputs.",
   "scripts": {
-    "build": "node tokens/build-tokens.mjs",
-    "test": "node --test \"tokens/**/*.test.mjs\""
+    "build": "node tokens/build-tokens.mjs && node icons/build-icons.mjs",
+    "build:tokens": "node tokens/build-tokens.mjs",
+    "build:icons": "node icons/build-icons.mjs",
+    "test": "node --test \"**/*.test.mjs\""
   }
 }

@@ -12,6 +12,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # Renders the shared icon sprite as inline SVG strings with currentColor
+  # (Story 1.2). Icon data is bundled in app_icons.dart — 0 network assets.
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
