@@ -1,0 +1,1910 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phương Nam Solar — Mockup toàn màn hình (Viền nét / blueprint)</title>
+<style>
+/* =====================================================================
+   PHƯƠNG NAM SOLAR — ALL SCREENS MOCKUP
+   Hướng thị giác: Direction 4 "Viền nét" (blueprint) — phẳng, KHÔNG bóng,
+   viền 1.5px teal, nhãn micro chữ hoa, teal làm mực.
+   Bảng màu: Theme #2 "Năng Lượng Sạch" (Clean Teal + Lime).
+   Light mode. Không JS, không network (điều hướng bằng anchor).
+   ---------------------------------------------------------------------
+   TOKEN HEX (documented):
+     primary teal   #0E9F8E   teal-700 #0B8578   teal-050 #E6F6F4
+     accent  lime   #A3E635   lime-600 #7DB800    lime-050 #F1FBDD
+     ink            #0C1F1C   ink-2   #334E49      muted   #4E6B66
+     line           #DBEBE7   bg      #F4FAF8      surface #FFFFFF   surface-2 #ECF6F3
+     ok #159A6B  warn #D98A0B  danger #E14B4B  info #0E8FA8
+   STATUS CHIP (9 states, theme #2):
+     Báo giá     bg#EAF3F1 fg#3A5450 bd#CFE5E0
+     Chờ duyệt   bg#FBF0DA fg#8A5C08 bd#EFD9A8
+     Đã chốt     bg#DCF3EF fg#0B7264 bd#B7E5DD
+     Đã cọc      bg#E7F5D9 fg#4B7A15 bd#CDE9AC
+     Đang thi công bg#FCEAD4 fg#985B08 bd#F2D3A6
+     Nghiệm thu  bg#E4EEFA fg#345C9C bd#C4D8F0
+     Đang giao   bg#DEF1F6 fg#0C6B84 bd#B7E0EB
+     Hoàn thành  bg#DEF3E6 fg#137A4C bd#B7E5CA
+     Huỷ         bg#FAE6E6 fg#B22C2C bd#F0C7C7
+   ===================================================================== */
+
+:root{
+  --teal:#0E9F8E; --teal-700:#0B8578; --teal-050:#E6F6F4;
+  --lime:#A3E635; --lime-600:#7DB800; --lime-050:#F1FBDD;
+  --ink:#0C1F1C; --ink-2:#334E49; --muted:#4E6B66; --line:#DBEBE7;
+  --bg:#F4FAF8; --surface:#FFFFFF; --surface-2:#ECF6F3;
+  --ok:#159A6B; --warn:#D98A0B; --danger:#E14B4B; --info:#0E8FA8;
+  --r-sm:8px; --r:10px; --r-lg:12px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  line-height:1.42;
+}
+a{color:inherit;text-decoration:none}
+.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.row{display:flex;align-items:center}
+.sp{flex:1}
+
+/* ---------- Micro label (uppercase blueprint) ---------- */
+.micro{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal)}
+.micro.muted{color:var(--muted)}
+.micro.ink{color:var(--ink)}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:1.5px solid var(--teal);background:var(--surface);color:var(--teal-700);
+  font-weight:800;font-size:13px;border-radius:var(--r);padding:9px 15px;cursor:pointer}
+.btn--primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn--accent{background:var(--lime-050);color:var(--lime-600);border-color:var(--lime)}
+.btn--ghost{border-color:var(--line);color:var(--ink-2)}
+.btn--danger{border-color:var(--danger);color:var(--danger)}
+.btn--sm{padding:5px 10px;font-size:11.5px;border-radius:var(--r-sm)}
+.btn--wide{width:100%}
+
+/* ---------- Card + blueprint frame ---------- */
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-lg)}
+.card--ink{border-color:var(--ink)}
+.card--teal{border-color:var(--teal)}
+.frame{position:relative;border:1.5px solid var(--ink);border-radius:var(--r-lg);background:var(--surface)}
+.frame > .frame-label{position:absolute;top:-8px;left:14px;background:var(--surface);padding:0 8px;
+  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.frame.on-bg > .frame-label{background:var(--bg)}
+
+/* ---------- Fields ---------- */
+.field{display:block;width:100%;border:1.5px solid var(--line);border-radius:var(--r);
+  background:var(--surface);padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:var(--font)}
+.field::placeholder{color:#9fb2ad}
+.field:focus,.field.focus{border-color:var(--teal);outline:none}
+.field-lg{padding:13px 14px;font-size:15px}
+.flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
+.fgroup{margin-bottom:13px}
+
+/* ---------- Status chips ---------- */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:3px 9px;border-radius:999px;border:1.5px solid transparent;white-space:nowrap}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+.chip--baogia    {background:#EAF3F1;color:#3A5450;border-color:#CFE5E0}
+.chip--choduyet  {background:#FBF0DA;color:#8A5C08;border-color:#EFD9A8}
+.chip--dachot    {background:#DCF3EF;color:#0B7264;border-color:#B7E5DD}
+.chip--dacoc     {background:#E7F5D9;color:#4B7A15;border-color:#CDE9AC}
+.chip--thicong   {background:#FCEAD4;color:#985B08;border-color:#F2D3A6}
+.chip--nghiemthu {background:#E4EEFA;color:#345C9C;border-color:#C4D8F0}
+.chip--danggiao  {background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB}
+.chip--hoanthanh {background:#DEF3E6;color:#137A4C;border-color:#B7E5CA}
+.chip--huy       {background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7}
+
+/* customer type + scope flags */
+.ktype{font-size:10.5px;font-weight:800;color:var(--ink);border:1.5px solid var(--lime);
+  background:var(--lime-050);padding:3px 10px;border-radius:999px}
+.scope-flag{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:#fff}
+.scope-flag.on{border:1.5px solid var(--teal);color:var(--teal-700)}
+.scope-flag.off{border:1.5px solid var(--line);color:#9fb2ad;text-decoration:line-through}
+
+/* ---------- Banner ---------- */
+.banner{display:flex;gap:9px;align-items:flex-start;border:1.5px solid var(--warn);
+  background:#FBF0DA;color:#8A5C08;border-radius:var(--r);padding:10px 12px;font-size:12px;font-weight:600}
+.banner b{font-weight:800}
+.banner--info{border-color:var(--info);background:#DEF1F6;color:#0C6B84}
+.banner--danger{border-color:var(--danger);background:#FAE6E6;color:#B22C2C}
+
+/* ---------- Dense table ---------- */
+.table{width:100%;border-collapse:collapse;font-size:12.5px}
+.table th{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:8px 12px;background:var(--surface-2);border-bottom:1.5px solid var(--line)}
+.table td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table .num{text-align:right}
+.table .strong{color:var(--ink);font-weight:800}
+.table tr.zebra td{background:#F7FBFA}
+
+/* ---------- Stepper ---------- */
+.stepper{display:flex;flex-wrap:wrap;gap:0}
+.step{display:flex;align-items:center;gap:0}
+.step .node{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:64px;text-align:center}
+.step .bul{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#9fb2ad}
+.step .st-label{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;max-width:74px}
+.step .bar{width:26px;height:1.5px;background:var(--line);margin-top:-18px}
+.step.done .bul{border-color:var(--teal);background:var(--teal);color:#fff}
+.step.done .st-label{color:var(--ink-2)}
+.step.current .bul{border-color:var(--teal);background:#fff;color:var(--teal-700);box-shadow:0 0 0 3px var(--teal-050)}
+.step.current .st-label{color:var(--teal-700);font-weight:800}
+.step.gate .bul{border-style:dashed;color:#c3d3ce}
+.step.gate .st-label{color:#a9bab5}
+
+/* ==================== PAGE SHELL ==================== */
+.topbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);
+  border-bottom:1.5px solid var(--ink)}
+.topbar-inner{max-width:1400px;margin:0 auto;padding:10px 22px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.brand .logo{width:30px;height:30px;border:1.5px solid var(--teal);border-radius:8px;display:flex;
+  align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:16px}
+.brand .bname{font-size:15px;font-weight:900;letter-spacing:-.01em}
+.brand .bsub{font-size:11px;color:var(--muted);font-weight:600}
+.nav{display:flex;flex-wrap:wrap;gap:6px}
+.nav a{font-size:11.5px;font-weight:700;color:var(--ink-2);border:1.5px solid var(--line);
+  background:#fff;border-radius:999px;padding:4px 11px}
+.nav a:hover{border-color:var(--teal);color:var(--teal-700);background:var(--teal-050)}
+.nav .navgroup{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);
+  align-self:center;margin:0 2px 0 8px;border:0;background:none;padding:0}
+
+.page{max-width:1400px;margin:0 auto;padding:26px 22px 90px}
+.intro{border:1.5px solid var(--ink);border-radius:var(--r-lg);background:#fff;padding:16px 18px;margin-bottom:30px}
+.intro h1{font-size:20px;margin:0 0 6px;letter-spacing:-.02em}
+.intro p{margin:0;font-size:13px;color:var(--ink-2);max-width:960px}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
+.section{margin:0 0 46px;scroll-margin-top:120px}
+.section-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px;
+  padding-bottom:9px;border-bottom:1.5px solid var(--line)}
+.section-head .kick{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+.section-head h2{font-size:19px;margin:0;letter-spacing:-.01em}
+.section-head .desc{font-size:12.5px;color:var(--muted);flex:1;min-width:200px}
+.surface-tag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  border:1.5px solid var(--teal);color:var(--teal-700);border-radius:999px;padding:3px 10px}
+.surface-tag.web{border-color:var(--info);color:#0C6B84}
+
+.stage{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+.stage .cap{font-size:11px;color:var(--muted);font-weight:700;margin:0 0 8px;text-align:center}
+
+/* ==================== PHONE FRAME ==================== */
+.phone{width:330px;background:#0C1512;border-radius:40px;padding:9px;flex:0 0 auto}
+.phone .glass{position:relative;border-radius:32px;overflow:hidden;background:var(--surface);
+  height:700px;display:flex;flex-direction:column}
+.phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:116px;height:22px;
+  background:#0C1512;border-radius:0 0 14px 14px;z-index:40}
+.phone .sbar{height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;font-size:11.5px;font-weight:700;z-index:30}
+.phone .sbar .r{font-size:10px}
+.phone .pbody{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;background:var(--bg)}
+.pscroll{flex:1;overflow:auto;padding:12px 13px}
+.pscroll::-webkit-scrollbar{width:0}
+
+/* mobile app top bar */
+.mtop{padding:11px 13px;border-bottom:1.5px solid var(--ink);background:#fff}
+.mback{width:28px;height:28px;border:1.5px solid var(--line);border-radius:8px;background:#fff;
+  color:var(--teal-700);font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center}
+.mtabbar{display:flex;border-top:1.5px solid var(--line);background:#fff}
+.mtabbar a{flex:1;text-align:center;padding:7px 0 8px;font-size:9.5px;font-weight:700;color:var(--muted)}
+.mtabbar a .ic{display:block;font-size:16px;margin-bottom:1px;color:#a9bab5}
+.mtabbar a.active{color:var(--teal-700)}
+.mtabbar a.active .ic{color:var(--teal)}
+
+/* mobile sticky totals */
+.mtotals{border-top:1.5px solid var(--ink);background:#fff;padding:10px 13px 12px}
+
+/* ==================== WEB / BROWSER FRAME ==================== */
+.web{flex:1 1 760px;min-width:0;border:1.5px solid var(--ink);border-radius:var(--r-lg);overflow:hidden;background:#fff}
+.web-chrome{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface-2);
+  border-bottom:1.5px solid var(--line)}
+.web-dots{display:flex;gap:6px}
+.web-dots i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);display:block}
+.web-url{flex:1;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;
+  font-size:11px;color:var(--muted);font-weight:600}
+.web-app{display:flex;min-height:520px}
+.side{width:186px;flex:0 0 186px;border-right:1.5px solid var(--line);background:var(--surface-2);padding:13px 10px}
+.side .brand2{display:flex;align-items:center;gap:8px;margin:2px 4px 14px}
+.side .brand2 .logo{width:26px;height:26px;border:1.5px solid var(--teal);border-radius:7px;display:flex;
+  align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:14px}
+.side .brand2 .t{font-size:12.5px;font-weight:900}
+.side .navlink{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);
+  font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:2px}
+.side .navlink .ic{width:15px;text-align:center;color:#8fa39e}
+.side .navlink.active{background:#fff;border:1.5px solid var(--teal);color:var(--teal-700)}
+.side .navlink.active .ic{color:var(--teal)}
+.side .navsec{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a9bab5;margin:12px 10px 5px}
+.main{flex:1;min-width:0;padding:18px 20px;background:#fff}
+.main-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.main-head h3{font-size:17px;margin:0;letter-spacing:-.01em}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search{flex:1;min-width:160px;position:relative}
+.search .field{padding-left:32px}
+.search .si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#9fb2ad;font-size:13px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg a{font-size:11.5px;font-weight:700;color:var(--ink-2);padding:6px 12px;border-right:1.5px solid var(--line)}
+.seg a:last-child{border-right:0}
+.seg a.active{background:var(--teal);color:#fff}
+
+/* tabs */
+.tabs{display:flex;gap:2px;border-bottom:1.5px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+.tabs a{font-size:12px;font-weight:700;color:var(--muted);padding:8px 12px;border-bottom:2px solid transparent;margin-bottom:-1.5px}
+.tabs a.active{color:var(--teal-700);border-bottom-color:var(--teal)}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{border:1.5px solid var(--line);border-radius:var(--r-lg);padding:12px 14px}
+.kpi .k-l{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .k-v{font-size:23px;font-weight:900;letter-spacing:-.02em;margin-top:5px}
+.kpi .k-d{font-size:11px;font-weight:700;color:var(--ok);margin-top:2px}
+.kpi.accent{border-color:var(--teal);background:var(--teal-050)}
+
+/* bar chart */
+.chart{display:flex;align-items:flex-end;gap:10px;height:150px;padding:8px 4px 0}
+.chart .bar{flex:1;background:var(--teal);border-radius:5px 5px 0 0;position:relative;min-width:14px}
+.chart .bar.lo{background:var(--lime);opacity:.9}
+.chart .bar span{position:absolute;bottom:-19px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--muted);font-weight:700}
+
+.list-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1.5px solid var(--line);
+  border-radius:var(--r);margin-bottom:8px;background:#fff}
+.list-row:hover{border-color:var(--teal)}
+
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px}
+.kv dt{color:var(--muted);font-weight:700}
+.kv dd{margin:0;color:var(--ink);font-weight:600}
+
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:74px;height:74px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;color:#b7c9c4;font-size:20px}
+.thumb.add{border-style:dashed;border-color:var(--teal);color:var(--teal-700);font-weight:800}
+
+/* document preview (contract / invoice) */
+.doc{border:1.5px solid var(--line);border-radius:var(--r);background:#fff;padding:22px 26px;
+  font-size:12px;color:var(--ink-2);max-width:520px}
+.doc h4{text-align:center;font-size:14px;margin:0 0 2px;color:var(--ink)}
+.doc .doc-sub{text-align:center;font-size:10.5px;color:var(--muted);margin-bottom:14px}
+.doc p{margin:0 0 8px}
+.doc .sig{display:flex;justify-content:space-between;margin-top:22px;font-size:11px;text-align:center}
+
+/* modal overlay (rendered inline as a card) */
+.overlay{background:var(--surface-2);border:1.5px dashed var(--line);border-radius:var(--r-lg);
+  padding:20px;display:flex;justify-content:center}
+.modal{width:340px;background:#fff;border:1.5px solid var(--ink);border-radius:var(--r-lg);overflow:hidden}
+.modal-head{padding:13px 16px;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal-head .mt{font-size:14px;font-weight:800}
+.modal-body{padding:16px}
+.modal-foot{padding:12px 16px;border-top:1.5px solid var(--line);display:flex;gap:8px}
+
+/* share sheet */
+.sheet{width:300px;background:#fff;border:1.5px solid var(--ink);border-radius:18px 18px 0 0;overflow:hidden}
+.sheet-grab{width:38px;height:4px;background:var(--line);border-radius:99px;margin:9px auto 4px}
+.share-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:8px 16px 16px}
+.share-app{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--ink-2)}
+.share-app .ic{width:48px;height:48px;border-radius:14px;border:1.5px solid var(--line);display:flex;
+  align-items:center;justify-content:center;font-size:20px;color:var(--teal)}
+
+.pill{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:999px;
+  border:1.5px solid var(--line);color:var(--muted)}
+.pill.ok{border-color:var(--ok);color:var(--ok);background:#DEF3E6}
+.pill.warn{border-color:var(--warn);color:#8A5C08;background:#FBF0DA}
+
+.tick{color:var(--teal);font-weight:900}
+.cross{color:#c3d3ce;font-weight:900}
+
+.notecard{background:var(--surface-2);border-radius:var(--r-sm);padding:8px 10px;font-size:11.5px;color:var(--ink-2)}
+
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .web-app{flex-direction:column}
+  .side{width:auto;flex:none;border-right:0;border-bottom:1.5px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .side .brand2,.side .navsec{width:100%}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================ STICKY INDEX ============================ -->
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="logo">☀</div>
+      <div>
+        <div class="bname">Phương Nam Solar</div>
+        <div class="bsub">App quản lý nội bộ · Mockup toàn màn hình · Viền nét / blueprint</div>
+      </div>
+    </div>
+    <div class="nav">
+      <span class="navgroup">Auth</span>
+      <a href="#s-login">Đăng nhập</a>
+      <span class="navgroup">Tổng quan</span>
+      <a href="#s-dashboard">Dashboard</a>
+      <span class="navgroup">Đơn</span>
+      <a href="#s-orders">Danh sách đơn</a>
+      <a href="#s-quote">Báo giá / giỏ hàng</a>
+      <a href="#s-customer">Khách hàng</a>
+      <a href="#s-detail">Chi tiết đơn</a>
+      <a href="#s-status-modal">Chuyển trạng thái</a>
+      <a href="#s-share">Share sheet</a>
+      <span class="navgroup">Tài chính</span>
+      <a href="#s-discount">Duyệt chiết khấu</a>
+      <a href="#s-payment">Thanh toán</a>
+      <a href="#s-contract">Hợp đồng</a>
+      <a href="#s-invoice">Hoá đơn</a>
+      <span class="navgroup">Kho</span>
+      <a href="#s-catalog">Danh mục &amp; giá</a>
+      <a href="#s-inventory">Tồn kho</a>
+      <span class="navgroup">Hệ thống</span>
+      <a href="#s-permissions">Phân quyền</a>
+      <a href="#s-audit">Audit log</a>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="intro">
+    <h1>Bộ màn hình — Phương Nam Solar (Phase 1)</h1>
+    <p>Toàn bộ màn hình chính của app nội bộ, một ngôn ngữ thị giác <strong>“Viền nét / blueprint”</strong>: phẳng, không đổ bóng, viền 1.5px teal, nhãn micro chữ hoa, teal làm mực — trên bảng màu <strong>“Năng Lượng Sạch”</strong> (teal #0E9F8E + lime #A3E635). Màn hiện trường dựng trong khung điện thoại (Flutter), màn văn phòng dựng trong khung trình duyệt (React). Dữ liệu tiếng Việt thật; điều hướng bằng liên kết neo, không JavaScript.</p>
+    <div class="legend">
+      <span class="chip chip--baogia"><span class="dot"></span>Báo giá</span>
+      <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span>
+      <span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span>
+      <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+      <span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span>
+      <span class="chip chip--nghiemthu"><span class="dot"></span>Nghiệm thu</span>
+      <span class="chip chip--danggiao"><span class="dot"></span>Đang giao</span>
+      <span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span>
+      <span class="chip chip--huy"><span class="dot"></span>Huỷ</span>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       1 · ĐĂNG NHẬP (web + mobile)
+  ========================================================================== -->
+  <section class="section" id="s-login">
+    <div class="section-head">
+      <span class="kick">Auth · FR-22</span>
+      <h2>Đăng nhập</h2>
+      <span class="desc">Đăng nhập áp đúng bộ Quyền của Account; UI ẩn/hiện chức năng theo quyền hiệu lực.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+
+      <!-- WEB login -->
+      <div class="web" style="flex:1 1 640px">
+        <div class="web-chrome">
+          <div class="web-dots"><i></i><i></i><i></i></div>
+          <div class="web-url">app.phuongnamsolar.vn/dang-nhap</div>
+        </div>
+        <div style="display:flex;min-height:440px">
+          <div style="flex:1;background:var(--teal-050);border-right:1.5px solid var(--line);padding:40px 34px;display:flex;flex-direction:column;justify-content:center">
+            <div class="brand" style="margin-bottom:18px">
+              <div class="logo" style="width:40px;height:40px;font-size:20px">☀</div>
+              <div><div class="bname" style="font-size:18px">Phương Nam Solar</div><div class="bsub">Máy tăng tốc báo giá &amp; đơn hàng</div></div>
+            </div>
+            <p style="font-size:13px;color:var(--ink-2);max-width:300px;margin:0">Báo giá vài phút thay vì 2 ngày. Dựng đơn tại hiện trường, chốt và chia sẻ ngay tại chỗ.</p>
+            <div class="frame on-bg" style="margin-top:26px;padding:12px 14px;background:#fff;max-width:300px">
+              <span class="frame-label">Phiên bản</span>
+              <div style="font-size:12px;color:var(--muted);font-weight:600">Phase 1 · Web (React) + Mobile (Flutter) · chung design system</div>
+            </div>
+          </div>
+          <div class="main" style="flex:0 0 340px;display:flex;flex-direction:column;justify-content:center">
+            <span class="micro">Đăng nhập nội bộ</span>
+            <h3 style="margin:6px 0 18px">Chào mừng trở lại</h3>
+            <div class="fgroup"><span class="flabel">Tài khoản</span><input class="field" value="hung.ks@phuongnamsolar.vn"></div>
+            <div class="fgroup"><span class="flabel">Mật khẩu</span><input class="field" type="password" value="••••••••••"></div>
+            <div class="row" style="justify-content:space-between;margin-bottom:16px">
+              <label style="font-size:12px;color:var(--ink-2);font-weight:600"><span class="tick">▣</span> Ghi nhớ thiết bị</label>
+              <a class="micro" href="#s-login" style="color:var(--teal-700)">Quên mật khẩu?</a>
+            </div>
+            <button class="btn btn--primary btn--wide">Đăng nhập</button>
+            <p style="font-size:11px;color:var(--muted);margin-top:14px">Cần cấp tài khoản? Liên hệ Admin (Tú) — FR-16.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MOBILE login -->
+      <div>
+        <p class="cap">Mobile · Flutter</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody"><div class="pscroll" style="display:flex;flex-direction:column;justify-content:center">
+            <div style="text-align:center;margin-bottom:22px">
+              <div class="logo" style="width:56px;height:56px;font-size:28px;margin:0 auto 12px;border:1.5px solid var(--teal);border-radius:16px;display:flex;align-items:center;justify-content:center;color:var(--teal)">☀</div>
+              <div style="font-size:17px;font-weight:900">Phương Nam Solar</div>
+              <div style="font-size:11.5px;color:var(--muted);font-weight:600">App khảo sát &amp; báo giá</div>
+            </div>
+            <div class="fgroup"><span class="flabel">Tài khoản</span><input class="field field-lg" value="hung.ks"></div>
+            <div class="fgroup"><span class="flabel">Mật khẩu</span><input class="field field-lg" type="password" value="••••••••"></div>
+            <button class="btn btn--primary btn--wide" style="padding:13px;margin-top:4px">Đăng nhập</button>
+            <div class="row" style="justify-content:center;gap:8px;margin-top:16px">
+              <span class="micro muted">Sinh trắc học</span>
+              <span class="scope-flag on" style="border-radius:8px">☺ Face ID</span>
+            </div>
+          </div></div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       2 · DASHBOARD (web)
+  ========================================================================== -->
+  <section class="section" id="s-dashboard">
+    <div class="section-head">
+      <span class="kick">Tổng quan · FR-19</span>
+      <h2>Dashboard vận hành</h2>
+      <span class="desc">Doanh thu ngày/tuần/tháng, số lượng đơn, tổng hợp đơn theo trạng thái (Quản lý/Chủ).</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/dashboard</div></div>
+      <div class="web-app">
+        <div class="side">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink active" href="#s-dashboard"><span class="ic">▦</span> Dashboard</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customer"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Tồn kho</a>
+          <div class="navsec">Tài chính</div>
+          <a class="navlink" href="#s-discount"><span class="ic">%</span> Duyệt chiết khấu</a>
+          <a class="navlink" href="#s-payment"><span class="ic">₫</span> Thanh toán</a>
+          <a class="navlink" href="#s-invoice"><span class="ic">▧</span> Hoá đơn</a>
+          <div class="navsec">Hệ thống</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit log</a>
+        </div>
+        <div class="main">
+          <div class="main-head">
+            <h3>Dashboard</h3>
+            <div class="sp"></div>
+            <div class="seg"><a href="#s-dashboard">Ngày</a><a href="#s-dashboard">Tuần</a><a class="active" href="#s-dashboard">Tháng</a></div>
+          </div>
+
+          <div class="kpis" style="margin-bottom:16px">
+            <div class="kpi accent"><div class="k-l">Doanh thu tháng 7</div><div class="k-v mono">1,42 tỷ</div><div class="k-d">▲ 18% so tháng 6</div></div>
+            <div class="kpi"><div class="k-l">Doanh thu tuần</div><div class="k-v mono">386 tr</div><div class="k-d">▲ 6%</div></div>
+            <div class="kpi"><div class="k-l">Doanh thu hôm nay</div><div class="k-v mono">83 tr</div><div class="k-d" style="color:var(--muted)">2 đơn chốt</div></div>
+            <div class="kpi"><div class="k-l">Đơn mới trong tháng</div><div class="k-v mono">47</div><div class="k-d">▲ 9 đơn</div></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
+            <div class="frame" style="padding:16px 16px 26px">
+              <span class="frame-label">Doanh thu 8 tuần gần nhất</span>
+              <div class="chart">
+                <div class="bar" style="height:44%"><span>T22</span></div>
+                <div class="bar" style="height:60%"><span>T23</span></div>
+                <div class="bar" style="height:52%"><span>T24</span></div>
+                <div class="bar" style="height:72%"><span>T25</span></div>
+                <div class="bar" style="height:66%"><span>T26</span></div>
+                <div class="bar lo" style="height:84%"><span>T27</span></div>
+                <div class="bar" style="height:78%"><span>T28</span></div>
+                <div class="bar lo" style="height:96%"><span>T29</span></div>
+              </div>
+            </div>
+            <div class="frame" style="padding:16px">
+              <span class="frame-label">Đơn theo trạng thái</span>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div class="row"><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span><span class="sp"></span><b class="mono">12</b></div>
+                <div class="row"><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span><span class="sp"></span><b class="mono">3</b></div>
+                <div class="row"><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span><span class="sp"></span><b class="mono">9</b></div>
+                <div class="row"><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span><span class="sp"></span><b class="mono">7</b></div>
+                <div class="row"><span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span><span class="sp"></span><b class="mono">5</b></div>
+                <div class="row"><span class="chip chip--danggiao"><span class="dot"></span>Đang giao</span><span class="sp"></span><b class="mono">2</b></div>
+                <div class="row"><span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span><span class="sp"></span><b class="mono">8</b></div>
+                <div class="row"><span class="chip chip--huy"><span class="dot"></span>Huỷ</span><span class="sp"></span><b class="mono">1</b></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE dashboard -->
+      <div>
+        <p class="cap">Mobile · tổng quan nhanh</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Tổng quan</span><div style="font-size:15px;font-weight:800">Dashboard</div></div><span class="micro muted">Sơn · QL</span></div>
+              <div class="seg" style="width:100%;margin-top:9px"><a href="#s-dashboard" style="flex:1;text-align:center">Ngày</a><a href="#s-dashboard" style="flex:1;text-align:center">Tuần</a><a class="active" href="#s-dashboard" style="flex:1;text-align:center">Tháng</a></div>
+            </div>
+            <div class="pscroll">
+              <div class="kpi accent" style="margin-bottom:9px"><div class="k-l">Doanh thu tháng 7</div><div class="k-v mono">1,42 tỷ</div><div class="k-d">▲ 18% so tháng 6</div></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:11px">
+                <div class="kpi"><div class="k-l">Tuần</div><div class="k-v mono" style="font-size:18px">386 tr</div><div class="k-d">▲ 6%</div></div>
+                <div class="kpi"><div class="k-l">Hôm nay</div><div class="k-v mono" style="font-size:18px">83 tr</div><div class="k-d" style="color:var(--muted)">2 đơn</div></div>
+                <div class="kpi"><div class="k-l">Đơn mới/tháng</div><div class="k-v mono" style="font-size:18px">47</div><div class="k-d">▲ 9 đơn</div></div>
+                <div class="kpi"><div class="k-l">Cần follow-up</div><div class="k-v mono" style="font-size:18px">12</div><div class="k-d" style="color:var(--warn)">chưa chốt</div></div>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px">
+                <span class="frame-label">Đơn theo trạng thái</span>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <div class="row"><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span><span class="sp"></span><b class="mono">12</b></div>
+                  <div class="row"><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span><span class="sp"></span><b class="mono">3</b></div>
+                  <div class="row"><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span><span class="sp"></span><b class="mono">7</b></div>
+                  <div class="row"><span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span><span class="sp"></span><b class="mono">5</b></div>
+                  <div class="row"><span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span><span class="sp"></span><b class="mono">8</b></div>
+                </div>
+              </div>
+            </div>
+            <div class="mtabbar">
+              <a class="active" href="#s-dashboard"><span class="ic">▦</span>Tổng quan</a>
+              <a href="#s-orders"><span class="ic">☰</span>Đơn</a>
+              <a href="#s-quote"><span class="ic">＋</span>Báo giá</a>
+              <a href="#s-customer"><span class="ic">☺</span>Khách</a>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       3 · DANH SÁCH ĐƠN (web + mobile)
+  ========================================================================== -->
+  <section class="section" id="s-orders">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-10</span>
+      <h2>Danh sách đơn</h2>
+      <span class="desc">Lọc theo trạng thái, tab “Cần follow-up” (báo giá chưa chốt), tìm kiếm; mỗi dòng có chip trạng thái.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+
+      <div class="web" style="flex:1 1 660px">
+        <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang</div></div>
+        <div class="web-app">
+          <div class="side">
+            <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+            <a class="navlink" href="#s-dashboard"><span class="ic">▦</span> Dashboard</a>
+            <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+            <a class="navlink" href="#s-customer"><span class="ic">☺</span> Khách hàng</a>
+            <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+            <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Tồn kho</a>
+          </div>
+          <div class="main">
+            <div class="main-head"><h3>Đơn hàng</h3><div class="sp"></div><button class="btn btn--primary btn--sm">＋ Tạo đơn</button></div>
+            <div class="tabs">
+              <a class="active" href="#s-orders">Tất cả · 47</a>
+              <a href="#s-orders">Cần follow-up · 12</a>
+              <a href="#s-orders">Đang thi công · 5</a>
+              <a href="#s-orders">Hoàn thành · 8</a>
+            </div>
+            <div class="toolbar">
+              <div class="search"><span class="si">⌕</span><input class="field" placeholder="Tìm theo SĐT, tên khách, mã đơn…"></div>
+              <div class="seg"><a class="active" href="#s-orders">Mọi trạng thái</a><a href="#s-orders">Chưa chốt</a><a href="#s-orders">Đã cọc</a></div>
+            </div>
+            <table class="table">
+              <thead><tr><th>Mã đơn</th><th>Khách hàng</th><th class="num">Tổng sau VAT</th><th>kWp</th><th>Trạng thái</th><th>Cập nhật</th></tr></thead>
+              <tbody>
+                <tr><td class="strong">DH-2048</td><td>VP Công Chứng Lê Đình Thao<br><span style="color:var(--muted);font-size:11px" class="mono">0903 176 968</span></td><td class="num strong mono">83.010.960</td><td class="mono">8,82</td><td><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span></td><td class="mono">09:12</td></tr>
+                <tr class="zebra"><td class="strong">DH-2047</td><td>Nguyễn Văn Hùng<br><span style="color:var(--muted);font-size:11px" class="mono">0912 345 678</span></td><td class="num strong mono">80.850.960</td><td class="mono">8,82</td><td><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></td><td class="mono">Hôm qua</td></tr>
+                <tr><td class="strong">DH-2045</td><td>Cty TNHH Tân Phát<br><span style="color:var(--muted);font-size:11px" class="mono">0908 220 114</span></td><td class="num strong mono">142.600.000</td><td class="mono">15,4</td><td><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></td><td class="mono">2 ngày</td></tr>
+                <tr class="zebra"><td class="strong">DH-2041</td><td>Trần Thị Mai<br><span style="color:var(--muted);font-size:11px" class="mono">0987 654 321</span></td><td class="num strong mono">64.320.000</td><td class="mono">6,60</td><td><span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span></td><td class="mono">3 ngày</td></tr>
+                <tr><td class="strong">DH-2039</td><td>Cty CP Đại Lộc<br><span style="color:var(--muted);font-size:11px" class="mono">0913 002 556</span></td><td class="num strong mono">98.100.000</td><td class="mono">10,2</td><td><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span></td><td class="mono">4 ngày</td></tr>
+                <tr class="zebra"><td class="strong">DH-2032</td><td>Lê Quốc Bảo<br><span style="color:var(--muted);font-size:11px" class="mono">0977 118 233</span></td><td class="num strong mono">55.900.000</td><td class="mono">5,80</td><td><span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span></td><td class="mono">1 tuần</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- mobile orders + follow-up tab -->
+      <div>
+        <p class="cap">Mobile · tab Cần follow-up</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Đơn hàng</span><div style="font-size:15px;font-weight:800">Cần follow-up</div></div><button class="btn btn--primary btn--sm">＋</button></div>
+              <div class="search" style="margin-top:9px"><span class="si">⌕</span><input class="field" placeholder="Tìm SĐT / tên khách…"></div>
+            </div>
+            <div class="row" style="gap:6px;padding:9px 13px 0;overflow:auto">
+              <span class="scope-flag on" style="border-radius:8px">Chưa chốt · 12</span>
+              <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Đã chốt</span>
+              <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Của tôi</span>
+            </div>
+            <div class="pscroll" style="padding-top:9px">
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13.5px">DH-2039 · Cty CP Đại Lộc</b><span class="sp"></span><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span></div>
+                <div class="row" style="margin-top:5px;font-size:12px;color:var(--muted)"><span class="mono">0913 002 556</span><span class="sp"></span><b class="mono" style="color:var(--ink)">98.100.000đ</b></div>
+                <div class="notecard" style="margin-top:8px">Gửi báo giá 4 ngày trước · chưa phản hồi. Nhắc lại?</div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13.5px">DH-2036 · Phạm Minh Tú</b><span class="sp"></span><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span></div>
+                <div class="row" style="margin-top:5px;font-size:12px;color:var(--muted)"><span class="mono">0966 440 771</span><span class="sp"></span><b class="mono" style="color:var(--ink)">51.200.000đ</b></div>
+                <div class="notecard" style="margin-top:8px">Hiệu lực báo giá còn 22h.</div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13.5px">DH-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></div>
+                <div class="row" style="margin-top:5px;font-size:12px;color:var(--muted)"><span class="mono">0903 176 968</span><span class="sp"></span><b class="mono" style="color:var(--ink)">83.010.960đ</b></div>
+              </div>
+            </div>
+            <div class="mtabbar">
+              <a class="active" href="#s-orders"><span class="ic">☰</span>Đơn</a>
+              <a href="#s-quote"><span class="ic">＋</span>Báo giá</a>
+              <a href="#s-customer"><span class="ic">☺</span>Khách</a>
+              <a href="#s-detail"><span class="ic">▤</span>Khác</a>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       4 · BÁO GIÁ / GIỎ HÀNG (mobile hero)
+  ========================================================================== -->
+  <section class="section" id="s-quote">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-1 · FR-2 · FR-3 · HERO</span>
+      <h2>Báo giá / giỏ hàng — tạo/sửa đơn</h2>
+      <span class="desc">Trái tim của app: dựng đơn tại hiện trường, tổng chạy realtime, chốt &amp; share tại chỗ.</span>
+      <span class="surface-tag">Mobile</span>
+      <span class="surface-tag web">Web</span>
+    </div>
+    <div class="stage">
+
+      <!-- WEB báo giá / giỏ hàng (bản văn phòng) -->
+      <div class="web" style="flex:1 1 620px">
+        <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/bao-gia</div></div>
+        <div class="main" style="padding:16px 18px">
+          <div class="main-head">
+            <a class="mback" href="#s-orders">‹</a>
+            <div style="flex:1"><span class="micro">Báo giá · DH-2048</span><h3 style="margin-top:1px">VP Công Chứng Lê Đình Thao</h3></div>
+            <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span>
+          </div>
+          <div class="row" style="gap:6px;margin-bottom:12px;flex-wrap:wrap">
+            <span class="ktype">Thương mại</span>
+            <span class="scope-flag on">▣ Thiết bị</span>
+            <span class="scope-flag on">▣ Thi công</span>
+            <span class="scope-flag off">▢ Vận chuyển</span>
+            <span class="scope-flag on" style="border-color:var(--lime);color:var(--lime-600)">⚡ 8,82 kWp</span>
+          </div>
+          <div class="banner" style="margin-bottom:14px"><span>⏳</span><div><b>Chờ duyệt chiết khấu</b> — giảm 2.000.000đ đang chờ Quản lý duyệt. Đã gửi 09:12.</div></div>
+          <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:16px;align-items:start">
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Giỏ báo giá · 4 món</span>
+              <table class="table">
+                <thead><tr><th>Hạng mục</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td class="strong">Tấm pin AE 630W<br><span style="color:var(--muted);font-size:10.5px">Pin mono 630W, BH 12 năm</span></td><td class="num mono">14</td><td class="num mono">2.583.000</td><td class="num strong mono">36.162.000</td><td class="num"><span class="btn btn--sm btn--ghost">✎</span></td></tr>
+                  <tr class="zebra"><td class="strong">Inverter Solplanet ASW8000-S<br><span style="color:var(--muted);font-size:10.5px">Hoà lưới 3 pha 8kW</span></td><td class="num mono">1</td><td class="num mono">18.500.000</td><td class="num strong mono">18.500.000</td><td class="num"><span class="btn btn--sm btn--ghost">✎</span></td></tr>
+                  <tr><td class="strong">Vật tư (gói)<br><span style="color:var(--muted);font-size:10.5px">Khung, tủ điện, dây DC/AC, CB</span></td><td class="num mono">1</td><td class="num mono">12.400.000</td><td class="num strong mono">12.400.000</td><td class="num"><span class="btn btn--sm btn--ghost">✎</span></td></tr>
+                  <tr class="zebra"><td class="strong">Công lắp đặt &nbsp;<span class="pill warn">Linh động</span><br><span style="color:var(--muted);font-size:10.5px">Nhân công + vận hành thử</span></td><td class="num mono">1</td><td class="num mono">9.800.000</td><td class="num strong mono">9.800.000</td><td class="num"><span class="btn btn--sm btn--ghost">✎</span></td></tr>
+                </tbody>
+              </table>
+              <div style="padding:10px 12px"><button class="btn btn--accent btn--sm">＋ Thêm món / dòng tự do</button></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Tổng kết</span>
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:2px 0"><span>Tổng trước VAT</span><span class="sp"></span><span class="mono">76.862.000</span></div>
+              <div class="row" style="font-size:12.5px;color:var(--danger);font-weight:700;padding:2px 0"><span>Chiết khấu (chờ duyệt)</span><span class="sp"></span><span class="mono">−2.000.000</span></div>
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:2px 0"><span><span class="tick">▣</span> VAT 8%</span><span class="sp"></span><span class="mono">5.988.960</span></div>
+              <div class="frame" style="padding:9px 12px;margin:10px 0;border-color:var(--ink)">
+                <div class="row" style="align-items:baseline"><span class="micro ink">Tổng sau VAT</span><span class="sp"></span><b class="mono" style="font-size:20px;color:var(--teal)">80.850.960<span style="font-size:12px;color:var(--muted)">đ</span></b></div>
+              </div>
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">⤴ Share</button><button class="btn btn--primary" style="flex:1.4">Chốt ✓</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- hero với banner chờ duyệt chiết khấu -->
+      <div>
+        <p class="cap">Có chiết khấu · “Chờ duyệt chiết khấu”</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px">
+                <button class="mback">‹</button>
+                <div style="flex:1"><span class="micro">Khách hàng</span><div style="font-size:14px;font-weight:800;margin-top:1px">VP Công Chứng Lê Đình Thao</div><div class="mono" style="font-size:12px;color:var(--muted)">0903 176 968</div></div>
+                <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span>
+              </div>
+              <div class="row" style="gap:6px;margin-top:9px;flex-wrap:wrap">
+                <span class="ktype">Thương mại</span>
+                <span class="scope-flag on">▣ Thiết bị</span>
+                <span class="scope-flag on">▣ Thi công</span>
+                <span class="scope-flag off">▢ Vận chuyển</span>
+                <span class="scope-flag on" style="border-color:var(--lime);color:var(--lime-600)">⚡ 8,82 kWp</span>
+              </div>
+            </div>
+
+            <div style="padding:11px 13px 0"><div class="banner"><span>⏳</span><div><b>Chờ duyệt chiết khấu</b> — giảm 2.000.000đ đang chờ Quản lý duyệt. Đã gửi 09:12.</div></div></div>
+
+            <div class="pscroll" style="padding-top:11px">
+              <div class="frame on-bg" style="padding:6px 0">
+                <span class="frame-label">Giỏ báo giá · 4 món</span>
+                <div style="padding:11px 13px;border-bottom:1px dashed var(--line)">
+                  <div class="row"><b style="font-size:13.5px">Tấm pin AE 630W</b><span class="sp"></span><b class="mono" style="color:var(--teal)">36.162.000</b></div>
+                  <div class="row" style="margin-top:3px;font-size:12px;color:var(--muted)"><span class="mono">14 × 2.583.000</span><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                  <div style="margin-top:6px;font-size:11.5px;color:var(--ink-2)"><span class="micro" style="border:1px solid var(--lime);padding:1px 5px;border-radius:5px">Diễn giải</span> Pin mono 630W, BH 12 năm.</div>
+                </div>
+                <div style="padding:11px 13px;border-bottom:1px dashed var(--line)">
+                  <div class="row"><b style="font-size:13.5px">Inverter Solplanet ASW8000-S</b><span class="sp"></span><b class="mono" style="color:var(--teal)">18.500.000</b></div>
+                  <div class="row" style="margin-top:3px;font-size:12px;color:var(--muted)"><span class="mono">1 × 18.500.000</span><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                  <div style="margin-top:6px;font-size:11.5px;color:var(--ink-2)"><span class="micro" style="border:1px solid var(--lime);padding:1px 5px;border-radius:5px">Diễn giải</span> Hoà lưới 3 pha 8kW.</div>
+                </div>
+                <div style="padding:11px 13px;border-bottom:1px dashed var(--line)">
+                  <div class="row"><b style="font-size:13.5px">Vật tư (gói)</b><span class="sp"></span><b class="mono" style="color:var(--teal)">12.400.000</b></div>
+                  <div class="row" style="margin-top:3px;font-size:12px;color:var(--muted)"><span class="mono">1 × 12.400.000</span><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                  <div style="margin-top:6px;font-size:11.5px;color:var(--ink-2)"><span class="micro" style="border:1px solid var(--lime);padding:1px 5px;border-radius:5px">Diễn giải</span> Khung, tủ điện, dây DC/AC, CB.</div>
+                </div>
+                <div style="padding:11px 13px">
+                  <div class="row"><b style="font-size:13.5px">Công lắp đặt</b><span class="sp"></span><b class="mono" style="color:var(--teal)">9.800.000</b></div>
+                  <div class="row" style="margin-top:3px;font-size:12px;color:var(--muted)"><span class="mono">1 × 9.800.000</span><span class="sp"></span><span class="pill warn">Linh động</span></div>
+                  <div style="margin-top:6px;font-size:11.5px;color:var(--ink-2)"><span class="micro" style="border:1px solid var(--lime);padding:1px 5px;border-radius:5px">Diễn giải</span> Nhân công + vận hành thử.</div>
+                </div>
+              </div>
+              <button class="btn btn--accent btn--wide" style="margin-top:11px">＋ Thêm món</button>
+              <div style="height:6px"></div>
+            </div>
+
+            <div class="mtotals">
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:1px 0"><span>Tổng trước VAT</span><span class="sp"></span><span class="mono">76.862.000</span></div>
+              <div class="row" style="font-size:12.5px;color:var(--danger);font-weight:700;padding:1px 0"><span>Chiết khấu (chờ duyệt)</span><span class="sp"></span><span class="mono">−2.000.000</span></div>
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:1px 0"><span><span class="tick">▣</span> VAT 8%</span><span class="sp"></span><span class="mono">5.988.960</span></div>
+              <div class="frame" style="padding:9px 12px;margin:8px 0 10px;border-color:var(--ink)">
+                <div class="row" style="align-items:baseline"><span class="micro ink">Tổng sau VAT</span><span class="sp"></span><b class="mono" style="font-size:20px;color:var(--teal)">80.850.960<span style="font-size:12px;color:var(--muted)">đ</span></b></div>
+              </div>
+              <div class="row" style="gap:8px">
+                <button class="btn btn--ghost" style="flex:1">⤴ Share</button>
+                <button class="btn btn--primary" style="flex:1.4">Chốt ✓</button>
+              </div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- variant: bình thường không chiết khấu, VAT toggle rõ -->
+      <div>
+        <p class="cap">Không chiết khấu · toggle VAT · thêm dòng tự do</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px">
+                <button class="mback">‹</button>
+                <div style="flex:1"><span class="micro">Khách hàng</span><div style="font-size:14px;font-weight:800;margin-top:1px">Nguyễn Văn Hùng</div><div class="mono" style="font-size:12px;color:var(--muted)">0912 345 678</div></div>
+                <span class="chip chip--baogia"><span class="dot"></span>Báo giá</span>
+              </div>
+              <div class="row" style="gap:6px;margin-top:9px;flex-wrap:wrap">
+                <span class="ktype">Cá nhân</span>
+                <span class="scope-flag on">▣ Thiết bị</span>
+                <span class="scope-flag on">▣ Thi công</span>
+                <span class="scope-flag on">▣ Vận chuyển</span>
+              </div>
+            </div>
+            <div class="pscroll">
+              <div class="frame on-bg" style="padding:6px 0">
+                <span class="frame-label">Giỏ báo giá · 4 món</span>
+                <div style="padding:10px 13px;border-bottom:1px dashed var(--line)"><div class="row"><b style="font-size:13px">Tấm pin AE 630W</b><span class="sp"></span><b class="mono" style="color:var(--teal)">36.162.000</b></div><div class="row" style="font-size:11.5px;color:var(--muted);margin-top:2px"><span class="mono">14 × 2.583.000</span></div></div>
+                <div style="padding:10px 13px;border-bottom:1px dashed var(--line)"><div class="row"><b style="font-size:13px">Inverter Solplanet ASW8000-S</b><span class="sp"></span><b class="mono" style="color:var(--teal)">18.500.000</b></div><div class="row" style="font-size:11.5px;color:var(--muted);margin-top:2px"><span class="mono">1 × 18.500.000</span></div></div>
+                <div style="padding:10px 13px;border-bottom:1px dashed var(--line)"><div class="row"><b style="font-size:13px">Vật tư (gói)</b><span class="sp"></span><b class="mono" style="color:var(--teal)">12.400.000</b></div><div class="row" style="font-size:11.5px;color:var(--muted);margin-top:2px"><span class="mono">1 × 12.400.000</span></div></div>
+                <div style="padding:10px 13px"><div class="row"><b style="font-size:13px">Công lắp đặt</b><span class="sp"></span><b class="mono" style="color:var(--teal)">9.800.000</b></div><div class="row" style="font-size:11.5px;color:var(--muted);margin-top:2px"><span class="mono">1 × 9.800.000</span></div></div>
+              </div>
+
+              <div class="frame on-bg" style="padding:12px 13px;margin-top:14px;border-style:dashed;border-color:var(--teal)">
+                <span class="frame-label" style="color:var(--teal)">Thêm dòng tự do / gói</span>
+                <div class="fgroup" style="margin-bottom:9px"><span class="flabel">Tên dòng</span><input class="field" placeholder="VD: Nâng cấp tủ điện 3 pha"></div>
+                <div class="row" style="gap:9px">
+                  <div style="flex:1"><span class="flabel">Đơn vị</span><input class="field" value="gói"></div>
+                  <div style="flex:1"><span class="flabel">SL</span><input class="field mono" value="1"></div>
+                  <div style="flex:1.4"><span class="flabel">Đơn giá</span><input class="field mono" placeholder="0"></div>
+                </div>
+                <button class="btn btn--accent btn--wide" style="margin-top:10px">＋ Thêm vào giỏ</button>
+              </div>
+              <div style="height:6px"></div>
+            </div>
+
+            <div class="mtotals">
+              <div class="row" style="margin-bottom:8px;gap:8px">
+                <span class="scope-flag on" style="border-radius:8px">▣ Tính VAT 8%</span>
+                <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">▢ Miễn VAT</span>
+                <span class="sp"></span>
+              </div>
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:1px 0"><span>Tổng trước VAT</span><span class="sp"></span><span class="mono">76.862.000</span></div>
+              <div class="row" style="font-size:12.5px;color:var(--muted);font-weight:600;padding:1px 0"><span>VAT 8%</span><span class="sp"></span><span class="mono">6.148.960</span></div>
+              <div class="frame" style="padding:9px 12px;margin:8px 0 10px;border-color:var(--ink)">
+                <div class="row" style="align-items:baseline"><span class="micro ink">Tổng sau VAT</span><span class="sp"></span><b class="mono" style="font-size:20px;color:var(--teal)">83.010.960<span style="font-size:12px;color:var(--muted)">đ</span></b></div>
+              </div>
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">Lưu nháp</button><button class="btn btn--primary" style="flex:1.4">Chốt ✓</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       5 · CHỌN / TẠO KHÁCH HÀNG
+  ========================================================================== -->
+  <section class="section" id="s-customer">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-29</span>
+      <h2>Chọn / Tạo khách hàng</h2>
+      <span class="desc">Nhập SĐT (khoá chính) để tra → khách cũ điền sẵn, hoặc “Tạo khách hàng mới”. Cá nhân vs Thương mại.</span>
+      <span class="surface-tag">Mobile</span>
+      <span class="surface-tag web">Web</span>
+    </div>
+    <div class="stage">
+
+      <!-- WEB chọn / tạo khách hàng (bản văn phòng) -->
+      <div class="web" style="flex:1 1 600px">
+        <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/khach-hang/chon</div></div>
+        <div class="main" style="padding:16px 18px">
+          <div class="main-head"><a class="mback" href="#s-orders">‹</a><div style="flex:1"><span class="micro">Bước 1/2 · Tạo đơn</span><h3 style="margin-top:1px">Chọn / tạo khách hàng</h3></div></div>
+          <div class="toolbar">
+            <div class="search" style="flex:1"><span class="si">⌕</span><input class="field mono" value="0903 176 968"></div>
+            <button class="btn btn--primary">Tra SĐT</button>
+            <button class="btn btn--ghost">＋ Tạo khách hàng mới</button>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div class="frame" style="padding:14px 16px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Đã tìm thấy khách cũ</span>
+              <div class="row"><b style="font-size:14px">VP Công Chứng Lê Đình Thao</b><span class="sp"></span><span class="ktype">Thương mại</span></div>
+              <dl class="kv" style="margin-top:10px">
+                <dt>MST</dt><dd class="mono">0316 552 018</dd>
+                <dt>Địa chỉ</dt><dd>122 Trần Não, TP. Thủ Đức</dd>
+                <dt>SĐT</dt><dd class="mono">0903 176 968</dd>
+                <dt>TK ngân hàng</dt><dd class="mono">1903 6688 552 · Techcombank</dd>
+              </dl>
+              <button class="btn btn--primary btn--wide" style="margin-top:12px">Dùng khách này →</button>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Hoặc tạo mới</span>
+              <div class="seg" style="width:100%;margin-bottom:12px"><a class="active" href="#s-customer" style="flex:1;text-align:center">Cá nhân</a><a href="#s-customer" style="flex:1;text-align:center">Thương mại</a></div>
+              <div class="fgroup"><span class="flabel">Họ tên</span><input class="field" placeholder="Nguyễn Văn A"></div>
+              <div class="row" style="gap:10px"><div class="fgroup" style="flex:1"><span class="flabel">CCCD</span><input class="field mono" placeholder="0790xxxxxxxx"></div><div class="fgroup" style="flex:1"><span class="flabel">Số điện thoại</span><input class="field mono" placeholder="09xx xxx xxx"></div></div>
+              <div class="fgroup" style="margin-bottom:0"><span class="flabel">Địa chỉ</span><input class="field" placeholder="Số nhà, đường, phường, quận"></div>
+              <div class="banner banner--info" style="margin-top:12px"><span>ℹ</span><div>Chọn tab <b>Thương mại</b> để nhập Tên công ty · MST · Tài khoản NH.</div></div>
+              <button class="btn btn--primary btn--wide" style="margin-top:12px">Lưu &amp; dùng cho đơn</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- lookup + result -->
+      <div>
+        <p class="cap">Tra SĐT · kết quả khách cũ</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop"><div class="row" style="gap:9px"><button class="mback">‹</button><div><span class="micro">Bước 1/2</span><div style="font-size:15px;font-weight:800">Chọn khách hàng</div></div></div></div>
+            <div class="pscroll">
+              <div class="fgroup"><span class="flabel">Số điện thoại (khoá chính)</span>
+                <div class="row" style="gap:8px"><input class="field field-lg mono" value="0903 176 968" style="flex:1"><button class="btn btn--primary">Tra</button></div>
+              </div>
+
+              <div class="frame on-bg" style="padding:13px;margin-top:6px;border-color:var(--teal)">
+                <span class="frame-label" style="color:var(--teal)">Đã tìm thấy khách cũ</span>
+                <div class="row"><b style="font-size:14px">VP Công Chứng Lê Đình Thao</b><span class="sp"></span><span class="ktype">Thương mại</span></div>
+                <dl class="kv" style="margin-top:10px">
+                  <dt>MST</dt><dd class="mono">0316 552 018</dd>
+                  <dt>Địa chỉ</dt><dd>122 Trần Não, TP. Thủ Đức</dd>
+                  <dt>SĐT</dt><dd class="mono">0903 176 968</dd>
+                  <dt>TK ngân hàng</dt><dd class="mono">1903 6688 552 · Techcombank</dd>
+                </dl>
+                <button class="btn btn--primary btn--wide" style="margin-top:12px">Dùng khách này →</button>
+              </div>
+
+              <div class="row" style="gap:8px;margin:14px 0 6px"><span style="flex:1;height:1.5px;background:var(--line)"></span><span class="micro muted">hoặc</span><span style="flex:1;height:1.5px;background:var(--line)"></span></div>
+              <button class="btn btn--ghost btn--wide">＋ Tạo khách hàng mới</button>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- create form: cá nhân vs thương mại -->
+      <div>
+        <p class="cap">Tạo mới · không tìm thấy SĐT</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop"><div class="row" style="gap:9px"><button class="mback">‹</button><div><span class="micro">Bước 1/2</span><div style="font-size:15px;font-weight:800">Khách hàng mới</div></div></div></div>
+            <div style="padding:11px 13px 0"><div class="banner banner--info"><span>ℹ</span><div>SĐT <b class="mono">0938 771 205</b> chưa có trong hệ thống. Tạo mới bên dưới.</div></div></div>
+            <div class="pscroll" style="padding-top:11px">
+              <div class="seg" style="width:100%;margin-bottom:12px"><a class="active" href="#s-customer" style="flex:1;text-align:center">Cá nhân</a><a href="#s-customer" style="flex:1;text-align:center">Thương mại</a></div>
+
+              <div class="frame on-bg" style="padding:13px">
+                <span class="frame-label">Cá nhân</span>
+                <div class="fgroup"><span class="flabel">Họ tên</span><input class="field" placeholder="Nguyễn Văn A"></div>
+                <div class="fgroup"><span class="flabel">CCCD</span><input class="field mono" placeholder="0790xxxxxxxx"></div>
+                <div class="fgroup"><span class="flabel">Địa chỉ</span><input class="field" placeholder="Số nhà, đường, phường, quận"></div>
+                <div class="fgroup" style="margin-bottom:0"><span class="flabel">Số điện thoại</span><input class="field mono" value="0938 771 205"></div>
+              </div>
+
+              <div class="frame on-bg" style="padding:13px;margin-top:12px;opacity:.55">
+                <span class="frame-label">Thương mại (khi chọn tab này)</span>
+                <div class="row" style="flex-wrap:wrap;gap:7px;font-size:11.5px;color:var(--muted)">
+                  <span class="pill">Tên công ty</span><span class="pill">MST</span><span class="pill">Địa chỉ</span><span class="pill">SĐT</span><span class="pill">Tài khoản NH</span>
+                </div>
+              </div>
+              <div style="height:8px"></div>
+            </div>
+            <div class="mtotals"><button class="btn btn--primary btn--wide">Lưu &amp; dùng cho đơn</button></div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       6 · CHI TIẾT ĐƠN (web + mobile) — stepper gate theo cờ + tabs
+  ========================================================================== -->
+  <section class="section" id="s-detail">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-6 · FR-7 · FR-9</span>
+      <h2>Chi tiết đơn</h2>
+      <span class="desc">Stepper vòng đời gate theo cờ (Thi công + Vận chuyển ở đơn này); tabs Thông tin / Thanh toán / Ảnh / Lịch sử / HĐ &amp; HĐ.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+
+      <div class="web" style="flex:1 1 700px">
+        <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048</div></div>
+        <div class="main" style="padding:18px 22px">
+          <div class="main-head">
+            <a class="mback" href="#s-orders" style="text-decoration:none">‹</a>
+            <div><span class="micro">Đơn hàng</span><h3 style="margin-top:1px">DH-2048 · VP Công Chứng Lê Đình Thao</h3></div>
+            <div class="sp"></div>
+            <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+            <button class="btn btn--primary btn--sm">Chuyển trạng thái →</button>
+          </div>
+
+          <!-- STEPPER gate theo cờ Thi công + Vận chuyển -->
+          <div class="frame" style="padding:20px 16px 14px;margin-bottom:16px">
+            <span class="frame-label">Vòng đời đơn · cờ Thiết bị + Thi công + Vận chuyển</span>
+            <div class="stepper" style="overflow:auto">
+              <div class="step done"><div class="node"><div class="bul">✓</div><div class="st-label">Khảo sát</div></div><div class="bar"></div></div>
+              <div class="step done"><div class="node"><div class="bul">✓</div><div class="st-label">Báo giá</div></div><div class="bar"></div></div>
+              <div class="step done"><div class="node"><div class="bul">✓</div><div class="st-label">Đã chốt</div></div><div class="bar"></div></div>
+              <div class="step current"><div class="node"><div class="bul">4</div><div class="st-label">Đã cọc</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">▤</div><div class="st-label">Lên lịch TC</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">▤</div><div class="st-label">Đang thi công</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">▤</div><div class="st-label">Nghiệm thu</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">▣</div><div class="st-label">Đang giao</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">▣</div><div class="st-label">Đã giao</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">★</div><div class="st-label">Hoàn thành</div></div></div>
+            </div>
+          </div>
+
+          <div class="tabs">
+            <a class="active" href="#s-detail">Thông tin</a>
+            <a href="#s-payment">Thanh toán</a>
+            <a href="#s-status-modal">Ảnh đính kèm</a>
+            <a href="#s-detail">Lịch sử update</a>
+            <a href="#s-contract">Hợp đồng &amp; Hoá đơn</a>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Khách hàng &amp; phạm vi</span>
+              <dl class="kv"><dt>Khách</dt><dd>VP Công Chứng Lê Đình Thao</dd><dt>Loại</dt><dd>Thương mại · MST 0316 552 018</dd><dt>SĐT</dt><dd class="mono">0903 176 968</dd><dt>Công suất</dt><dd class="mono">8,82 kWp</dd><dt>Hiệu lực BG</dt><dd>48h kể từ lên PO</dd></dl>
+              <div class="row" style="gap:6px;margin-top:10px"><span class="scope-flag on">▣ Thiết bị</span><span class="scope-flag on">▣ Thi công</span><span class="scope-flag off">▢ Vận chuyển</span></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Giá trị đơn (snapshot khi chốt)</span>
+              <table class="table" style="font-size:12px">
+                <tr><td>Tấm pin AE 630W</td><td class="num mono">×14</td><td class="num strong mono">36.162.000</td></tr>
+                <tr><td>Inverter Solplanet ASW8000-S</td><td class="num mono">×1</td><td class="num strong mono">18.500.000</td></tr>
+                <tr><td>Vật tư (gói)</td><td class="num mono">×1</td><td class="num strong mono">12.400.000</td></tr>
+                <tr><td>Công lắp đặt</td><td class="num mono">×1</td><td class="num strong mono">9.800.000</td></tr>
+                <tr><td class="strong">Tổng sau VAT (8%)</td><td></td><td class="num strong mono" style="color:var(--teal)">83.010.960</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- mobile chi tiết + lịch sử update -->
+      <div>
+        <p class="cap">Mobile · tab Lịch sử update</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px"><button class="mback">‹</button><div style="flex:1"><span class="micro">DH-2048</span><div style="font-size:13.5px;font-weight:800">VP CC Lê Đình Thao</div></div><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></div>
+            </div>
+            <div class="row" style="gap:2px;padding:0 8px;border-bottom:1.5px solid var(--line);background:#fff;overflow:auto">
+              <a href="#s-detail" style="font-size:11px;font-weight:700;color:var(--muted);padding:8px 8px">Thông tin</a>
+              <a href="#s-payment" style="font-size:11px;font-weight:700;color:var(--muted);padding:8px 8px">Thanh toán</a>
+              <a href="#s-status-modal" style="font-size:11px;font-weight:700;color:var(--muted);padding:8px 8px">Ảnh</a>
+              <a href="#s-detail" style="font-size:11px;font-weight:800;color:var(--teal-700);padding:8px 8px;border-bottom:2px solid var(--teal)">Lịch sử</a>
+            </div>
+            <div class="pscroll">
+              <div class="frame on-bg" style="padding:11px 13px;margin-bottom:10px;border-color:var(--teal)">
+                <div class="row"><span class="micro" style="color:var(--teal)">Bản v3 · hiệu lực</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">Hôm nay 09:12</span></div>
+                <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2)">Áp chiết khấu 2.000.000đ · Hùng (Thợ KS)</div>
+                <div class="row" style="margin-top:6px"><span class="mono" style="font-size:11px;color:var(--muted)">82.850.960 → </span><b class="mono" style="font-size:12px;color:var(--teal);margin-left:4px">80.850.960</b></div>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px;margin-bottom:10px">
+                <div class="row"><span class="micro muted">Bản v2</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">Hôm qua 16:40</span></div>
+                <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2)">Sửa SL tấm pin 12 → 14 · snapshot lại giá</div>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px">
+                <div class="row"><span class="micro muted">Bản v1 · chốt lần đầu</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">02/07 10:05</span></div>
+                <div style="font-size:12.5px;margin-top:5px;color:var(--ink-2)">Chốt đơn · Hùng (Thợ KS)</div>
+              </div>
+            </div>
+            <div class="mtotals"><button class="btn btn--primary btn--wide">Chuyển trạng thái →</button></div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       7 · MODAL CHUYỂN TRẠNG THÁI + ĐÍNH KÈM ẢNH
+  ========================================================================== -->
+  <section class="section" id="s-status-modal">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-9 · FR-23</span>
+      <h2>Chuyển trạng thái + đính kèm ảnh</h2>
+      <span class="desc">Đính kèm nhiều ảnh (chụp/chọn) làm bằng chứng bước; upload luôn tuỳ chọn, không bắt buộc.</span>
+      <span class="surface-tag">Mobile</span>
+      <span class="surface-tag web">Web</span>
+    </div>
+    <div class="stage">
+
+      <!-- mobile modal -->
+      <div>
+        <p class="cap">Mobile · modal chuyển bước</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody" style="justify-content:flex-end;background:rgba(12,31,28,.28)">
+            <div style="background:#fff;border-top:1.5px solid var(--ink);border-radius:16px 16px 0 0;padding:14px 15px 16px">
+              <div class="sheet-grab"></div>
+              <div class="row" style="margin-bottom:12px"><span class="micro ink">Chuyển trạng thái · DH-2048</span></div>
+              <div class="row" style="gap:8px;margin-bottom:14px;justify-content:center">
+                <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+                <span style="color:var(--muted);font-weight:800">→</span>
+                <span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span>
+              </div>
+              <span class="flabel">Ảnh bằng chứng (tuỳ chọn · nhiều ảnh)</span>
+              <div class="thumbs" style="margin-bottom:12px">
+                <div class="thumb">▤</div><div class="thumb">▤</div><div class="thumb">▤</div>
+                <div class="thumb add">＋</div>
+              </div>
+              <div class="row" style="gap:8px;margin-bottom:12px">
+                <button class="btn btn--ghost" style="flex:1">☷ Chụp ảnh</button>
+                <button class="btn btn--ghost" style="flex:1">▤ Chọn thư viện</button>
+              </div>
+              <div class="fgroup"><span class="flabel">Ghi chú (tuỳ chọn)</span><input class="field" placeholder="VD: bắt đầu lắp khung mái"></div>
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">Huỷ</button><button class="btn btn--primary" style="flex:1.4">Xác nhận chuyển</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <!-- web modal (inline overlay) -->
+      <div style="flex:1 1 480px">
+        <p class="cap">Web · dialog chuyển trạng thái</p>
+        <div class="overlay">
+          <div class="modal">
+            <div class="modal-head"><span class="mt">Chuyển trạng thái</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">DH-2041</span></div>
+            <div class="modal-body">
+              <div class="row" style="gap:8px;margin-bottom:14px;justify-content:center">
+                <span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span><span style="color:var(--muted);font-weight:800">→</span><span class="chip chip--nghiemthu"><span class="dot"></span>Nghiệm thu</span>
+              </div>
+              <span class="flabel">Ảnh bằng chứng nghiệm thu (tuỳ chọn)</span>
+              <div class="thumbs" style="margin-bottom:12px"><div class="thumb">▤</div><div class="thumb">▤</div><div class="thumb add">＋ Chọn file</div></div>
+              <div class="banner banner--info"><span>ℹ</span><div>Ảnh đính kèm được ghi vào Audit log của bước chuyển này (ai, khi nào).</div></div>
+            </div>
+            <div class="modal-foot"><span class="sp"></span><button class="btn btn--ghost">Huỷ</button><button class="btn btn--primary">Xác nhận</button></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       8 · DUYỆT CHIẾT KHẤU
+  ========================================================================== -->
+  <section class="section" id="s-discount">
+    <div class="section-head">
+      <span class="kick">Tài chính · FR-18</span>
+      <h2>Duyệt chiết khấu</h2>
+      <span class="desc">Danh sách chờ duyệt + màn duyệt (đồng ý / từ chối). Phase 1: mọi chiết khấu cần người có quyền duyệt.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 600px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/duyet-chiet-khau</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><h3>Duyệt chiết khấu</h3><div class="sp"></div><span class="pill warn">3 đơn chờ duyệt</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1.1fr;gap:18px">
+          <div class="frame" style="padding:6px 0">
+            <span class="frame-label">Chờ duyệt</span>
+            <div style="padding:11px 14px;border-bottom:1px solid var(--line);background:var(--teal-050)">
+              <div class="row"><b style="font-size:13px">DH-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−2.000.000</b></div>
+              <div class="row" style="font-size:11.5px;color:var(--muted);margin-top:3px"><span>Đề xuất: Hùng (Thợ KS) · 09:12</span></div>
+            </div>
+            <div style="padding:11px 14px;border-bottom:1px solid var(--line)">
+              <div class="row"><b style="font-size:13px">DH-2044 · Cty Tân Phát</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−5.500.000</b></div>
+              <div class="row" style="font-size:11.5px;color:var(--muted);margin-top:3px"><span>Đề xuất: Sơn (Thợ KS) · Hôm qua</span></div>
+            </div>
+            <div style="padding:11px 14px">
+              <div class="row"><b style="font-size:13px">DH-2043 · Lê Quốc Bảo</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−1.200.000</b></div>
+              <div class="row" style="font-size:11.5px;color:var(--muted);margin-top:3px"><span>Đề xuất: Hùng (Thợ KS) · Hôm qua</span></div>
+            </div>
+          </div>
+          <div class="frame" style="padding:16px">
+            <span class="frame-label" style="color:var(--teal)">Đang xem · DH-2048</span>
+            <dl class="kv" style="margin-bottom:14px"><dt>Khách</dt><dd>VP Công Chứng Lê Đình Thao</dd><dt>Tổng trước CK</dt><dd class="mono">82.850.960đ</dd><dt>Chiết khấu đề xuất</dt><dd class="mono" style="color:var(--danger)">−2.000.000đ (2,4%)</dd><dt>Tổng sau CK &amp; VAT</dt><dd class="mono strong" style="color:var(--teal)">80.850.960đ</dd></dl>
+            <div class="notecard" style="margin-bottom:14px"><b>Lý do:</b> Khách chốt tại chỗ, xin giảm để lấy thêm hợp đồng bảo trì năm sau.</div>
+            <div class="fgroup"><span class="flabel">Ghi chú duyệt (tuỳ chọn)</span><input class="field" placeholder="Đồng ý cho khách quen"></div>
+            <div class="row" style="gap:10px"><button class="btn btn--danger" style="flex:1">✕ Từ chối</button><button class="btn btn--primary" style="flex:1.4">✓ Đồng ý duyệt</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE duyệt chiết khấu -->
+      <div>
+        <p class="cap">Mobile · Quản lý duyệt tại chỗ</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Tài chính</span><div style="font-size:15px;font-weight:800">Duyệt chiết khấu</div></div><span class="pill warn">3 chờ</span></div>
+            </div>
+            <div class="pscroll">
+              <div class="frame on-bg" style="padding:12px 13px;margin-bottom:10px;border-color:var(--teal)">
+                <div class="row"><b style="font-size:13.5px">DH-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−2.000.000</b></div>
+                <dl class="kv" style="margin-top:9px">
+                  <dt>Tổng trước CK</dt><dd class="mono">82.850.960đ</dd>
+                  <dt>Sau CK &amp; VAT</dt><dd class="mono strong" style="color:var(--teal)">80.850.960đ</dd>
+                  <dt>Đề xuất</dt><dd>Hùng (Thợ KS) · 09:12</dd>
+                </dl>
+                <div class="notecard" style="margin-top:9px"><b>Lý do:</b> Khách chốt tại chỗ, xin giảm để lấy thêm hợp đồng bảo trì năm sau.</div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">DH-2044 · Cty Tân Phát</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−5.500.000</b></div>
+                <div class="row" style="font-size:11.5px;color:var(--muted);margin-top:3px"><span>Đề xuất: Sơn (Thợ KS) · Hôm qua</span></div>
+              </div>
+              <div class="card" style="padding:11px 12px">
+                <div class="row"><b style="font-size:13px">DH-2043 · Lê Quốc Bảo</b><span class="sp"></span><b class="mono" style="color:var(--danger)">−1.200.000</b></div>
+                <div class="row" style="font-size:11.5px;color:var(--muted);margin-top:3px"><span>Đề xuất: Hùng (Thợ KS) · Hôm qua</span></div>
+              </div>
+            </div>
+            <div class="mtotals">
+              <div class="fgroup" style="margin-bottom:10px"><span class="flabel">Ghi chú duyệt (tuỳ chọn)</span><input class="field" placeholder="Đồng ý cho khách quen"></div>
+              <div class="row" style="gap:8px"><button class="btn btn--danger" style="flex:1">✕ Từ chối</button><button class="btn btn--primary" style="flex:1.4">✓ Đồng ý duyệt</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       9 · LỊCH THANH TOÁN & GHI NHẬN
+  ========================================================================== -->
+  <section class="section" id="s-payment">
+    <div class="section-head">
+      <span class="kick">Tài chính · FR-11 · FR-12 · FR-8</span>
+      <h2>Lịch thanh toán &amp; ghi nhận</h2>
+      <span class="desc">Các đợt 20/70/10; ghi nhận đợt → trạng thái tự nhảy (đợt cọc đầu → “Đã cọc”). Tổng đợt = tổng sau VAT.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 620px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/thanh-toan</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><a class="mback" href="#s-detail">‹</a><h3>Lịch thanh toán · DH-2048</h3><div class="sp"></div><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></div>
+        <div class="frame" style="padding:6px 0;margin-bottom:14px">
+          <span class="frame-label">Các đợt · mẫu 20/70/10</span>
+          <table class="table">
+            <thead><tr><th>Đợt</th><th>Điều kiện</th><th class="num">Tỉ lệ</th><th class="num">Số tiền</th><th>Trạng thái</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Đợt 1</td><td>Cọc khi ký hợp đồng</td><td class="num mono">20%</td><td class="num strong mono">16.602.192</td><td><span class="pill ok">Đã thu · 03/07</span></td><td class="num"><span class="btn btn--sm btn--ghost">Xem</span></td></tr>
+              <tr class="zebra"><td class="strong">Đợt 2</td><td>Sau khi lắp đặt xong</td><td class="num mono">70%</td><td class="num strong mono">58.107.672</td><td><span class="pill warn">Chờ thu</span></td><td class="num"><span class="btn btn--sm btn--primary">Ghi nhận</span></td></tr>
+              <tr><td class="strong">Đợt 3</td><td>Sau nghiệm thu 7 ngày</td><td class="num mono">10%</td><td class="num strong mono">8.301.096</td><td><span class="pill">Chưa tới</span></td><td class="num"><span class="btn btn--sm btn--ghost">Ghi nhận</span></td></tr>
+              <tr><td colspan="2" class="strong">Tổng các đợt</td><td class="num mono strong">100%</td><td class="num strong mono" style="color:var(--teal)">83.010.960</td><td colspan="2"><span class="pill ok">✓ Khớp tổng sau VAT</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px">
+          <div class="overlay" style="padding:16px;justify-content:flex-start;background:#fff;border-style:solid;border-color:var(--line)">
+            <div class="modal" style="width:100%;border-color:var(--teal)">
+              <div class="modal-head"><span class="mt">Ghi nhận đợt 2</span><span class="sp"></span><span class="pill warn">70%</span></div>
+              <div class="modal-body">
+                <div class="fgroup"><span class="flabel">Số tiền</span><input class="field field-lg mono" value="58.107.672"></div>
+                <div class="row" style="gap:10px"><div class="fgroup" style="flex:1"><span class="flabel">Ngày thu</span><input class="field mono" value="06/07/2026"></div><div class="fgroup" style="flex:1"><span class="flabel">Hình thức</span><input class="field" value="Chuyển khoản"></div></div>
+                <div class="banner banner--info" style="margin-top:2px"><span>⚡</span><div>Ghi nhận đủ đợt này sẽ tự cập nhật trạng thái thanh toán &amp; audit log (FR-8).</div></div>
+              </div>
+              <div class="modal-foot"><span class="sp"></span><button class="btn btn--ghost">Huỷ</button><button class="btn btn--primary">Ghi nhận</button></div>
+            </div>
+          </div>
+          <div class="frame" style="padding:14px 16px">
+            <span class="frame-label">Tình hình công nợ</span>
+            <dl class="kv"><dt>Đã thu</dt><dd class="mono strong" style="color:var(--ok)">16.602.192đ</dd><dt>Còn lại</dt><dd class="mono strong" style="color:var(--warn)">66.408.768đ</dd><dt>Tổng đơn</dt><dd class="mono">83.010.960đ</dd></dl>
+            <div style="height:10px;background:var(--surface-2);border-radius:99px;margin-top:12px;overflow:hidden"><div style="width:20%;height:100%;background:var(--teal)"></div></div>
+            <div class="row" style="font-size:10.5px;color:var(--muted);font-weight:700;margin-top:5px"><span>Thu 20%</span><span class="sp"></span><span>Còn 80%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE lịch thanh toán -->
+      <div>
+        <p class="cap">Mobile · các đợt &amp; ghi nhận</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px"><button class="mback">‹</button><div style="flex:1"><span class="micro">DH-2048</span><div style="font-size:14px;font-weight:800">Lịch thanh toán</div></div><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></div>
+            </div>
+            <div class="pscroll">
+              <div class="frame on-bg" style="padding:11px 13px;margin-bottom:10px">
+                <div class="row"><span class="micro muted">Công nợ</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">Thu 20%</span></div>
+                <div style="height:10px;background:var(--surface-2);border-radius:99px;margin-top:8px;overflow:hidden"><div style="width:20%;height:100%;background:var(--teal)"></div></div>
+                <div class="row" style="margin-top:8px"><span style="font-size:11.5px;color:var(--ok);font-weight:700">Đã thu 16.602.192đ</span><span class="sp"></span><span style="font-size:11.5px;color:var(--warn);font-weight:700">Còn 66.408.768đ</span></div>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">Đợt 1 · Cọc khi ký HĐ</b><span class="sp"></span><span class="pill ok">Đã thu</span></div>
+                <div class="row" style="margin-top:5px"><span class="mono" style="font-size:11px;color:var(--muted)">20% · 03/07</span><span class="sp"></span><b class="mono">16.602.192đ</b></div>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px;margin-bottom:9px;border-color:var(--teal)">
+                <div class="row"><b style="font-size:13px">Đợt 2 · Sau lắp đặt</b><span class="sp"></span><span class="pill warn">Chờ thu</span></div>
+                <div class="row" style="margin-top:5px"><span class="mono" style="font-size:11px;color:var(--muted)">70%</span><span class="sp"></span><b class="mono">58.107.672đ</b></div>
+                <button class="btn btn--primary btn--wide" style="margin-top:10px">Ghi nhận đợt 2</button>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px">
+                <div class="row"><b style="font-size:13px">Đợt 3 · Sau nghiệm thu 7 ngày</b><span class="sp"></span><span class="pill">Chưa tới</span></div>
+                <div class="row" style="margin-top:5px"><span class="mono" style="font-size:11px;color:var(--muted)">10%</span><span class="sp"></span><b class="mono">8.301.096đ</b></div>
+              </div>
+            </div>
+            <div class="mtotals">
+              <div class="row" style="font-size:12.5px"><span class="micro ink">Tổng các đợt</span><span class="sp"></span><b class="mono" style="color:var(--teal)">83.010.960đ</b></div>
+              <div class="row" style="margin-top:6px"><span class="pill ok">✓ Khớp tổng sau VAT</span></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       10 · SINH HỢP ĐỒNG
+  ========================================================================== -->
+  <section class="section" id="s-contract">
+    <div class="section-head">
+      <span class="kick">Tài chính · FR-13</span>
+      <h2>Sinh hợp đồng</h2>
+      <span class="desc">Preview văn bản (HĐ Thi công / HĐ Mua bán) từ template tĩnh — điều khoản cố định, chỉ điền dữ liệu động; xuất PDF.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/hop-dong</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><a class="mback" href="#s-detail">‹</a><h3>Sinh hợp đồng · DH-2048</h3><div class="sp"></div>
+          <div class="seg"><a class="active" href="#s-contract">HĐ Thi công</a><a href="#s-contract">HĐ Mua bán</a></div>
+          <button class="btn btn--primary btn--sm">⤓ Xuất PDF</button>
+        </div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+          <div class="doc" style="max-width:none">
+            <div class="row" style="align-items:flex-start;margin-bottom:12px"><div class="logo" style="width:34px;height:34px;border:1.5px solid var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900">☀</div><div style="margin-left:10px;font-size:10px;color:var(--muted)"><b style="color:var(--ink);font-size:12px">CÔNG TY NLMT PHƯƠNG NAM</b><br>MST 0312 998 771 · 45 Nguyễn Oanh, Gò Vấp, TP.HCM</div></div>
+            <h4>HỢP ĐỒNG THI CÔNG ĐIỆN MẶT TRỜI</h4>
+            <div class="doc-sub">Số: HĐTC-2048/2026 · Tham chiếu báo giá: BG-2048</div>
+            <p><b>Bên A (Chủ đầu tư):</b> VP Công Chứng Lê Đình Thao — MST 0316 552 018 — 122 Trần Não, TP. Thủ Đức — ĐT 0903 176 968.</p>
+            <p><b>Bên B (Nhà thầu):</b> Công ty NLMT Phương Nam.</p>
+            <p><b>Điều 1. Nội dung:</b> Bên B cung cấp và thi công hệ thống điện mặt trời hoà lưới công suất <b>8,82 kWp</b> theo danh mục vật tư đính kèm.</p>
+            <p><b>Điều 2. Giá trị hợp đồng:</b> <b>80.850.960đ</b> (đã gồm VAT 8%). Thanh toán 3 đợt 20/70/10 theo phụ lục.</p>
+            <p style="color:var(--muted)"><b>Điều 3–8 (bảo hành, tiến độ, phạt vi phạm, bất khả kháng…):</b> theo template tĩnh chuẩn của công ty — không chỉnh theo đơn.</p>
+            <div class="sig"><div>NGƯỜI LẬP PHIẾU<br><span style="color:var(--muted)">(Ký, ghi rõ họ tên)</span></div><div>GIÁM ĐỐC<br><span style="color:var(--muted)">(Ký, đóng dấu)</span></div></div>
+          </div>
+          <div class="frame" style="padding:14px 16px">
+            <span class="frame-label">Dữ liệu động đưa vào HĐ</span>
+            <dl class="kv"><dt>Loại HĐ</dt><dd>HĐ Thi công (đơn có cờ Thi công)</dd><dt>Hai bên</dt><dd>A: Khách · B: Phương Nam</dd><dt>Vật tư/giá</dt><dd>4 dòng · snapshot</dd><dt>Tổng tiền</dt><dd class="mono strong">80.850.960đ</dd><dt>Lịch TT</dt><dd>20/70/10</dd><dt>Ref báo giá</dt><dd class="mono">BG-2048</dd></dl>
+            <div class="banner banner--info" style="margin-top:12px"><span>ℹ</span><div>Điều khoản là template tĩnh; sinh HĐ ghi Audit log. Bản xuất có logo + khối chữ ký.</div></div>
+            <button class="btn btn--primary btn--wide" style="margin-top:12px">⤓ Xuất PDF hợp đồng</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE sinh hợp đồng -->
+      <div>
+        <p class="cap">Mobile · preview &amp; xuất PDF</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px"><button class="mback">‹</button><div style="flex:1"><span class="micro">DH-2048</span><div style="font-size:14px;font-weight:800">Sinh hợp đồng</div></div></div>
+              <div class="seg" style="width:100%;margin-top:9px"><a class="active" href="#s-contract" style="flex:1;text-align:center">HĐ Thi công</a><a href="#s-contract" style="flex:1;text-align:center">HĐ Mua bán</a></div>
+            </div>
+            <div class="pscroll">
+              <div class="doc" style="max-width:none;padding:16px 16px;font-size:11px">
+                <div class="row" style="align-items:flex-start;margin-bottom:10px"><div class="logo" style="width:28px;height:28px;border:1.5px solid var(--teal);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:14px">☀</div><div style="margin-left:8px;font-size:9px;color:var(--muted)"><b style="color:var(--ink);font-size:11px">CÔNG TY NLMT PHƯƠNG NAM</b><br>MST 0312 998 771</div></div>
+                <h4 style="font-size:12px">HỢP ĐỒNG THI CÔNG ĐMT</h4>
+                <div class="doc-sub" style="font-size:9.5px">Số: HĐTC-2048/2026 · Ref BG-2048</div>
+                <p style="font-size:10.5px"><b>Bên A:</b> VP CC Lê Đình Thao — MST 0316 552 018.</p>
+                <p style="font-size:10.5px"><b>Bên B:</b> Công ty NLMT Phương Nam.</p>
+                <p style="font-size:10.5px"><b>Điều 1:</b> Thi công ĐMT hoà lưới <b>8,82 kWp</b>.</p>
+                <p style="font-size:10.5px"><b>Điều 2:</b> Giá trị <b>80.850.960đ</b> (gồm VAT 8%), TT 20/70/10.</p>
+                <p style="font-size:10px;color:var(--muted)"><b>Điều 3–8:</b> theo template tĩnh chuẩn.</p>
+              </div>
+              <div class="frame on-bg" style="padding:11px 13px;margin-top:11px">
+                <span class="frame-label">Dữ liệu động</span>
+                <dl class="kv" style="font-size:11.5px"><dt>Loại HĐ</dt><dd>HĐ Thi công</dd><dt>Tổng tiền</dt><dd class="mono strong">80.850.960đ</dd><dt>Lịch TT</dt><dd>20/70/10</dd><dt>Ref BG</dt><dd class="mono">BG-2048</dd></dl>
+              </div>
+            </div>
+            <div class="mtotals"><button class="btn btn--primary btn--wide">⤓ Xuất PDF hợp đồng</button></div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       11 · HOÁ ĐƠN
+  ========================================================================== -->
+  <section class="section" id="s-invoice">
+    <div class="section-head">
+      <span class="kick">Tài chính · FR-27 · FR-28</span>
+      <h2>Hoá đơn</h2>
+      <span class="desc">Tạo hoá đơn từ đơn (lưu DB, số nội bộ) + xem/xuất PDF. Phase 1 không tích hợp nhà cung cấp HĐĐT.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/hoa-don</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><a class="mback" href="#s-detail">‹</a><h3>Hoá đơn · DH-2048</h3><div class="sp"></div><span class="pill warn">Không tích hợp HĐĐT (Phase sau)</span><button class="btn btn--primary btn--sm">⤓ Xuất PDF</button></div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+          <div class="doc" style="max-width:none">
+            <div class="row" style="margin-bottom:10px"><div><b style="font-size:12px">CÔNG TY NLMT PHƯƠNG NAM</b><br><span style="font-size:10px;color:var(--muted)">MST 0312 998 771</span></div><div class="sp"></div><div style="text-align:right"><span class="pill">Số HĐ nội bộ</span><br><b class="mono" style="font-size:13px">HD-2026-0731</b></div></div>
+            <h4>HOÁ ĐƠN BÁN HÀNG</h4>
+            <div class="doc-sub">Ngày lập: 06/07/2026 · Gắn đơn: DH-2048</div>
+            <p><b>Khách hàng:</b> VP Công Chứng Lê Đình Thao — MST 0316 552 018 — 122 Trần Não, TP. Thủ Đức.</p>
+            <table class="table" style="margin:8px 0">
+              <thead><tr><th>Hạng mục</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th></tr></thead>
+              <tbody>
+                <tr><td>Tấm pin AE 630W</td><td class="num mono">14</td><td class="num mono">2.583.000</td><td class="num strong mono">36.162.000</td></tr>
+                <tr class="zebra"><td>Inverter Solplanet ASW8000-S</td><td class="num mono">1</td><td class="num mono">18.500.000</td><td class="num strong mono">18.500.000</td></tr>
+                <tr><td>Vật tư (gói)</td><td class="num mono">1</td><td class="num mono">12.400.000</td><td class="num strong mono">12.400.000</td></tr>
+                <tr class="zebra"><td>Công lắp đặt</td><td class="num mono">1</td><td class="num mono">9.800.000</td><td class="num strong mono">9.800.000</td></tr>
+              </tbody>
+            </table>
+            <p style="text-align:right;margin:2px 0">Tổng trước VAT: <b class="mono">76.862.000đ</b> · VAT 8%: <b class="mono">6.148.960đ</b></p>
+            <p style="text-align:right;font-size:14px">Tổng thanh toán: <b class="mono" style="color:var(--teal)">83.010.960đ</b></p>
+            <div class="sig"><div>NGƯỜI LẬP PHIẾU</div><div>GIÁM ĐỐC</div></div>
+          </div>
+          <div class="frame" style="padding:14px 16px">
+            <span class="frame-label">Tạo hoá đơn từ đơn</span>
+            <dl class="kv"><dt>Nguồn</dt><dd>Đơn DH-2048 (snapshot)</dd><dt>MST khách</dt><dd class="mono">0316 552 018</dd><dt>Số HĐ nội bộ</dt><dd class="mono">HD-2026-0731 (tự cấp)</dd><dt>Ngày</dt><dd class="mono">06/07/2026</dd><dt>Lưu DB</dt><dd><span class="pill ok">Đã lưu</span></dd></dl>
+            <div class="row" style="gap:8px;margin-top:14px"><button class="btn btn--ghost" style="flex:1">Xem lại</button><button class="btn btn--primary" style="flex:1.4">⤓ Xuất / chia sẻ PDF</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE hoá đơn -->
+      <div>
+        <p class="cap">Mobile · hoá đơn &amp; chia sẻ</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:9px"><button class="mback">‹</button><div style="flex:1"><span class="micro">DH-2048</span><div style="font-size:14px;font-weight:800">Hoá đơn bán hàng</div></div><span class="pill ok">Đã lưu</span></div>
+            </div>
+            <div class="pscroll">
+              <div class="doc" style="max-width:none;padding:15px 15px;font-size:11px">
+                <div class="row" style="margin-bottom:9px"><div><b style="font-size:11px">CÔNG TY NLMT PHƯƠNG NAM</b><br><span style="font-size:9px;color:var(--muted)">MST 0312 998 771</span></div><div class="sp"></div><div style="text-align:right"><span class="pill">Số HĐ</span><br><b class="mono" style="font-size:11px">HD-2026-0731</b></div></div>
+                <h4 style="font-size:12px">HOÁ ĐƠN BÁN HÀNG</h4>
+                <div class="doc-sub" style="font-size:9.5px">06/07/2026 · Gắn đơn DH-2048</div>
+                <p style="font-size:10.5px"><b>KH:</b> VP CC Lê Đình Thao — MST 0316 552 018.</p>
+                <table class="table" style="font-size:10.5px;margin:6px 0">
+                  <tbody>
+                    <tr><td>Tấm pin AE 630W ×14</td><td class="num strong mono">36.162.000</td></tr>
+                    <tr class="zebra"><td>Inverter ASW8000-S ×1</td><td class="num strong mono">18.500.000</td></tr>
+                    <tr><td>Vật tư (gói) ×1</td><td class="num strong mono">12.400.000</td></tr>
+                    <tr class="zebra"><td>Công lắp đặt ×1</td><td class="num strong mono">9.800.000</td></tr>
+                  </tbody>
+                </table>
+                <p style="text-align:right;margin:2px 0;font-size:10.5px">Trước VAT: <b class="mono">76.862.000đ</b> · VAT 8%: <b class="mono">6.148.960đ</b></p>
+                <p style="text-align:right;font-size:12.5px">Tổng: <b class="mono" style="color:var(--teal)">83.010.960đ</b></p>
+              </div>
+            </div>
+            <div class="mtotals">
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">Xem lại</button><button class="btn btn--primary" style="flex:1.4">⤓ Xuất / chia sẻ PDF</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       12 · DANH MỤC VẬT TƯ & GIÁ
+  ========================================================================== -->
+  <section class="section" id="s-catalog">
+    <div class="section-head">
+      <span class="kick">Kho · FR-14 · FR-15</span>
+      <h2>Danh mục vật tư &amp; giá</h2>
+      <span class="desc">Bảng sản phẩm (tên/đơn vị/giá), sửa giá; toggle “Giá phân tầng (lẻ/sỉ)”.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/danh-muc</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><h3>Danh mục vật tư</h3><div class="sp"></div>
+          <span class="row" style="gap:8px"><span class="micro muted">Giá phân tầng (lẻ/sỉ)</span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></span>
+          <button class="btn btn--primary btn--sm">＋ Thêm sản phẩm</button>
+        </div>
+        <div class="toolbar"><div class="search"><span class="si">⌕</span><input class="field" placeholder="Tìm sản phẩm…"></div></div>
+        <div class="frame" style="padding:6px 0">
+          <span class="frame-label">Sản phẩm · giá phân tầng đang BẬT</span>
+          <table class="table">
+            <thead><tr><th>Sản phẩm</th><th>Đơn vị</th><th class="num">Giá lẻ</th><th class="num">Giá sỉ</th><th>Cập nhật</th><th></th></tr></thead>
+            <tbody>
+              <tr><td class="strong">Tấm pin AE 630W (mono)</td><td>tấm</td><td class="num mono">2.583.000</td><td class="num mono">2.480.000</td><td class="mono" style="color:var(--muted)">02/07</td><td class="num"><span class="btn btn--sm btn--ghost">✎ Sửa giá</span></td></tr>
+              <tr class="zebra"><td class="strong">Inverter Solplanet ASW8000-S</td><td>bộ</td><td class="num mono">18.500.000</td><td class="num mono">17.900.000</td><td class="mono" style="color:var(--muted)">28/06</td><td class="num"><span class="btn btn--sm btn--ghost">✎ Sửa giá</span></td></tr>
+              <tr><td class="strong">Vật tư (gói tiêu chuẩn)</td><td>gói</td><td class="num mono">12.400.000</td><td class="num mono">11.800.000</td><td class="mono" style="color:var(--muted)">28/06</td><td class="num"><span class="btn btn--sm btn--ghost">✎ Sửa giá</span></td></tr>
+              <tr class="zebra"><td class="strong">Công lắp đặt</td><td>công</td><td class="num mono">9.800.000</td><td class="num mono">9.200.000</td><td class="mono" style="color:var(--muted)">15/06</td><td class="num"><span class="btn btn--sm btn--ghost">✎ Sửa giá</span></td></tr>
+              <tr><td class="strong">Dây DC 6mm² Solar</td><td>mét</td><td class="num mono">42.000</td><td class="num mono">38.000</td><td class="mono" style="color:var(--muted)">15/06</td><td class="num"><span class="btn btn--sm btn--ghost">✎ Sửa giá</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="banner banner--info" style="margin-top:12px"><span>ℹ</span><div>Cập nhật giá phản ánh ngay vào báo giá <b>đang dựng</b> (chưa chốt); <b>không hồi tố</b> đơn đã chốt (snapshot). Mọi thay đổi ghi Audit log.</div></div>
+      </div>
+    </div>
+
+      <!-- MOBILE danh mục vật tư -->
+      <div>
+        <p class="cap">Mobile · danh mục &amp; sửa giá</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Kho</span><div style="font-size:15px;font-weight:800">Danh mục vật tư</div></div><button class="btn btn--primary btn--sm">＋</button></div>
+              <div class="search" style="margin-top:9px"><span class="si">⌕</span><input class="field" placeholder="Tìm sản phẩm…"></div>
+              <div class="row" style="gap:8px;margin-top:9px"><span class="micro muted">Giá phân tầng (lẻ/sỉ)</span><span class="sp"></span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></div>
+            </div>
+            <div class="pscroll">
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">Tấm pin AE 630W (mono)</b><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                <div class="row" style="margin-top:6px;font-size:12px"><span class="micro muted">tấm</span><span class="sp"></span><span class="mono">Lẻ 2.583.000</span><span style="margin:0 6px;color:var(--line)">|</span><span class="mono" style="color:var(--muted)">Sỉ 2.480.000</span></div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">Inverter Solplanet ASW8000-S</b><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                <div class="row" style="margin-top:6px;font-size:12px"><span class="micro muted">bộ</span><span class="sp"></span><span class="mono">Lẻ 18.500.000</span><span style="margin:0 6px;color:var(--line)">|</span><span class="mono" style="color:var(--muted)">Sỉ 17.900.000</span></div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">Vật tư (gói tiêu chuẩn)</b><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                <div class="row" style="margin-top:6px;font-size:12px"><span class="micro muted">gói</span><span class="sp"></span><span class="mono">Lẻ 12.400.000</span><span style="margin:0 6px;color:var(--line)">|</span><span class="mono" style="color:var(--muted)">Sỉ 11.800.000</span></div>
+              </div>
+              <div class="card" style="padding:11px 12px;margin-bottom:9px">
+                <div class="row"><b style="font-size:13px">Dây DC 6mm² Solar</b><span class="sp"></span><span class="btn btn--sm btn--ghost">✎ Sửa</span></div>
+                <div class="row" style="margin-top:6px;font-size:12px"><span class="micro muted">mét</span><span class="sp"></span><span class="mono">Lẻ 42.000</span><span style="margin:0 6px;color:var(--line)">|</span><span class="mono" style="color:var(--muted)">Sỉ 38.000</span></div>
+              </div>
+              <div class="banner banner--info"><span>ℹ</span><div>Sửa giá phản ánh ngay vào báo giá <b>đang dựng</b>; <b>không hồi tố</b> đơn đã chốt.</div></div>
+            </div>
+            <div class="mtabbar">
+              <a href="#s-dashboard"><span class="ic">▦</span>Tổng quan</a>
+              <a href="#s-inventory"><span class="ic">▤</span>Tồn kho</a>
+              <a class="active" href="#s-catalog"><span class="ic">⬚</span>Danh mục</a>
+              <a href="#s-orders"><span class="ic">☰</span>Đơn</a>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       13 · TỒN KHO
+  ========================================================================== -->
+  <section class="section" id="s-inventory">
+    <div class="section-head">
+      <span class="kick">Kho · FR-25 · FR-26</span>
+      <h2>Tồn kho</h2>
+      <span class="desc">Tồn hiện tại theo sản phẩm + Phiếu nhập/xuất; xuất gắn đơn; cảnh báo CHẶN khi không đủ tồn (1 kho).</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/ton-kho</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><h3>Tồn kho</h3><div class="sp"></div><button class="btn btn--ghost btn--sm">＋ Phiếu nhập</button><button class="btn btn--primary btn--sm">＋ Phiếu xuất</button></div>
+        <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:start">
+          <div class="frame" style="padding:6px 0">
+            <span class="frame-label">Tồn hiện tại · 1 kho</span>
+            <table class="table">
+              <thead><tr><th>Sản phẩm</th><th class="num">Tồn</th><th>Đơn vị</th><th>Cảnh báo</th></tr></thead>
+              <tbody>
+                <tr><td class="strong">Tấm pin AE 630W</td><td class="num strong mono">28</td><td>tấm</td><td><span class="pill ok">Đủ</span></td></tr>
+                <tr class="zebra"><td class="strong">Inverter Solplanet ASW8000-S</td><td class="num strong mono">3</td><td>bộ</td><td><span class="pill ok">Đủ</span></td></tr>
+                <tr><td class="strong">Vật tư (gói tiêu chuẩn)</td><td class="num strong mono">6</td><td>gói</td><td><span class="pill ok">Đủ</span></td></tr>
+                <tr class="zebra"><td class="strong">Dây DC 6mm² Solar</td><td class="num strong mono" style="color:var(--danger)">40</td><td>mét</td><td><span class="pill warn">Sắp hết</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="overlay" style="padding:0;background:none;border:0;justify-content:stretch">
+            <div class="modal" style="width:100%;border-color:var(--danger)">
+              <div class="modal-head"><span class="mt">Phiếu xuất · gắn đơn</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">DH-2041</span></div>
+              <div class="modal-body">
+                <div class="fgroup"><span class="flabel">Xuất theo dòng vật tư của đơn</span>
+                  <div class="row" style="justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)"><span>Tấm pin AE 630W</span><span class="mono">cần 12 · tồn 28 <span class="tick">✓</span></span></div>
+                  <div class="row" style="justify-content:space-between;font-size:12.5px;padding:6px 0"><span>Dây DC 6mm² Solar</span><span class="mono" style="color:var(--danger)">cần 60 · tồn 40 <span class="cross">✕</span></span></div>
+                </div>
+                <div class="banner banner--danger"><span>⛔</span><div><b>CHẶN xuất kho</b> — Dây DC 6mm² không đủ tồn (cần 60, còn 40). Nhập thêm trước khi xuất.</div></div>
+              </div>
+              <div class="modal-foot"><span class="sp"></span><button class="btn btn--ghost">Huỷ</button><button class="btn btn--danger" style="opacity:.55;cursor:not-allowed">Xuất kho (bị chặn)</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="frame" style="padding:6px 0;margin-top:16px">
+          <span class="frame-label">Phiếu kho gần đây</span>
+          <table class="table">
+            <thead><tr><th>Phiếu</th><th>Loại</th><th>Sản phẩm</th><th class="num">SL</th><th>Gắn đơn</th><th>Người · lúc</th></tr></thead>
+            <tbody>
+              <tr><td class="strong mono">PK-N-118</td><td><span class="pill ok">Nhập</span></td><td>Tấm pin AE 630W</td><td class="num mono">+30</td><td>—</td><td>Kho (Bình) · Hôm qua</td></tr>
+              <tr class="zebra"><td class="strong mono">PK-X-095</td><td><span class="pill warn">Xuất</span></td><td>Inverter Solplanet</td><td class="num mono">−1</td><td class="mono">DH-2045</td><td>Kho (Bình) · 2 ngày</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE tồn kho -->
+      <div>
+        <p class="cap">Mobile · tồn &amp; chặn xuất</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Kho · 1 kho</span><div style="font-size:15px;font-weight:800">Tồn kho</div></div><button class="btn btn--primary btn--sm">＋ Xuất</button></div>
+            </div>
+            <div class="pscroll">
+              <div class="banner banner--danger" style="margin-bottom:10px"><span>⛔</span><div><b>CHẶN xuất DH-2041</b> — Dây DC 6mm² cần 60, còn 40. Nhập thêm trước khi xuất.</div></div>
+              <span class="micro muted" style="display:block;margin:2px 0 8px">Tồn hiện tại</span>
+              <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:13px">Tấm pin AE 630W</b><span class="sp"></span><b class="mono">28</b><span style="font-size:11px;color:var(--muted);margin-left:4px">tấm</span><span class="pill ok" style="margin-left:8px">Đủ</span></div></div>
+              <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:13px">Inverter ASW8000-S</b><span class="sp"></span><b class="mono">3</b><span style="font-size:11px;color:var(--muted);margin-left:4px">bộ</span><span class="pill ok" style="margin-left:8px">Đủ</span></div></div>
+              <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:13px">Vật tư (gói)</b><span class="sp"></span><b class="mono">6</b><span style="font-size:11px;color:var(--muted);margin-left:4px">gói</span><span class="pill ok" style="margin-left:8px">Đủ</span></div></div>
+              <div class="card" style="padding:10px 12px;margin-bottom:12px;border-color:var(--warn)"><div class="row"><b style="font-size:13px">Dây DC 6mm² Solar</b><span class="sp"></span><b class="mono" style="color:var(--danger)">40</b><span style="font-size:11px;color:var(--muted);margin-left:4px">mét</span><span class="pill warn" style="margin-left:8px">Sắp hết</span></div></div>
+              <div class="frame on-bg" style="padding:6px 0">
+                <span class="frame-label">Phiếu kho gần đây</span>
+                <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><div class="row"><span class="mono strong" style="font-size:12px">PK-N-118</span><span class="pill ok" style="margin-left:8px">Nhập</span><span class="sp"></span><b class="mono">+30</b></div><div style="font-size:10.5px;color:var(--muted);margin-top:3px">Tấm pin · Kho (Bình) · Hôm qua</div></div>
+                <div style="padding:9px 12px"><div class="row"><span class="mono strong" style="font-size:12px">PK-X-095</span><span class="pill warn" style="margin-left:8px">Xuất</span><span class="sp"></span><b class="mono">−1</b></div><div style="font-size:10.5px;color:var(--muted);margin-top:3px">Inverter · DH-2045 · 2 ngày</div></div>
+              </div>
+            </div>
+            <div class="mtabbar">
+              <a href="#s-dashboard"><span class="ic">▦</span>Tổng quan</a>
+              <a class="active" href="#s-inventory"><span class="ic">▤</span>Tồn kho</a>
+              <a href="#s-catalog"><span class="ic">⬚</span>Danh mục</a>
+              <a href="#s-orders"><span class="ic">☰</span>Đơn</a>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       14 · PHÂN QUYỀN & TÀI KHOẢN
+  ========================================================================== -->
+  <section class="section" id="s-permissions">
+    <div class="section-head">
+      <span class="kick">Hệ thống · FR-16 · FR-17 · FR-18</span>
+      <h2>Phân quyền &amp; tài khoản</h2>
+      <span class="desc">List account; 1 account → checklist Quyền (tick/bỏ) + “Áp preset role”; ma trận quyền × role.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/phan-quyen</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><h3>Phân quyền &amp; tài khoản</h3><div class="sp"></div><button class="btn btn--primary btn--sm">＋ Tạo account</button></div>
+        <div style="display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:start">
+          <div class="frame" style="padding:6px 0">
+            <span class="frame-label">Accounts</span>
+            <div style="padding:9px 12px;border-bottom:1px solid var(--line);background:var(--teal-050)"><b style="font-size:12.5px">Hùng</b><div style="font-size:10.5px;color:var(--muted)">Thợ khảo sát</div></div>
+            <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><b style="font-size:12.5px">Lan</b><div style="font-size:10.5px;color:var(--muted)">Kế toán</div></div>
+            <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><b style="font-size:12.5px">Bình</b><div style="font-size:10.5px;color:var(--muted)">Kho/Giao hàng</div></div>
+            <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><b style="font-size:12.5px">Sơn</b><div style="font-size:10.5px;color:var(--muted)">Quản lý/Sếp</div></div>
+            <div style="padding:9px 12px"><b style="font-size:12.5px">Tú</b><div style="font-size:10.5px;color:var(--muted)">Admin · <span style="color:var(--teal-700)">Super Admin</span></div></div>
+          </div>
+          <div>
+            <div class="frame" style="padding:14px 16px;margin-bottom:14px">
+              <div class="row"><span class="frame-label">Quyền của: Hùng</span></div>
+              <div class="row" style="gap:8px;margin-bottom:12px"><span class="ktype">Role preset: Thợ khảo sát</span><span class="sp"></span><button class="btn btn--accent btn--sm">↺ Áp preset role</button></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:12.5px">
+                <label><span class="tick">▣</span> Tạo/sửa báo giá</label>
+                <label><span class="tick">▣</span> Chốt đơn</label>
+                <label><span class="tick">▣</span> Áp chiết khấu</label>
+                <label><span class="cross">▢</span> <span style="color:var(--muted)">Duyệt chiết khấu</span></label>
+                <label><span class="tick">▣</span> Sinh hợp đồng</label>
+                <label><span class="tick">▣</span> Quản lý khách hàng</label>
+                <label><span class="cross">▢</span> <span style="color:var(--muted)">Xem tất cả đơn</span></label>
+                <label><span class="tick">▣</span> Xem đơn của mình</label>
+                <label><span class="cross">▢</span> <span style="color:var(--muted)">Ghi nhận thanh toán</span></label>
+                <label><span class="cross">▢</span> <span style="color:var(--muted)">Nhập/Xuất kho</span></label>
+              </div>
+              <div class="banner banner--info" style="margin-top:12px"><span>ℹ</span><div>Sửa quyền account này KHÔNG ảnh hưởng account khác cùng role. Áp preset chỉ nạp giá trị.</div></div>
+              <div class="row" style="gap:8px;margin-top:12px;justify-content:flex-end"><button class="btn btn--ghost btn--sm">Huỷ</button><button class="btn btn--primary btn--sm">Lưu quyền</button></div>
+            </div>
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Ma trận quyền × preset role</span>
+              <table class="table" style="font-size:11.5px">
+                <thead><tr><th>Quyền</th><th class="num">Thợ KS</th><th class="num">Thi công</th><th class="num">Kế toán</th><th class="num">Kho/Giao</th><th class="num">QL/Sếp</th><th class="num">Admin</th></tr></thead>
+                <tbody>
+                  <tr><td>Tạo/sửa báo giá</td><td class="num"><span class="tick">✓</span></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr class="zebra"><td>Duyệt chiết khấu</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr><td>Chuyển bước thi công</td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr class="zebra"><td>Ghi nhận thanh toán</td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr><td>Nhập/Xuất kho</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr class="zebra"><td>Quản lý account &amp; phân quyền</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span></td></tr>
+                  <tr><td>Xem Audit log</td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"></td><td class="num"><span class="tick">✓</span><sup>¹</sup></td></tr>
+                </tbody>
+              </table>
+              <div style="font-size:10px;color:var(--muted);padding:6px 12px">¹ Chỉ account Super Admin (Tú), không phải mọi Admin.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+      <!-- MOBILE phân quyền -->
+      <div>
+        <p class="cap">Mobile · quyền theo account</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Hệ thống</span><div style="font-size:15px;font-weight:800">Phân quyền</div></div><button class="btn btn--primary btn--sm">＋</button></div>
+              <div class="row" style="gap:6px;margin-top:9px;overflow:auto">
+                <span class="scope-flag on" style="border-radius:8px">Hùng</span>
+                <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Lan</span>
+                <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Bình</span>
+                <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Sơn</span>
+                <span class="scope-flag off" style="border-radius:8px;text-decoration:none;color:var(--muted)">Tú</span>
+              </div>
+            </div>
+            <div class="pscroll">
+              <div class="row" style="gap:8px;margin-bottom:11px"><span class="ktype">Role: Thợ khảo sát</span><span class="sp"></span><button class="btn btn--accent btn--sm">↺ Áp preset</button></div>
+              <div class="frame on-bg" style="padding:11px 13px">
+                <span class="frame-label">Quyền của: Hùng</span>
+                <div style="display:flex;flex-direction:column;gap:9px;font-size:12.5px;margin-top:4px">
+                  <label class="row"><span>Tạo/sửa báo giá</span><span class="sp"></span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></label>
+                  <label class="row"><span>Chốt đơn</span><span class="sp"></span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></label>
+                  <label class="row"><span>Áp chiết khấu</span><span class="sp"></span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></label>
+                  <label class="row"><span style="color:var(--muted)">Duyệt chiết khấu</span><span class="sp"></span><span class="scope-flag off" style="border-radius:8px;text-decoration:none">▢ Tắt</span></label>
+                  <label class="row"><span>Sinh hợp đồng</span><span class="sp"></span><span class="scope-flag on" style="border-radius:8px">▣ Bật</span></label>
+                  <label class="row"><span style="color:var(--muted)">Xem tất cả đơn</span><span class="sp"></span><span class="scope-flag off" style="border-radius:8px;text-decoration:none">▢ Tắt</span></label>
+                  <label class="row"><span style="color:var(--muted)">Ghi nhận thanh toán</span><span class="sp"></span><span class="scope-flag off" style="border-radius:8px;text-decoration:none">▢ Tắt</span></label>
+                  <label class="row"><span style="color:var(--muted)">Nhập/Xuất kho</span><span class="sp"></span><span class="scope-flag off" style="border-radius:8px;text-decoration:none">▢ Tắt</span></label>
+                </div>
+              </div>
+              <div class="banner banner--info" style="margin-top:10px"><span>ℹ</span><div>Sửa quyền account này KHÔNG ảnh hưởng account khác cùng role.</div></div>
+            </div>
+            <div class="mtotals">
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">Huỷ</button><button class="btn btn--primary" style="flex:1.4">Lưu quyền</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       15 · AUDIT LOG (Super Admin)
+  ========================================================================== -->
+  <section class="section" id="s-audit">
+    <div class="section-head">
+      <span class="kick">Hệ thống · FR-20 · chỉ Super Admin</span>
+      <h2>Audit log</h2>
+      <span class="desc">Bản ghi bất biến: ai / hành động / đối tượng / thời gian / giá trị trước→sau. Không sửa/xoá.</span>
+      <span class="surface-tag web">Web</span>
+      <span class="surface-tag">Mobile</span>
+    </div>
+    <div class="stage">
+    <div class="web" style="flex:1 1 640px">
+      <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/audit-log</div></div>
+      <div class="main" style="padding:18px 22px">
+        <div class="main-head"><h3>Audit log</h3><span class="pill" style="border-color:var(--teal);color:var(--teal-700)">🔒 Super Admin: Tú</span><div class="sp"></div><div class="search" style="max-width:240px"><span class="si">⌕</span><input class="field" placeholder="Lọc account / đối tượng…"></div></div>
+        <div class="frame" style="padding:6px 0">
+          <span class="frame-label">Nhật ký bất biến</span>
+          <table class="table" style="font-size:11.5px">
+            <thead><tr><th>Thời gian</th><th>Ai</th><th>Hành động</th><th>Đối tượng</th><th>Trước → Sau</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">06/07 09:12</td><td>Hùng</td><td>Áp chiết khấu</td><td class="mono">DH-2048</td><td class="mono">82.850.960 → 80.850.960</td></tr>
+              <tr class="zebra"><td class="mono">06/07 08:40</td><td>Lan</td><td>Ghi nhận thanh toán</td><td class="mono">DH-2048 · đợt 1</td><td class="mono">Chưa thu → Đã thu 16.602.192</td></tr>
+              <tr><td class="mono">06/07 08:41</td><td>Hệ thống</td><td>Auto chuyển trạng thái</td><td class="mono">DH-2048</td><td class="mono">Đã chốt → Đã cọc</td></tr>
+              <tr class="zebra"><td class="mono">05/07 16:40</td><td>Hùng</td><td>Sửa đơn (bản v2)</td><td class="mono">DH-2048 · Tấm pin</td><td class="mono">SL 12 → 14</td></tr>
+              <tr><td class="mono">02/07 10:05</td><td>Hùng</td><td>Chốt đơn (snapshot)</td><td class="mono">DH-2048</td><td class="mono">Báo giá → Đã chốt</td></tr>
+              <tr class="zebra"><td class="mono">02/07 09:22</td><td>Lan</td><td>Sửa giá danh mục</td><td class="mono">Inverter ASW8000-S</td><td class="mono">18.900.000 → 18.500.000</td></tr>
+              <tr><td class="mono">01/07 14:03</td><td>Tú</td><td>Cấp account + áp role</td><td class="mono">Account: Hùng</td><td class="mono">— → Thợ khảo sát</td></tr>
+              <tr class="zebra"><td class="mono">01/07 11:15</td><td>Bình</td><td>Nhập kho (PK-N-118)</td><td class="mono">Tấm pin AE 630W</td><td class="mono">Tồn 0 → 30</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="banner banner--info" style="margin-top:12px"><span>🔒</span><div>Bản ghi <b>không sửa/xoá được</b>. Chỉ một account Super Admin được xem trang này.</div></div>
+      </div>
+    </div>
+
+      <!-- MOBILE audit log -->
+      <div>
+        <p class="cap">Mobile · nhật ký bất biến</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody">
+            <div class="mtop">
+              <div class="row" style="gap:10px"><div style="flex:1"><span class="micro">Hệ thống</span><div style="font-size:15px;font-weight:800">Audit log</div></div><span class="pill" style="border-color:var(--teal);color:var(--teal-700)">🔒 Tú</span></div>
+              <div class="search" style="margin-top:9px"><span class="si">⌕</span><input class="field" placeholder="Lọc account / đối tượng…"></div>
+            </div>
+            <div class="pscroll">
+              <div class="frame on-bg" style="padding:10px 12px;margin-bottom:8px">
+                <div class="row"><b style="font-size:12.5px">Hùng · Áp chiết khấu</b><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">06/07 09:12</span></div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px"><span class="mono">DH-2048</span> · 82.850.960 → <b class="mono" style="color:var(--teal)">80.850.960</b></div>
+              </div>
+              <div class="frame on-bg" style="padding:10px 12px;margin-bottom:8px">
+                <div class="row"><b style="font-size:12.5px">Lan · Ghi nhận thanh toán</b><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">06/07 08:40</span></div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px"><span class="mono">DH-2048 · đợt 1</span> · Chưa thu → Đã thu 16.602.192</div>
+              </div>
+              <div class="frame on-bg" style="padding:10px 12px;margin-bottom:8px">
+                <div class="row"><b style="font-size:12.5px">Hệ thống · Auto chuyển trạng thái</b><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">06/07 08:41</span></div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px"><span class="mono">DH-2048</span> · Đã chốt → Đã cọc</div>
+              </div>
+              <div class="frame on-bg" style="padding:10px 12px;margin-bottom:8px">
+                <div class="row"><b style="font-size:12.5px">Hùng · Sửa đơn (v2)</b><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">05/07 16:40</span></div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px"><span class="mono">DH-2048 · Tấm pin</span> · SL 12 → 14</div>
+              </div>
+              <div class="frame on-bg" style="padding:10px 12px;margin-bottom:8px">
+                <div class="row"><b style="font-size:12.5px">Tú · Cấp account + role</b><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">01/07 14:03</span></div>
+                <div style="font-size:11.5px;color:var(--ink-2);margin-top:3px"><span class="mono">Account: Hùng</span> · — → Thợ khảo sát</div>
+              </div>
+              <div class="banner banner--info"><span>🔒</span><div>Bản ghi <b>không sửa/xoá được</b>. Chỉ Super Admin xem được.</div></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       16 · SHARE SHEET (native)
+  ========================================================================== -->
+  <section class="section" id="s-share">
+    <div class="section-head">
+      <span class="kick">Đơn · FR-21</span>
+      <h2>Share sheet (khi Chốt)</h2>
+      <span class="desc">Native share bottom sheet; ưu tiên chia sẻ HÌNH ẢNH báo giá (hoặc PDF) qua Zalo/Messenger…</span>
+      <span class="surface-tag">Mobile</span>
+      <span class="surface-tag web">Web · Chia sẻ / Tải</span>
+    </div>
+    <div class="stage">
+
+      <!-- WEB chia sẻ / tải (bản văn phòng) -->
+      <div class="web" style="flex:1 1 520px">
+        <div class="web-chrome"><div class="web-dots"><i></i><i></i><i></i></div><div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048?share=1</div></div>
+        <div class="main" style="padding:16px 18px">
+          <div class="main-head"><div style="flex:1"><span class="micro">Đã chốt · BG-2048</span><h3 style="margin-top:1px">Chia sẻ / Tải báo giá</h3></div><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></div>
+          <div class="frame" style="padding:12px 14px;margin-bottom:14px;border-color:var(--teal)">
+            <span class="frame-label" style="color:var(--teal)">Báo giá đóng băng</span>
+            <div class="row"><b style="font-size:13.5px">BG-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><b class="mono" style="font-size:16px;color:var(--teal)">80.850.960đ</b></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Tệp xuất</span>
+              <div class="frame on-bg" style="padding:9px 11px;margin-bottom:9px"><div class="row"><span style="font-size:22px">🖼</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.png</div><div style="font-size:10.5px;color:var(--muted)">Hình ảnh báo giá · 248 KB</div></div><span class="sp"></span><span class="pill ok">Ưu tiên</span></div></div>
+              <div class="frame on-bg" style="padding:9px 11px"><div class="row"><span style="font-size:22px">📄</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.pdf</div><div style="font-size:10.5px;color:var(--muted)">Bản PDF · có chữ ký &amp; logo</div></div></div></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Chia sẻ / Tải</span>
+              <div class="fgroup"><span class="flabel">Liên kết chia sẻ</span><div class="row" style="gap:8px"><input class="field mono" value="pns.vn/bg/2048" style="flex:1"><button class="btn btn--ghost">⎘ Chép</button></div></div>
+              <div class="row" style="gap:8px;margin-bottom:9px"><button class="btn btn--primary" style="flex:1">⤴ Gửi Zalo</button><button class="btn btn--ghost" style="flex:1">✉ Email</button></div>
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">⤓ Tải PNG</button><button class="btn btn--ghost" style="flex:1">⤓ Tải PDF</button></div>
+              <div class="banner banner--info" style="margin-top:11px"><span>ℹ</span><div>Web hành xử tương tự mobile: <b>chia sẻ / tải</b>. Bản xuất có khối chữ ký + logo.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p class="cap">Sau khi bấm Chốt → native share</p>
+        <div class="phone"><div class="glass">
+          <div class="notch"></div>
+          <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+          <div class="pbody" style="justify-content:flex-end;background:rgba(12,31,28,.32)">
+            <div style="padding:0 8px">
+              <div class="frame" style="background:#fff;padding:12px;margin-bottom:10px;border-color:var(--teal)">
+                <span class="frame-label" style="color:var(--teal)">Đã chốt · báo giá đóng băng</span>
+                <div class="row"><b style="font-size:13px">BG-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></div>
+                <div class="row" style="margin-top:6px"><span class="micro muted">Tổng sau VAT</span><span class="sp"></span><b class="mono" style="font-size:15px;color:var(--teal)">80.850.960đ</b></div>
+              </div>
+            </div>
+            <div class="sheet" style="margin:0 auto;border-bottom:0">
+              <div class="sheet-grab"></div>
+              <div class="row" style="padding:2px 16px 10px"><span class="micro ink">Chia sẻ báo giá</span><span class="sp"></span><span class="pill">Ảnh · PDF</span></div>
+              <div class="frame on-bg" style="margin:0 16px 10px;padding:9px 11px;background:#fff"><div class="row"><span style="font-size:22px">🖼</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.png</div><div style="font-size:10.5px;color:var(--muted)">Hình ảnh báo giá · 248 KB</div></div></div></div>
+              <div class="share-grid">
+                <div class="share-app"><div class="ic" style="color:#0068FF">Z</div>Zalo</div>
+                <div class="share-app"><div class="ic" style="color:#0084FF">✉</div>Messenger</div>
+                <div class="share-app"><div class="ic" style="color:var(--ok)">✆</div>WhatsApp</div>
+                <div class="share-app"><div class="ic">✉</div>Email</div>
+                <div class="share-app"><div class="ic">⤓</div>Lưu ảnh</div>
+                <div class="share-app"><div class="ic">⎘</div>Sao chép</div>
+                <div class="share-app"><div class="ic">▤</div>Drive</div>
+                <div class="share-app"><div class="ic">⋯</div>Khác</div>
+              </div>
+              <div style="padding:0 16px 16px"><button class="btn btn--ghost btn--wide">Huỷ</button></div>
+            </div>
+          </div>
+        </div></div>
+      </div>
+
+      <div class="frame" style="flex:1 1 320px;padding:16px 18px;align-self:flex-start">
+        <span class="frame-label">Ghi chú hành vi Share (FR-21)</span>
+        <ul style="font-size:12.5px;color:var(--ink-2);padding-left:18px;margin:6px 0 0;line-height:1.7">
+          <li>Nút <b>Share</b> gọi native share bottom sheet của hệ điều hành.</li>
+          <li>Ưu tiên chia sẻ <b>hình ảnh</b> báo giá; PDF là lựa chọn thứ hai.</li>
+          <li>Web hành xử tương tự: share / download.</li>
+          <li>Bản xuất có <b>khối chữ ký</b> (Người lập phiếu / Giám đốc) + logo &amp; thông tin công ty theo mẫu thật.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bảng màu — Phương Nam Solar</title>
+<style>
+/* =====================================================================
+   PHƯƠNG NAM SOLAR — COLOR THEME EXPLORATION
+   Vibe: "Hiện đại tươi sáng" (modern, bright, fresh)
+   Context: internal ops tool, data-dense, field + office, Vietnamese
+   Light mode primary. Field readability = high contrast.
+   ---------------------------------------------------------------------
+   Each variation sets its palette via CSS custom properties on a
+   .theme wrapper. Components below consume those variables (DRY).
+   Concrete hex values are documented in comments per variation.
+   ===================================================================== */
+
+:root {
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: #eef1f5;
+  color: #10131a;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+}
+.page-head {
+  padding: 28px 24px 8px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+.page-head h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.02em; }
+.page-head p { margin: 0; color: #55607a; font-size: 14px; max-width: 760px; }
+.grid {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 16px 24px 60px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+  gap: 22px;
+}
+@media (max-width: 640px) {
+  .grid { grid-template-columns: 1fr; padding: 12px; }
+}
+
+/* ---- Theme card shell (neutral, theme-independent) ---- */
+.theme {
+  border-radius: 16px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 6px 20px rgba(20,30,50,0.08);
+  display: flex;
+  flex-direction: column;
+}
+.theme-head {
+  padding: 16px 18px;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.theme-head .name { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.theme-head .reg { font-size: 12.5px; opacity: 0.92; margin-top: 2px; }
+.theme-body { padding: 16px 18px 20px; }
+
+/* ---- Token chips ---- */
+.tokens { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+.tok {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px 3px 4px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.tok .sw {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 1px solid rgba(0,0,0,0.14);
+}
+.sub { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin: 4px 0 8px; }
+
+/* ---- Status chips (order state machine) ---- */
+.statuses { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.chip {
+  font-size: 11.5px; font-weight: 650;
+  padding: 3px 9px; border-radius: 6px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+
+/* ---- Mini quote card (Báo giá / giỏ hàng) ---- */
+.quote {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.quote-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.quote-top .qt { font-weight: 700; font-size: 14px; color: var(--text); }
+.quote-top .qc { font-size: 11.5px; color: var(--text-muted); }
+.line {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 10px 14px;
+  border-bottom: 1px dashed var(--border);
+}
+.line .nm { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.line .meta { font-size: 11.5px; color: var(--text-muted); }
+.line .amt { font-size: 13.5px; font-weight: 700; color: var(--text); text-align: right; align-self: center; }
+.line .accent-amt { color: var(--primary); }
+.totals { padding: 10px 14px; background: var(--surface-2); }
+.trow { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; }
+.trow.grand { font-size: 15px; font-weight: 800; color: var(--text); margin: 6px 0 0; padding-top: 8px; border-top: 1px solid var(--border); }
+.trow.grand .g { color: var(--primary); }
+.quote-actions { display: flex; gap: 8px; padding: 12px 14px; }
+.btn {
+  font-size: 12.5px; font-weight: 700; border-radius: 8px;
+  padding: 8px 14px; border: 1px solid var(--border);
+  cursor: default;
+}
+.btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.btn.ghost { background: transparent; color: var(--primary); border-color: var(--primary); }
+.chips-inline { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+
+/* ---- Dark strip ---- */
+.darkstrip {
+  margin-top: 14px; border-radius: 10px; padding: 12px 14px;
+  background: var(--d-bg); color: var(--d-text);
+  border: 1px solid var(--d-border);
+}
+.darkstrip .dlabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.7; margin-bottom: 8px; }
+.darkstrip .drow { display: flex; align-items: center; justify-content: space-between; }
+.darkstrip .dq { font-size: 13px; font-weight: 700; }
+.darkstrip .dg { font-size: 14px; font-weight: 800; color: var(--d-primary); }
+.dchips { display: flex; gap: 6px; margin-top: 8px; }
+
+/* =====================================================================
+   VARIATION 1 — NẮNG XANH (Solar Blue + Amber)
+   Register: năng động, tin cậy — xanh dương công nghệ + vàng nắng.
+   primary #1E63D8  accent #FFB300  bg #F7F9FC  surface #FFFFFF
+   text #10131A  muted #5A657C  border #E1E6EF
+   success #1E9E5A warning #E8930C danger #E23D3D info #1E7FD8
+   ===================================================================== */
+.v1 {
+  --primary:#1E63D8; --on-primary:#FFFFFF; --accent:#FFB300;
+  --bg:#F7F9FC; --surface:#FFFFFF; --surface-2:#F1F5FB;
+  --text:#10131A; --text-muted:#5A657C; --border:#E1E6EF;
+  --success:#1E9E5A; --warning:#E8930C; --danger:#E23D3D; --info:#1E7FD8;
+  --d-bg:#0E1626; --d-text:#E7ECF6; --d-primary:#5B9BFF; --d-border:#22314C;
+}
+
+/* =====================================================================
+   VARIATION 2 — NĂNG LƯỢNG SẠCH (Clean Teal + Lime)
+   Register: điềm tĩnh, sạch, bền vững — teal + xanh lá năng lượng sạch.
+   primary #0E9F8E  accent #A3E635  bg #F4FAF8  surface #FFFFFF
+   text #0C1F1C  muted #4E6B66  border #DBEBE7
+   success #159A6B warning #D98A0B danger #E14B4B info #0E8FA8
+   ===================================================================== */
+.v2 {
+  --primary:#0E9F8E; --on-primary:#FFFFFF; --accent:#A3E635;
+  --bg:#F4FAF8; --surface:#FFFFFF; --surface-2:#ECF6F3;
+  --text:#0C1F1C; --text-muted:#4E6B66; --border:#DBEBE7;
+  --success:#159A6B; --warning:#D98A0B; --danger:#E14B4B; --info:#0E8FA8;
+  --d-bg:#08211D; --d-text:#E3F3EF; --d-primary:#37D0BC; --d-border:#154039;
+}
+
+/* =====================================================================
+   VARIATION 3 — TINH GỌN (Crisp Neutral + one Blue accent)
+   Register: gọn gàng, chuyên nghiệp — nền xám lạnh, một điểm nhấn xanh.
+   primary #2563EB  accent #2563EB  bg #F8FAFC  surface #FFFFFF
+   text #0F172A  muted #64748B  border #E2E8F0
+   success #16A34A warning #D97706 danger #DC2626 info #0891B2
+   ===================================================================== */
+.v3 {
+  --primary:#2563EB; --on-primary:#FFFFFF; --accent:#2563EB;
+  --bg:#F8FAFC; --surface:#FFFFFF; --surface-2:#F1F5F9;
+  --text:#0F172A; --text-muted:#64748B; --border:#E2E8F0;
+  --success:#16A34A; --warning:#D97706; --danger:#DC2626; --info:#0891B2;
+  --d-bg:#0B1220; --d-text:#E6EDF7; --d-primary:#6EA8FF; --d-border:#1E2A44;
+}
+
+/* =====================================================================
+   VARIATION 4 — BÌNH MINH (Warm Dawn — Orange/Coral)
+   Register: ấm áp, thân thiện, nhiệt huyết — cam bình minh + xanh mực.
+   primary #F26B21  accent #1F3A5F  bg #FFF8F3  surface #FFFFFF
+   text #23180F  muted #7A6656  border #F0E2D6
+   success #2E9E5B warning #E0930A danger #DE3B3B info #2E7CC4
+   ===================================================================== */
+.v4 {
+  --primary:#F26B21; --on-primary:#FFFFFF; --accent:#1F3A5F;
+  --bg:#FFF8F3; --surface:#FFFFFF; --surface-2:#FCEFE6;
+  --text:#23180F; --text-muted:#7A6656; --border:#F0E2D6;
+  --success:#2E9E5B; --warning:#E0930A; --danger:#DE3B3B; --info:#2E7CC4;
+  --d-bg:#241207; --d-text:#F6E9DF; --d-primary:#FF8B4C; --d-border:#472712;
+}
+
+/* =====================================================================
+   VARIATION 5 — TRỜI TRONG (Sky — airy Sky Blue + Cyan)
+   Register: thoáng, nhẹ, tươi — xanh trời trong, tối giản.
+   primary #0284C7  accent #06B6D4  bg #F5FAFE  surface #FFFFFF
+   text #0B1B2B  muted #567089  border #DDE9F3
+   success #17995C warning #DE9109 danger #E0453F info #0EA5C4
+   ===================================================================== */
+.v5 {
+  --primary:#0284C7; --on-primary:#FFFFFF; --accent:#06B6D4;
+  --bg:#F5FAFE; --surface:#FFFFFF; --surface-2:#EAF3FB;
+  --text:#0B1B2B; --text-muted:#567089; --border:#DDE9F3;
+  --success:#17995C; --warning:#DE9109; --danger:#E0453F; --info:#0EA5C4;
+  --d-bg:#071824; --d-text:#E2F1FB; --d-primary:#38BDF8; --d-border:#123246;
+}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>Bảng màu đề xuất — Phương Nam Solar</h1>
+  <p>5 phương án màu theo tinh thần <strong>“Hiện đại tươi sáng”</strong> — khác nhau về <em>cảm xúc</em>, không chỉ sắc độ. Mỗi phương án gồm: chip token vai trò, chip trạng thái đơn hàng, và một thẻ <strong>Báo giá (giỏ hàng)</strong> mẫu để đánh giá màu trong ngữ cảnh thực. Ưu tiên chế độ sáng, tương phản cao cho môi trường ngoài trời.</p>
+</div>
+
+<div class="grid">
+
+  <!-- ============ VARIATION 1 ============ -->
+  <section class="theme v1">
+    <div class="theme-head">
+      <div class="name">1 · Nắng Xanh</div>
+      <div class="reg">Năng động &amp; tin cậy — xanh công nghệ điểm vàng nắng</div>
+    </div>
+    <div class="theme-body">
+      <div class="tokens">
+        <span class="tok"><span class="sw" style="background:#1E63D8"></span>primary</span>
+        <span class="tok"><span class="sw" style="background:#FFB300"></span>accent</span>
+        <span class="tok"><span class="sw" style="background:#F7F9FC"></span>surface</span>
+        <span class="tok"><span class="sw" style="background:#10131A"></span>text</span>
+        <span class="tok"><span class="sw" style="background:#5A657C"></span>muted</span>
+        <span class="tok"><span class="sw" style="background:#E1E6EF"></span>border</span>
+        <span class="tok"><span class="sw" style="background:#1E9E5A"></span>success</span>
+        <span class="tok"><span class="sw" style="background:#E8930C"></span>warning</span>
+        <span class="tok"><span class="sw" style="background:#E23D3D"></span>danger</span>
+        <span class="tok"><span class="sw" style="background:#1E7FD8"></span>info</span>
+      </div>
+      <div class="sub">Trạng thái đơn hàng</div>
+      <div class="statuses">
+        <span class="chip" style="background:#EEF3FB;color:#345; border-color:#D5E1F3">Báo giá</span>
+        <span class="chip" style="background:#FFF4DE;color:#8A5A00;border-color:#F3DDA6">Chờ duyệt</span>
+        <span class="chip" style="background:#E5EFFF;color:#1A4FB0;border-color:#C5DAFB">Đã chốt</span>
+        <span class="chip" style="background:#E4F5EE;color:#0F7A46;border-color:#BFE6D5">Đã cọc</span>
+        <span class="chip" style="background:#FDEBD2;color:#9A5A00;border-color:#F6D3A2">Đang thi công</span>
+        <span class="chip" style="background:#EDE9FB;color:#5B3FC0;border-color:#D6CDF4">Nghiệm thu</span>
+        <span class="chip" style="background:#E2F1FA;color:#0E6C9A;border-color:#BFE1F2">Đang giao</span>
+        <span class="chip" style="background:#E1F6E9;color:#137A42;border-color:#BCE9CE">Hoàn thành</span>
+        <span class="chip" style="background:#FBE7E7;color:#B42323;border-color:#F3C9C9">Huỷ</span>
+      </div>
+      <div class="quote">
+        <div class="quote-top">
+          <span class="qt">Báo giá #BG-2048</span>
+          <span class="qc">KH: Nguyễn Văn Hải · Q. Bình Tân</span>
+        </div>
+        <div class="line">
+          <div><div class="nm">Tấm pin JA Solar 580W</div><div class="meta">14 tấm × 2.450.000đ</div></div>
+          <div class="amt">34.300.000đ</div>
+        </div>
+        <div class="line">
+          <div><div class="nm">Inverter Growatt 8kW</div><div class="meta">1 bộ × 18.900.000đ</div></div>
+          <div class="amt">18.900.000đ</div>
+        </div>
+        <div class="totals">
+          <div class="trow"><span>Tạm tính</span><span>53.200.000đ</span></div>
+          <div class="trow"><span>VAT 8%</span><span>4.256.000đ</span></div>
+          <div class="trow grand"><span>Tổng cộng</span><span class="g">57.456.000đ</span></div>
+        </div>
+        <div class="quote-actions">
+          <button class="btn primary">Chốt đơn</button>
+          <button class="btn ghost">Lưu nháp</button>
+          <span class="chips-inline">
+            <span class="chip" style="background:#E5EFFF;color:#1A4FB0;border-color:#C5DAFB">Đã chốt</span>
+            <span class="chip" style="background:#FDEBD2;color:#9A5A00;border-color:#F6D3A2">Đang thi công</span>
+          </span>
+        </div>
+      </div>
+      <div class="darkstrip">
+        <div class="dlabel">Chế độ tối</div>
+        <div class="drow"><span class="dq">Báo giá #BG-2048</span><span class="dg">57.456.000đ</span></div>
+        <div class="dchips">
+          <span class="chip" style="background:#12294A;color:#8FB8FF;border-color:#25406B">Đã chốt</span>
+          <span class="chip" style="background:#3A2A0C;color:#F2BE6A;border-color:#5A431A">Đang thi công</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 2 ============ -->
+  <section class="theme v2">
+    <div class="theme-head">
+      <div class="name">2 · Năng Lượng Sạch</div>
+      <div class="reg">Điềm tĩnh &amp; bền vững — teal sạch điểm xanh lá</div>
+    </div>
+    <div class="theme-body">
+      <div class="tokens">
+        <span class="tok"><span class="sw" style="background:#0E9F8E"></span>primary</span>
+        <span class="tok"><span class="sw" style="background:#A3E635"></span>accent</span>
+        <span class="tok"><span class="sw" style="background:#F4FAF8"></span>surface</span>
+        <span class="tok"><span class="sw" style="background:#0C1F1C"></span>text</span>
+        <span class="tok"><span class="sw" style="background:#4E6B66"></span>muted</span>
+        <span class="tok"><span class="sw" style="background:#DBEBE7"></span>border</span>
+        <span class="tok"><span class="sw" style="background:#159A6B"></span>success</span>
+        <span class="tok"><span class="sw" style="background:#D98A0B"></span>warning</span>
+        <span class="tok"><span class="sw" style="background:#E14B4B"></span>danger</span>
+        <span class="tok"><span class="sw" style="background:#0E8FA8"></span>info</span>
+      </div>
+      <div class="sub">Trạng thái đơn hàng</div>
+      <div class="statuses">
+        <span class="chip" style="background:#EAF3F1;color:#3A5450;border-color:#CFE5E0">Báo giá</span>
+        <span class="chip" style="background:#FBF0DA;color:#8A5C08;border-color:#EFD9A8">Chờ duyệt</span>
+        <span class="chip" style="background:#DCF3EF;color:#0B7264;border-color:#B7E5DD">Đã chốt</span>
+        <span class="chip" style="background:#E7F5D9;color:#4B7A15;border-color:#CDE9AC">Đã cọc</span>
+        <span class="chip" style="background:#FCEAD4;color:#985B08;border-color:#F2D3A6">Đang thi công</span>
+        <span class="chip" style="background:#E4EEFA;color:#345C9C;border-color:#C4D8F0">Nghiệm thu</span>
+        <span class="chip" style="background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB">Đang giao</span>
+        <span class="chip" style="background:#DEF3E6;color:#137A4C;border-color:#B7E5CA">Hoàn thành</span>
+        <span class="chip" style="background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7">Huỷ</span>
+      </div>
+      <div class="quote">
+        <div class="quote-top">
+          <span class="qt">Báo giá #BG-2048</span>
+          <span class="qc">KH: Nguyễn Văn Hải · Q. Bình Tân</span>
+        </div>
+        <div class="line">
+          <div><div class="nm">Tấm pin JA Solar 580W</div><div class="meta">14 tấm × 2.450.000đ</div></div>
+          <div class="amt">34.300.000đ</div>
+        </div>
+        <div class="line">
+          <div><div class="nm">Inverter Growatt 8kW</div><div class="meta">1 bộ × 18.900.000đ</div></div>
+          <div class="amt">18.900.000đ</div>
+        </div>
+        <div class="totals">
+          <div class="trow"><span>Tạm tính</span><span>53.200.000đ</span></div>
+          <div class="trow"><span>VAT 8%</span><span>4.256.000đ</span></div>
+          <div class="trow grand"><span>Tổng cộng</span><span class="g">57.456.000đ</span></div>
+        </div>
+        <div class="quote-actions">
+          <button class="btn primary">Chốt đơn</button>
+          <button class="btn ghost">Lưu nháp</button>
+          <span class="chips-inline">
+            <span class="chip" style="background:#DCF3EF;color:#0B7264;border-color:#B7E5DD">Đã chốt</span>
+            <span class="chip" style="background:#FCEAD4;color:#985B08;border-color:#F2D3A6">Đang thi công</span>
+          </span>
+        </div>
+      </div>
+      <div class="darkstrip">
+        <div class="dlabel">Chế độ tối</div>
+        <div class="drow"><span class="dq">Báo giá #BG-2048</span><span class="dg">57.456.000đ</span></div>
+        <div class="dchips">
+          <span class="chip" style="background:#0C3A34;color:#5BD9C6;border-color:#1B554C">Đã chốt</span>
+          <span class="chip" style="background:#3A2A0C;color:#F0BE6A;border-color:#57431A">Đang thi công</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 3 ============ -->
+  <section class="theme v3">
+    <div class="theme-head">
+      <div class="name">3 · Tinh Gọn</div>
+      <div class="reg">Gọn gàng &amp; chuyên nghiệp — nền xám lạnh, một điểm nhấn xanh</div>
+    </div>
+    <div class="theme-body">
+      <div class="tokens">
+        <span class="tok"><span class="sw" style="background:#2563EB"></span>primary</span>
+        <span class="tok"><span class="sw" style="background:#2563EB"></span>accent</span>
+        <span class="tok"><span class="sw" style="background:#F8FAFC"></span>surface</span>
+        <span class="tok"><span class="sw" style="background:#0F172A"></span>text</span>
+        <span class="tok"><span class="sw" style="background:#64748B"></span>muted</span>
+        <span class="tok"><span class="sw" style="background:#E2E8F0"></span>border</span>
+        <span class="tok"><span class="sw" style="background:#16A34A"></span>success</span>
+        <span class="tok"><span class="sw" style="background:#D97706"></span>warning</span>
+        <span class="tok"><span class="sw" style="background:#DC2626"></span>danger</span>
+        <span class="tok"><span class="sw" style="background:#0891B2"></span>info</span>
+      </div>
+      <div class="sub">Trạng thái đơn hàng</div>
+      <div class="statuses">
+        <span class="chip" style="background:#F1F5F9;color:#475569;border-color:#DDE4EC">Báo giá</span>
+        <span class="chip" style="background:#FEF3E2;color:#9A5B08;border-color:#F6DDB4">Chờ duyệt</span>
+        <span class="chip" style="background:#E6EEFE;color:#1D4FD8;border-color:#C6D8FB">Đã chốt</span>
+        <span class="chip" style="background:#E4F7EC;color:#15803D;border-color:#BFE9CE">Đã cọc</span>
+        <span class="chip" style="background:#FDEBD3;color:#9A5B08;border-color:#F6D6A8">Đang thi công</span>
+        <span class="chip" style="background:#EEEBFB;color:#5B3FC0;border-color:#D7CFF4">Nghiệm thu</span>
+        <span class="chip" style="background:#E0F4FA;color:#0B7A94;border-color:#BBE5F0">Đang giao</span>
+        <span class="chip" style="background:#E4F7EC;color:#137A3D;border-color:#BFE9CE">Hoàn thành</span>
+        <span class="chip" style="background:#FCE8E8;color:#C11E1E;border-color:#F4CCCC">Huỷ</span>
+      </div>
+      <div class="quote">
+        <div class="quote-top">
+          <span class="qt">Báo giá #BG-2048</span>
+          <span class="qc">KH: Nguyễn Văn Hải · Q. Bình Tân</span>
+        </div>
+        <div class="line">
+          <div><div class="nm">Tấm pin JA Solar 580W</div><div class="meta">14 tấm × 2.450.000đ</div></div>
+          <div class="amt">34.300.000đ</div>
+        </div>
+        <div class="line">
+          <div><div class="nm">Inverter Growatt 8kW</div><div class="meta">1 bộ × 18.900.000đ</div></div>
+          <div class="amt">18.900.000đ</div>
+        </div>
+        <div class="totals">
+          <div class="trow"><span>Tạm tính</span><span>53.200.000đ</span></div>
+          <div class="trow"><span>VAT 8%</span><span>4.256.000đ</span></div>
+          <div class="trow grand"><span>Tổng cộng</span><span class="g">57.456.000đ</span></div>
+        </div>
+        <div class="quote-actions">
+          <button class="btn primary">Chốt đơn</button>
+          <button class="btn ghost">Lưu nháp</button>
+          <span class="chips-inline">
+            <span class="chip" style="background:#E6EEFE;color:#1D4FD8;border-color:#C6D8FB">Đã chốt</span>
+            <span class="chip" style="background:#FDEBD3;color:#9A5B08;border-color:#F6D6A8">Đang thi công</span>
+          </span>
+        </div>
+      </div>
+      <div class="darkstrip">
+        <div class="dlabel">Chế độ tối</div>
+        <div class="drow"><span class="dq">Báo giá #BG-2048</span><span class="dg">57.456.000đ</span></div>
+        <div class="dchips">
+          <span class="chip" style="background:#14213D;color:#8FB0FF;border-color:#26375A">Đã chốt</span>
+          <span class="chip" style="background:#3A2A0C;color:#F0BE6A;border-color:#57431A">Đang thi công</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 4 ============ -->
+  <section class="theme v4">
+    <div class="theme-head">
+      <div class="name">4 · Bình Minh</div>
+      <div class="reg">Ấm áp &amp; nhiệt huyết — cam bình minh, nền kem</div>
+    </div>
+    <div class="theme-body">
+      <div class="tokens">
+        <span class="tok"><span class="sw" style="background:#F26B21"></span>primary</span>
+        <span class="tok"><span class="sw" style="background:#1F3A5F"></span>accent</span>
+        <span class="tok"><span class="sw" style="background:#FFF8F3"></span>surface</span>
+        <span class="tok"><span class="sw" style="background:#23180F"></span>text</span>
+        <span class="tok"><span class="sw" style="background:#7A6656"></span>muted</span>
+        <span class="tok"><span class="sw" style="background:#F0E2D6"></span>border</span>
+        <span class="tok"><span class="sw" style="background:#2E9E5B"></span>success</span>
+        <span class="tok"><span class="sw" style="background:#E0930A"></span>warning</span>
+        <span class="tok"><span class="sw" style="background:#DE3B3B"></span>danger</span>
+        <span class="tok"><span class="sw" style="background:#2E7CC4"></span>info</span>
+      </div>
+      <div class="sub">Trạng thái đơn hàng</div>
+      <div class="statuses">
+        <span class="chip" style="background:#F4EDE6;color:#6A5647;border-color:#E6D6C7">Báo giá</span>
+        <span class="chip" style="background:#FCEFCF;color:#8A5D06;border-color:#F1DA9E">Chờ duyệt</span>
+        <span class="chip" style="background:#E4EBF4;color:#274B76;border-color:#C6D5E8">Đã chốt</span>
+        <span class="chip" style="background:#E3F3E7;color:#1E7A44;border-color:#BFE5C9">Đã cọc</span>
+        <span class="chip" style="background:#FBE3D2;color:#B8500F;border-color:#F4CBA9">Đang thi công</span>
+        <span class="chip" style="background:#ECE7F6;color:#553FA8;border-color:#D6CBEE">Nghiệm thu</span>
+        <span class="chip" style="background:#DFEEF7;color:#1A5F8C;border-color:#BCDBEE">Đang giao</span>
+        <span class="chip" style="background:#E1F2E6;color:#166B3B;border-color:#BEE3C8">Hoàn thành</span>
+        <span class="chip" style="background:#FAE4E1;color:#B82C24;border-color:#F1C6C0">Huỷ</span>
+      </div>
+      <div class="quote">
+        <div class="quote-top">
+          <span class="qt">Báo giá #BG-2048</span>
+          <span class="qc">KH: Nguyễn Văn Hải · Q. Bình Tân</span>
+        </div>
+        <div class="line">
+          <div><div class="nm">Tấm pin JA Solar 580W</div><div class="meta">14 tấm × 2.450.000đ</div></div>
+          <div class="amt">34.300.000đ</div>
+        </div>
+        <div class="line">
+          <div><div class="nm">Inverter Growatt 8kW</div><div class="meta">1 bộ × 18.900.000đ</div></div>
+          <div class="amt">18.900.000đ</div>
+        </div>
+        <div class="totals">
+          <div class="trow"><span>Tạm tính</span><span>53.200.000đ</span></div>
+          <div class="trow"><span>VAT 8%</span><span>4.256.000đ</span></div>
+          <div class="trow grand"><span>Tổng cộng</span><span class="g">57.456.000đ</span></div>
+        </div>
+        <div class="quote-actions">
+          <button class="btn primary">Chốt đơn</button>
+          <button class="btn ghost">Lưu nháp</button>
+          <span class="chips-inline">
+            <span class="chip" style="background:#E4EBF4;color:#274B76;border-color:#C6D5E8">Đã chốt</span>
+            <span class="chip" style="background:#FBE3D2;color:#B8500F;border-color:#F4CBA9">Đang thi công</span>
+          </span>
+        </div>
+      </div>
+      <div class="darkstrip">
+        <div class="dlabel">Chế độ tối</div>
+        <div class="drow"><span class="dq">Báo giá #BG-2048</span><span class="dg">57.456.000đ</span></div>
+        <div class="dchips">
+          <span class="chip" style="background:#20344F;color:#8FB4E4;border-color:#324E72">Đã chốt</span>
+          <span class="chip" style="background:#43230C;color:#FF9E63;border-color:#63381A">Đang thi công</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VARIATION 5 ============ -->
+  <section class="theme v5">
+    <div class="theme-head">
+      <div class="name">5 · Trời Trong</div>
+      <div class="reg">Thoáng &amp; nhẹ — xanh trời trong, tối giản</div>
+    </div>
+    <div class="theme-body">
+      <div class="tokens">
+        <span class="tok"><span class="sw" style="background:#0284C7"></span>primary</span>
+        <span class="tok"><span class="sw" style="background:#06B6D4"></span>accent</span>
+        <span class="tok"><span class="sw" style="background:#F5FAFE"></span>surface</span>
+        <span class="tok"><span class="sw" style="background:#0B1B2B"></span>text</span>
+        <span class="tok"><span class="sw" style="background:#567089"></span>muted</span>
+        <span class="tok"><span class="sw" style="background:#DDE9F3"></span>border</span>
+        <span class="tok"><span class="sw" style="background:#17995C"></span>success</span>
+        <span class="tok"><span class="sw" style="background:#DE9109"></span>warning</span>
+        <span class="tok"><span class="sw" style="background:#E0453F"></span>danger</span>
+        <span class="tok"><span class="sw" style="background:#0EA5C4"></span>info</span>
+      </div>
+      <div class="sub">Trạng thái đơn hàng</div>
+      <div class="statuses">
+        <span class="chip" style="background:#EDF3F9;color:#42586E;border-color:#D5E2EE">Báo giá</span>
+        <span class="chip" style="background:#FCF0D6;color:#8A5A06;border-color:#F1DCA6">Chờ duyệt</span>
+        <span class="chip" style="background:#DEEFFA;color:#0A6299;border-color:#B8DCF2">Đã chốt</span>
+        <span class="chip" style="background:#DFF4EA;color:#15804C;border-color:#B8E6CF">Đã cọc</span>
+        <span class="chip" style="background:#FCEAD3;color:#98600A;border-color:#F3D5A6">Đang thi công</span>
+        <span class="chip" style="background:#E7EAFA;color:#3E45B5;border-color:#CBD0F1">Nghiệm thu</span>
+        <span class="chip" style="background:#DBF3F8;color:#0A748C;border-color:#B4E4EE">Đang giao</span>
+        <span class="chip" style="background:#DFF4E9;color:#137A4A;border-color:#B8E6CD">Hoàn thành</span>
+        <span class="chip" style="background:#FBE6E5;color:#B52F2A;border-color:#F2C8C6">Huỷ</span>
+      </div>
+      <div class="quote">
+        <div class="quote-top">
+          <span class="qt">Báo giá #BG-2048</span>
+          <span class="qc">KH: Nguyễn Văn Hải · Q. Bình Tân</span>
+        </div>
+        <div class="line">
+          <div><div class="nm">Tấm pin JA Solar 580W</div><div class="meta">14 tấm × 2.450.000đ</div></div>
+          <div class="amt">34.300.000đ</div>
+        </div>
+        <div class="line">
+          <div><div class="nm">Inverter Growatt 8kW</div><div class="meta">1 bộ × 18.900.000đ</div></div>
+          <div class="amt">18.900.000đ</div>
+        </div>
+        <div class="totals">
+          <div class="trow"><span>Tạm tính</span><span>53.200.000đ</span></div>
+          <div class="trow"><span>VAT 8%</span><span>4.256.000đ</span></div>
+          <div class="trow grand"><span>Tổng cộng</span><span class="g">57.456.000đ</span></div>
+        </div>
+        <div class="quote-actions">
+          <button class="btn primary">Chốt đơn</button>
+          <button class="btn ghost">Lưu nháp</button>
+          <span class="chips-inline">
+            <span class="chip" style="background:#DEEFFA;color:#0A6299;border-color:#B8DCF2">Đã chốt</span>
+            <span class="chip" style="background:#FCEAD3;color:#98600A;border-color:#F3D5A6">Đang thi công</span>
+          </span>
+        </div>
+      </div>
+      <div class="darkstrip">
+        <div class="dlabel">Chế độ tối</div>
+        <div class="drow"><span class="dq">Báo giá #BG-2048</span><span class="dg">57.456.000đ</span></div>
+        <div class="dchips">
+          <span class="chip" style="background:#0C3348;color:#66C6F5;border-color:#1B4A66">Đã chốt</span>
+          <span class="chip" style="background:#3A2A0C;color:#F0BE6A;border-color:#57431A">Đang thi công</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

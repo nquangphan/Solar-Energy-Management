@@ -1,0 +1,616 @@
+<!-- =====================================================================
+     PART E — KHO · PHÂN QUYỀN · AUDIT (5 screens)
+     s-inventory · s-stock-vouchers · s-permissions · s-account-form · s-audit
+===================================================================== -->
+
+<!-- ============================ 1 · TỒN KHO ============================ -->
+<section class="screen" id="s-inventory">
+  <div class="screen-head">
+    <span class="kick">Kho · FR-25 · FR-26</span>
+    <h2>Tồn kho</h2>
+    <span class="desc">Tồn hiện tại theo sản phẩm; tạo Phiếu nhập/xuất. Xuất gắn đơn mà thiếu tồn → cảnh báo và CHẶN (1 kho duy nhất).</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/ton-kho</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink active" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHO · 1 KHO</span>
+              Tồn kho
+            </div>
+            <a class="topbar-action" href="#s-stock-vouchers">Phiếu kho</a>
+          </div>
+
+          <div class="toolbar">
+            <div class="search"><span class="si">⌕</span><input class="field" placeholder="Tìm sản phẩm trong kho…"></div>
+            <button class="btn btn--ghost btn--sm">＋ Phiếu nhập</button>
+            <button class="btn btn--primary btn--sm">＋ Phiếu xuất</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.25fr 1fr;gap:18px;align-items:start">
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Tồn hiện tại · theo sản phẩm</span>
+              <table class="table">
+                <thead><tr><th>Sản phẩm</th><th class="num">Tồn</th><th>ĐV</th><th>Tình trạng</th></tr></thead>
+                <tbody>
+                  <tr><td class="strong">Tấm pin AE 630W</td><td class="num strong mono">42</td><td>tấm</td><td><span class="pill ok">Đủ</span></td></tr>
+                  <tr class="zebra"><td class="strong">Inverter Solplanet ASW8000-S</td><td class="num strong mono">3</td><td>bộ</td><td><span class="pill warn">Sắp hết</span></td></tr>
+                  <tr><td class="strong">Battery LiFePO4 10kWh</td><td class="num strong mono" style="color:var(--danger)">0</td><td>bộ</td><td><span class="pill" style="border-color:var(--danger);color:#B22C2C;background:#FAE6E6">Hết hàng</span></td></tr>
+                  <tr class="zebra"><td class="strong">Vật tư (gói tiêu chuẩn)</td><td class="num strong mono">8</td><td>gói</td><td><span class="pill ok">Đủ</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="modal" style="width:100%;border-color:var(--danger)">
+              <div class="modal-head"><span class="mt">Phiếu xuất · gắn đơn</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">DH-2048</span></div>
+              <div class="modal-body">
+                <div class="fgroup"><span class="flabel">Xuất theo dòng vật tư của đơn</span>
+                  <div class="row" style="justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)"><span>Tấm pin AE 630W</span><span class="mono">cần 12 · tồn 42 <span class="tick">✓</span></span></div>
+                  <div class="row" style="justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px dashed var(--line)"><span>Inverter Solplanet ASW8000-S</span><span class="mono">cần 1 · tồn 3 <span class="tick">✓</span></span></div>
+                  <div class="row" style="justify-content:space-between;font-size:12.5px;padding:6px 0"><span>Battery LiFePO4 10kWh</span><span class="mono" style="color:var(--danger)">cần 1 · tồn 0 <span class="cross">✕</span></span></div>
+                </div>
+                <div class="banner banner--danger"><span>⛔</span><div><b>CHẶN xuất kho</b> — Battery LiFePO4 10kWh không đủ tồn (cần 1, còn 0). Nhập thêm trước khi xuất.</div></div>
+              </div>
+              <div class="modal-foot"><span class="sp"></span><button class="btn btn--ghost">Huỷ</button><button class="btn btn--danger" style="opacity:.55;cursor:not-allowed">Xuất kho (bị chặn)</button></div>
+            </div>
+          </div>
+
+          <div class="notecard" style="margin-top:14px">Mọi Phiếu nhập/xuất được ghi Audit log (ai, khi nào, số lượng, sản phẩm). Phase 1 quản lý một kho duy nhất.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHO · 1 KHO</span>
+              Tồn kho
+            </div>
+            <a class="topbar-action" href="#s-inventory">＋ Xuất</a>
+          </div>
+          <div class="pscroll">
+            <div class="banner banner--danger" style="margin-bottom:10px"><span>⛔</span><div><b>CHẶN xuất DH-2048</b> — Battery LiFePO4 10kWh cần 1, còn 0. Nhập thêm trước khi xuất.</div></div>
+            <span class="micro muted" style="display:block;margin:2px 0 8px">Tồn hiện tại</span>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:13px">Tấm pin AE 630W</b><span class="sp"></span><b class="mono">42</b><span style="font-size:11px;color:var(--muted);margin-left:4px">tấm</span><span class="pill ok" style="margin-left:8px">Đủ</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px;border-color:var(--warn)"><div class="row"><b style="font-size:13px">Inverter ASW8000-S</b><span class="sp"></span><b class="mono">3</b><span style="font-size:11px;color:var(--muted);margin-left:4px">bộ</span><span class="pill warn" style="margin-left:8px">Sắp hết</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px;border-color:var(--danger)"><div class="row"><b style="font-size:13px">Battery LiFePO4 10kWh</b><span class="sp"></span><b class="mono" style="color:var(--danger)">0</b><span style="font-size:11px;color:var(--muted);margin-left:4px">bộ</span><span class="pill" style="margin-left:8px;border-color:var(--danger);color:#B22C2C;background:#FAE6E6">Hết</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:12px"><div class="row"><b style="font-size:13px">Vật tư (gói)</b><span class="sp"></span><b class="mono">8</b><span style="font-size:11px;color:var(--muted);margin-left:4px">gói</span><span class="pill ok" style="margin-left:8px">Đủ</span></div></div>
+            <a class="btn btn--ghost btn--wide" href="#s-stock-vouchers">Xem phiếu kho ›</a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item active" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 2 · PHIẾU KHO ============================ -->
+<section class="screen" id="s-stock-vouchers">
+  <div class="screen-head">
+    <span class="kick">Kho · FR-25 · FR-26</span>
+    <h2>Phiếu kho</h2>
+    <span class="desc">Danh sách phiếu nhập/xuất (mã · loại · ngày · người) và chi tiết một phiếu — các dòng sản phẩm, gắn đơn nếu có.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/phieu-kho</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink active" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-inventory" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHO</span>
+              Phiếu kho
+            </div>
+            <a class="topbar-action" href="#s-inventory">＋ Tạo phiếu</a>
+          </div>
+
+          <div class="toolbar">
+            <div class="seg"><a class="active" href="#s-stock-vouchers">Tất cả</a><a href="#s-stock-vouchers">Nhập</a><a href="#s-stock-vouchers">Xuất</a></div>
+            <div class="sp"></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start">
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Danh sách phiếu</span>
+              <table class="table">
+                <thead><tr><th>Phiếu</th><th>Loại</th><th>Ngày</th><th>Người</th></tr></thead>
+                <tbody>
+                  <tr style="cursor:pointer"><td class="strong mono">PK-X-096</td><td><span class="pill warn">Xuất</span></td><td class="mono">06/07</td><td>Kho (Bình)</td></tr>
+                  <tr class="zebra"><td class="strong mono">PK-N-119</td><td><span class="pill ok">Nhập</span></td><td class="mono">05/07</td><td>Kho (Bình)</td></tr>
+                  <tr><td class="strong mono">PK-X-095</td><td><span class="pill warn">Xuất</span></td><td class="mono">04/07</td><td>Kho (Bình)</td></tr>
+                  <tr class="zebra"><td class="strong mono">PK-N-118</td><td><span class="pill ok">Nhập</span></td><td class="mono">02/07</td><td>Kho (Bình)</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="card card--teal" style="overflow:hidden">
+              <div style="padding:12px 14px;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:10px">
+                <span class="micro">Chi tiết phiếu</span><span class="strong mono" style="font-size:14px">PK-X-096</span>
+                <span class="sp"></span><span class="pill warn">Xuất</span>
+              </div>
+              <div style="padding:14px">
+                <dl class="kv" style="margin-bottom:12px">
+                  <dt>Loại</dt><dd>Xuất kho · gắn đơn</dd>
+                  <dt>Gắn đơn</dt><dd class="mono">DH-2048</dd>
+                  <dt>Ngày</dt><dd class="mono">06/07/2026 · 09:12</dd>
+                  <dt>Người tạo</dt><dd>Kho/Giao hàng (Bình)</dd>
+                </dl>
+                <span class="micro muted" style="display:block;margin:0 0 6px">Dòng sản phẩm</span>
+                <table class="table">
+                  <thead><tr><th>Sản phẩm</th><th class="num">SL</th></tr></thead>
+                  <tbody>
+                    <tr><td>Tấm pin AE 630W</td><td class="num mono">−12</td></tr>
+                    <tr class="zebra"><td>Inverter Solplanet ASW8000-S</td><td class="num mono">−1</td></tr>
+                    <tr><td>Vật tư (gói tiêu chuẩn)</td><td class="num mono">−1</td></tr>
+                  </tbody>
+                </table>
+                <div class="notecard" style="margin-top:12px">Đã ghi Audit log lúc tạo phiếu. Không sửa/xoá được sau khi lưu.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-inventory" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHO</span>
+              Phiếu kho
+            </div>
+            <a class="topbar-action" href="#s-inventory">＋</a>
+          </div>
+          <div class="pscroll">
+            <span class="micro muted" style="display:block;margin:2px 0 8px">Danh sách phiếu</span>
+            <div class="frame on-bg" style="padding:6px 0;margin-bottom:12px">
+              <span class="frame-label">Gần đây</span>
+              <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><div class="row"><span class="mono strong" style="font-size:12px">PK-X-096</span><span class="pill warn" style="margin-left:8px">Xuất</span><span class="sp"></span><b class="mono">−14</b></div><div style="font-size:10.5px;color:var(--muted);margin-top:3px">DH-2048 · Kho (Bình) · Hôm nay</div></div>
+              <div style="padding:9px 12px;border-bottom:1px solid var(--line)"><div class="row"><span class="mono strong" style="font-size:12px">PK-N-119</span><span class="pill ok" style="margin-left:8px">Nhập</span><span class="sp"></span><b class="mono">+40</b></div><div style="font-size:10.5px;color:var(--muted);margin-top:3px">Tấm pin · Kho (Bình) · 05/07</div></div>
+              <div style="padding:9px 12px"><div class="row"><span class="mono strong" style="font-size:12px">PK-X-095</span><span class="pill warn" style="margin-left:8px">Xuất</span><span class="sp"></span><b class="mono">−1</b></div><div style="font-size:10.5px;color:var(--muted);margin-top:3px">Inverter · DH-2045 · 04/07</div></div>
+            </div>
+
+            <div class="card card--teal" style="padding:12px">
+              <div class="row" style="margin-bottom:8px"><span class="strong mono" style="font-size:13px">PK-X-096</span><span class="pill warn" style="margin-left:8px">Xuất</span><span class="sp"></span><span class="mono" style="font-size:11px;color:var(--muted)">DH-2048</span></div>
+              <div style="font-size:11.5px;color:var(--muted);margin-bottom:8px">06/07/2026 · Kho/Giao hàng (Bình)</div>
+              <div class="row" style="justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px dashed var(--line)"><span>Tấm pin AE 630W</span><b class="mono">−12</b></div>
+              <div class="row" style="justify-content:space-between;font-size:12.5px;padding:5px 0;border-bottom:1px dashed var(--line)"><span>Inverter ASW8000-S</span><b class="mono">−1</b></div>
+              <div class="row" style="justify-content:space-between;font-size:12.5px;padding:5px 0"><span>Vật tư (gói)</span><b class="mono">−1</b></div>
+            </div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item active" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== 3 · PHÂN QUYỀN & TÀI KHOẢN ==================== -->
+<section class="screen" id="s-permissions">
+  <div class="screen-head">
+    <span class="kick">Quản trị · FR-16 · FR-17 · FR-18</span>
+    <h2>Phân quyền &amp; tài khoản</h2>
+    <span class="desc">Danh sách account; chọn 1 account → checklist Quyền (tick/bỏ) + nút “Áp preset role”. Quyền lưu trên account là nguồn chân lý; role chỉ nạp giá trị.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/phan-quyen</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink active" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN TRỊ</span>
+              Phân quyền &amp; tài khoản
+            </div>
+            <a class="topbar-action" href="#s-account-form">＋ Tạo account</a>
+          </div>
+
+          <div style="display:grid;grid-template-columns:230px 1fr;gap:18px;align-items:start">
+            <!-- account list -->
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Tài khoản</span>
+              <div style="padding:4px 6px">
+                <a class="list-row" href="#s-permissions" style="border-color:var(--teal);margin-bottom:6px"><div style="flex:1"><b style="font-size:12.5px">Trần Văn A</b><div style="font-size:10.5px;color:var(--muted)">Thợ khảo sát</div></div></a>
+                <a class="list-row" href="#s-permissions" style="margin-bottom:6px"><div style="flex:1"><b style="font-size:12.5px">Nguyễn B</b><div style="font-size:10.5px;color:var(--muted)">Đội thi công</div></div></a>
+                <a class="list-row" href="#s-permissions" style="margin-bottom:6px"><div style="flex:1"><b style="font-size:12.5px">Lê Thị C</b><div style="font-size:10.5px;color:var(--muted)">Kế toán</div></div></a>
+                <a class="list-row" href="#s-permissions" style="margin-bottom:6px"><div style="flex:1"><b style="font-size:12.5px">Bình (Kho)</b><div style="font-size:10.5px;color:var(--muted)">Kho/Giao hàng</div></div></a>
+                <a class="list-row" href="#s-permissions" style="margin-bottom:0"><div style="flex:1"><b style="font-size:12.5px">Sếp D</b><div style="font-size:10.5px;color:var(--muted)">Quản lý/Sếp</div></div></a>
+              </div>
+            </div>
+
+            <!-- checklist for selected account -->
+            <div class="card card--teal">
+              <div style="padding:12px 14px;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <span class="micro">Quyền của account</span><b style="font-size:14px">Trần Văn A</b><span class="ktype">Thợ khảo sát</span>
+                <span class="sp"></span>
+                <button class="btn btn--accent btn--sm">Áp preset role ▾</button>
+                <button class="btn btn--primary btn--sm">Lưu</button>
+              </div>
+              <div style="padding:12px 14px">
+                <div class="banner banner--info" style="margin-bottom:12px"><span>ⓘ</span><div>Áp preset chỉ <b>nạp giá trị mặc định</b>. Sau đó tick/bỏ từng quyền — bộ quyền lưu trên account là nguồn chân lý.</div></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px 20px;font-size:12.5px">
+                  <label class="row" style="gap:8px"><span class="tick">☑</span> Tạo/sửa báo giá</label>
+                  <label class="row" style="gap:8px"><span class="tick">☑</span> Chốt đơn</label>
+                  <label class="row" style="gap:8px"><span class="tick">☑</span> Áp chiết khấu</label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:var(--muted)">Duyệt chiết khấu</span></label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:var(--muted)">Chuyển bước thi công</span></label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:var(--muted)">Xác nhận giao hàng</span></label>
+                  <label class="row" style="gap:8px"><span class="tick">☑</span> Quản lý khách hàng</label>
+                  <label class="row" style="gap:8px"><span class="tick">☑</span> Sinh hợp đồng</label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:var(--muted)">Xem tất cả đơn</span> <span class="pill" style="margin-left:4px">bỏ · chỉ đơn của mình</span></label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:var(--muted)">Nhập/Xuất kho</span></label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:#c3d3ce">Xem Audit log</span> <span class="pill" style="margin-left:4px;border-color:var(--danger);color:#B22C2C">chỉ Super Admin</span></label>
+                  <label class="row" style="gap:8px"><span class="cross">☐</span> <span style="color:#c3d3ce">Quản lý account &amp; phân quyền</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- matrix -->
+          <div class="frame" style="padding:6px 0;margin-top:18px">
+            <span class="frame-label">Ma trận Quyền × 6 role (preset mặc định — PRD §4.6)</span>
+            <div style="overflow-x:auto">
+            <table class="table" style="min-width:640px">
+              <thead><tr><th>Quyền</th><th class="num">Thợ KS</th><th class="num">Thi công</th><th class="num">Kế toán</th><th class="num">Kho/Giao</th><th class="num">QL/Sếp</th><th class="num">Admin</th></tr></thead>
+              <tbody>
+                <tr><td class="strong">Tạo/sửa báo giá</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Chốt đơn</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Áp chiết khấu</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Duyệt chiết khấu</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Chuyển bước thi công</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Xác nhận giao hàng</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Ghi nhận thanh toán</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Sửa danh mục &amp; giá</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Sinh hợp đồng</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Xem tất cả đơn</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Xem dashboard tài chính</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Quản lý khách hàng</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Nhập/Xuất kho</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Tạo/xuất hoá đơn</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num cross">·</td><td class="num tick">✓</td><td class="num tick">✓</td></tr>
+                <tr><td class="strong">Quản lý account &amp; phân quyền</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num tick">✓</td></tr>
+                <tr class="zebra"><td class="strong">Xem Audit log</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num cross">·</td><td class="num" style="color:var(--danger);font-weight:900">✓¹</td></tr>
+              </tbody>
+            </table>
+            </div>
+            <div class="notecard" style="margin:8px 14px 4px">¹ <b>Xem Audit log = chỉ Super Admin</b> — một account Admin được chỉ định là cao nhất, không phải mọi Admin. Đổi định nghĩa preset role sau này không tự đổi account đã tạo.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-menu" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN TRỊ</span>
+              Quyền · Trần Văn A
+            </div>
+            <a class="topbar-action" href="#s-permissions">Lưu</a>
+          </div>
+          <div class="pscroll">
+            <div class="card" style="padding:10px 12px;margin-bottom:10px"><div class="row"><b style="font-size:13px">Trần Văn A</b><span class="ktype" style="margin-left:8px">Thợ khảo sát</span></div></div>
+            <button class="btn btn--accent btn--wide" style="margin-bottom:10px">Áp preset role ▾</button>
+            <div class="banner banner--info" style="margin-bottom:10px"><span>ⓘ</span><div>Preset chỉ nạp mặc định; tick/bỏ từng quyền bên dưới.</div></div>
+            <span class="micro muted" style="display:block;margin:2px 0 6px">Checklist quyền</span>
+            <div style="display:grid;gap:8px;font-size:12.5px">
+              <label class="list-row" style="margin:0;padding:9px 12px"><span class="tick" style="margin-right:8px">☑</span> Tạo/sửa báo giá</label>
+              <label class="list-row" style="margin:0;padding:9px 12px"><span class="tick" style="margin-right:8px">☑</span> Chốt đơn</label>
+              <label class="list-row" style="margin:0;padding:9px 12px"><span class="tick" style="margin-right:8px">☑</span> Áp chiết khấu</label>
+              <label class="list-row" style="margin:0;padding:9px 12px"><span class="cross" style="margin-right:8px">☐</span> <span style="color:var(--muted)">Xem tất cả đơn</span></label>
+              <label class="list-row" style="margin:0;padding:9px 12px"><span class="tick" style="margin-right:8px">☑</span> Quản lý khách hàng</label>
+              <label class="list-row" style="margin:0;padding:9px 12px;border-color:var(--danger)"><span class="cross" style="margin-right:8px">☐</span> <span style="color:#c3d3ce">Xem Audit log</span><span class="sp"></span><span class="pill" style="border-color:var(--danger);color:#B22C2C">chỉ Super Admin</span></label>
+            </div>
+            <a class="btn btn--ghost btn--wide" href="#s-permissions" style="margin-top:12px">Xem ma trận quyền × role ›</a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== 4 · TẠO / SỬA ACCOUNT ==================== -->
+<section class="screen" id="s-account-form">
+  <div class="screen-head">
+    <span class="kick">Quản trị · FR-16</span>
+    <h2>Tạo / sửa account</h2>
+    <span class="desc">Form tạo tài khoản: tên, SĐT, role preset, trạng thái kích hoạt. Áp preset nạp bộ quyền mặc định; chỉnh thêm ở màn phân quyền.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/phan-quyen/tao</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink active" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-permissions" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN TRỊ · ACCOUNT</span>
+              Tạo tài khoản mới
+            </div>
+            <a class="topbar-action" href="#s-permissions">Lưu</a>
+          </div>
+
+          <div style="max-width:520px">
+            <div class="card" style="padding:18px">
+              <div class="fgroup"><span class="flabel">Họ tên</span><input class="field" value="Phạm Văn E"></div>
+              <div class="fgroup"><span class="flabel">Số điện thoại (dùng đăng nhập)</span><input class="field mono" value="0912 345 678"></div>
+              <div class="fgroup"><span class="flabel">Role preset</span>
+                <select class="field"><option>Thợ khảo sát</option><option>Đội thi công</option><option selected>Kế toán</option><option>Kho/Giao hàng</option><option>Quản lý/Sếp</option><option>Admin</option></select>
+              </div>
+              <div class="fgroup"><span class="flabel">Trạng thái kích hoạt</span>
+                <div class="row" style="gap:8px"><span class="scope-flag on">● Kích hoạt</span><span class="scope-flag off">Tạm khoá</span></div>
+              </div>
+              <div class="banner banner--info" style="margin:4px 0 14px"><span>ⓘ</span><div>Áp preset role sẽ <b>nạp bộ quyền mặc định</b> cho account. Muốn chỉnh thêm (tick/bỏ từng quyền) → làm ở màn <b>Phân quyền</b>.</div></div>
+              <div class="row" style="gap:8px"><a class="btn btn--ghost" href="#s-permissions">Huỷ</a><span class="sp"></span><button class="btn btn--primary">Lưu account</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-permissions" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">ACCOUNT</span>
+              Tạo tài khoản
+            </div>
+            <a class="topbar-action" href="#s-permissions">Lưu</a>
+          </div>
+          <div class="pscroll">
+            <div class="fgroup"><span class="flabel">Họ tên</span><input class="field" value="Phạm Văn E"></div>
+            <div class="fgroup"><span class="flabel">Số điện thoại</span><input class="field mono" value="0912 345 678"></div>
+            <div class="fgroup"><span class="flabel">Role preset</span>
+              <select class="field"><option>Thợ khảo sát</option><option>Đội thi công</option><option selected>Kế toán</option><option>Kho/Giao hàng</option><option>Quản lý/Sếp</option><option>Admin</option></select>
+            </div>
+            <div class="fgroup"><span class="flabel">Trạng thái</span>
+              <div class="row" style="gap:8px"><span class="scope-flag on">● Kích hoạt</span><span class="scope-flag off">Tạm khoá</span></div>
+            </div>
+            <div class="banner banner--info" style="margin-bottom:12px"><span>ⓘ</span><div>Preset nạp quyền mặc định; chỉnh thêm ở màn Phân quyền.</div></div>
+            <button class="btn btn--primary btn--wide">Lưu account</button>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================== 5 · AUDIT LOG ==================== -->
+<section class="screen" id="s-audit">
+  <div class="screen-head">
+    <span class="kick">Quản trị · FR-20</span>
+    <h2>Audit log</h2>
+    <span class="desc">Nhật ký bất biến: ai · hành động · đối tượng · thời gian · giá trị trước→sau. Bản ghi không sửa/xoá được. Chỉ Super Admin được xem.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/audit</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink active" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN TRỊ</span>
+              Audit log
+            </div>
+            <a class="topbar-action" href="#s-audit">Xuất CSV</a>
+          </div>
+
+          <div class="banner" style="margin-bottom:14px;border-color:var(--teal);background:var(--teal-050);color:var(--teal-700)"><span>⚿</span><div><b>Chỉ Super Admin xem được màn này.</b> Đang đăng nhập: <b>Super Admin (Sếp D)</b>. Bản ghi bất biến — không sửa/xoá.</div></div>
+
+          <div class="toolbar">
+            <div class="search"><span class="si">⌕</span><input class="field" placeholder="Lọc theo account, đối tượng…"></div>
+            <div class="seg"><a class="active" href="#s-audit">Tất cả</a><a href="#s-audit">Đơn</a><a href="#s-audit">Giá</a><a href="#s-audit">Kho</a><a href="#s-audit">Quyền</a></div>
+          </div>
+
+          <div class="frame" style="padding:6px 0">
+            <span class="frame-label">Nhật ký hành động</span>
+            <div style="overflow-x:auto">
+            <table class="table" style="min-width:680px">
+              <thead><tr><th>Ai</th><th>Hành động</th><th>Đối tượng</th><th>Trước → Sau</th><th>Thời gian</th></tr></thead>
+              <tbody>
+                <tr><td class="strong">Bình (Kho)</td><td>Xuất kho</td><td class="mono">PK-X-096 · DH-2048</td><td class="mono">Tồn 42 → 30 (Tấm pin)</td><td class="mono">06/07 09:12</td></tr>
+                <tr class="zebra"><td class="strong">Sếp D</td><td>Duyệt chiết khấu</td><td class="mono">DH-2048</td><td class="mono">Chờ duyệt → Đã chốt</td><td class="mono">06/07 08:55</td></tr>
+                <tr><td class="strong">Lê Thị C</td><td>Sửa giá</td><td class="mono">SP · Inverter ASW8000-S</td><td class="mono">18.500.000 → 18.900.000</td><td class="mono">05/07 16:40</td></tr>
+                <tr class="zebra"><td class="strong">Trần Văn A</td><td>Chốt đơn</td><td class="mono">DH-2048</td><td class="mono">Báo giá → Chờ duyệt</td><td class="mono">05/07 14:22</td></tr>
+                <tr><td class="strong">Sếp D (Super Admin)</td><td>Sửa quyền account</td><td class="mono">Account · Trần Văn A</td><td class="mono">+ Sinh hợp đồng</td><td class="mono">04/07 11:03</td></tr>
+                <tr class="zebra"><td class="strong">Lê Thị C</td><td>Ghi nhận thanh toán</td><td class="mono">DH-2045 · đợt 2</td><td class="mono">Đã cọc → Đã cọc (70%)</td><td class="mono">04/07 09:18</td></tr>
+              </tbody>
+            </table>
+            </div>
+          </div>
+          <div class="notecard" style="margin-top:12px">Mỗi bản ghi lưu: account, hành động, đối tượng, thời gian, giá trị trước→sau (khi áp dụng). Không thao tác sửa/xoá — chỉ đọc.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-menu" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN TRỊ</span>
+              Audit log
+            </div>
+            <a class="topbar-action" href="#s-audit">Lọc</a>
+          </div>
+          <div class="pscroll">
+            <div class="banner" style="margin-bottom:10px;border-color:var(--teal);background:var(--teal-050);color:var(--teal-700)"><span>⚿</span><div><b>Chỉ Super Admin xem.</b> Đang đăng nhập: Sếp D.</div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:12.5px">Bình (Kho)</b><span class="pill warn" style="margin-left:8px">Xuất kho</span><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">09:12</span></div><div style="font-size:11px;color:var(--ink-2);margin-top:4px">PK-X-096 · DH-2048 · <span class="mono">Tồn 42 → 30</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:12.5px">Sếp D</b><span class="pill ok" style="margin-left:8px">Duyệt CK</span><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">08:55</span></div><div style="font-size:11px;color:var(--ink-2);margin-top:4px">DH-2048 · <span class="mono">Chờ duyệt → Đã chốt</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:12.5px">Lê Thị C</b><span class="pill" style="margin-left:8px">Sửa giá</span><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">05/07</span></div><div style="font-size:11px;color:var(--ink-2);margin-top:4px">Inverter · <span class="mono">18.500.000 → 18.900.000</span></div></div>
+            <div class="card" style="padding:10px 12px;margin-bottom:8px"><div class="row"><b style="font-size:12.5px">Trần Văn A</b><span class="pill" style="margin-left:8px">Chốt đơn</span><span class="sp"></span><span class="mono" style="font-size:10.5px;color:var(--muted)">05/07</span></div><div style="font-size:11px;color:var(--ink-2);margin-top:4px">DH-2048 · <span class="mono">Báo giá → Chờ duyệt</span></div></div>
+            <div class="notecard">Bản ghi bất biến — chỉ đọc, không sửa/xoá.</div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>

@@ -1,0 +1,741 @@
+<!-- ============================================================= PART D — Khách hàng & Danh mục ============================================================= -->
+
+<!-- ============================ S-CUSTOMERS ============================ -->
+<section class="screen" id="s-customers">
+  <div class="screen-head">
+    <span class="kick">KHÁCH &amp; DANH MỤC · FR-16</span>
+    <h2>Danh sách khách hàng</h2>
+    <span class="desc">Tra cứu khách theo SĐT (khoá chính) hoặc tên; mỗi dòng hiện loại khách và số đơn. Có biến thể rỗng &amp; đang tải.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/khach-hang</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink active" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="main-head">
+            <h3>Khách hàng</h3>
+            <span class="pill">128 khách</span>
+            <span class="sp"></span>
+            <a class="btn btn--primary btn--sm" href="#s-customer-detail">＋ Thêm khách</a>
+          </div>
+
+          <div class="toolbar">
+            <div class="search">
+              <span class="si">⌕</span>
+              <input class="field" placeholder="Tìm theo SĐT hoặc tên khách…" value="">
+            </div>
+            <div class="seg">
+              <a class="active" href="#s-customers">Tất cả</a>
+              <a href="#s-customers">Cá nhân</a>
+              <a href="#s-customers">Thương mại</a>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="card">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Tên khách</th>
+                    <th>SĐT</th>
+                    <th>Loại khách</th>
+                    <th class="num">Số đơn</th>
+                    <th class="num"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="strong">VP Công Chứng Lê Đình Thao</td>
+                    <td class="mono">0903176968</td>
+                    <td><span class="ktype">Thương mại</span></td>
+                    <td class="num mono strong">4</td>
+                    <td class="num"><a href="#s-customer-detail" style="color:var(--teal-700);font-weight:800">Xem ›</a></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Nguyễn Văn Hùng</td>
+                    <td class="mono">0912345678</td>
+                    <td><span class="ktype">Cá nhân</span></td>
+                    <td class="num mono strong">2</td>
+                    <td class="num"><a href="#s-customer-detail" style="color:var(--teal-700);font-weight:800">Xem ›</a></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">Trần Thị Mai Lan</td>
+                    <td class="mono">0938271654</td>
+                    <td><span class="ktype">Cá nhân</span></td>
+                    <td class="num mono strong">1</td>
+                    <td class="num"><a href="#s-customer-detail" style="color:var(--teal-700);font-weight:800">Xem ›</a></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Cty TNHH Điện Mặt Trời Sao Việt</td>
+                    <td class="mono">0908112233</td>
+                    <td><span class="ktype">Thương mại</span></td>
+                    <td class="num mono strong">9</td>
+                    <td class="num"><a href="#s-customer-detail" style="color:var(--teal-700);font-weight:800">Xem ›</a></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">Phạm Quốc Duy</td>
+                    <td class="mono">0977554411</td>
+                    <td><span class="ktype">Cá nhân</span></td>
+                    <td class="num mono strong">3</td>
+                    <td class="num"><a href="#s-customer-detail" style="color:var(--teal-700);font-weight:800">Xem ›</a></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Biến thể: đang tải + rỗng (compact) -->
+          <div class="fgroup">
+            <div class="micro muted" style="margin-bottom:6px">Biến thể · Đang tải</div>
+            <div class="overlay">
+              <div class="micro muted">⟳ Đang tải danh sách khách hàng…</div>
+            </div>
+          </div>
+          <div class="fgroup">
+            <div class="micro muted" style="margin-bottom:6px">Biến thể · Rỗng (chưa có khách)</div>
+            <div class="overlay">
+              <div style="text-align:center">
+                <div class="micro muted">Chưa có khách hàng nào</div>
+                <div class="notecard" style="margin:8px 0 10px">Thêm khách đầu tiên để bắt đầu tạo báo giá.</div>
+                <a class="btn btn--primary btn--sm" href="#s-customer-detail">＋ Thêm khách</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-menu" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHÁCH HÀNG</span>
+              Danh sách khách
+            </div>
+            <a class="topbar-action" href="#s-customer-detail">＋ Thêm</a>
+          </div>
+          <div class="pscroll">
+            <div class="search fgroup">
+              <span class="si">⌕</span>
+              <input class="field" placeholder="SĐT hoặc tên khách…">
+            </div>
+
+            <a class="list-row" href="#s-customer-detail">
+              <div style="min-width:0;flex:1">
+                <b>VP Công Chứng Lê Đình Thao</b>
+                <div class="micro muted mono">0903176968</div>
+              </div>
+              <div style="text-align:right">
+                <span class="ktype">Thương mại</span>
+                <div class="micro muted" style="margin-top:4px">4 đơn</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-customer-detail">
+              <div style="min-width:0;flex:1">
+                <b>Nguyễn Văn Hùng</b>
+                <div class="micro muted mono">0912345678</div>
+              </div>
+              <div style="text-align:right">
+                <span class="ktype">Cá nhân</span>
+                <div class="micro muted" style="margin-top:4px">2 đơn</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-customer-detail">
+              <div style="min-width:0;flex:1">
+                <b>Trần Thị Mai Lan</b>
+                <div class="micro muted mono">0938271654</div>
+              </div>
+              <div style="text-align:right">
+                <span class="ktype">Cá nhân</span>
+                <div class="micro muted" style="margin-top:4px">1 đơn</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-customer-detail">
+              <div style="min-width:0;flex:1">
+                <b>Cty TNHH ĐMT Sao Việt</b>
+                <div class="micro muted mono">0908112233</div>
+              </div>
+              <div style="text-align:right">
+                <span class="ktype">Thương mại</span>
+                <div class="micro muted" style="margin-top:4px">9 đơn</div>
+              </div>
+            </a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ========================= S-CUSTOMER-DETAIL ========================= -->
+<section class="screen" id="s-customer-detail">
+  <div class="screen-head">
+    <span class="kick">KHÁCH &amp; DANH MỤC · FR-16</span>
+    <h2>Chi tiết khách hàng</h2>
+    <span class="desc">Hồ sơ khách (Cá nhân/Thương mại) + lịch sử đơn của khách; tạo đơn mới gắn sẵn khách này.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/khach-hang/0903176968</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink active" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-customers" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHÁCH · THƯƠNG MẠI</span>
+              VP Công Chứng Lê Đình Thao
+            </div>
+            <a class="topbar-action" href="#s-quote">＋ Tạo đơn mới</a>
+          </div>
+
+          <div class="fgroup">
+            <div class="card" style="padding:16px 18px">
+              <div class="row" style="margin-bottom:12px">
+                <span class="micro">Thông tin khách</span>
+                <span class="sp"></span>
+                <span class="ktype">Thương mại</span>
+                <a class="btn btn--ghost btn--sm" href="#s-customer-detail" style="margin-left:8px">Sửa</a>
+              </div>
+              <dl class="kv">
+                <dt>Tên đơn vị</dt><dd>VP Công Chứng Lê Đình Thao</dd>
+                <dt>MST</dt><dd class="mono">0316227841</dd>
+                <dt>SĐT (khoá chính)</dt><dd class="mono">0903176968</dd>
+                <dt>Địa chỉ</dt><dd>142 Nguyễn Thị Minh Khai, Q.3, TP.HCM</dd>
+                <dt>Tài khoản NH</dt><dd class="mono">0123 4567 8901 · Vietcombank CN Sài Gòn</dd>
+              </dl>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="row" style="margin-bottom:8px">
+              <span class="micro ink">Lịch sử đơn — 4 đơn</span>
+              <span class="sp"></span>
+              <a href="#s-orders" style="color:var(--teal-700);font-weight:800;font-size:12px">Xem tất cả ›</a>
+            </div>
+            <div class="card">
+              <table class="table">
+                <thead>
+                  <tr><th>Mã đơn</th><th>Ngày</th><th class="num">Tổng (sau VAT)</th><th>Trạng thái</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="mono strong">BG-2026-0142</td>
+                    <td>03/07/2026</td>
+                    <td class="num mono">312.400.000 ₫</td>
+                    <td><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="mono strong">BG-2026-0118</td>
+                    <td>21/06/2026</td>
+                    <td class="num mono">98.750.000 ₫</td>
+                    <td><span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span></td>
+                  </tr>
+                  <tr>
+                    <td class="mono strong">BG-2026-0097</td>
+                    <td>05/06/2026</td>
+                    <td class="num mono">45.200.000 ₫</td>
+                    <td><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="mono strong">BG-2026-0071</td>
+                    <td>18/05/2026</td>
+                    <td class="num mono">27.900.000 ₫</td>
+                    <td><span class="chip chip--huy"><span class="dot"></span>Huỷ</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-customers" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">KHÁCH · THƯƠNG MẠI</span>
+              Lê Đình Thao
+            </div>
+            <a class="topbar-action" href="#s-customer-detail">Sửa</a>
+          </div>
+          <div class="pscroll">
+            <div class="card fgroup" style="padding:12px 13px">
+              <div class="row" style="margin-bottom:9px">
+                <span class="micro">Thông tin</span>
+                <span class="sp"></span>
+                <span class="ktype">Thương mại</span>
+              </div>
+              <dl class="kv">
+                <dt>Tên</dt><dd>VP Công Chứng Lê Đình Thao</dd>
+                <dt>MST</dt><dd class="mono">0316227841</dd>
+                <dt>SĐT</dt><dd class="mono">0903176968</dd>
+                <dt>Địa chỉ</dt><dd>142 Nguyễn Thị Minh Khai, Q.3</dd>
+              </dl>
+            </div>
+
+            <div class="micro ink fgroup" style="margin-bottom:6px">Lịch sử đơn — 4 đơn</div>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1">
+                <b class="mono">BG-2026-0142</b>
+                <div class="micro muted">03/07/2026 · 312.400.000 ₫</div>
+              </div>
+              <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+            </a>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1">
+                <b class="mono">BG-2026-0118</b>
+                <div class="micro muted">21/06/2026 · 98.750.000 ₫</div>
+              </div>
+              <span class="chip chip--hoanthanh"><span class="dot"></span>Xong</span>
+            </a>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1">
+                <b class="mono">BG-2026-0097</b>
+                <div class="micro muted">05/06/2026 · 45.200.000 ₫</div>
+              </div>
+              <span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span>
+            </a>
+          </div>
+          <div class="mtotals">
+            <a class="btn btn--primary btn--wide" href="#s-quote">＋ Tạo đơn mới cho khách này</a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================= S-CATALOG ============================= -->
+<section class="screen" id="s-catalog">
+  <div class="screen-head">
+    <span class="kick">KHÁCH &amp; DANH MỤC · FR-14/15</span>
+    <h2>Danh mục vật tư &amp; giá</h2>
+    <span class="desc">Nguồn giá cho báo giá. Bảng sản phẩm (tên/đơn vị/giá lẻ/giá sỉ); cờ “Giá phân tầng (lẻ/sỉ)” bật/tắt cột giá sỉ.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/danh-muc</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink active" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="main-head">
+            <h3>Danh mục vật tư &amp; giá</h3>
+            <span class="pill">24 sản phẩm</span>
+            <span class="sp"></span>
+            <a class="btn btn--primary btn--sm" href="#s-product-detail">＋ Thêm sản phẩm</a>
+          </div>
+
+          <div class="toolbar">
+            <div class="search">
+              <span class="si">⌕</span>
+              <input class="field" placeholder="Tìm sản phẩm…">
+            </div>
+            <div class="row" style="gap:8px">
+              <span class="micro ink">Giá phân tầng (lẻ/sỉ)</span>
+              <span class="scope-flag on">BẬT</span>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="card">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>Tên sản phẩm</th>
+                    <th>Đơn vị</th>
+                    <th class="num">Giá lẻ</th>
+                    <th class="num">Giá sỉ <span class="micro muted" style="letter-spacing:.04em">· sau cờ</span></th>
+                    <th class="num"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="strong">Tấm pin AE 630W</td>
+                    <td>Tấm</td>
+                    <td class="num mono">2.583.000</td>
+                    <td class="num mono">2.450.000</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Inverter Solplanet ASW8000-S</td>
+                    <td>Bộ</td>
+                    <td class="num mono">23.000.000</td>
+                    <td class="num mono">22.100.000</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">Battery Dyness 5kWh</td>
+                    <td>Bộ</td>
+                    <td class="num mono">18.500.000</td>
+                    <td class="num mono">17.800.000</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Dây DC 6mm²</td>
+                    <td>Mét</td>
+                    <td class="num mono">28.000</td>
+                    <td class="num mono">24.500</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">Dây AC 4mm²</td>
+                    <td>Mét</td>
+                    <td class="num mono">22.000</td>
+                    <td class="num mono">19.000</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Công lắp đặt</td>
+                    <td>Gói</td>
+                    <td class="num mono">— <span class="micro muted">báo theo dự án</span></td>
+                    <td class="num mono">—</td>
+                    <td class="num"><a href="#s-product-detail" style="color:var(--teal-700);font-weight:800">Sửa</a></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="fgroup">
+            <div class="notecard">Tắt cờ “Giá phân tầng” → ẩn cột <b>Giá sỉ</b>, mỗi sản phẩm chỉ dùng 1 mức giá. Mặc định cờ tắt.</div>
+          </div>
+
+          <!-- Biến thể rỗng -->
+          <div class="fgroup">
+            <div class="micro muted" style="margin-bottom:6px">Biến thể · Rỗng (danh mục trống)</div>
+            <div class="overlay">
+              <div style="text-align:center">
+                <div class="micro muted">Danh mục chưa có sản phẩm</div>
+                <div class="notecard" style="margin:8px 0 10px">Thêm sản phẩm để nhân viên chọn khi tạo báo giá.</div>
+                <a class="btn btn--primary btn--sm" href="#s-product-detail">＋ Thêm sản phẩm</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-menu" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DANH MỤC</span>
+              Vật tư &amp; giá
+            </div>
+            <a class="topbar-action" href="#s-product-detail">＋ Thêm</a>
+          </div>
+          <div class="pscroll">
+            <div class="row fgroup" style="gap:8px">
+              <span class="micro ink">Giá phân tầng (lẻ/sỉ)</span>
+              <span class="sp"></span>
+              <span class="scope-flag on">BẬT</span>
+            </div>
+
+            <a class="list-row" href="#s-product-detail">
+              <div style="flex:1">
+                <b>Tấm pin AE 630W</b>
+                <div class="micro muted">Tấm</div>
+              </div>
+              <div style="text-align:right">
+                <b class="mono">2.583.000</b>
+                <div class="micro muted mono">sỉ 2.450.000</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-product-detail">
+              <div style="flex:1">
+                <b>Inverter Solplanet ASW8000-S</b>
+                <div class="micro muted">Bộ</div>
+              </div>
+              <div style="text-align:right">
+                <b class="mono">23.000.000</b>
+                <div class="micro muted mono">sỉ 22.100.000</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-product-detail">
+              <div style="flex:1">
+                <b>Battery Dyness 5kWh</b>
+                <div class="micro muted">Bộ</div>
+              </div>
+              <div style="text-align:right">
+                <b class="mono">18.500.000</b>
+                <div class="micro muted mono">sỉ 17.800.000</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-product-detail">
+              <div style="flex:1">
+                <b>Dây DC 6mm²</b>
+                <div class="micro muted">Mét</div>
+              </div>
+              <div style="text-align:right">
+                <b class="mono">28.000</b>
+                <div class="micro muted mono">sỉ 24.500</div>
+              </div>
+            </a>
+            <a class="list-row" href="#s-product-detail">
+              <div style="flex:1">
+                <b>Công lắp đặt</b>
+                <div class="micro muted">Gói</div>
+              </div>
+              <div style="text-align:right">
+                <b class="mono">—</b>
+                <div class="micro muted">theo dự án</div>
+              </div>
+            </a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ========================= S-PRODUCT-DETAIL ========================= -->
+<section class="screen" id="s-product-detail">
+  <div class="screen-head">
+    <span class="kick">KHÁCH &amp; DANH MỤC · FR-14/15</span>
+    <h2>Chi tiết / Sửa sản phẩm</h2>
+    <span class="desc">Form sản phẩm: tên, đơn vị, giá lẻ, giá sỉ (khi bật cờ phân tầng), ghi chú. Sửa giá không hồi tố đơn đã chốt.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/danh-muc/tam-pin-ae-630w</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink active" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-catalog" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">SỬA SẢN PHẨM</span>
+              Tấm pin AE 630W
+            </div>
+            <a class="topbar-action" href="#s-catalog">Lưu</a>
+          </div>
+
+          <div class="banner banner--info fgroup">
+            <span>ⓘ</span>
+            <div>Sửa giá <b>không hồi tố</b> đơn đã chốt — đơn đã Chốt giữ snapshot giá cũ. Chỉ báo giá <b>chưa chốt</b> mới ăn giá mới.</div>
+          </div>
+
+          <div class="card" style="padding:18px 20px;max-width:560px">
+            <div class="fgroup">
+              <label class="flabel">Tên sản phẩm</label>
+              <input class="field field-lg" value="Tấm pin AE 630W">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Đơn vị tính</label>
+              <input class="field" value="Tấm">
+            </div>
+
+            <div class="row" style="gap:8px;margin:4px 0 12px">
+              <span class="micro ink">Giá phân tầng (lẻ/sỉ)</span>
+              <span class="scope-flag on">BẬT</span>
+            </div>
+
+            <div class="row" style="gap:12px;align-items:flex-start">
+              <div class="fgroup" style="flex:1">
+                <label class="flabel">Giá lẻ (₫)</label>
+                <input class="field mono" value="2.583.000">
+              </div>
+              <div class="fgroup" style="flex:1">
+                <label class="flabel">Giá sỉ (₫) · sau cờ</label>
+                <input class="field mono" value="2.450.000">
+              </div>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Ghi chú</label>
+              <input class="field" value="Pin AE Solar 630W, hiệu suất 22,6% — hàng có sẵn kho.">
+            </div>
+
+            <div class="row" style="gap:8px;margin-top:6px">
+              <a class="btn btn--primary" href="#s-catalog">Lưu</a>
+              <a class="btn btn--ghost" href="#s-catalog">Huỷ</a>
+              <span class="sp"></span>
+              <a class="btn btn--danger btn--sm" href="#s-catalog">Xoá sản phẩm</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-catalog" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">SỬA SẢN PHẨM</span>
+              Tấm pin AE 630W
+            </div>
+            <a class="topbar-action" href="#s-catalog">Lưu</a>
+          </div>
+          <div class="pscroll">
+            <div class="banner banner--info fgroup">
+              <span>ⓘ</span>
+              <div>Sửa giá <b>không hồi tố</b> đơn đã chốt. Chỉ báo giá chưa chốt ăn giá mới.</div>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Tên sản phẩm</label>
+              <input class="field field-lg" value="Tấm pin AE 630W">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Đơn vị tính</label>
+              <input class="field" value="Tấm">
+            </div>
+
+            <div class="row fgroup" style="gap:8px">
+              <span class="micro ink">Giá phân tầng (lẻ/sỉ)</span>
+              <span class="sp"></span>
+              <span class="scope-flag on">BẬT</span>
+            </div>
+
+            <div class="fgroup">
+              <label class="flabel">Giá lẻ (₫)</label>
+              <input class="field mono" value="2.583.000">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Giá sỉ (₫) · sau cờ</label>
+              <input class="field mono" value="2.450.000">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Ghi chú</label>
+              <input class="field" value="Hiệu suất 22,6% — có sẵn kho.">
+            </div>
+          </div>
+          <div class="mtotals">
+            <a class="btn btn--primary btn--wide" href="#s-catalog">Lưu sản phẩm</a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>

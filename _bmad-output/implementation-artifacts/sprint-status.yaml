@@ -1,0 +1,104 @@
+# generated: 2026-07-07
+# last_updated: 2026-07-07
+# project: Solar-Energy-Management
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic:   backlog -> in-progress -> done
+# Story:  backlog -> ready-for-dev -> in-progress -> review -> done
+# Retrospective: optional <-> done
+# Action Item:   open -> in-progress -> done
+#
+# WORKFLOW NOTES:
+# - Epic -> in-progress automatically when first story is created (create-story)
+# - Dev moves story to review, then runs code-review; retrospective appends action_items
+
+generated: 2026-07-07
+last_updated: 2026-07-07
+project: Solar-Energy-Management
+project_key: NOKEY
+tracking_system: file-system
+story_location: {project-root}/_bmad-output/implementation-artifacts
+
+development_status:
+  epic-1: in-progress
+  1-1-tang-token-dung-chung-mau-spacing-radius-quy-tac-vien-net: done
+  1-2-he-thong-icon-svg-sprite-inline: backlog
+  1-3-react-button-card-frame-field: backlog
+  1-4-react-chip-status-chip-9-trang-thai-chip-chi-doc: backlog
+  1-5-react-table-stepper-kpi-banner: backlog
+  1-6-react-hanh-vi-gio-hang-trang-thai-danh-sach-overlay-share-upload: backlog
+  1-7-flutter-thu-vien-widget-tuong-duong-parity-component: backlog
+  1-8-app-shell-mobile-topbar-bottom-nav-5-tab-fab-phone-frame: backlog
+  1-9-app-shell-web-sidebar-web-frame: backlog
+  1-10-primitive-gating-theo-quyen-accessibility-floor-parity: backlog
+  1-11-man-dang-nhap-dung-that-demo-design-system: backlog
+  epic-1-retrospective: optional
+  epic-2: backlog
+  2-1-skeleton-backend-prisma-openapi-sinh-tu-code: backlog
+  2-2-error-envelope-thong-nhat-xu-ly-loi-tap-trung: backlog
+  2-3-dang-nhap-jwt-access-refresh: backlog
+  2-4-registry-quyen-chinh-tac-luu-quyen-theo-account: backlog
+  2-5-endpoint-me-guard-quyen-server-side-moi-request: backlog
+  2-6-noi-ui-gating-vao-me-tren-hai-nen-tang: backlog
+  2-7-domain-event-port-eventbus-notificationdispatcher-no-op-audit-subscriber: backlog
+  2-8-quen-mat-khau-ho-so-doi-mat-khau: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  3-1-crud-san-pham-gia: backlog
+  3-2-gia-phan-tang-sau-co: backlog
+  3-3-crud-khach-hang-sdt-e-164-khoa-chinh-chan-trung: backlog
+  3-4-tra-sdt-chon-tao-khach-inline-man-danh-sach-chi-tiet-khach: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  4-1-tao-don-dung-gio-hang-order-orderversion-orderlineitem: backlog
+  4-2-xem-truoc-tong-realtime-qua-post-orders-preview-total: backlog
+  4-3-co-pham-vi-loai-khach-preset: backlog
+  4-4-vat-cau-hinh-tick-ap-vat-metadata-don: backlog
+  4-5-chot-don-snapshot-gia: backlog
+  4-6-sua-don-da-chot-ban-update-moi-lich-su: backlog
+  4-7-ap-chiet-khau-duyet-chiet-khau: backlog
+  4-8-xuat-chia-se-bao-gia-pdf-anh: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  5-1-engine-applytransition-enum-bang-transition-guard-audit: backlog
+  5-2-auto-transition-theo-su-kien-nghiep-vu: backlog
+  5-3-danh-sach-don-follow-up-trang-thai-list: backlog
+  5-4-chi-tiet-don-stepper-gate-tabs-lich-su-ban-update: backlog
+  5-5-chuyen-trang-thai-thu-cong-dinh-kem-anh-optional: backlog
+  5-6-dinh-kem-anh-bo-sung-trong-chi-tiet-don: backlog
+  5-7-huy-don-kem-ly-do: backlog
+  5-8-nhanh-thi-cong-len-lich-dang-thi-cong-nghiem-thu: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  6-1-nhanh-giao-hang-dang-giao-da-giao: backlog
+  6-2-ton-kho-hien-tai-theo-san-pham: backlog
+  6-3-phieu-nhap-xuat-kho: backlog
+  6-4-xuat-kho-gan-don: backlog
+  6-5-chan-khi-thieu-ton: backlog
+  epic-6-retrospective: optional
+  epic-7: backlog
+  7-1-cau-hinh-lich-thanh-toan-nhieu-dot: backlog
+  7-2-ghi-nhan-thanh-toan-auto-chuyen-trang-thai: backlog
+  7-3-sinh-hop-dong-thi-cong-mua-ban-pdf: backlog
+  7-4-tao-hoa-don-tu-don-luu-db: backlog
+  7-5-xem-xuat-hoa-don-pdf: backlog
+  epic-7-retrospective: optional
+  epic-8: backlog
+  8-1-dashboard-van-hanh: backlog
+  8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
+  8-3-form-tao-sua-vo-hieu-hoa-account: backlog
+  8-4-cau-hinh-ma-tran-quyen-hanh-dong-duyet: backlog
+  8-5-man-xem-audit-log-chi-super-admin: backlog
+  epic-8-retrospective: optional
+  epic-9: backlog
+  9-1-thiet-lap-firebase-mobile: backlog
+  9-2-dang-ky-go-device-token: backlog
+  9-3-resolve-nguoi-nhan-theo-quyen-gui-fcm-subscribe-event: backlog
+  9-4-hop-thu-in-app-da-doc-chua-doc-badge: backlog
+  9-5-tuy-chon-thong-bao-theo-loai: backlog
+  9-6-nhac-theo-lich-bao-gia-sap-het-han-lead-nguoi: backlog
+  epic-9-retrospective: optional

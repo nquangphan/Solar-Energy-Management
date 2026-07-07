@@ -1,0 +1,669 @@
+<!-- ==================================================================== -->
+<!-- s-login — Đăng nhập -->
+<!-- ==================================================================== -->
+<section class="screen" id="s-login">
+  <div class="screen-head">
+    <span class="kick">XÁC THỰC · FR-22</span>
+    <h2>Đăng nhập</h2>
+    <span class="desc">Cổng vào app nội bộ — phiên áp đúng bộ Quyền của Account. Web: thẻ căn giữa; Mobile: form toàn màn hình.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/dang-nhap</div>
+      </div>
+      <div class="web-app" style="align-items:center;justify-content:center;padding:40px;background:var(--bg)">
+        <div class="card" style="width:360px;padding:28px 26px">
+          <div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:20px">
+            <div class="logo" style="width:44px;height:44px;border:1.5px solid var(--teal);border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:24px;margin-bottom:10px">☀</div>
+            <div style="font-size:17px;font-weight:900;letter-spacing:-.01em">Phương Nam Solar</div>
+            <div style="font-size:11px;color:var(--muted);font-weight:600">App quản lý nội bộ · Phase 1</div>
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Tài khoản</label>
+            <input class="field field-lg" placeholder="Số điện thoại hoặc email" value="hung.ks">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Mật khẩu</label>
+            <input class="field field-lg" type="password" placeholder="Nhập mật khẩu" value="········">
+          </div>
+          <a class="btn btn--primary btn--wide" href="#s-home" style="margin-top:6px;padding:12px">Đăng nhập</a>
+          <div style="text-align:center;margin-top:14px">
+            <a href="#s-forgot" style="font-size:12px;font-weight:700;color:var(--teal-700)">Quên mật khẩu?</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME (auth: no topbar, no botnav) -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="pscroll" style="display:flex;flex-direction:column;justify-content:center;padding:22px 18px">
+            <div style="display:flex;flex-direction:column;align-items:center;text-align:center;margin-bottom:26px">
+              <div class="logo" style="width:56px;height:56px;border:1.5px solid var(--teal);border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:30px;margin-bottom:12px">☀</div>
+              <div style="font-size:19px;font-weight:900;letter-spacing:-.01em">Phương Nam Solar</div>
+              <div style="font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px">Đăng nhập để bắt đầu ca làm</div>
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Tài khoản</label>
+              <input class="field field-lg" placeholder="Số điện thoại hoặc email" value="hung.ks">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Mật khẩu</label>
+              <input class="field field-lg" type="password" placeholder="Nhập mật khẩu" value="········">
+            </div>
+            <a class="btn btn--primary btn--wide" href="#s-home" style="margin-top:6px;padding:13px">Đăng nhập</a>
+            <div style="text-align:center;margin-top:16px">
+              <a href="#s-forgot" style="font-size:12.5px;font-weight:700;color:var(--teal-700)">Quên mật khẩu?</a>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- s-forgot — Quên mật khẩu -->
+<!-- ==================================================================== -->
+<section class="screen" id="s-forgot">
+  <div class="screen-head">
+    <span class="kick">XÁC THỰC · FR-22</span>
+    <h2>Quên mật khẩu</h2>
+    <span class="desc">Nhập SĐT/email → gửi mã xác thực → nhập mã và đặt mật khẩu mới. Không có botnav ở luồng xác thực.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/quen-mat-khau</div>
+      </div>
+      <div class="web-app" style="align-items:center;justify-content:center;padding:34px;background:var(--bg)">
+        <div class="card" style="width:400px;padding:24px 24px">
+          <a href="#s-login" style="font-size:12px;font-weight:700;color:var(--teal-700);display:inline-block;margin-bottom:14px">‹ Quay lại đăng nhập</a>
+          <div class="stepper" style="margin-bottom:18px">
+            <div class="step done"><div class="node"><div class="bul">✓</div><div class="st-label">Gửi mã</div></div><div class="bar"></div></div>
+            <div class="step current"><div class="node"><div class="bul">2</div><div class="st-label">Nhập mã &amp; mật khẩu mới</div></div></div>
+          </div>
+          <div class="banner banner--info" style="margin-bottom:16px">Đã gửi mã 6 số đến <b>098•••1234</b>. Mã có hiệu lực 5 phút.</div>
+          <div class="fgroup">
+            <label class="flabel">SĐT / Email đã đăng ký</label>
+            <input class="field" value="0987 654 321">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Mã xác thực</label>
+            <input class="field field-lg mono" placeholder="6 chữ số" value="428 601" style="letter-spacing:.3em;text-align:center">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Mật khẩu mới</label>
+            <input class="field" type="password" value="············">
+          </div>
+          <div class="fgroup">
+            <label class="flabel">Xác nhận mật khẩu mới</label>
+            <input class="field" type="password" value="············">
+          </div>
+          <a class="btn btn--primary btn--wide" href="#s-login" style="margin-top:4px;padding:11px">Đặt lại mật khẩu</a>
+          <div style="text-align:center;margin-top:12px">
+            <a href="#s-forgot" style="font-size:11.5px;font-weight:700;color:var(--muted)">Gửi lại mã sau 04:12</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME (auth: topbar back to login, no botnav) -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-login" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">XÁC THỰC</span>
+              Quên mật khẩu
+            </div>
+            <a class="topbar-action" href="#s-login">Đăng nhập</a>
+          </div>
+          <div class="pscroll">
+            <div class="stepper" style="margin-bottom:16px">
+              <div class="step done"><div class="node"><div class="bul">✓</div><div class="st-label">Gửi mã</div></div><div class="bar"></div></div>
+              <div class="step current"><div class="node"><div class="bul">2</div><div class="st-label">Mã &amp; MK mới</div></div></div>
+            </div>
+            <div class="banner banner--info" style="margin-bottom:14px">Đã gửi mã 6 số đến <b>098•••1234</b>. Hết hạn sau 5 phút.</div>
+            <div class="fgroup">
+              <label class="flabel">SĐT / Email đã đăng ký</label>
+              <input class="field" value="0987 654 321">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Mã xác thực</label>
+              <input class="field field-lg mono" value="428 601" style="letter-spacing:.3em;text-align:center">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Mật khẩu mới</label>
+              <input class="field" type="password" value="············">
+            </div>
+            <div class="fgroup">
+              <label class="flabel">Xác nhận mật khẩu mới</label>
+              <input class="field" type="password" value="············">
+            </div>
+            <a class="btn btn--primary btn--wide" href="#s-login" style="margin-top:4px;padding:12px">Đặt lại mật khẩu</a>
+            <div style="text-align:center;margin-top:12px">
+              <a href="#s-forgot" style="font-size:11.5px;font-weight:700;color:var(--muted)">Gửi lại mã sau 04:12</a>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- s-home — Trang chủ / Dashboard -->
+<!-- ==================================================================== -->
+<section class="screen" id="s-home">
+  <div class="screen-head">
+    <span class="kick">NỀN · FR-19</span>
+    <h2>Trang chủ / Dashboard</h2>
+    <span class="desc">Tổng quan vận hành: doanh thu ngày/tuần/tháng, số đơn, đơn theo trạng thái và các đơn gần đây.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/trang-chu</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink active" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">XIN CHÀO, ANH TÚ · QUẢN LÝ</span>
+              Tổng quan vận hành
+            </div>
+            <a class="topbar-action" href="#s-quote">+ Tạo báo giá</a>
+          </div>
+
+          <div class="toolbar">
+            <div class="seg">
+              <a href="#s-home">Ngày</a>
+              <a href="#s-home">Tuần</a>
+              <a class="active" href="#s-home">Tháng này</a>
+            </div>
+            <span class="sp"></span>
+            <span class="micro muted">Cập nhật 9:41 · 06/07/2026</span>
+          </div>
+
+          <div class="kpis" style="margin-bottom:18px">
+            <div class="kpi accent">
+              <div class="k-l">Doanh thu tháng</div>
+              <div class="k-v mono">1,24 tỷ</div>
+              <div class="k-d">▲ 18% so tháng trước</div>
+            </div>
+            <div class="kpi">
+              <div class="k-l">Doanh thu tuần</div>
+              <div class="k-v mono">312 tr</div>
+              <div class="k-d">▲ 9% so tuần trước</div>
+            </div>
+            <div class="kpi">
+              <div class="k-l">Doanh thu hôm nay</div>
+              <div class="k-v mono">48,5 tr</div>
+              <div class="k-d">3 đơn đã cọc</div>
+            </div>
+            <div class="kpi">
+              <div class="k-l">Số đơn / tháng</div>
+              <div class="k-v mono">37</div>
+              <div class="k-d">12 chưa chốt</div>
+            </div>
+          </div>
+
+          <div class="frame on-bg" style="padding:20px 16px 30px;margin-bottom:18px">
+            <span class="frame-label">Đơn theo trạng thái</span>
+            <div class="chart">
+              <div class="bar" style="height:38%"><span>Báo giá · 12</span></div>
+              <div class="bar lo" style="height:22%"><span>Chờ duyệt · 4</span></div>
+              <div class="bar" style="height:55%"><span>Đã chốt · 9</span></div>
+              <div class="bar" style="height:70%"><span>Đã cọc · 11</span></div>
+              <div class="bar lo" style="height:44%"><span>Thi công · 7</span></div>
+              <div class="bar" style="height:88%"><span>Hoàn thành · 15</span></div>
+            </div>
+          </div>
+
+          <div class="main-head" style="margin-bottom:10px">
+            <h3 style="font-size:14px">Đơn gần đây</h3>
+            <span class="sp"></span>
+            <a class="btn btn--ghost btn--sm" href="#s-orders">Xem tất cả</a>
+          </div>
+          <div class="card" style="overflow:hidden">
+            <table class="table">
+              <thead>
+                <tr><th>Số báo giá</th><th>Khách hàng</th><th class="num">Tổng sau VAT</th><th>Trạng thái</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="strong">BG-2026-0142</td><td>Nguyễn Văn Hải</td><td class="num mono">86.400.000 ₫</td><td><span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span></td></tr>
+                <tr class="zebra"><td class="strong">BG-2026-0141</td><td>Cty TNHH Minh Phát</td><td class="num mono">245.000.000 ₫</td><td><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span></td></tr>
+                <tr><td class="strong">BG-2026-0140</td><td>Trần Thị Bích</td><td class="num mono">52.800.000 ₫</td><td><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></td></tr>
+                <tr class="zebra"><td class="strong">BG-2026-0139</td><td>Lê Quốc Anh</td><td class="num mono">39.200.000 ₫</td><td><span class="chip chip--baogia"><span class="dot"></span>Báo giá</span></td></tr>
+                <tr><td class="strong">BG-2026-0138</td><td>Cty CP Đông Á</td><td class="num mono">418.500.000 ₫</td><td><span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME (active tab = Trang chủ) -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">XIN CHÀO, ANH HÙNG</span>
+              Trang chủ
+            </div>
+            <a class="topbar-action" href="#s-menu">☰</a>
+          </div>
+          <div class="pscroll">
+            <div class="kpis" style="grid-template-columns:repeat(2,1fr);margin-bottom:14px">
+              <div class="kpi accent">
+                <div class="k-l">DT tháng</div>
+                <div class="k-v mono" style="font-size:19px">1,24 tỷ</div>
+                <div class="k-d">▲ 18%</div>
+              </div>
+              <div class="kpi">
+                <div class="k-l">Số đơn</div>
+                <div class="k-v mono" style="font-size:19px">37</div>
+                <div class="k-d">12 chưa chốt</div>
+              </div>
+              <div class="kpi">
+                <div class="k-l">DT tuần</div>
+                <div class="k-v mono" style="font-size:19px">312 tr</div>
+                <div class="k-d">▲ 9%</div>
+              </div>
+              <div class="kpi">
+                <div class="k-l">Hôm nay</div>
+                <div class="k-v mono" style="font-size:19px">48,5 tr</div>
+                <div class="k-d">3 đơn cọc</div>
+              </div>
+            </div>
+
+            <div class="frame on-bg" style="padding:18px 10px 28px;margin-bottom:14px">
+              <span class="frame-label">Đơn theo trạng thái</span>
+              <div class="chart" style="height:120px">
+                <div class="bar" style="height:38%"><span>BG·12</span></div>
+                <div class="bar lo" style="height:24%"><span>Duyệt·4</span></div>
+                <div class="bar" style="height:56%"><span>Chốt·9</span></div>
+                <div class="bar" style="height:72%"><span>Cọc·11</span></div>
+                <div class="bar lo" style="height:44%"><span>TC·7</span></div>
+                <div class="bar" style="height:90%"><span>HT·15</span></div>
+              </div>
+            </div>
+
+            <div class="row" style="margin-bottom:8px">
+              <span class="micro ink">Đơn gần đây</span>
+              <span class="sp"></span>
+              <a href="#s-orders" style="font-size:11px;font-weight:800;color:var(--teal-700)">Tất cả ›</a>
+            </div>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12.5px;font-weight:800">BG-2026-0142 · Nguyễn Văn Hải</div>
+                <div class="mono" style="font-size:11.5px;color:var(--muted)">86.400.000 ₫ · 8,2 kWp</div>
+              </div>
+              <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+            </a>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12.5px;font-weight:800">BG-2026-0141 · Cty Minh Phát</div>
+                <div class="mono" style="font-size:11.5px;color:var(--muted)">245.000.000 ₫ · 22 kWp</div>
+              </div>
+              <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span>
+            </a>
+            <a class="list-row" href="#s-order-detail">
+              <div style="flex:1;min-width:0">
+                <div style="font-size:12.5px;font-weight:800">BG-2026-0140 · Trần Thị Bích</div>
+                <div class="mono" style="font-size:11.5px;color:var(--muted)">52.800.000 ₫ · 5,4 kWp</div>
+              </div>
+              <span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span>
+            </a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- s-menu — Menu (mobile hub / web all-functions) -->
+<!-- ==================================================================== -->
+<section class="screen" id="s-menu">
+  <div class="screen-head">
+    <span class="kick">NỀN · HUB</span>
+    <h2>Menu</h2>
+    <span class="desc">Trung tâm điều hướng của mobile; trên web ánh xạ sang thanh điều hướng trái đầy đủ.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/menu</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink active" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-home" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">ĐIỀU HƯỚNG</span>
+              Tất cả chức năng
+            </div>
+            <a class="topbar-action" href="#s-login">Đăng xuất</a>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+            <a class="list-row" href="#s-customers" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">☺</div>
+              <div><div style="font-size:13px;font-weight:800">Khách hàng</div><div style="font-size:11.5px;color:var(--muted)">Tra &amp; quản lý theo SĐT</div></div>
+            </a>
+            <a class="list-row" href="#s-catalog" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">⬚</div>
+              <div><div style="font-size:13px;font-weight:800">Danh mục vật tư</div><div style="font-size:11.5px;color:var(--muted)">Sản phẩm &amp; giá</div></div>
+            </a>
+            <a class="list-row" href="#s-inventory" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">▤</div>
+              <div><div style="font-size:13px;font-weight:800">Kho</div><div style="font-size:11.5px;color:var(--muted)">Tồn kho &amp; phiếu nhập/xuất</div></div>
+            </a>
+            <a class="list-row" href="#s-permissions" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">⚿</div>
+              <div><div style="font-size:13px;font-weight:800">Phân quyền</div><div style="font-size:11.5px;color:var(--muted)">Account &amp; ma trận quyền</div></div>
+            </a>
+            <a class="list-row" href="#s-audit" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">◷</div>
+              <div><div style="font-size:13px;font-weight:800">Audit log</div><div style="font-size:11.5px;color:var(--muted)">Nhật ký bất biến · Super Admin</div></div>
+            </a>
+            <a class="list-row" href="#s-profile" style="margin:0">
+              <div class="thumb" style="width:40px;height:40px;font-size:18px">◉</div>
+              <div><div style="font-size:13px;font-weight:800">Hồ sơ</div><div style="font-size:11.5px;color:var(--muted)">Thông tin &amp; đổi mật khẩu</div></div>
+            </a>
+          </div>
+          <a class="btn btn--danger btn--wide" href="#s-login" style="margin-top:14px">Đăng xuất</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME (active tab = Menu) -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-home" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">ĐIỀU HƯỚNG</span>
+              Menu
+            </div>
+            <a class="topbar-action" href="#s-profile">Hồ sơ</a>
+          </div>
+          <div class="pscroll">
+            <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;margin-bottom:14px">
+              <div class="thumb" style="width:44px;height:44px;font-size:20px;color:var(--teal)">◉</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:800">Trần Văn Hùng</div>
+                <div style="font-size:11.5px;color:var(--muted)">Thợ khảo sát · 0987 654 321</div>
+              </div>
+              <span class="pill ok">Đang hoạt động</span>
+            </div>
+
+            <a class="list-row" href="#s-customers">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">☺</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Khách hàng</div><div style="font-size:11px;color:var(--muted)">Tra &amp; quản lý theo SĐT</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="list-row" href="#s-catalog">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">⬚</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Danh mục vật tư</div><div style="font-size:11px;color:var(--muted)">Sản phẩm &amp; giá</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="list-row" href="#s-inventory">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">▤</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Kho</div><div style="font-size:11px;color:var(--muted)">Tồn kho &amp; phiếu nhập/xuất</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="list-row" href="#s-permissions">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">⚿</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Phân quyền</div><div style="font-size:11px;color:var(--muted)">Account &amp; ma trận quyền</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="list-row" href="#s-audit">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">◷</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Audit log</div><div style="font-size:11px;color:var(--muted)">Nhật ký bất biến · Super Admin</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="list-row" href="#s-profile">
+              <div class="thumb" style="width:36px;height:36px;font-size:16px">◉</div>
+              <div style="flex:1"><div style="font-size:13px;font-weight:800">Hồ sơ</div><div style="font-size:11px;color:var(--muted)">Thông tin &amp; đổi mật khẩu</div></div>
+              <span style="color:#c3d3ce">›</span>
+            </a>
+            <a class="btn btn--danger btn--wide" href="#s-login" style="margin-top:6px">Đăng xuất</a>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ==================================================================== -->
+<!-- s-profile — Hồ sơ cá nhân & Đổi mật khẩu -->
+<!-- ==================================================================== -->
+<section class="screen" id="s-profile">
+  <div class="screen-head">
+    <span class="kick">QUẢN TRỊ · FR-22</span>
+    <h2>Hồ sơ cá nhân &amp; Đổi mật khẩu</h2>
+    <span class="desc">Xem thông tin tài khoản (tên, vai trò, SĐT) và tự đổi mật khẩu.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB FRAME -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/ho-so</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink active" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-home" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">TÀI KHOẢN</span>
+              Hồ sơ cá nhân
+            </div>
+            <a class="topbar-action" href="#s-login">Đăng xuất</a>
+          </div>
+
+          <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start">
+            <div class="card card--teal" style="flex:1 1 300px;padding:18px">
+              <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+                <div class="thumb" style="width:56px;height:56px;font-size:26px;color:var(--teal)">◉</div>
+                <div>
+                  <div style="font-size:16px;font-weight:900">Trần Văn Hùng</div>
+                  <div style="margin-top:4px"><span class="ktype">Thợ khảo sát</span></div>
+                </div>
+              </div>
+              <dl class="kv">
+                <dt>Tài khoản</dt><dd>hung.ks</dd>
+                <dt>Vai trò</dt><dd>Thợ khảo sát</dd>
+                <dt>Số điện thoại</dt><dd class="mono">0987 654 321</dd>
+                <dt>Email</dt><dd>hung.ks@phuongnamsolar.vn</dd>
+                <dt>Trạng thái</dt><dd><span class="pill ok">Đang hoạt động</span></dd>
+                <dt>Đăng nhập gần nhất</dt><dd class="mono">06/07/2026 · 09:41</dd>
+              </dl>
+            </div>
+
+            <div class="frame" style="flex:1 1 300px;padding:20px 18px">
+              <span class="frame-label">Đổi mật khẩu</span>
+              <div class="fgroup">
+                <label class="flabel">Mật khẩu hiện tại</label>
+                <input class="field" type="password" value="········">
+              </div>
+              <div class="fgroup">
+                <label class="flabel">Mật khẩu mới</label>
+                <input class="field" type="password" value="············">
+              </div>
+              <div class="fgroup">
+                <label class="flabel">Xác nhận mật khẩu mới</label>
+                <input class="field" type="password" value="············">
+              </div>
+              <div class="notecard" style="margin-bottom:12px">Tối thiểu 8 ký tự, có chữ và số. Đổi mật khẩu sẽ ghi vào Audit log.</div>
+              <div class="row" style="gap:8px">
+                <a class="btn btn--ghost" href="#s-profile">Huỷ</a>
+                <a class="btn btn--primary" href="#s-profile" style="flex:1">Cập nhật mật khẩu</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE FRAME (reached via Menu → active tab = Menu) -->
+    <div class="phone-col">
+      <p class="caption">Mobile · Flutter</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-menu" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">TÀI KHOẢN</span>
+              Hồ sơ cá nhân
+            </div>
+            <a class="topbar-action" href="#s-login">Đăng xuất</a>
+          </div>
+          <div class="pscroll">
+            <div class="card card--teal" style="padding:16px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+                <div class="thumb" style="width:50px;height:50px;font-size:22px;color:var(--teal)">◉</div>
+                <div>
+                  <div style="font-size:15px;font-weight:900">Trần Văn Hùng</div>
+                  <div style="margin-top:4px"><span class="ktype">Thợ khảo sát</span></div>
+                </div>
+              </div>
+              <dl class="kv">
+                <dt>Tài khoản</dt><dd>hung.ks</dd>
+                <dt>SĐT</dt><dd class="mono">0987 654 321</dd>
+                <dt>Email</dt><dd>hung.ks@phuongnam...</dd>
+                <dt>Trạng thái</dt><dd><span class="pill ok">Hoạt động</span></dd>
+              </dl>
+            </div>
+
+            <div class="frame" style="padding:18px 14px">
+              <span class="frame-label">Đổi mật khẩu</span>
+              <div class="fgroup">
+                <label class="flabel">Mật khẩu hiện tại</label>
+                <input class="field" type="password" value="········">
+              </div>
+              <div class="fgroup">
+                <label class="flabel">Mật khẩu mới</label>
+                <input class="field" type="password" value="············">
+              </div>
+              <div class="fgroup">
+                <label class="flabel">Xác nhận mật khẩu mới</label>
+                <input class="field" type="password" value="············">
+              </div>
+              <div class="notecard" style="margin-bottom:12px">Tối thiểu 8 ký tự, có chữ và số.</div>
+              <a class="btn btn--primary btn--wide" href="#s-profile">Cập nhật mật khẩu</a>
+            </div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item active" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>

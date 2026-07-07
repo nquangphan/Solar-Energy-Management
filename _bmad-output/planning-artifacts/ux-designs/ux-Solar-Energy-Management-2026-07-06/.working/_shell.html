@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Phương Nam Solar — Design Source of Truth</title>
+<style>
+/* =====================================================================
+   PHƯƠNG NAM SOLAR — DESIGN SYSTEM CORE (shell)
+   Hướng thị giác: "Viền nét" (blueprint) — phẳng, KHÔNG bóng,
+   viền 1.5px teal, nhãn micro chữ hoa, teal làm mực.
+   Bảng màu: "Năng Lượng Sạch" (teal #0E9F8E + lime #A3E635). Light mode.
+   Không JS, không network (điều hướng bằng anchor).
+   ---------------------------------------------------------------------
+   TOKEN HEX:
+     primary teal   #0E9F8E   teal-700 #0B8578   teal-050 #E6F6F4
+     accent  lime   #A3E635   lime-600 #7DB800    lime-050 #F1FBDD
+     ink            #0C1F1C   ink-2   #334E49      muted   #4E6B66
+     line           #DBEBE7   bg      #F4FAF8      surface #FFFFFF   surface-2 #ECF6F3
+     ok #159A6B  warn #D98A0B  danger #E14B4B  info #0E8FA8
+   STATUS CHIP (9 states) — class .chip--*  (canonical status chips):
+     Báo giá     .chip--baogia     bg#EAF3F1 fg#3A5450 bd#CFE5E0
+     Chờ duyệt   .chip--choduyet   bg#FBF0DA fg#8A5C08 bd#EFD9A8
+     Đã chốt     .chip--dachot     bg#DCF3EF fg#0B7264 bd#B7E5DD
+     Đã cọc      .chip--dacoc      bg#E7F5D9 fg#4B7A15 bd#CDE9AC
+     Đang thi công .chip--thicong  bg#FCEAD4 fg#985B08 bd#F2D3A6
+     Nghiệm thu  .chip--nghiemthu  bg#E4EEFA fg#345C9C bd#C4D8F0
+     Đang giao   .chip--danggiao   bg#DEF1F6 fg#0C6B84 bd#B7E0EB
+     Hoàn thành  .chip--hoanthanh  bg#DEF3E6 fg#137A4C bd#B7E5CA
+     Huỷ         .chip--huy        bg#FAE6E6 fg#B22C2C bd#F0C7C7
+   ===================================================================== */
+
+:root{
+  --teal:#0E9F8E; --teal-700:#0B8578; --teal-050:#E6F6F4;
+  --lime:#A3E635; --lime-600:#7DB800; --lime-050:#F1FBDD;
+  --ink:#0C1F1C; --ink-2:#334E49; --muted:#4E6B66; --line:#DBEBE7;
+  --bg:#F4FAF8; --surface:#FFFFFF; --surface-2:#ECF6F3;
+  --ok:#159A6B; --warn:#D98A0B; --danger:#E14B4B; --info:#0E8FA8;
+  --r-sm:8px; --r:10px; --r-lg:12px;
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--ink);
+  -webkit-font-smoothing:antialiased;
+  line-height:1.42;
+}
+a{color:inherit;text-decoration:none}
+.mono{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.row{display:flex;align-items:center}
+.sp{flex:1}
+
+/* ---------- Micro label (uppercase blueprint) ---------- */
+.micro{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal)}
+.micro.muted{color:var(--muted)}
+.micro.ink{color:var(--ink)}
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:1.5px solid var(--teal);background:var(--surface);color:var(--teal-700);
+  font-weight:800;font-size:13px;border-radius:var(--r);padding:9px 15px;cursor:pointer}
+.btn--primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn--accent{background:var(--lime-050);color:var(--lime-600);border-color:var(--lime)}
+.btn--ghost{border-color:var(--line);color:var(--ink-2)}
+.btn--danger{border-color:var(--danger);color:var(--danger)}
+.btn--sm{padding:5px 10px;font-size:11.5px;border-radius:var(--r-sm)}
+.btn--wide{width:100%}
+
+/* ---------- Card + blueprint frame ---------- */
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--r-lg)}
+.card--ink{border-color:var(--ink)}
+.card--teal{border-color:var(--teal)}
+.frame{position:relative;border:1.5px solid var(--ink);border-radius:var(--r-lg);background:var(--surface)}
+.frame > .frame-label{position:absolute;top:-8px;left:14px;background:var(--surface);padding:0 8px;
+  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.frame.on-bg > .frame-label{background:var(--bg)}
+
+/* ---------- Fields ---------- */
+.field{display:block;width:100%;border:1.5px solid var(--line);border-radius:var(--r);
+  background:var(--surface);padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:var(--font)}
+.field::placeholder{color:#9fb2ad}
+.field:focus,.field.focus{border-color:var(--teal);outline:none}
+.field-lg{padding:13px 14px;font-size:15px}
+.flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
+.fgroup{margin-bottom:13px}
+
+/* ---------- Status chips (9 order states) ---------- */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:3px 9px;border-radius:999px;border:1.5px solid transparent;white-space:nowrap}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+.chip--baogia    {background:#EAF3F1;color:#3A5450;border-color:#CFE5E0}
+.chip--choduyet  {background:#FBF0DA;color:#8A5C08;border-color:#EFD9A8}
+.chip--dachot    {background:#DCF3EF;color:#0B7264;border-color:#B7E5DD}
+.chip--dacoc     {background:#E7F5D9;color:#4B7A15;border-color:#CDE9AC}
+.chip--thicong   {background:#FCEAD4;color:#985B08;border-color:#F2D3A6}
+.chip--nghiemthu {background:#E4EEFA;color:#345C9C;border-color:#C4D8F0}
+.chip--danggiao  {background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB}
+.chip--hoanthanh {background:#DEF3E6;color:#137A4C;border-color:#B7E5CA}
+.chip--huy       {background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7}
+
+/* customer type + scope flags */
+.ktype{font-size:10.5px;font-weight:800;color:var(--ink);border:1.5px solid var(--lime);
+  background:var(--lime-050);padding:3px 10px;border-radius:999px}
+.scope-flag{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:999px;background:#fff}
+.scope-flag.on{border:1.5px solid var(--teal);color:var(--teal-700)}
+.scope-flag.off{border:1.5px solid var(--line);color:#9fb2ad;text-decoration:line-through}
+
+/* ---------- Banner ---------- */
+.banner{display:flex;gap:9px;align-items:flex-start;border:1.5px solid var(--warn);
+  background:#FBF0DA;color:#8A5C08;border-radius:var(--r);padding:10px 12px;font-size:12px;font-weight:600}
+.banner b{font-weight:800}
+.banner--info{border-color:var(--info);background:#DEF1F6;color:#0C6B84}
+.banner--danger{border-color:var(--danger);background:#FAE6E6;color:#B22C2C}
+
+/* ---------- Dense table ---------- */
+.table{width:100%;border-collapse:collapse;font-size:12.5px}
+.table th{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:8px 12px;background:var(--surface-2);border-bottom:1.5px solid var(--line)}
+.table td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table .num{text-align:right}
+.table .strong{color:var(--ink);font-weight:800}
+.table tr.zebra td{background:#F7FBFA}
+
+/* ---------- Stepper ---------- */
+.stepper{display:flex;flex-wrap:wrap;gap:0}
+.step{display:flex;align-items:center;gap:0}
+.step .node{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:64px;text-align:center}
+.step .bul{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#9fb2ad}
+.step .st-label{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;max-width:74px}
+.step .bar{width:26px;height:1.5px;background:var(--line);margin-top:-18px}
+.step.done .bul{border-color:var(--teal);background:var(--teal);color:#fff}
+.step.done .st-label{color:var(--ink-2)}
+.step.current .bul{border-color:var(--teal);background:#fff;color:var(--teal-700);box-shadow:0 0 0 3px var(--teal-050)}
+.step.current .st-label{color:var(--teal-700);font-weight:800}
+.step.gate .bul{border-style:dashed;color:#c3d3ce}
+.step.gate .st-label{color:#a9bab5}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{border:1.5px solid var(--line);border-radius:var(--r-lg);padding:12px 14px}
+.kpi .k-l{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .k-v{font-size:23px;font-weight:900;letter-spacing:-.02em;margin-top:5px}
+.kpi .k-d{font-size:11px;font-weight:700;color:var(--ok);margin-top:2px}
+.kpi.accent{border-color:var(--teal);background:var(--teal-050)}
+
+/* ---------- bar chart ---------- */
+.chart{display:flex;align-items:flex-end;gap:10px;height:150px;padding:8px 4px 0}
+.chart .bar{flex:1;background:var(--teal);border-radius:5px 5px 0 0;position:relative;min-width:14px}
+.chart .bar.lo{background:var(--lime);opacity:.9}
+.chart .bar span{position:absolute;bottom:-19px;left:0;right:0;text-align:center;font-size:9.5px;color:var(--muted);font-weight:700}
+
+/* ---------- misc reusable ---------- */
+.list-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1.5px solid var(--line);
+  border-radius:var(--r);margin-bottom:8px;background:#fff}
+.list-row:hover{border-color:var(--teal)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px}
+.kv dt{color:var(--muted);font-weight:700}
+.kv dd{margin:0;color:var(--ink);font-weight:600}
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:74px;height:74px;border:1.5px solid var(--line);border-radius:var(--r);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;color:#b7c9c4;font-size:20px}
+.thumb.add{border-style:dashed;border-color:var(--teal);color:var(--teal-700);font-weight:800}
+.doc{border:1.5px solid var(--line);border-radius:var(--r);background:#fff;padding:22px 26px;
+  font-size:12px;color:var(--ink-2);max-width:520px}
+.doc h4{text-align:center;font-size:14px;margin:0 0 2px;color:var(--ink)}
+.doc .doc-sub{text-align:center;font-size:10.5px;color:var(--muted);margin-bottom:14px}
+.doc p{margin:0 0 8px}
+.doc .sig{display:flex;justify-content:space-between;margin-top:22px;font-size:11px;text-align:center}
+.overlay{background:var(--surface-2);border:1.5px dashed var(--line);border-radius:var(--r-lg);
+  padding:20px;display:flex;justify-content:center}
+.modal{width:340px;background:#fff;border:1.5px solid var(--ink);border-radius:var(--r-lg);overflow:hidden}
+.modal-head{padding:13px 16px;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal-head .mt{font-size:14px;font-weight:800}
+.modal-body{padding:16px}
+.modal-foot{padding:12px 16px;border-top:1.5px solid var(--line);display:flex;gap:8px}
+.sheet{width:300px;background:#fff;border:1.5px solid var(--ink);border-radius:18px 18px 0 0;overflow:hidden}
+.sheet-grab{width:38px;height:4px;background:var(--line);border-radius:99px;margin:9px auto 4px}
+.share-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:8px 16px 16px}
+.share-app{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:10px;font-weight:700;color:var(--ink-2)}
+.share-app .ic{width:48px;height:48px;border-radius:14px;border:1.5px solid var(--line);display:flex;
+  align-items:center;justify-content:center;font-size:20px;color:var(--teal)}
+.pill{display:inline-block;font-size:10.5px;font-weight:800;padding:2px 9px;border-radius:999px;
+  border:1.5px solid var(--line);color:var(--muted)}
+.pill.ok{border-color:var(--ok);color:var(--ok);background:#DEF3E6}
+.pill.warn{border-color:var(--warn);color:#8A5C08;background:#FBF0DA}
+.tick{color:var(--teal);font-weight:900}
+.cross{color:#c3d3ce;font-weight:900}
+.notecard{background:var(--surface-2);border-radius:var(--r-sm);padding:8px 10px;font-size:11.5px;color:var(--ink-2)}
+
+/* ==================== STICKY INDEX (page-level nav) ==================== */
+.indexbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,.94);backdrop-filter:blur(10px);
+  border-bottom:1.5px solid var(--ink)}
+.indexbar-inner{max-width:1400px;margin:0 auto;padding:10px 22px}
+.brand{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.brand .logo{width:30px;height:30px;border:1.5px solid var(--teal);border-radius:8px;display:flex;
+  align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:16px}
+.brand .bname{font-size:15px;font-weight:900;letter-spacing:-.01em}
+.brand .bsub{font-size:11px;color:var(--muted);font-weight:600}
+.indexnav{display:flex;flex-wrap:wrap;gap:6px}
+.indexnav a{font-size:11.5px;font-weight:700;color:var(--ink-2);border:1.5px solid var(--line);
+  background:#fff;border-radius:999px;padding:4px 11px}
+.indexnav a:hover{border-color:var(--teal);color:var(--teal-700);background:var(--teal-050)}
+.indexnav .navgroup{font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal);
+  align-self:center;margin:0 2px 0 8px;border:0;background:none;padding:0}
+
+.page{max-width:1400px;margin:0 auto;padding:26px 22px 90px}
+.intro{border:1.5px solid var(--ink);border-radius:var(--r-lg);background:#fff;padding:16px 18px;margin-bottom:30px}
+.intro h1{font-size:20px;margin:0 0 6px;letter-spacing:-.02em}
+.intro p{margin:0;font-size:13px;color:var(--ink-2);max-width:960px}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
+/* ==================== SCREEN SECTION WRAPPER ==================== */
+.screen{margin:0 0 46px;scroll-margin-top:120px}
+.screen-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:16px;
+  padding-bottom:9px;border-bottom:1.5px solid var(--line)}
+.screen-head .kick{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+.screen-head h2{font-size:19px;margin:0;letter-spacing:-.01em}
+.screen-head .desc{font-size:12.5px;color:var(--muted);flex:1;min-width:200px}
+.surface-tag{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+  border:1.5px solid var(--teal);color:var(--teal-700);border-radius:999px;padding:3px 10px}
+.surface-tag.web{border-color:var(--info);color:#0C6B84}
+
+.stage{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+.phone-col{flex:0 0 auto}
+.caption{font-size:11px;color:var(--muted);font-weight:700;margin:0 0 8px;text-align:center}
+
+/* ==================== TOPBAR (canonical screen top bar) ==================== */
+.topbar{display:flex;align-items:center;gap:10px;flex:0 0 auto;
+  padding:10px 13px;border-bottom:1.5px solid var(--ink);background:#fff}
+.topbar-back{flex:0 0 auto;width:28px;height:28px;border:1.5px solid var(--line);border-radius:8px;background:#fff;
+  color:var(--teal-700);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center}
+.topbar-title{flex:1;min-width:0;font-size:15px;font-weight:800;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-eyebrow{display:block;font-size:10px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--teal);line-height:1.2}
+.topbar-action{flex:0 0 auto;font-size:12px;font-weight:800;color:var(--teal-700)}
+
+/* ==================== BOTNAV (LOCKED 5-tab mobile bottom nav) ==================== */
+.botnav{display:flex;align-items:flex-end;flex:0 0 auto;
+  border-top:1.5px solid var(--ink);background:#fff;padding:0 2px}
+.botnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:7px 0 9px;font-size:9.5px;font-weight:700;color:var(--muted);text-align:center;line-height:1.1}
+.botnav-item .icn{width:22px;height:22px;color:#a9bab5}
+.botnav-item.active{color:var(--teal-700)}
+.botnav-item.active .icn{color:var(--teal)}
+.botnav-fab { color:var(--teal-700) }
+.botnav-fab .fab { width:46px;height:46px;margin-top:-22px;margin-bottom:2px;border-radius:50%;
+  background:var(--teal);border:3px solid #fff;box-shadow:0 0 0 1.5px var(--teal-700);
+  color:#fff;font-size:23px;font-weight:500;line-height:1;
+  display:flex;align-items:center;justify-content:center }
+
+/* ==================== PHONE FRAME ==================== */
+.phone{width:330px;background:#0C1512;border-radius:40px;padding:9px;flex:0 0 auto}
+.phone .glass{position:relative;border-radius:32px;overflow:hidden;background:var(--surface);
+  height:700px;display:flex;flex-direction:column}
+.phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:116px;height:22px;
+  background:#0C1512;border-radius:0 0 14px 14px;z-index:40}
+.phone .sbar{height:34px;flex:0 0 34px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;font-size:11.5px;font-weight:700;z-index:30}
+.phone .sbar .r{font-size:10px}
+.phone .pbody{flex:1;overflow:hidden;display:flex;flex-direction:column;position:relative;background:var(--bg)}
+.pscroll{flex:1;overflow:auto;padding:12px 13px}
+.pscroll::-webkit-scrollbar{width:0}
+/* mobile sticky totals bar (optional, sits above botnav) */
+.mtotals{border-top:1.5px solid var(--ink);background:#fff;padding:10px 13px 12px;flex:0 0 auto}
+
+/* ==================== WEB / BROWSER FRAME ==================== */
+.web{flex:1 1 760px;min-width:0;border:1.5px solid var(--ink);border-radius:var(--r-lg);overflow:hidden;background:#fff}
+.web-chrome{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface-2);
+  border-bottom:1.5px solid var(--line)}
+.web-dots{display:flex;gap:6px}
+.web-dots i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);display:block}
+.web-url{flex:1;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;
+  font-size:11px;color:var(--muted);font-weight:600}
+.web-app{display:flex;min-height:520px}
+
+/* canonical web left-nav */
+.web .sidebar{width:186px;flex:0 0 186px;border-right:1.5px solid var(--line);background:var(--surface-2);padding:13px 10px}
+.sidebar .brand2{display:flex;align-items:center;gap:8px;margin:2px 4px 14px}
+.sidebar .brand2 .logo{width:26px;height:26px;border:1.5px solid var(--teal);border-radius:7px;display:flex;
+  align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:14px}
+.sidebar .brand2 .t{font-size:12.5px;font-weight:900}
+.sidebar .navlink{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);
+  font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:2px}
+.sidebar .navlink .icn{width:16px;height:16px;color:#8fa39e}
+.sidebar .navlink.active{background:#fff;border:1.5px solid var(--teal);color:var(--teal-700)}
+.sidebar .navlink.active .icn{color:var(--teal)}
+.sidebar .navsec{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a9bab5;margin:12px 10px 5px}
+
+.main{flex:1;min-width:0;padding:18px 20px;background:#fff}
+.main-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.main-head h3{font-size:17px;margin:0;letter-spacing:-.01em}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search{flex:1;min-width:160px;position:relative}
+.search .field{padding-left:32px}
+.search .si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#9fb2ad;font-size:13px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg a{font-size:11.5px;font-weight:700;color:var(--ink-2);padding:6px 12px;border-right:1.5px solid var(--line)}
+.seg a:last-child{border-right:0}
+.seg a.active{background:var(--teal);color:#fff}
+.tabs{display:flex;gap:2px;border-bottom:1.5px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+.tabs a{font-size:12px;font-weight:700;color:var(--muted);padding:8px 12px;border-bottom:2px solid transparent;margin-bottom:-1.5px}
+.tabs a.active{color:var(--teal-700);border-bottom-color:var(--teal)}
+
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .web-app{flex-direction:column}
+  .web .sidebar{width:auto;flex:none;border-right:0;border-bottom:1.5px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidebar .brand2,.sidebar .navsec{width:100%}
+}
+
+/* ---------- Inline SVG icon system (modern thin-line icons) ---------- */
+svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fill:none;stroke:currentColor}
+.icn-xs{width:13px;height:13px}
+.botnav-fab .fab .icn{width:22px;height:22px}
+.topbar-back .icn{width:18px;height:18px}
+.si .icn{width:16px;height:16px}
+.logo .icn{width:18px;height:18px}
+.btn .icn{width:15px;height:15px}
+.topbar-action .icn{width:15px;height:15px}
+.banner .icn{width:16px;height:16px;margin-top:1px}
+.table .num .icn{width:14px;height:14px}
+.step .bul .icn{width:14px;height:14px}
+.tick .icn,.cross .icn{width:14px;height:14px}
+.thumb .icn{width:20px;height:20px}
+.share-app .ic .icn{width:24px;height:24px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="ic-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol><symbol id="ic-orders" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol><symbol id="ic-customer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="ic-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol><symbol id="ic-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol><symbol id="ic-catalog" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol><symbol id="ic-warehouse" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 8.35V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.35A2 2 0 0 1 3.26 6.5l8-3.2a2 2 0 0 1 1.48 0l8 3.2A2 2 0 0 1 22 8.35Z"/><path d="M6 18h12"/><path d="M6 14h12"/><path d="M6 10h12"/></symbol><symbol id="ic-inventory" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol><symbol id="ic-product" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol><symbol id="ic-permissions" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><circle cx="12" cy="10" r="1.4"/><path d="M12 11.4V15"/></symbol><symbol id="ic-audit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 7v5l3 2"/></symbol><symbol id="ic-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></symbol><symbol id="ic-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol><symbol id="ic-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></symbol><symbol id="ic-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></symbol><symbol id="ic-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol><symbol id="ic-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></symbol><symbol id="ic-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></symbol><symbol id="ic-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol><symbol id="ic-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol><symbol id="ic-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol><symbol id="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol><symbol id="ic-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></symbol><symbol id="ic-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></symbol><symbol id="ic-sort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol><symbol id="ic-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol><symbol id="ic-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></symbol><symbol id="ic-filter" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol><symbol id="ic-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol><symbol id="ic-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></symbol><symbol id="ic-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol><symbol id="ic-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></symbol><symbol id="ic-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol><symbol id="ic-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></symbol><symbol id="ic-contract" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></symbol><symbol id="ic-invoice" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/></symbol><symbol id="ic-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92Z"/></symbol><symbol id="ic-more" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol><symbol id="ic-ban" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></symbol><symbol id="ic-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></symbol><symbol id="ic-status" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></symbol><symbol id="ic-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol><symbol id="ic-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol><symbol id="ic-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol><symbol id="ic-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol><symbol id="ic-payment" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></symbol></defs></svg>
+
+
+<!-- ============================ STICKY INDEX ============================ -->
+<div class="indexbar" id="index">
+  <div class="indexbar-inner">
+    <div class="brand">
+      <div class="logo"><svg class="icn"><use href="#ic-sun"/></svg></div>
+      <div>
+        <div class="bname">Phương Nam Solar</div>
+        <div class="bsub">Design Source of Truth · 25 màn hình · Viền nét / blueprint</div>
+      </div>
+    </div>
+    <div class="indexnav">
+      <span class="navgroup">Xác thực &amp; Nền</span>
+      <a href="#s-login">Đăng nhập</a>
+      <a href="#s-forgot">Quên mật khẩu</a>
+      <a href="#s-home">Trang chủ</a>
+      <a href="#s-menu">Menu</a>
+      <a href="#s-profile">Hồ sơ</a>
+
+      <span class="navgroup">Đơn hàng</span>
+      <a href="#s-orders">Danh sách đơn</a>
+      <a href="#s-quote">Báo giá</a>
+      <a href="#s-customer-pick">Chọn khách</a>
+      <a href="#s-order-detail">Chi tiết đơn</a>
+      <a href="#s-status-change">Chuyển trạng thái</a>
+      <a href="#s-order-cancel">Huỷ đơn</a>
+
+      <span class="navgroup">Tiền &amp; Chứng từ</span>
+      <a href="#s-discount-approval">Duyệt chiết khấu</a>
+      <a href="#s-payments">Thanh toán</a>
+      <a href="#s-contract">Hợp đồng</a>
+      <a href="#s-invoice">Hoá đơn</a>
+      <a href="#s-share">Chia sẻ</a>
+
+      <span class="navgroup">Khách &amp; Danh mục &amp; Kho</span>
+      <a href="#s-customers">Khách hàng</a>
+      <a href="#s-customer-detail">Chi tiết khách</a>
+      <a href="#s-catalog">Danh mục</a>
+      <a href="#s-product-detail">Chi tiết sản phẩm</a>
+      <a href="#s-inventory">Tồn kho</a>
+      <a href="#s-stock-vouchers">Phiếu kho</a>
+
+      <span class="navgroup">Quản trị</span>
+      <a href="#s-permissions">Phân quyền</a>
+      <a href="#s-account-form">Tạo tài khoản</a>
+      <a href="#s-audit">Audit log</a>
+    </div>
+  </div>
+</div>
+
+<div class="page">
+
+  <div class="intro">
+    <h1>Design Source of Truth — Phương Nam Solar</h1>
+    <p>Khung nền (shell) cho toàn bộ 25 màn hình app nội bộ, một ngôn ngữ thị giác <strong>“Viền nét / blueprint”</strong>: phẳng, không đổ bóng, viền 1.5px teal, nhãn micro chữ hoa, teal làm mực — trên bảng màu <strong>“Năng Lượng Sạch”</strong> (teal #0E9F8E + lime #A3E635). Màn hiện trường dựng trong khung điện thoại (Flutter), màn văn phòng dựng trong khung trình duyệt (React). Các component <code>.topbar</code>, <code>.botnav</code>, <code>.phone</code>, <code>.web</code>, <code>.sidebar</code> đã khoá — chép nguyên văn từ khối “COMPONENT REFERENCE” ở đầu file. Điều hướng bằng liên kết neo, không JavaScript.</p>
+    <div class="legend">
+      <span class="chip chip--baogia"><span class="dot"></span>Báo giá</span>
+      <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span>
+      <span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span>
+      <span class="chip chip--dacoc"><span class="dot"></span>Đã cọc</span>
+      <span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span>
+      <span class="chip chip--nghiemthu"><span class="dot"></span>Nghiệm thu</span>
+      <span class="chip chip--danggiao"><span class="dot"></span>Đang giao</span>
+      <span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span>
+      <span class="chip chip--huy"><span class="dot"></span>Huỷ</span>
+    </div>
+  </div>
+
+<!--SCREENS_INJECT-->
+
+</div>
+</body>
+</html>

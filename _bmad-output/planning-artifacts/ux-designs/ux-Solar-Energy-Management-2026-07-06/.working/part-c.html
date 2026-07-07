@@ -1,0 +1,691 @@
+<!-- =====================================================================
+     PART C — TIỀN & CHỨNG TỪ (5 màn hình)
+     s-discount-approval · s-payments · s-contract · s-invoice · s-share
+     Chép nguyên văn .topbar / .botnav / .phone / .web / .sidebar từ shell.
+     Số liệu chuẩn: đơn DH-2048 · trước VAT 76.862.000 · VAT 8% 6.148.960
+     · tổng sau VAT 83.010.960 · lịch 20/70/10 = 16.602.192 / 58.107.672 / 8.301.096
+===================================================================== -->
+
+<!-- ============================ 1 · DUYỆT CHIẾT KHẤU ============================ -->
+<section class="screen" id="s-discount-approval">
+  <div class="screen-head">
+    <span class="kick">Tiền &amp; Chứng từ · FR-11</span>
+    <h2>Duyệt chiết khấu</h2>
+    <span class="desc">Danh sách đề xuất chiết khấu chờ duyệt (đơn · mức giảm · người đề xuất) và màn chi tiết để Đồng ý / Từ chối kèm lý do.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/duyet-chiet-khau</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">QUẢN LÝ · CHỜ DUYỆT</span>
+              Duyệt chiết khấu
+            </div>
+            <a class="topbar-action" href="#index">3 đề xuất</a>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:16px">
+            <!-- danh sách đề xuất -->
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Đề xuất chờ duyệt</span>
+              <table class="table">
+                <thead><tr><th>Đơn · Khách</th><th class="num">Mức giảm</th><th>Người đề xuất</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="strong">DH-2048<br><span style="font-weight:600;color:var(--muted)">VP CC Lê Đình Thao</span></td>
+                    <td class="num"><b class="mono" style="color:var(--warn)">5%</b><br><span class="mono" style="font-size:11px;color:var(--muted)">−4.150.548đ</span></td>
+                    <td>Trần Văn Sơn<br><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">DH-2051<br><span style="font-weight:600;color:var(--muted)">Cty TNHH Minh Long</span></td>
+                    <td class="num"><b class="mono">3%</b><br><span class="mono" style="font-size:11px;color:var(--muted)">−2.640.000đ</span></td>
+                    <td>Lê Thị Hà<br><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">DH-2047<br><span style="font-weight:600;color:var(--muted)">Anh Hùng (hộ dân)</span></td>
+                    <td class="num"><b class="mono" style="color:var(--danger)">8%</b><br><span class="mono" style="font-size:11px;color:var(--danger)">vượt hạn mức</span></td>
+                    <td>Trần Văn Sơn<br><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- chi tiết duyệt -->
+            <div class="frame" style="padding:14px 16px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Chi tiết duyệt · DH-2048</span>
+              <dl class="kv" style="margin-bottom:12px">
+                <dt>Đơn</dt><dd class="mono">DH-2048</dd>
+                <dt>Khách</dt><dd>VP CC Lê Đình Thao</dd>
+                <dt>Người đề xuất</dt><dd>Trần Văn Sơn (Sale)</dd>
+                <dt>Mức giảm</dt><dd><b style="color:var(--warn)">5%</b> · trong hạn mức</dd>
+                <dt>Giá gốc</dt><dd class="mono">83.010.960đ</dd>
+                <dt>Sau chiết khấu</dt><dd class="mono strong" style="color:var(--teal)">78.860.412đ</dd>
+              </dl>
+              <div class="notecard" style="margin-bottom:12px"><b>Lý do đề xuất:</b> Khách công chứng ký nhiều đơn, đề nghị giảm 5% để chốt trong tuần.</div>
+              <div class="fgroup">
+                <span class="flabel">Lý do duyệt / từ chối (bắt buộc khi từ chối)</span>
+                <input class="field" placeholder="Nhập lý do…">
+              </div>
+              <div class="row" style="gap:8px">
+                <button class="btn btn--danger" style="flex:1">✕ Từ chối</button>
+                <button class="btn btn--primary" style="flex:1.3">✓ Đồng ý chiết khấu</button>
+              </div>
+              <div class="banner banner--info" style="margin-top:11px"><span>ℹ</span><div>Duyệt / từ chối đều ghi <b>Audit log</b>. Đơn vượt hạn mức chỉ Giám đốc mới duyệt được.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · duyệt tại hiện trường</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#index" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">CHỜ DUYỆT · 3</span>
+              Duyệt chiết khấu
+            </div>
+            <a class="topbar-action" href="#index">Lọc</a>
+          </div>
+          <div class="pscroll">
+            <div class="list-row" style="border-color:var(--teal)">
+              <div style="flex:1">
+                <div class="row"><b style="font-size:13px">DH-2048</b><span class="sp"></span><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></div>
+                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">VP CC Lê Đình Thao · đề xuất bởi Trần Văn Sơn</div>
+                <div class="row" style="margin-top:5px;font-size:12px"><span class="micro">Giảm 5%</span><span class="sp"></span><span class="mono" style="color:var(--warn)">−4.150.548đ</span></div>
+              </div>
+            </div>
+            <div class="list-row">
+              <div style="flex:1">
+                <div class="row"><b style="font-size:13px">DH-2051</b><span class="sp"></span><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></div>
+                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Cty TNHH Minh Long · Lê Thị Hà</div>
+                <div class="row" style="margin-top:5px;font-size:12px"><span class="micro">Giảm 3%</span><span class="sp"></span><span class="mono">−2.640.000đ</span></div>
+              </div>
+            </div>
+            <div class="list-row">
+              <div style="flex:1">
+                <div class="row"><b style="font-size:13px">DH-2047</b><span class="sp"></span><span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt</span></div>
+                <div style="font-size:11.5px;color:var(--muted);margin-top:2px">Anh Hùng (hộ dân) · Trần Văn Sơn</div>
+                <div class="row" style="margin-top:5px;font-size:12px"><span class="micro" style="color:var(--danger)">Giảm 8% · vượt hạn mức</span></div>
+              </div>
+            </div>
+
+            <div class="frame on-bg" style="padding:12px 13px;margin-top:12px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Duyệt · DH-2048</span>
+              <dl class="kv" style="font-size:12px">
+                <dt>Giá gốc</dt><dd class="mono">83.010.960đ</dd>
+                <dt>Sau CK 5%</dt><dd class="mono strong" style="color:var(--teal)">78.860.412đ</dd>
+              </dl>
+              <div class="fgroup" style="margin-top:10px;margin-bottom:0">
+                <span class="flabel">Lý do (bắt buộc khi từ chối)</span>
+                <input class="field" placeholder="Nhập lý do…">
+              </div>
+            </div>
+          </div>
+          <div class="mtotals">
+            <div class="row" style="gap:8px"><button class="btn btn--danger" style="flex:1">✕ Từ chối</button><button class="btn btn--primary" style="flex:1.3">✓ Đồng ý</button></div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 2 · THANH TOÁN ============================ -->
+<section class="screen" id="s-payments">
+  <div class="screen-head">
+    <span class="kick">Tiền &amp; Chứng từ · FR-12</span>
+    <h2>Lịch thanh toán &amp; ghi nhận</h2>
+    <span class="desc">Ba đợt 20/70/10 với trạng thái từng đợt, tiến độ công nợ và form ghi nhận một đợt (số tiền · ngày · phương thức).</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/thanh-toan</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048 · CÔNG NỢ</span>
+              Lịch thanh toán
+            </div>
+            <a class="topbar-action" href="#index">Lịch sử</a>
+          </div>
+
+          <!-- progress công nợ -->
+          <div class="frame" style="padding:14px 16px;margin-top:16px">
+            <span class="frame-label">Tiến độ công nợ</span>
+            <div class="row" style="margin-bottom:8px">
+              <div><span class="micro muted">Đã thu</span><div class="mono" style="font-size:19px;font-weight:900;color:var(--teal)">16.602.192đ</div></div>
+              <div class="sp"></div>
+              <div style="text-align:right"><span class="micro muted">Còn lại</span><div class="mono" style="font-size:19px;font-weight:900">66.408.768đ</div></div>
+            </div>
+            <div style="height:12px;border:1.5px solid var(--line);border-radius:999px;background:var(--surface-2);overflow:hidden">
+              <div style="width:20%;height:100%;background:var(--teal)"></div>
+            </div>
+            <div class="row" style="margin-top:6px"><span class="micro muted">20% / 100%</span><span class="sp"></span><span class="micro muted">Tổng đơn 83.010.960đ</span></div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.35fr 1fr;gap:18px;align-items:start;margin-top:14px">
+            <!-- các đợt -->
+            <div class="frame" style="padding:6px 0">
+              <span class="frame-label">Các đợt thanh toán</span>
+              <table class="table">
+                <thead><tr><th>Đợt</th><th class="num">Số tiền</th><th>Trạng thái</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td class="strong">Đợt 1 · Cọc 20%<br><span style="font-weight:600;color:var(--muted)">Thu 02/07 · Chuyển khoản</span></td>
+                    <td class="num strong mono">16.602.192</td>
+                    <td><span class="pill ok">✓ Đã thu</span></td>
+                  </tr>
+                  <tr class="zebra">
+                    <td class="strong">Đợt 2 · Thi công 70%<br><span style="font-weight:600;color:var(--muted)">Đến hạn khi thi công</span></td>
+                    <td class="num strong mono">58.107.672</td>
+                    <td><span class="pill warn">Chưa thu</span></td>
+                  </tr>
+                  <tr>
+                    <td class="strong">Đợt 3 · Nghiệm thu 10%<br><span style="font-weight:600;color:var(--muted)">Đến hạn khi bàn giao</span></td>
+                    <td class="num strong mono">8.301.096</td>
+                    <td><span class="pill">Chưa thu</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- form ghi nhận 1 đợt -->
+            <div class="frame" style="padding:14px 16px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Ghi nhận thanh toán · Đợt 2</span>
+              <div class="fgroup"><span class="flabel">Số tiền thu</span><input class="field mono" value="58.107.672"></div>
+              <div class="row" style="gap:10px">
+                <div class="fgroup" style="flex:1"><span class="flabel">Ngày thu</span><input class="field mono" value="06/07/2026"></div>
+                <div class="fgroup" style="flex:1"><span class="flabel">Phương thức</span><input class="field" value="Chuyển khoản"></div>
+              </div>
+              <button class="btn btn--primary btn--wide">✓ Ghi nhận đợt 2</button>
+              <div class="banner" style="margin-top:11px"><span>ℹ</span><div>Ghi nhận đợt cọc → trạng thái đơn <b>tự nhảy</b> (ví dụ sang <b>Đã cọc</b>). Mọi lần ghi nhận đều vào Audit log.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · ghi nhận thu tiền</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048</span>
+              Lịch thanh toán
+            </div>
+            <a class="topbar-action" href="#index">Lịch sử</a>
+          </div>
+          <div class="pscroll">
+            <div class="frame on-bg" style="padding:12px 13px;margin-bottom:11px">
+              <span class="frame-label">Công nợ</span>
+              <div class="row"><span class="micro muted">Đã thu</span><span class="sp"></span><b class="mono" style="color:var(--teal)">16.602.192đ</b></div>
+              <div style="height:10px;border:1.5px solid var(--line);border-radius:999px;background:#fff;overflow:hidden;margin:7px 0 5px"><div style="width:20%;height:100%;background:var(--teal)"></div></div>
+              <div class="row"><span class="micro muted">20%</span><span class="sp"></span><span class="micro muted">Còn 66.408.768đ</span></div>
+            </div>
+
+            <div class="card" style="padding:11px 12px;margin-bottom:8px;border-color:var(--lime)">
+              <div class="row"><b style="font-size:13px">Đợt 1 · Cọc 20%</b><span class="sp"></span><span class="pill ok">✓ Đã thu</span></div>
+              <div class="row" style="margin-top:5px;font-size:12px"><span style="color:var(--muted)">02/07 · CK</span><span class="sp"></span><b class="mono">16.602.192đ</b></div>
+            </div>
+            <div class="card" style="padding:11px 12px;margin-bottom:8px">
+              <div class="row"><b style="font-size:13px">Đợt 2 · Thi công 70%</b><span class="sp"></span><span class="pill warn">Chưa thu</span></div>
+              <div class="row" style="margin-top:5px;font-size:12px"><span style="color:var(--muted)">Đến hạn khi thi công</span><span class="sp"></span><b class="mono">58.107.672đ</b></div>
+            </div>
+            <div class="card" style="padding:11px 12px;margin-bottom:11px">
+              <div class="row"><b style="font-size:13px">Đợt 3 · Nghiệm thu 10%</b><span class="sp"></span><span class="pill">Chưa thu</span></div>
+              <div class="row" style="margin-top:5px;font-size:12px"><span style="color:var(--muted)">Đến hạn khi bàn giao</span><span class="sp"></span><b class="mono">8.301.096đ</b></div>
+            </div>
+
+            <div class="frame on-bg" style="padding:12px 13px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Ghi nhận đợt 2</span>
+              <div class="fgroup"><span class="flabel">Số tiền</span><input class="field mono" value="58.107.672"></div>
+              <div class="row" style="gap:8px">
+                <div class="fgroup" style="flex:1;margin-bottom:0"><span class="flabel">Ngày</span><input class="field mono" value="06/07/2026"></div>
+                <div class="fgroup" style="flex:1;margin-bottom:0"><span class="flabel">Phương thức</span><input class="field" value="Chuyển khoản"></div>
+              </div>
+              <div class="notecard" style="margin-top:9px">Ghi nhận cọc → trạng thái tự nhảy <b>Đã cọc</b>.</div>
+            </div>
+          </div>
+          <div class="mtotals">
+            <button class="btn btn--primary btn--wide">✓ Ghi nhận đợt 2</button>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 3 · SINH HỢP ĐỒNG ============================ -->
+<section class="screen" id="s-contract">
+  <div class="screen-head">
+    <span class="kick">Tiền &amp; Chứng từ · FR-13</span>
+    <h2>Sinh hợp đồng</h2>
+    <span class="desc">Chọn HĐ Thi công / HĐ Mua bán, xem preview văn bản với trường động (hai bên · vật tư · tiền · lịch TT · số BG); điều khoản là template tĩnh — xuất PDF.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/hop-dong</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048 · HỢP ĐỒNG</span>
+              Sinh hợp đồng
+            </div>
+            <a class="topbar-action" href="#index">⤓ Xuất PDF</a>
+          </div>
+
+          <div class="toolbar" style="margin-top:16px">
+            <div class="seg"><a class="active" href="#s-contract">HĐ Thi công</a><a href="#s-contract">HĐ Mua bán</a></div>
+            <div class="sp"></div>
+            <span class="pill">Template tĩnh</span>
+            <button class="btn btn--primary btn--sm">⤓ Xuất PDF</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+            <div class="doc" style="max-width:none">
+              <div class="row" style="align-items:flex-start;margin-bottom:12px">
+                <div class="logo" style="width:34px;height:34px;border:1.5px solid var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900">☀</div>
+                <div style="margin-left:10px;font-size:10px;color:var(--muted)"><b style="color:var(--ink);font-size:12px">CÔNG TY NLMT PHƯƠNG NAM</b><br>MST 0312 998 771 · 45 Nguyễn Oanh, Gò Vấp, TP.HCM</div>
+              </div>
+              <h4>HỢP ĐỒNG THI CÔNG ĐIỆN MẶT TRỜI</h4>
+              <div class="doc-sub">Số: HĐTC-2048/2026 · Tham chiếu báo giá: BG-2048</div>
+              <p><b>Bên A (Chủ đầu tư):</b> VP Công Chứng Lê Đình Thao — MST 0316 552 018 — 122 Trần Não, TP. Thủ Đức — ĐT 0903 176 968.</p>
+              <p><b>Bên B (Nhà thầu):</b> Công ty NLMT Phương Nam.</p>
+              <p><b>Điều 1. Nội dung:</b> Bên B cung cấp và thi công hệ thống điện mặt trời hoà lưới công suất <b>8,82 kWp</b> theo danh mục vật tư đính kèm.</p>
+              <p><b>Điều 2. Giá trị hợp đồng:</b> <b>83.010.960đ</b> (đã gồm VAT 8%). Thanh toán 3 đợt 20/70/10 theo phụ lục.</p>
+              <p style="color:var(--muted)"><b>Điều 3–8 (bảo hành, tiến độ, phạt vi phạm, bất khả kháng…):</b> theo <b>template tĩnh</b> chuẩn của công ty — không chỉnh theo đơn.</p>
+              <div class="sig"><div>NGƯỜI LẬP PHIẾU<br><span style="color:var(--muted)">(Ký, ghi rõ họ tên)</span></div><div>GIÁM ĐỐC<br><span style="color:var(--muted)">(Ký, đóng dấu)</span></div></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Trường động đưa vào HĐ</span>
+              <dl class="kv"><dt>Loại HĐ</dt><dd>HĐ Thi công</dd><dt>Hai bên</dt><dd>A: Khách · B: Phương Nam</dd><dt>Vật tư</dt><dd>4 dòng · snapshot đơn</dd><dt>Tổng tiền</dt><dd class="mono strong">83.010.960đ</dd><dt>Lịch TT</dt><dd>20/70/10</dd><dt>Số BG</dt><dd class="mono">BG-2048</dd></dl>
+              <div class="banner banner--info" style="margin-top:12px"><span>ℹ</span><div>Điều khoản là <b>template tĩnh</b>; sinh HĐ ghi Audit log. Bản xuất có logo + khối chữ ký.</div></div>
+              <button class="btn btn--primary btn--wide" style="margin-top:12px">⤓ Xuất PDF hợp đồng</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · preview &amp; xuất PDF</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048</span>
+              Sinh hợp đồng
+            </div>
+            <a class="topbar-action" href="#index">PDF</a>
+          </div>
+          <div class="pscroll">
+            <div class="seg" style="width:100%;margin-bottom:11px"><a class="active" href="#s-contract" style="flex:1;text-align:center">HĐ Thi công</a><a href="#s-contract" style="flex:1;text-align:center">HĐ Mua bán</a></div>
+            <div class="doc" style="max-width:none;padding:16px 16px;font-size:11px">
+              <div class="row" style="align-items:flex-start;margin-bottom:10px">
+                <div class="logo" style="width:28px;height:28px;border:1.5px solid var(--teal);border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:14px">☀</div>
+                <div style="margin-left:8px;font-size:9px;color:var(--muted)"><b style="color:var(--ink);font-size:11px">CÔNG TY NLMT PHƯƠNG NAM</b><br>MST 0312 998 771</div>
+              </div>
+              <h4 style="font-size:12px">HỢP ĐỒNG THI CÔNG ĐMT</h4>
+              <div class="doc-sub" style="font-size:9.5px">Số: HĐTC-2048/2026 · Ref BG-2048</div>
+              <p style="font-size:10.5px"><b>Bên A:</b> VP CC Lê Đình Thao — MST 0316 552 018.</p>
+              <p style="font-size:10.5px"><b>Bên B:</b> Công ty NLMT Phương Nam.</p>
+              <p style="font-size:10.5px"><b>Điều 1:</b> Thi công ĐMT hoà lưới <b>8,82 kWp</b>.</p>
+              <p style="font-size:10.5px"><b>Điều 2:</b> Giá trị <b>83.010.960đ</b> (gồm VAT 8%), TT 20/70/10.</p>
+              <p style="font-size:10px;color:var(--muted)"><b>Điều 3–8:</b> theo template tĩnh chuẩn.</p>
+            </div>
+            <div class="frame on-bg" style="padding:11px 13px;margin-top:11px">
+              <span class="frame-label">Trường động</span>
+              <dl class="kv" style="font-size:11.5px"><dt>Loại HĐ</dt><dd>HĐ Thi công</dd><dt>Tổng tiền</dt><dd class="mono strong">83.010.960đ</dd><dt>Lịch TT</dt><dd>20/70/10</dd><dt>Số BG</dt><dd class="mono">BG-2048</dd></dl>
+            </div>
+          </div>
+          <div class="mtotals"><button class="btn btn--primary btn--wide">⤓ Xuất PDF hợp đồng</button></div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 4 · HOÁ ĐƠN ============================ -->
+<section class="screen" id="s-invoice">
+  <div class="screen-head">
+    <span class="kick">Tiền &amp; Chứng từ · FR-27 · FR-28</span>
+    <h2>Hoá đơn</h2>
+    <span class="desc">Tạo hoá đơn từ đơn (số nội bộ · khách MST · dòng · VAT · tổng), lưu DB và Xem / Xuất PDF. Phase 1 không tích hợp nhà cung cấp HĐĐT.</span>
+    <span class="surface-tag web">Web</span>
+    <span class="surface-tag">Mobile</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048/hoa-don</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048 · HOÁ ĐƠN</span>
+              Hoá đơn bán hàng
+            </div>
+            <a class="topbar-action" href="#index">⤓ Xuất PDF</a>
+          </div>
+
+          <div class="toolbar" style="margin-top:16px">
+            <span class="pill ok">Đã lưu DB</span>
+            <span class="pill warn">Không tích hợp HĐĐT (Phase sau)</span>
+            <div class="sp"></div>
+            <button class="btn btn--primary btn--sm">⤓ Xuất PDF</button>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;align-items:start">
+            <div class="doc" style="max-width:none">
+              <div class="row" style="margin-bottom:10px"><div><b style="font-size:12px">CÔNG TY NLMT PHƯƠNG NAM</b><br><span style="font-size:10px;color:var(--muted)">MST 0312 998 771</span></div><div class="sp"></div><div style="text-align:right"><span class="pill">Số HĐ nội bộ</span><br><b class="mono" style="font-size:13px">HD-2026-0731</b></div></div>
+              <h4>HOÁ ĐƠN BÁN HÀNG</h4>
+              <div class="doc-sub">Ngày lập: 06/07/2026 · Gắn đơn: DH-2048</div>
+              <p><b>Khách hàng:</b> VP Công Chứng Lê Đình Thao — MST 0316 552 018 — 122 Trần Não, TP. Thủ Đức.</p>
+              <table class="table" style="margin:8px 0">
+                <thead><tr><th>Hạng mục</th><th class="num">SL</th><th class="num">Đơn giá</th><th class="num">Thành tiền</th></tr></thead>
+                <tbody>
+                  <tr><td>Tấm pin AE 630W</td><td class="num mono">14</td><td class="num mono">2.583.000</td><td class="num strong mono">36.162.000</td></tr>
+                  <tr class="zebra"><td>Inverter Solplanet ASW8000-S</td><td class="num mono">1</td><td class="num mono">18.500.000</td><td class="num strong mono">18.500.000</td></tr>
+                  <tr><td>Vật tư (gói)</td><td class="num mono">1</td><td class="num mono">12.400.000</td><td class="num strong mono">12.400.000</td></tr>
+                  <tr class="zebra"><td>Công lắp đặt</td><td class="num mono">1</td><td class="num mono">9.800.000</td><td class="num strong mono">9.800.000</td></tr>
+                </tbody>
+              </table>
+              <p style="text-align:right;margin:2px 0">Tổng trước VAT: <b class="mono">76.862.000đ</b> · VAT 8%: <b class="mono">6.148.960đ</b></p>
+              <p style="text-align:right;font-size:14px">Tổng thanh toán: <b class="mono" style="color:var(--teal)">83.010.960đ</b></p>
+              <div class="sig"><div>NGƯỜI LẬP PHIẾU</div><div>GIÁM ĐỐC</div></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Tạo hoá đơn từ đơn</span>
+              <dl class="kv"><dt>Nguồn</dt><dd>Đơn DH-2048 (snapshot)</dd><dt>MST khách</dt><dd class="mono">0316 552 018</dd><dt>Số HĐ nội bộ</dt><dd class="mono">HD-2026-0731 (tự cấp)</dd><dt>Ngày lập</dt><dd class="mono">06/07/2026</dd><dt>Lưu DB</dt><dd><span class="pill ok">Đã lưu</span></dd></dl>
+              <div class="row" style="gap:8px;margin-top:14px"><button class="btn btn--ghost" style="flex:1">Xem lại</button><button class="btn btn--primary" style="flex:1.4">⤓ Xuất PDF</button></div>
+              <div class="banner banner--info" style="margin-top:11px"><span>ℹ</span><div>Phase 1: <b>không tích hợp nhà cung cấp HĐĐT</b> — chỉ lưu DB &amp; xuất PDF nội bộ.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Mobile · hoá đơn &amp; xuất PDF</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">DH-2048 · ĐÃ LƯU</span>
+              Hoá đơn bán hàng
+            </div>
+            <a class="topbar-action" href="#index">PDF</a>
+          </div>
+          <div class="pscroll">
+            <div class="banner" style="margin-bottom:11px"><span>ℹ</span><div>Không tích hợp HĐĐT (Phase sau) — lưu DB &amp; xuất PDF.</div></div>
+            <div class="doc" style="max-width:none;padding:15px 15px;font-size:11px">
+              <div class="row" style="margin-bottom:9px"><div><b style="font-size:11px">CÔNG TY NLMT PHƯƠNG NAM</b><br><span style="font-size:9px;color:var(--muted)">MST 0312 998 771</span></div><div class="sp"></div><div style="text-align:right"><span class="pill">Số HĐ</span><br><b class="mono" style="font-size:11px">HD-2026-0731</b></div></div>
+              <h4 style="font-size:12px">HOÁ ĐƠN BÁN HÀNG</h4>
+              <div class="doc-sub" style="font-size:9.5px">06/07/2026 · Gắn đơn DH-2048</div>
+              <p style="font-size:10.5px"><b>KH:</b> VP CC Lê Đình Thao — MST 0316 552 018.</p>
+              <table class="table" style="font-size:10.5px;margin:6px 0">
+                <tbody>
+                  <tr><td>Tấm pin AE 630W ×14</td><td class="num strong mono">36.162.000</td></tr>
+                  <tr class="zebra"><td>Inverter ASW8000-S ×1</td><td class="num strong mono">18.500.000</td></tr>
+                  <tr><td>Vật tư (gói) ×1</td><td class="num strong mono">12.400.000</td></tr>
+                  <tr class="zebra"><td>Công lắp đặt ×1</td><td class="num strong mono">9.800.000</td></tr>
+                </tbody>
+              </table>
+              <p style="text-align:right;margin:2px 0;font-size:10.5px">Trước VAT: <b class="mono">76.862.000đ</b> · VAT 8%: <b class="mono">6.148.960đ</b></p>
+              <p style="text-align:right;font-size:12.5px">Tổng: <b class="mono" style="color:var(--teal)">83.010.960đ</b></p>
+            </div>
+          </div>
+          <div class="mtotals">
+            <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">Xem lại</button><button class="btn btn--primary" style="flex:1.4">⤓ Xuất PDF</button></div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ============================ 5 · CHIA SẺ / XUẤT BÁO GIÁ ============================ -->
+<section class="screen" id="s-share">
+  <div class="screen-head">
+    <span class="kick">Tiền &amp; Chứng từ · FR-21</span>
+    <h2>Chia sẻ / xuất báo giá</h2>
+    <span class="desc">Mobile: native share sheet ưu tiên HÌNH ẢNH (hoặc PDF) qua Zalo / Email. Web: panel “Chia sẻ / Tải” (PNG / PDF + link).</span>
+    <span class="surface-tag web">Web · Chia sẻ / Tải</span>
+    <span class="surface-tag">Mobile · Share sheet</span>
+  </div>
+  <div class="stage">
+
+    <!-- WEB -->
+    <div class="web">
+      <div class="web-chrome">
+        <div class="web-dots"><i></i><i></i><i></i></div>
+        <div class="web-url">app.phuongnamsolar.vn/don-hang/DH-2048?share=1</div>
+      </div>
+      <div class="web-app">
+        <nav class="sidebar">
+          <div class="brand2"><div class="logo">☀</div><div class="t">Phương Nam</div></div>
+          <a class="navlink" href="#s-home"><span class="ic">▦</span> Trang chủ</a>
+          <a class="navlink active" href="#s-orders"><span class="ic">☰</span> Đơn hàng</a>
+          <a class="navlink" href="#s-customers"><span class="ic">☺</span> Khách hàng</a>
+          <a class="navlink" href="#s-catalog"><span class="ic">⬚</span> Danh mục</a>
+          <a class="navlink" href="#s-inventory"><span class="ic">▤</span> Kho</a>
+          <div class="navsec">Quản trị</div>
+          <a class="navlink" href="#s-permissions"><span class="ic">⚿</span> Phân quyền</a>
+          <a class="navlink" href="#s-audit"><span class="ic">◷</span> Audit</a>
+          <a class="navlink" href="#s-profile"><span class="ic">◉</span> Hồ sơ</a>
+        </nav>
+        <div class="main">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">ĐÃ CHỐT · BG-2048</span>
+              Chia sẻ / Tải báo giá
+            </div>
+            <a class="topbar-action" href="#index">⎘ Chép link</a>
+          </div>
+
+          <div class="frame" style="padding:12px 14px;margin:16px 0 14px;border-color:var(--teal)">
+            <span class="frame-label" style="color:var(--teal)">Báo giá đóng băng</span>
+            <div class="row"><b style="font-size:13.5px">BG-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span><b class="mono" style="font-size:16px;color:var(--teal);margin-left:12px">83.010.960đ</b></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Tệp xuất</span>
+              <div class="frame on-bg" style="padding:9px 11px;margin-bottom:9px"><div class="row"><span style="font-size:22px">🖼</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.png</div><div style="font-size:10.5px;color:var(--muted)">Hình ảnh báo giá · 248 KB</div></div><span class="sp"></span><span class="pill ok">Ưu tiên</span></div></div>
+              <div class="frame on-bg" style="padding:9px 11px"><div class="row"><span style="font-size:22px">📄</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.pdf</div><div style="font-size:10.5px;color:var(--muted)">Bản PDF · có chữ ký &amp; logo</div></div></div></div>
+            </div>
+            <div class="frame" style="padding:14px 16px">
+              <span class="frame-label">Chia sẻ / Tải</span>
+              <div class="fgroup"><span class="flabel">Liên kết chia sẻ</span><div class="row" style="gap:8px"><input class="field mono" value="pns.vn/bg/2048" style="flex:1"><button class="btn btn--ghost">⎘ Chép</button></div></div>
+              <div class="row" style="gap:8px;margin-bottom:9px"><button class="btn btn--primary" style="flex:1">⤴ Gửi Zalo</button><button class="btn btn--ghost" style="flex:1">✉ Email</button></div>
+              <div class="row" style="gap:8px"><button class="btn btn--ghost" style="flex:1">⤓ Tải PNG</button><button class="btn btn--ghost" style="flex:1">⤓ Tải PDF</button></div>
+              <div class="banner banner--info" style="margin-top:11px"><span>ℹ</span><div>Web hành xử tương tự mobile: <b>chia sẻ / tải</b>. Bản xuất có khối chữ ký + logo.</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PHONE -->
+    <div class="phone-col">
+      <p class="caption">Sau khi Chốt → native share sheet</p>
+      <div class="phone"><div class="glass">
+        <div class="notch"></div>
+        <div class="sbar"><span>9:41</span><span class="r">5G · 82%</span></div>
+        <div class="pbody">
+          <div class="topbar">
+            <a class="topbar-back" href="#s-order-detail" aria-label="Quay lại">‹</a>
+            <div class="topbar-title">
+              <span class="topbar-eyebrow">ĐÃ CHỐT · BG-2048</span>
+              Chia sẻ báo giá
+            </div>
+            <a class="topbar-action" href="#index">Xong</a>
+          </div>
+          <div class="pscroll" style="display:flex;flex-direction:column;justify-content:flex-end;background:rgba(12,31,28,.28)">
+            <div class="frame" style="background:#fff;padding:12px;margin-bottom:10px;border-color:var(--teal)">
+              <span class="frame-label" style="color:var(--teal)">Báo giá đóng băng</span>
+              <div class="row"><b style="font-size:13px">BG-2048 · VP CC Lê Đình Thao</b><span class="sp"></span><span class="chip chip--dachot"><span class="dot"></span>Đã chốt</span></div>
+              <div class="row" style="margin-top:6px"><span class="micro muted">Tổng sau VAT</span><span class="sp"></span><b class="mono" style="font-size:15px;color:var(--teal)">83.010.960đ</b></div>
+            </div>
+            <div class="sheet" style="margin:0 auto;border-bottom:0">
+              <div class="sheet-grab"></div>
+              <div class="row" style="padding:2px 16px 10px"><span class="micro ink">Chia sẻ báo giá</span><span class="sp"></span><span class="pill">Ảnh · PDF</span></div>
+              <div class="frame on-bg" style="margin:0 16px 10px;padding:9px 11px;background:#fff"><div class="row"><span style="font-size:22px">🖼</span><div style="margin-left:9px"><div style="font-size:12px;font-weight:800">bao-gia-BG-2048.png</div><div style="font-size:10.5px;color:var(--muted)">Hình ảnh báo giá · 248 KB</div></div><span class="sp"></span><span class="pill ok">Ưu tiên</span></div></div>
+              <div class="share-grid">
+                <div class="share-app"><div class="ic" style="color:#0068FF">Z</div>Zalo</div>
+                <div class="share-app"><div class="ic" style="color:#0084FF">✉</div>Messenger</div>
+                <div class="share-app"><div class="ic" style="color:var(--ok)">✆</div>WhatsApp</div>
+                <div class="share-app"><div class="ic">✉</div>Email</div>
+                <div class="share-app"><div class="ic">⤓</div>Lưu ảnh</div>
+                <div class="share-app"><div class="ic">⎘</div>Sao chép</div>
+                <div class="share-app"><div class="ic">▤</div>Drive</div>
+                <div class="share-app"><div class="ic">⋯</div>Khác</div>
+              </div>
+              <div style="padding:0 16px 16px"><button class="btn btn--ghost btn--wide">Huỷ</button></div>
+            </div>
+          </div>
+          <nav class="botnav">
+            <a class="botnav-item active" href="#s-home"><span class="ic">▦</span>Trang chủ</a>
+            <a class="botnav-item" href="#s-orders"><span class="ic">☰</span>Đơn hàng</a>
+            <a class="botnav-item botnav-fab" href="#s-quote"><span class="fab">＋</span>Tạo</a>
+            <a class="botnav-item" href="#s-inventory"><span class="ic">▤</span>Kho</a>
+            <a class="botnav-item" href="#s-menu"><span class="ic">≡</span>Menu</a>
+          </nav>
+        </div>
+      </div></div>
+    </div>
+
+  </div>
+</section>

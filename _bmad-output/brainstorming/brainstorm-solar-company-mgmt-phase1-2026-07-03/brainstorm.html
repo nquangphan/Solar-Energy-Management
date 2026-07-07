@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Máy tăng tốc — Brainstorm Phase 1 · Năng lượng mặt trời Phương Nam</title>
+<style>
+  :root{
+    --sun-core:#ffd23f;
+    --sun-1:#ffb703;
+    --sun-2:#fb8500;
+    --sun-3:#f4511e;
+    --sky-1:#0b1d3a;
+    --sky-2:#132b52;
+    --panel:#0f2440;
+    --panel-2:#16335c;
+    --ink:#f4f7fb;
+    --ink-dim:#a9bcd6;
+    --line:#2a4670;
+    --grid:#1c3557;
+    --green:#43d9a3;
+    --violet:#9b8cff;
+    --park:#6b7a90;
+    --radius:18px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1200px 700px at 80% -10%, rgba(255,183,3,.20), transparent 60%),
+      radial-gradient(900px 600px at 0% 10%, rgba(251,133,0,.12), transparent 55%),
+      linear-gradient(180deg,#081428 0%,#0b1d3a 40%,#0a1730 100%);
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+  /* ---------- HERO ---------- */
+  header.hero{
+    position:relative;
+    overflow:hidden;
+    padding:96px 20px 72px;
+    text-align:center;
+  }
+  .sun{
+    position:absolute;
+    top:-160px;left:50%;transform:translateX(-50%);
+    width:520px;height:520px;
+    border-radius:50%;
+    background:radial-gradient(circle at 50% 45%,var(--sun-core) 0%,var(--sun-1) 32%,var(--sun-2) 55%,rgba(244,81,30,0) 72%);
+    filter:blur(2px);
+    opacity:.9;
+    animation:pulse 7s ease-in-out infinite;
+    z-index:0;
+  }
+  @keyframes pulse{0%,100%{transform:translateX(-50%) scale(1);opacity:.9}50%{transform:translateX(-50%) scale(1.05);opacity:1}}
+  .rays{position:absolute;top:-160px;left:50%;transform:translateX(-50%);width:520px;height:520px;z-index:0;animation:spin 90s linear infinite}
+  @keyframes spin{to{transform:translateX(-50%) rotate(360deg)}}
+  .hero .wrap{position:relative;z-index:2}
+  .kicker{
+    display:inline-block;
+    font-size:.72rem;letter-spacing:.28em;text-transform:uppercase;
+    color:#0b1d3a;background:linear-gradient(90deg,var(--sun-core),var(--sun-1));
+    padding:6px 16px;border-radius:999px;font-weight:800;margin-bottom:26px;
+    box-shadow:0 8px 30px rgba(255,183,3,.35);
+  }
+  h1.title{
+    font-size:clamp(2.2rem,6vw,4rem);
+    line-height:1.05;margin:0 0 10px;font-weight:900;letter-spacing:-.02em;
+  }
+  h1.title .grad{
+    background:linear-gradient(90deg,var(--sun-core),var(--sun-2) 70%,var(--sun-3));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .subtitle{max-width:640px;margin:14px auto 0;color:var(--ink-dim);font-size:1.06rem}
+  .meta-row{margin-top:34px;display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+  .chip{
+    font-size:.78rem;color:var(--ink-dim);
+    border:1px solid var(--line);border-radius:999px;padding:6px 14px;
+    background:rgba(15,36,64,.6);backdrop-filter:blur(6px);
+  }
+  .chip b{color:var(--sun-core)}
+  .panel-band{
+    margin-top:56px;display:flex;gap:6px;justify-content:center;perspective:600px;
+  }
+  .pv{
+    width:52px;height:34px;border-radius:4px;
+    background:linear-gradient(135deg,#1b6fb0,#0d3f6e);
+    border:1px solid #2f7cbf;
+    transform:rotateX(52deg);
+    box-shadow:0 6px 14px rgba(0,0,0,.35);
+    position:relative;
+  }
+  .pv::before,.pv::after{content:"";position:absolute;inset:0;background:
+    repeating-linear-gradient(90deg,transparent 0 10px,rgba(255,255,255,.12) 10px 11px),
+    repeating-linear-gradient(0deg,transparent 0 8px,rgba(255,255,255,.10) 8px 9px);}
+
+  /* ---------- SECTIONS ---------- */
+  section{padding:64px 0;position:relative}
+  .sec-head{display:flex;align-items:center;gap:16px;margin-bottom:8px}
+  .num{
+    flex:0 0 auto;width:52px;height:52px;border-radius:14px;
+    display:grid;place-items:center;font-weight:900;font-size:1.15rem;
+    color:#0b1d3a;background:linear-gradient(135deg,var(--sun-core),var(--sun-2));
+    box-shadow:0 10px 26px rgba(251,133,0,.30);
+  }
+  .sec-head h2{font-size:clamp(1.5rem,3.6vw,2.15rem);margin:0;font-weight:850;letter-spacing:-.01em}
+  .sec-head .en{display:block;font-size:.74rem;letter-spacing:.22em;text-transform:uppercase;color:var(--sun-1);font-weight:700;margin-bottom:2px}
+  .lead{color:var(--ink-dim);max-width:760px;margin:6px 0 30px;font-size:1.02rem}
+
+  .card{
+    background:linear-gradient(180deg,rgba(22,51,92,.55),rgba(15,36,64,.75));
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 24px;
+  }
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+
+  ul.clean{list-style:none;margin:0;padding:0}
+  ul.clean li{position:relative;padding:8px 0 8px 30px;border-bottom:1px dashed rgba(42,70,112,.55)}
+  ul.clean li:last-child{border-bottom:0}
+  ul.clean li::before{content:"";position:absolute;left:6px;top:16px;width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--sun-core),var(--sun-2));box-shadow:0 0 10px rgba(255,183,3,.6)}
+  .tag{display:inline-block;font-size:.68rem;font-weight:800;letter-spacing:.05em;padding:2px 9px;border-radius:6px;vertical-align:middle;margin-right:6px}
+  .tag.dec{background:rgba(67,217,163,.16);color:var(--green);border:1px solid rgba(67,217,163,.4)}
+  .tag.idea{background:rgba(255,183,3,.15);color:var(--sun-core);border:1px solid rgba(255,183,3,.4)}
+  .tag.ins{background:rgba(155,140,255,.16);color:var(--violet);border:1px solid rgba(155,140,255,.4)}
+  .tag.q{background:rgba(244,81,30,.16);color:#ff9a76;border:1px solid rgba(244,81,30,.4)}
+
+  .quote{
+    border-left:4px solid var(--sun-2);
+    padding:14px 20px;margin:24px 0;
+    background:rgba(251,133,0,.07);border-radius:0 12px 12px 0;
+    font-size:1.12rem;font-weight:600;
+  }
+  .quote small{display:block;color:var(--ink-dim);font-weight:400;font-size:.85rem;margin-top:6px}
+
+  /* Role playing avatars */
+  .voices{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:8px}
+  @media(max-width:760px){.voices{grid-template-columns:1fr}}
+  .voice{background:linear-gradient(180deg,rgba(255,183,3,.09),rgba(15,36,64,.6));border:1px solid var(--line);border-radius:16px;padding:20px}
+  .voice .face{font-size:2rem;margin-bottom:8px}
+  .voice h4{margin:0 0 6px;font-size:1rem}
+  .voice p{margin:0;color:var(--ink-dim);font-size:.92rem}
+
+  /* First principles funnel */
+  .funnel{display:flex;flex-direction:column;gap:0;margin:10px 0}
+  .funnel .row{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:12px;margin:5px 0}
+  .funnel .from{background:rgba(244,81,30,.10);border:1px solid rgba(244,81,30,.35)}
+  .funnel .to{background:rgba(67,217,163,.10);border:1px solid rgba(67,217,163,.35)}
+  .funnel .big{font-weight:900;font-size:1.35rem;white-space:nowrap}
+  .funnel .from .big{color:#ff9a76}
+  .funnel .to .big{color:var(--green)}
+  .funnel .arrow{text-align:center;color:var(--sun-1);font-size:1.4rem}
+
+  /* Cart mock */
+  .cart{border:1px solid var(--line);border-radius:14px;overflow:hidden;font-size:.9rem}
+  .cart .chrow{display:grid;grid-template-columns:2.4fr .7fr 1fr 1fr;gap:0}
+  .cart .chrow>div{padding:10px 12px;border-bottom:1px solid rgba(42,70,112,.5)}
+  .cart .head>div{background:rgba(255,183,3,.10);font-weight:800;color:var(--sun-core);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+  .cart .num-c{text-align:right;font-variant-numeric:tabular-nums}
+  .cart .total{display:flex;justify-content:space-between;padding:14px 16px;background:rgba(67,217,163,.10);font-weight:900}
+  .cart .total .amt{color:var(--green);font-size:1.15rem}
+
+  /* Lifecycle flows */
+  .flow{margin:14px 0}
+  .flow h4{margin:0 0 12px;display:flex;align-items:center;gap:8px;font-size:1.02rem}
+  .flow .steps{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .state{
+    padding:8px 14px;border-radius:999px;font-size:.85rem;font-weight:700;
+    background:rgba(15,36,64,.8);border:1px solid var(--line);white-space:nowrap;
+  }
+  .state.start{border-color:var(--sun-2);color:var(--sun-core);background:rgba(251,133,0,.12)}
+  .state.gate{border-color:var(--violet);color:var(--violet);background:rgba(155,140,255,.12)}
+  .state.end{border-color:var(--green);color:var(--green);background:rgba(67,217,163,.12)}
+  .sep{color:var(--sun-1);font-weight:900}
+  .flow .note{font-size:.8rem;color:var(--ink-dim);margin-top:8px}
+
+  /* permission matrix */
+  .matrix{width:100%;border-collapse:collapse;font-size:.82rem}
+  .matrix th,.matrix td{border:1px solid var(--line);padding:9px 11px;text-align:left}
+  .matrix thead th{background:rgba(255,183,3,.10);color:var(--sun-core);font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
+  .matrix tbody th{background:rgba(22,51,92,.55);font-weight:700}
+  .matrix .yes{color:var(--green);text-align:center;font-weight:800}
+  .matrix .no{color:#5b6f8c;text-align:center}
+  .matrix .cfg{color:var(--sun-1);text-align:center;font-weight:700}
+  .tablescroll{overflow-x:auto}
+
+  /* preset roles */
+  .roles{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+  .role{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:12px;background:rgba(22,51,92,.6);border:1px solid var(--line);font-weight:700;font-size:.9rem}
+  .role span.e{font-size:1.15rem}
+
+  /* snapshot / data philosophy */
+  .snap{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin:8px 0}
+  @media(max-width:760px){.snap{grid-template-columns:1fr}}
+  .snap .box{padding:16px;border-radius:14px;border:1px solid var(--line);background:rgba(15,36,64,.6)}
+  .snap .box b{color:var(--sun-core)}
+  .snap .lock{font-size:1.8rem;text-align:center;color:var(--green)}
+
+  /* parked */
+  .parked{
+    border:2px dashed var(--park);border-radius:16px;padding:22px 24px;
+    background:repeating-linear-gradient(135deg,rgba(107,122,144,.06) 0 12px,transparent 12px 24px);
+    color:var(--ink-dim);position:relative;
+  }
+  .parked .ribbon{
+    position:absolute;top:-13px;left:22px;background:var(--park);color:#0b1d3a;
+    font-weight:900;font-size:.7rem;letter-spacing:.1em;padding:4px 12px;border-radius:8px;text-transform:uppercase;
+  }
+  .parked h4{margin:8px 0 8px;color:var(--ink)}
+
+  /* real doc findings */
+  .findings{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.findings{grid-template-columns:1fr}}
+  .finding{padding:18px 20px;border-radius:14px;background:rgba(15,36,64,.6);border:1px solid var(--line);border-top:3px solid var(--sun-2)}
+  .finding .ic{font-size:1.5rem}
+  .finding h4{margin:6px 0 6px;font-size:1rem}
+  .finding p{margin:0;color:var(--ink-dim);font-size:.9rem}
+  .finding.flag{border-top-color:var(--violet)}
+
+  /* invoice VAT mock */
+  .vat{max-width:340px;margin-left:auto;font-size:.88rem}
+  .vat .r{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed rgba(42,70,112,.5)}
+  .vat .r.grand{border-bottom:0;font-weight:900;color:var(--sun-core);font-size:1.05rem}
+  .vat .r .n{font-variant-numeric:tabular-nums}
+
+  /* payment installments */
+  .instal{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+  .inst{flex:1;min-width:90px;padding:12px;border-radius:12px;text-align:center;border:1px solid var(--line);background:rgba(22,51,92,.55)}
+  .inst .p{font-size:1.5rem;font-weight:900;color:var(--sun-core)}
+  .inst .l{font-size:.78rem;color:var(--ink-dim)}
+
+  /* SYNTHESIS */
+  .synth{
+    background:
+      radial-gradient(700px 380px at 100% 0%,rgba(255,183,3,.16),transparent 60%),
+      linear-gradient(180deg,rgba(15,36,64,.9),rgba(8,20,40,.95));
+    border-top:1px solid var(--sun-2);border-bottom:1px solid var(--line);
+  }
+  .thesis{
+    text-align:center;font-size:clamp(1.7rem,4.5vw,2.8rem);font-weight:900;
+    line-height:1.2;margin:8px 0 6px;letter-spacing:-.02em;
+  }
+  .thesis .grad{background:linear-gradient(90deg,var(--sun-core),var(--sun-3));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .anti{text-align:center;color:var(--ink-dim);margin:0 0 36px;font-size:1rem}
+  .anti s{color:#ff9a76;text-decoration-color:rgba(244,81,30,.5)}
+  .links{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.links{grid-template-columns:1fr}}
+  .link{padding:20px 22px;border-radius:16px;background:rgba(15,36,64,.7);border:1px solid var(--line);position:relative;overflow:hidden}
+  .link .no{font-size:2.4rem;font-weight:900;color:rgba(255,183,3,.22);position:absolute;top:6px;right:16px;line-height:1}
+  .link h4{margin:0 0 8px;font-size:1.02rem;padding-right:40px}
+  .link p{margin:0;color:var(--ink-dim);font-size:.9rem}
+
+  /* final scope */
+  .scope{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  @media(max-width:900px){.scope{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:480px){.scope{grid-template-columns:1fr}}
+  .sc{padding:18px;border-radius:16px;background:linear-gradient(180deg,rgba(22,51,92,.7),rgba(15,36,64,.85));border:1px solid var(--line);border-left:4px solid var(--sun-2)}
+  .sc .ic{font-size:1.7rem;display:block;margin-bottom:8px}
+  .sc h4{margin:0 0 4px;font-size:.98rem}
+  .sc p{margin:0;font-size:.83rem;color:var(--ink-dim)}
+  .platforms{display:flex;gap:10px;justify-content:center;margin-top:26px;flex-wrap:wrap}
+  .plat{padding:10px 18px;border-radius:12px;background:rgba(255,183,3,.10);border:1px solid rgba(255,183,3,.4);color:var(--sun-core);font-weight:800;font-size:.9rem}
+
+  footer{text-align:center;padding:56px 20px 70px;color:var(--ink-dim);font-size:.85rem}
+  footer .dot{color:var(--sun-2)}
+  .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:0}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <svg class="rays" viewBox="0 0 520 520" aria-hidden="true">
+    <g stroke="rgba(255,210,63,.30)" stroke-width="3" stroke-linecap="round">
+      <line x1="260" y1="40" x2="260" y2="95"/>
+      <line x1="260" y1="425" x2="260" y2="480"/>
+      <line x1="40" y1="260" x2="95" y2="260"/>
+      <line x1="425" y1="260" x2="480" y2="260"/>
+      <line x1="105" y1="105" x2="145" y2="145"/>
+      <line x1="375" y1="375" x2="415" y2="415"/>
+      <line x1="415" y1="105" x2="375" y2="145"/>
+      <line x1="145" y1="375" x2="105" y2="415"/>
+    </g>
+  </svg>
+  <div class="sun"></div>
+  <div class="wrap">
+    <div class="kicker">Nhật ký Brainstorm · 03–06.07.2026</div>
+    <h1 class="title">Máy tăng tốc,<br><span class="grad">không ai phải chờ ai</span></h1>
+    <p class="subtitle">Phiên brainstorm Phase 1 cho app quản lý nội bộ Công ty Năng lượng Mặt trời Phương Nam — bán và thi công lắp pin. Từ nỗi đau "phải hỏi mới biết" đến một xương sống nghiệp vụ gọn gàng.</p>
+    <div class="meta-row">
+      <span class="chip">Chế độ: <b>Đối tác (partner)</b></span>
+      <span class="chip">Trạng thái: <b>Hoàn tất</b></span>
+      <span class="chip"><b>5</b> kỹ thuật sáng tạo</span>
+      <span class="chip">Mục tiêu: <b>công cụ vận hành thật</b></span>
+    </div>
+    <div class="panel-band" aria-hidden="true">
+      <div class="pv"></div><div class="pv"></div><div class="pv"></div><div class="pv"></div><div class="pv"></div><div class="pv"></div>
+    </div>
+  </div>
+</header>
+
+<div class="divider"></div>
+
+<!-- 1. ROLE PLAYING -->
+<section id="role">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">01</div>
+      <div><span class="en">Role Playing · Đóng vai</span><h2>Ba tiếng nói, một nỗi đau</h2></div>
+    </div>
+    <p class="lead">Đứng vào vai người chủ, mọi mong muốn đều quy về một điểm: thông tin đang bị nghẽn, không ai tự phục vụ được cho chính mình.</p>
+
+    <div class="voices">
+      <div class="voice">
+        <div class="face">🧭</div>
+        <h4>Báo giá tại hiện trường</h4>
+        <p>Sếp muốn báo giá cho khách NGAY lúc khảo sát / tư vấn, không delay như hiện tại.</p>
+      </div>
+      <div class="voice">
+        <div class="face">📦</div>
+        <h4>Tự theo dõi đơn</h4>
+        <p>Tự xem tình trạng đơn bất cứ lúc nào mà không phải đi hỏi ai.</p>
+      </div>
+      <div class="voice">
+        <div class="face">📈</div>
+        <h4>Tài chính realtime</h4>
+        <p>Xem tình hình tài chính công ty theo thời gian thực để chỉnh chiến lược bán hàng nhanh.</p>
+      </div>
+    </div>
+
+    <div class="quote">
+      Nỗi đau chung của mọi vai: <b>"phải hỏi người khác mới biết"</b> — thông tin bị nghẽn, không self-serve.
+      <small>Insight của coach</small>
+    </div>
+
+    <div class="card">
+      <p style="margin:0 0 10px"><span class="tag ins">REFRAME</span> Hiện tại mọi thứ đã minh bạch, không ai sợ lộ thông tin. <b>Phân quyền KHÔNG vì bảo mật / giấu nhau.</b> Mục tiêu duy nhất là làm quy trình <b>NHANH hơn</b>.</p>
+      <p style="margin:0;color:var(--ink-dim)">→ Phân quyền theo tính năng phục vụ "đúng người đúng việc / bớt rối / chống thao tác nhầm", không phải khóa bí mật.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 2. FIRST PRINCIPLES -->
+<section id="first">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">02</div>
+      <div><span class="en">First Principles · Nguyên lý gốc</span><h2>Bóc delay 2 ngày ra tận đáy</h2></div>
+    </div>
+    <p class="lead">Đào xuống nền: cái chậm không nằm ở bản chất công việc, mà ở chỗ Excel bị khóa tại văn phòng và phải ráp tay.</p>
+
+    <div class="funnel">
+      <div class="row from"><span class="big">2 NGÀY</span><span style="color:var(--ink-dim)">Về văn phòng → mở Excel → tìm đúng vật tư → bỏ vào → điền giá → gửi khách</span></div>
+      <div class="arrow">↓ &nbsp; delay này là <b style="color:#ff9a76">NHÂN TẠO</b>, không phải bản chất &nbsp; ↓</div>
+      <div class="row to"><span class="big">VÀI PHÚT</span><span style="color:var(--ink-dim)">Chọn đúng bộ vật tư (BOM) ngay tại hiện trường → auto gán giá → xuất đẹp</span></div>
+    </div>
+
+    <div class="card" style="margin:18px 0">
+      <p style="margin:0"><span class="tag ins">BEDROCK</span> Giá = dữ liệu đã giải xong; chỉ <b>chiết khấu</b> mới là quyết định con người. Vì vậy: giá vật tư có sẵn thì <b>KHÔNG cần duyệt</b>; chỉ khi có chiết khấu mới cần sếp duyệt.</p>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h4 style="margin:0 0 12px">Báo giá thật sự là gì?</h4>
+        <ul class="clean">
+          <li><span class="tag dec">CHỐT</span>Chọn <b>TỪNG MÓN</b> vật tư — BOM builder linh hoạt, KHÔNG default sẵn combo (dễ nhầm, dễ sai).</li>
+          <li><span class="tag ins">MT#2</span>Ngang hàng tốc độ: <b>chống báo giá nhầm</b>. App phải vừa nhanh vừa khó sai.</li>
+          <li><span class="tag dec">AI DÙNG</span>Người dùng chính = <b>thợ khảo sát</b>, chọn từng món CÙNG khách ngay tại chỗ.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="margin:0 0 12px">Màn báo giá = Giỏ hàng 🛒</h4>
+        <div class="cart">
+          <div class="chrow head"><div>Tên sản phẩm</div><div class="num-c">SL</div><div class="num-c">Đơn giá</div><div class="num-c">Thành tiền</div></div>
+          <div class="chrow"><div>Tấm pin mono 580W</div><div class="num-c">12</div><div class="num-c">2.4tr</div><div class="num-c">28.8tr</div></div>
+          <div class="chrow"><div>Inverter hybrid 5kW</div><div class="num-c">1</div><div class="num-c">18tr</div><div class="num-c">18.0tr</div></div>
+          <div class="total"><span>Tổng cộng</span><span class="amt">46.8tr ↑</span></div>
+        </div>
+        <p style="margin:12px 0 0;color:var(--ink-dim);font-size:.86rem">Thêm món → tổng nhảy realtime. Đưa nguyên màn cho khách coi trực tiếp tại chỗ → bấm <b>Chốt</b>.</p>
+      </div>
+    </div>
+
+    <div class="quote" style="margin-top:22px">
+      Báo giá và đơn hàng là <b>CÙNG MỘT object</b>, chỉ khác nhau ở TRẠNG THÁI. "Chốt" chỉ là một chuyển trạng thái.
+      <small>Kiến trúc lõi — status trở thành xương sống nối báo giá ↔ theo dõi đơn</small>
+    </div>
+
+    <h4 style="margin:26px 0 6px">Một object, hai vòng đời theo loại khách</h4>
+    <p style="color:var(--ink-dim);margin:0 0 8px;font-size:.95rem">Xác nhận hai chuỗi trạng thái là đúng. Bộ trạng thái + ai-làm-gì khác nhau → khớp thẳng vào phân quyền.</p>
+    <div class="card">
+      <div class="flow">
+        <h4>👤 Khách cá nhân — có khảo sát + thi công</h4>
+        <div class="steps">
+          <span class="state start">Khảo sát</span><span class="sep">→</span>
+          <span class="state">Báo giá</span><span class="sep">→</span>
+          <span class="state">Đã chốt</span><span class="sep">→</span>
+          <span class="state">Đã cọc</span><span class="sep">→</span>
+          <span class="state gate">Thi công</span><span class="sep">→</span>
+          <span class="state end">Hoàn tất</span>
+        </div>
+      </div>
+      <div class="divider" style="margin:16px 0"></div>
+      <div class="flow">
+        <h4>🏭 Khách bỏ mối / đại lý — chỉ giao vật tư</h4>
+        <div class="steps">
+          <span class="state">Báo giá</span><span class="sep">→</span>
+          <span class="state">Đã chốt</span><span class="sep">→</span>
+          <span class="state">Đã cọc</span><span class="sep">→</span>
+          <span class="state gate">Đang giao hàng</span><span class="sep">→</span>
+          <span class="state end">Hoàn tất</span>
+        </div>
+        <p class="note">Đội thi công chỉ xuất hiện ở luồng cá nhân; kho / giao hàng ở luồng bỏ mối.</p>
+      </div>
+    </div>
+
+    <div class="grid3" style="margin-top:18px">
+      <div class="card"><span class="tag dec">CONFIG</span><p style="margin:8px 0 0">Quyền bấm chuyển mỗi trạng thái gắn theo <b>role</b> và phải <b>config được</b> — không hardcode.</p></div>
+      <div class="card"><span class="tag dec">DUYỆT</span><p style="margin:8px 0 0">Có bước <b>duyệt</b> trong luồng; quyền duyệt cũng config được.</p></div>
+      <div class="card"><span class="tag dec">PRESET</span><p style="margin:8px 0 0">Tạo account có quyền <b>default theo role</b>, chỉnh lại sau được → cần màn "Phân quyền".</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 3. ASSUMPTION REVERSAL -->
+<section id="reverse">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">03</div>
+      <div><span class="en">Assumption Reversal · Đảo giả định</span><h2>Cắt scope, để trạng thái tự nhảy</h2></div>
+    </div>
+    <p class="lead">Lật hai giả định lớn: "khách phải có tài khoản" và "phải bấm nút để đổi trạng thái".</p>
+
+    <div class="grid2">
+      <div class="card">
+        <span class="tag dec">SCOPE</span>
+        <h4 style="margin:8px 0 8px">Chỉ nội bộ trong Phase 1</h4>
+        <p style="margin:0;color:var(--ink-dim)">App chỉ nhân viên dùng; khách hàng CHƯA có account → loại self-service portal cho khách/đại lý khỏi Phase 1.</p>
+      </div>
+      <div class="card">
+        <span class="tag dec">CHỌN B</span>
+        <h4 style="margin:8px 0 8px">Trạng thái tự nhảy theo sự kiện</h4>
+        <p style="margin:0;color:var(--ink-dim)">VD: kế toán ghi nhận cọc → đơn tự sang "Đã cọc". Loại phương án A (một đơn nhiều phương án giá) khỏi Phase 1.</p>
+      </div>
+    </div>
+
+    <div class="quote" style="margin-top:22px">
+      Status đổi như <b>HỆ QUẢ</b> của hành động nghiệp vụ mà role được phép làm — không phải nút "chuyển trạng thái" rời rạc.
+      <small>Hoà giải với luật phân quyền: vài bước tự nhảy theo sự kiện, vài bước cần người + duyệt</small>
+    </div>
+
+    <div class="parked">
+      <span class="ribbon">⏸ Parked · Phase 2+</span>
+      <h4>Cổng tự đặt hàng cho đại lý bỏ mối</h4>
+      <p>Khách tự dựng giỏ hàng, xem giá sỉ, gửi đơn; công ty duyệt &amp; giao. Ý tưởng tốt nhưng gác lại — Phase 1 giữ nội bộ.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 4. MORPHOLOGICAL -->
+<section id="morph">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">04</div>
+      <div><span class="en">Morphological Analysis · Phân tích hình thái</span><h2>Ma trận quyền &amp; cỗ máy giá</h2></div>
+    </div>
+    <p class="lead">Tách bài toán thành các trục độc lập: ai được làm gì, giá lấy từ đâu, và làm sao giá không "hồi tố".</p>
+
+    <div class="quote">
+      Phân quyền theo <b>TỪNG ACCOUNT</b>, KHÔNG phải theo role. Role chỉ là bộ quyền default/preset lúc tạo account.
+      <small>Nguồn chân lý quyền = bộ quyền của từng account. Role = nút "áp preset" cho nhanh.</small>
+    </div>
+
+    <h4 style="margin:24px 0 6px">6 role làm preset là đủ</h4>
+    <div class="roles">
+      <div class="role"><span class="e">🧭</span> Thợ khảo sát</div>
+      <div class="role"><span class="e">🔧</span> Đội thi công</div>
+      <div class="role"><span class="e">🧮</span> Kế toán</div>
+      <div class="role"><span class="e">🚚</span> Kho / Giao hàng</div>
+      <div class="role"><span class="e">👔</span> Quản lý / Sếp</div>
+      <div class="role"><span class="e">🛡️</span> Admin</div>
+    </div>
+
+    <h4 style="margin:26px 0 8px">Trục quyền feature-level (đủ cho Phase 1)</h4>
+    <div class="tablescroll">
+      <table class="matrix">
+        <thead>
+          <tr><th>Nhóm quyền</th><th>Thợ KS</th><th>Thi công</th><th>Kế toán</th><th>Kho/Giao</th><th>Sếp</th><th>Admin</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Báo giá / Đơn</th><td class="yes">✓</td><td class="no">–</td><td class="cfg">◐</td><td class="no">–</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><th>Giá &amp; Chiết khấu</th><td class="no">–</td><td class="no">–</td><td class="cfg">◐</td><td class="no">–</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><th>Thi công / Giao hàng</th><td class="no">–</td><td class="yes">✓</td><td class="no">–</td><td class="yes">✓</td><td class="cfg">◐</td><td class="yes">✓</td></tr>
+          <tr><th>Tài chính</th><td class="no">–</td><td class="no">–</td><td class="yes">✓</td><td class="no">–</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><th>Danh mục vật tư</th><td class="no">–</td><td class="no">–</td><td class="cfg">◐</td><td class="cfg">◐</td><td class="yes">✓</td><td class="yes">✓</td></tr>
+          <tr><th>Hệ thống</th><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="cfg">◐</td><td class="yes">✓</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="color:var(--ink-dim);font-size:.82rem;margin:8px 0 0">✓ preset bật · ◐ config theo account · – preset tắt. Bảng minh hoạ tinh thần preset; nguồn chân lý vẫn là bộ quyền từng account (tick/bỏ tick + nút áp preset role).</p>
+
+    <div class="card" style="margin-top:20px">
+      <span class="tag dec">AUDIT</span>
+      <p style="margin:8px 0 0"><b>Audit log mọi hành động</b> (ai làm gì, lúc nào) — hợp văn hoá minh bạch, và là bằng chứng cho ai chuyển/duyệt trạng thái nào.</p>
+    </div>
+
+    <h4 style="margin:28px 0 8px">Cỗ máy giá: danh mục + snapshot</h4>
+    <div class="grid2">
+      <div class="card">
+        <span class="tag dec">CỜ ẨN</span>
+        <h4 style="margin:8px 0 6px">Giá phân tầng lẻ / sỉ</h4>
+        <p style="margin:0;color:var(--ink-dim)">Code sẵn nhưng ẩn sau một cờ bật/tắt. Mặc định TẮT; user thấy cần thì bật là chạy — khỏi sửa sau.</p>
+      </div>
+      <div class="card">
+        <span class="tag dec">CẬP NHẬT</span>
+        <h4 style="margin:8px 0 6px">Danh mục vật tư linh hoạt</h4>
+        <p style="margin:0;color:var(--ink-dim)">Thêm/xoá/sửa sản phẩm &amp; giá bất kỳ lúc nào. Giá cập nhật tập trung → giỏ hàng lấy giá mới nhất, hết cảnh giá cũ như Excel.</p>
+      </div>
+    </div>
+
+    <div class="quote" style="margin-top:20px">
+      <span class="tag ins">CẢNH BÁO DATA-MODEL</span> Nếu giá sửa bất kỳ lúc nào, báo giá đã tạo phải <b>CHỤP GIÁ</b> tại thời điểm — không tham chiếu sống tới bảng giá, kẻo sửa giá hôm nay hồi tố làm đổi báo giá đã gửi hôm qua.
+    </div>
+
+    <div class="snap">
+      <div class="box">Trước chốt (nháp / báo giá)<br><b>ăn theo giá mới nhất</b> của danh mục</div>
+      <div class="lock">🔒</div>
+      <div class="box">Sau khi bấm <b>CHỐT</b><br>giá <b>đóng băng</b> (snapshot vào line item) — sửa danh mục KHÔNG hồi tố lên đơn đã chốt</div>
+    </div>
+    <p style="color:var(--ink-dim);font-size:.85rem;margin:10px 0 0">Khớp: bản báo giá xuất cho khách (PDF/Zalo) vốn đã tĩnh; snapshot-lúc-chốt là để khoá dữ liệu đơn trong hệ thống. Đơn giản, không mâu thuẫn.</p>
+  </div>
+</section>
+
+<!-- 5. WHAT IF -->
+<section id="whatif">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">05</div>
+      <div><span class="en">What If Scenarios · Kịch bản giả định</span><h2>Rèn cho chịu được ca biên</h2></div>
+    </div>
+    <p class="lead">Thử phá app bằng các tình huống thực tế để chốt cách xử lý — giữ đơn giản, không tính năng thừa.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <span class="tag dec">GIỮ ĐƠN GIẢN</span>
+        <h4 style="margin:8px 0 6px">Không hạn mức chiết khấu tự quyết</h4>
+        <p style="margin:0;color:var(--ink-dim)">Mọi chiết khấu cần sếp duyệt; sale gọi điện thoại nhắc sếp — không cần tính năng nhắc trong app.</p>
+      </div>
+      <div class="card">
+        <span class="tag dec">OK</span>
+        <h4 style="margin:8px 0 6px">Đổi vật tư sau khi đã chốt</h4>
+        <p style="margin:0;color:var(--ink-dim)">Đơn đã chốt → <b>mở lại</b> tạo bản chỉnh sửa (không sửa đè), snapshot giá lại khi chốt lại, audit log ghi ai sửa/đổi gì.</p>
+      </div>
+      <div class="card">
+        <span class="tag dec">OK</span>
+        <h4 style="margin:8px 0 6px">Lead nguội không rơi rụng</h4>
+        <p style="margin:0;color:var(--ink-dim)">Báo giá chưa chốt giữ ở trạng thái "Báo giá" → danh sách <b>follow-up</b> (mầm CRM cho Phase sau).</p>
+      </div>
+      <div class="card">
+        <span class="tag dec">1 QUYỀN</span>
+        <h4 style="margin:8px 0 6px">"Xem đơn của mình" vs "xem tất cả"</h4>
+        <p style="margin:0;color:var(--ink-dim)">Là một quyền trong ma trận: có quyền "xem tất cả đơn" → thấy hết; không có → chỉ thấy đơn của mình. Hết câu hỏi treo.</p>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:18px">
+      <div class="card">
+        <h4 style="margin:0 0 10px">📊 Dashboard tài chính (sếp)</h4>
+        <ul class="clean">
+          <li>Doanh thu theo <b>ngày / tuần / tháng</b></li>
+          <li>Số lượng đơn hàng</li>
+          <li>Tổng hợp đơn theo <b>trạng thái</b></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="margin:0 0 10px">📱 Trình &amp; giao báo giá</h4>
+        <p style="margin:0;color:var(--ink-dim)">Sale cho khách coi trực tiếp trên điện thoại/iPad; khách OK → bấm <b>Chốt</b> → xuất PDF ngay + nút <b>Share</b>. Ưu tiên chia sẻ hình ảnh (hoặc PDF) qua <b>native share bottom sheet</b>. Web tương tự.</p>
+      </div>
+    </div>
+
+    <div class="platforms" style="margin-top:22px">
+      <span class="plat">🌐 Bản WEB</span>
+      <span class="plat">📱 Bản MOBILE — sale/thợ dùng tại hiện trường</span>
+    </div>
+  </div>
+</section>
+
+<!-- ĐỐI CHIẾU MẪU THẬT -->
+<section id="realdoc">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">📄</div>
+      <div><span class="en">Đối chiếu tài liệu mẫu thật</span><h2>Mẫu "Báo giá kiêm đơn đặt hàng"</h2></div>
+    </div>
+    <p class="lead">Soi mẫu chứng từ thật của công ty: xác nhận kiến trúc lõi và lộ ra những khoảng trống brainstorm chưa chạm tới.</p>
+
+    <div class="quote">
+      <span class="tag ins">XÁC NHẬN</span> Cả hai template đều tên <b>"BÁO GIÁ KIÊM ĐƠN ĐẶT HÀNG"</b> → khớp mô hình 1-object-đổi-trạng-thái. Cùng một mẫu cho cả cá nhân lẫn thương mại.
+    </div>
+
+    <h4 style="margin:24px 0 12px">Những khoảng trống (GAP) mẫu thật lộ ra</h4>
+    <div class="findings">
+      <div class="finding flag">
+        <div class="ic">🚩</div>
+        <h4>Bộ cờ phạm vi + Công suất kWp</h4>
+        <p>Báo giá có checkbox <b>Cung cấp thiết bị / Thi công / Vận chuyển</b> + trường công suất kWp. Chính bộ cờ này (không chỉ loại khách) quyết định có thi công hay không → model theo <b>scope flags</b>.</p>
+      </div>
+      <div class="finding">
+        <div class="ic">🧾</div>
+        <h4>VAT 8%</h4>
+        <p>Có Tổng trước VAT / Thuế VAT / Tổng sau VAT. Brainstorm chưa nhắc → cần field <b>thuế suất</b> + hai mức tổng.</p>
+        <div class="vat" style="margin-top:12px">
+          <div class="r"><span>Tổng trước VAT</span><span class="n">46.800.000</span></div>
+          <div class="r"><span>Thuế VAT (8%)</span><span class="n">3.744.000</span></div>
+          <div class="r grand"><span>Tổng sau VAT</span><span class="n">50.544.000</span></div>
+        </div>
+      </div>
+      <div class="finding">
+        <div class="ic">📝</div>
+        <h4>Dòng tự do / gói + ghi chú</h4>
+        <p>Dòng hàng có cột <b>Diễn giải</b> (bảo hành/ghi chú) + dòng dạng <b>GÓI</b> mô tả nhiều dòng + đánh dấu "linh động"/"dự kiến". Cart phải cho dòng tự do/gói + ghi chú, không chỉ pick SKU nguyên tử.</p>
+      </div>
+      <div class="finding">
+        <div class="ic">💳</div>
+        <h4>Thanh toán nhiều đợt</h4>
+        <p>"Đặt cọc" thực chất là <b>lịch thanh toán nhiều đợt cấu hình được</b>, không phải một trạng thái đơn.</p>
+        <div class="instal">
+          <div class="inst"><div class="p">20%</div><div class="l">Ký HĐ</div></div>
+          <div class="inst"><div class="p">70%</div><div class="l">Về vật tư</div></div>
+          <div class="inst"><div class="p">10%</div><div class="l">Nghiệm thu</div></div>
+        </div>
+        <p style="margin:10px 0 0;font-size:.82rem;color:var(--ink-dim)">Thương mại: 100% trước xuất kho · hoặc "tùy đàm phán".</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:20px">
+      <span class="tag q">CÂU HỎI → CHỐT</span>
+      <h4 style="margin:8px 0 6px">Sinh hợp đồng có trong Phase 1 không?</h4>
+      <p style="margin:0"><b>CÓ.</b> Contract generation (sinh HĐ Thi công / HĐ Mua bán từ đơn, tham chiếu số BG) <b>làm trong Phase 1</b> — cùng với VAT, dòng tự do/gói, lịch thanh toán nhiều đợt, metadata hiệu lực/loại khách.</p>
+    </div>
+
+    <div class="quote" style="margin-top:20px;border-left-color:var(--violet);background:rgba(155,140,255,.08)">
+      <span class="tag ins">CHỌN HYBRID (C)</span> Mỗi đơn có <b>3 cờ phạm vi</b> (Thiết bị / Thi công / Vận chuyển); luồng trạng thái <b>GATE theo cờ</b>. Loại khách (Cá nhân/Thương mại) = preset set cờ mặc định + nhãn báo cáo, vẫn sửa cờ từng đơn được. Bước <b>Khảo sát gate theo cờ Thi công</b>.
+    </div>
+  </div>
+</section>
+
+<!-- SYNTHESIS -->
+<section id="synth" class="synth">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">⚡</div>
+      <div><span class="en">Synthesis · Tổng hợp — cao trào</span><h2>Sợi chỉ đỏ xuyên suốt</h2></div>
+    </div>
+
+    <p class="thesis">App là <span class="grad">"máy tăng tốc, không ai phải chờ ai"</span></p>
+    <p class="anti">KHÔNG phải <s>hệ thống kiểm soát</s>. Mọi quyết định đều quy về: gỡ chỗ nghẽn để thông tin tự chảy.</p>
+
+    <h4 style="margin:8px 0 16px;text-align:center">4 liên kết ẩn nối các mảnh lại thành một</h4>
+    <div class="links">
+      <div class="link">
+        <div class="no">1</div>
+        <h4>Phân quyền vì tốc độ, không vì bảo mật</h4>
+        <p>Reframe này làm mô hình <b>per-account</b> đơn giản hẳn đi — không cần tầng bảo mật phức tạp, chỉ cần "đúng người đúng việc".</p>
+      </div>
+      <div class="link">
+        <div class="no">2</div>
+        <h4>"2 loại khách" đội hai mũ</h4>
+        <p>Nó chi phối <b>cả status machine lẫn giá lẻ/sỉ</b> — một biến, hai hệ quả sâu trong kiến trúc.</p>
+      </div>
+      <div class="link">
+        <div class="no">3</div>
+        <h4>Một triết lý dữ liệu duy nhất</h4>
+        <p>Snapshot-lúc-chốt + audit log + reopen-có-version thực ra là MỘT: <b>bất biến sau chốt, mọi thay đổi để lại dấu vết</b>.</p>
+      </div>
+      <div class="link">
+        <div class="no">4</div>
+        <h4>Role bị "giáng chức"</h4>
+        <p>Role tụt xuống thành nút áp preset; <b>account mới là nguồn chân lý</b> của quyền.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FINAL SCOPE -->
+<section id="scope">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="num">🎯</div>
+      <div><span class="en">Phase 1 · Final Scope</span><h2>Chốt phạm vi triển khai</h2></div>
+    </div>
+    <p class="lead">Tám khối nghiệp vụ, hai nền tảng — xương sống đủ để chạy vận hành thật.</p>
+
+    <div class="scope">
+      <div class="sc"><span class="ic">🛒</span><h4>1 · Báo giá kiêm đơn</h4><p>Giỏ hàng + dòng tự do/gói + ghi chú + VAT + cờ phạm vi.</p></div>
+      <div class="sc"><span class="ic">🔄</span><h4>2 · Đơn 1-object</h4><p>Status gate theo cờ (Hybrid), tự nhảy theo sự kiện, mở lại có version.</p></div>
+      <div class="sc"><span class="ic">💳</span><h4>3 · Lịch thanh toán</h4><p>Nhiều đợt, cấu hình được (20/70/10, 100% trước xuất kho, tùy đàm phán).</p></div>
+      <div class="sc"><span class="ic">📜</span><h4>4 · Sinh hợp đồng</h4><p>HĐ Thi công / Mua bán sinh từ đơn, tham chiếu số BG.</p></div>
+      <div class="sc"><span class="ic">📦</span><h4>5 · Danh mục vật tư</h4><p>Giá phân tầng sau cờ, snapshot lúc chốt.</p></div>
+      <div class="sc"><span class="ic">🔐</span><h4>6 · Phân quyền</h4><p>Per-account + role preset + bước duyệt.</p></div>
+      <div class="sc"><span class="ic">📊</span><h4>7 · Dashboard</h4><p>Doanh thu / đơn theo trạng thái.</p></div>
+      <div class="sc"><span class="ic">🧾</span><h4>8 · Audit log</h4><p>Ghi mọi hành động — ai làm gì, lúc nào.</p></div>
+    </div>
+
+    <div class="platforms">
+      <span class="plat">🌐 Web</span>
+      <span class="plat">📱 Mobile</span>
+      <span class="plat">📤 Share PDF / ảnh (native)</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>☀️ Công ty Năng lượng Mặt trời <b>Phương Nam</b> · Brainstorm Phase 1 — quản lý đơn hàng, báo giá &amp; phân quyền</p>
+    <p>Role Playing <span class="dot">•</span> First Principles <span class="dot">•</span> Assumption Reversal <span class="dot">•</span> Morphological Analysis <span class="dot">•</span> What If Scenarios</p>
+    <p style="opacity:.7">Nhật ký sáng tạo · chế độ đối tác · hoàn tất 06.07.2026</p>
+  </div>
+</footer>
+
+</body>
+</html>
