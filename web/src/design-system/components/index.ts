@@ -43,3 +43,36 @@ export type { KpiProps } from './Kpi';
 
 export { Banner } from './Banner';
 export type { BannerProps, BannerTone } from './Banner';
+
+// Behavior / interaction layer (Story 1.6): cart line, overlays, list states,
+// share, image upload. Behavior primitives only — no business logic (money math,
+// status transitions, R2 upload all live on the backend; AD-3/10/11/16).
+export { CartLineRow } from './CartLineRow';
+export type { CartLineRowProps } from './CartLineRow';
+
+export { Dialog } from './Dialog';
+export type { DialogProps } from './Dialog';
+
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
+
+export { Sheet } from './Sheet';
+export type { SheetProps } from './Sheet';
+
+export { Skeleton } from './Skeleton';
+export type { SkeletonProps } from './Skeleton';
+
+export { EmptyState } from './EmptyState';
+export type { EmptyStateProps } from './EmptyState';
+
+export { ErrorState } from './ErrorState';
+export type { ErrorStateProps } from './ErrorState';
+
+export { ShareButton } from './ShareButton';
+export type { ShareButtonProps } from './ShareButton';
+
+export { ImageUpload } from './ImageUpload';
+export type { ImageUploadProps, ImageUploadItem } from './ImageUpload';
+
+export { shareFiles } from './share';
+export type { ShareFilesOptions, ShareResult } from './share';

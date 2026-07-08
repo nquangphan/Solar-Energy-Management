@@ -129,3 +129,43 @@
 .kpi .k-v{font-size:23px;font-weight:900;letter-spacing:-.02em;margin-top:5px}
 .kpi .k-d{font-size:11px;font-weight:700;color:var(--ok);margin-top:2px}
 .kpi.accent{border-color:var(--teal);background:var(--teal-050)}
+
+/* Behavior / interaction layer (Story 1.6): overlay backdrop, Dialog, Sheet,
+   upload thumbnails, list-state skeleton. Verbatim from the mockup (lines
+   164-182) except the radius vars, remapped to the shipped token layer:
+   .modal -> var(--radius-lg); .thumb -> var(--radius); .sheet-grab 99px ->
+   var(--radius-full). .sheet keeps 18px 18px 0 0 (sanctioned
+   constant, DESIGN.md 226). Overlays float via a 1.5px ink border on a dimmed
+   .scrim — flat, no elevation fill (Viền nét, UX-DR-4). .scrim + .skel are new
+   (no mockup verbatim): .scrim replaces the mockup's dashed .overlay demo box
+   with a real fixed backdrop; .skel extracts the mockup's inline skeleton bars
+   (surface-2 + 6px radius) into a token-based helper. */
+
+/* Backdrop (new, production): fixed viewport cover that dims the page with
+   --ink (#0C1F1C) at .32 alpha — flat, no elevation. --sheet anchors the sheet
+   to the bottom edge, full-bleed. */
+.scrim{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:22px;background:rgba(12,31,28,.32)}
+.scrim.scrim--sheet{align-items:flex-end;justify-content:stretch;padding:0}
+
+/* Dialog (AC-3): 340px card, 1.5px ink border on the scrim; head/foot split by
+   1.5px line borders. */
+.modal{width:340px;background:#fff;border:1.5px solid var(--ink);border-radius:var(--radius-lg);overflow:hidden}
+.modal-head{padding:13px 16px;border-bottom:1.5px solid var(--line);display:flex;align-items:center;gap:10px}
+.modal-head .mt{font-size:14px;font-weight:800}
+.modal-body{padding:16px}
+.modal-foot{padding:12px 16px;border-top:1.5px solid var(--line);display:flex;gap:8px}
+
+/* Sheet (AC-3): bottom sheet, 1.5px ink border, top corners bo 18px (sanctioned
+   constant, DESIGN.md 226). .sheet-grab is the drag handle pill. */
+.sheet{width:300px;background:#fff;border:1.5px solid var(--ink);border-radius:18px 18px 0 0;overflow:hidden}
+.sheet-grab{width:38px;height:4px;background:var(--line);border-radius:var(--radius-full);margin:9px auto 4px}
+
+/* Upload thumbnails (AC-5): 74px squares; .add is the dashed teal "+" tile. */
+.thumbs{display:flex;gap:8px;flex-wrap:wrap}
+.thumb{width:74px;height:74px;border:1.5px solid var(--line);border-radius:var(--radius);background:var(--surface-2);
+  display:flex;align-items:center;justify-content:center;color:#b7c9c4;font-size:20px}
+.thumb.add{border-style:dashed;border-color:var(--teal);color:var(--teal-700);font-weight:800}
+
+/* Skeleton (AC-2): token-based loading bar — surface-2 fill + 6px radius. Width/
+   height come from the component (props); static (no shimmer — Viền nét). */
+.skel{background:var(--surface-2);border-radius:6px}

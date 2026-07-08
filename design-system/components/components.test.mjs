@@ -283,3 +283,67 @@ test('icon context sizing matches the mockup (banner 16px, stepper/table num 14p
   assert.ok(css.includes('.table .num .icn{width:14px;height:14px}'), '.table .num .icn must be 14px (mockup)');
   assert.ok(css.includes('.step .bul .icn{width:14px;height:14px}'), '.step .bul .icn must be 14px (mockup)');
 });
+
+// ---------- Behavior / interaction layer drift-guard (Story 1.6) ----------
+// The overlay backdrop (.scrim), Dialog (.modal*), Sheet (.sheet*), upload
+// thumbnails (.thumb*), and the list-state skeleton (.skel) are hand-authored
+// verbatim from the mockup (lines 164-182) except the radius remap. These
+// assertions fail if a selector is dropped, a core declaration drifts, or the
+// radius remap is forgotten. (Flatness — 0 drop-shadow — is covered by test 3;
+// cross-file token integrity by test 8 — both scan the whole file, incl. this
+// block, so a drop-shadow on the modal or an undefined token would already fail
+// there.)
+
+// (21) Every overlay/sheet/thumb/scrim/skel selector must be present.
+test('all behavior-layer selectors exist (AC-2/3/5)', () => {
+  const required = [
+    '.scrim', '.scrim--sheet',
+    '.modal', '.modal-head', '.modal-head .mt', '.modal-body', '.modal-foot',
+    '.sheet', '.sheet-grab',
+    '.thumbs', '.thumb', '.thumb.add',
+    '.skel',
+  ];
+  for (const sel of required) {
+    assert.ok(css.includes(sel), `components.css missing selector: ${sel}`);
+  }
+});
+
+// (22) Dialog/Sheet core declarations, verbatim from the mockup (AC-3). Modal +
+// sheet float via a 1.5px ink border; head/foot split by 1.5px line borders.
+test('Dialog/Sheet core declarations match the mockup verbatim (AC-3)', () => {
+  assert.ok(css.includes('.modal{width:340px;background:#fff;border:1.5px solid var(--ink);border-radius:var(--radius-lg);overflow:hidden}'), '.modal base verbatim');
+  assert.ok(css.includes('.modal-head{padding:13px 16px;border-bottom:1.5px solid var(--line)'), '.modal-head must have 1.5px line bottom border');
+  assert.ok(css.includes('.modal-head .mt{font-size:14px;font-weight:800}'), '.modal-head .mt verbatim');
+  assert.ok(css.includes('.modal-body{padding:16px}'), '.modal-body verbatim');
+  assert.ok(css.includes('.modal-foot{padding:12px 16px;border-top:1.5px solid var(--line);display:flex;gap:8px}'), '.modal-foot verbatim');
+  assert.ok(css.includes('.sheet{width:300px;background:#fff;border:1.5px solid var(--ink);border-radius:18px 18px 0 0;overflow:hidden}'), '.sheet base verbatim (18px top corners kept)');
+  assert.ok(css.includes('.sheet-grab{width:38px;height:4px;background:var(--line);border-radius:var(--radius-full);margin:9px auto 4px}'), '.sheet-grab verbatim');
+});
+
+// (23) Backdrop .scrim (new, production): fixed viewport cover that dims with
+// --ink@.32 — the "float via border on a dimmed backdrop, no drop-shadow" rule.
+test('.scrim is a fixed ink@.32 backdrop (AC-3, Viền nét)', () => {
+  assert.ok(css.includes('.scrim{position:fixed;inset:0'), '.scrim must be position:fixed;inset:0 (full viewport)');
+  assert.ok(css.includes('background:rgba(12,31,28,.32)'), '.scrim must dim with --ink (#0C1F1C) at .32 alpha');
+  assert.ok(css.includes('.scrim.scrim--sheet{align-items:flex-end'), '.scrim--sheet must bottom-anchor the sheet');
+});
+
+// (24) Upload thumbnails + skeleton verbatim (AC-5/2), incl. the dashed teal add
+// tile and the token-based skel helper.
+test('thumbnails + skeleton match the mockup verbatim (AC-5/2)', () => {
+  assert.ok(css.includes('.thumbs{display:flex;gap:8px;flex-wrap:wrap}'), '.thumbs verbatim');
+  assert.ok(css.includes('.thumb{width:74px;height:74px;border:1.5px solid var(--line);border-radius:var(--radius);background:var(--surface-2);'), '.thumb 74px square verbatim');
+  assert.ok(css.includes('.thumb.add{border-style:dashed;border-color:var(--teal);color:var(--teal-700);font-weight:800}'), '.thumb.add must be the dashed teal tile');
+  assert.ok(css.includes('.skel{background:var(--surface-2);border-radius:6px}'), '.skel must be surface-2 + 6px radius');
+});
+
+// (25) Radius remap for the behavior layer: .modal → var(--radius-lg), .thumb →
+// var(--radius), .sheet-grab → var(--radius-full). test 4's regex already bans
+// any raw var(--r*) across the file — re-assert the mapped values are present so
+// a forgotten Story-1.6 remap is pinned to this block.
+test('behavior-layer radius vars are remapped (no raw var(--r*))', () => {
+  assert.ok(css.includes('.modal{width:340px;background:#fff;border:1.5px solid var(--ink);border-radius:var(--radius-lg)'), '.modal must use var(--radius-lg), not var(--r-lg)');
+  assert.ok(css.includes('.thumb{width:74px;height:74px;border:1.5px solid var(--line);border-radius:var(--radius);'), '.thumb must use var(--radius), not var(--r)');
+  assert.ok(css.includes('.sheet-grab{width:38px;height:4px;background:var(--line);border-radius:var(--radius-full)'), '.sheet-grab must use var(--radius-full), not 99px');
+  assert.ok(!/var\(--r(-sm|-lg)?\)/.test(css), 'components.css must keep no raw var(--r)/var(--r-sm)/var(--r-lg)');
+});
