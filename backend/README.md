@@ -47,6 +47,10 @@ Token trả về: `{ accessToken (JWT ngắn), refreshToken (opaque), expiresIn 
 
 Quyền là **một registry chính tắc** (`src/accounts/domain/permission-registry.ts`, AD-17) — nguồn duy nhất, cấm literal ngoài registry. Lưu per-account ở bảng `account_permissions`; preset role là hằng số code (`domain/role-presets.ts`), chỉ `SUPER_ADMIN` có `audit.read`. Artifact `openapi/permissions.json` **sinh tự động** (`npm run permissions:gen`) — FE gen key từ đó (Story 2.6). Chi tiết: `CONVENTIONS.md#Permission registry`.
 
+## Enforce quyền server-side + `/me` (Story 2.5)
+
+Guard **fail-closed toàn cục**: mọi endpoint mặc định cần `Authorization: Bearer <accessToken>` (`APP_GUARD`: `JwtAuthGuard` → `PermissionsGuard`). `@Public()` mở route hạ-tầng (`/health`, `/auth/*`); `@RequirePermissions(PERM.x)` (AND) đòi quyền cụ thể; thiếu token → 401, thiếu quyền → 403. `GET /me` trả bộ quyền hiệu lực `{ id, email, displayName, permissions: string[] }` (sorted) để FE dựng phiên — server enforce mỗi request, client gating chỉ UX (AD-4). Chi tiết: `CONVENTIONS.md#Guard quyền server-side`.
+
 ## Ranh giới (đọc `CONVENTIONS.md`)
 
 - Chỉ `PrismaService` chạm DB — không `new PrismaClient()` nơi khác (source-guard enforce). `prisma/seed.ts` là CLI script (ngoài `src/`) nên được phép tự tạo client với driver adapter.

@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { Public } from '../auth/public.decorator';
 import { HealthResponseDto } from './dto/health-response.dto';
 
 /**
@@ -9,8 +10,12 @@ import { HealthResponseDto } from './dto/health-response.dto';
  *
  * Ping DB qua `PrismaService.$queryRaw` để chứng minh chuỗi wiring AD-1
  * (client → backend → Prisma → PostgreSQL) hoạt động end-to-end ngay từ story đầu.
+ *
+ * `@Public()` opt-out guard toàn cục fail-closed (2.5): probe hạ tầng phải mở, không
+ * đòi access token. Quên ⇒ e2e `health.spec.ts` fail 401.
  */
 @ApiTags('health')
+@Public()
 @Controller('health')
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}

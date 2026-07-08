@@ -110,6 +110,21 @@ Mọi lỗi backend trả về **đúng một** shape (`ErrorEnvelopeDto`):
 - **`Account`** (danh tính) là entity **base** tạo ở 2.3; Story 2.4 **mở rộng** cùng entity với registry quyền + `AccountPermission` (migration riêng, KHÔNG tạo lại bảng). Một entity, hai story bồi đắp — KHÔNG hai nhánh danh tính (AD-8).
 - Route `/auth/login|refresh|logout` là **ngoại lệ hạ-tầng-xác-thực có chủ ý** (như `/health`) — không áp quy ước "danh từ số nhiều" cho verb auth.
 
+## Guard quyền server-side — fail-closed toàn cục + `/me` (AD-4, Story 2.5)
+
+Server là **ranh giới bảo mật DUY NHẤT**: backend enforce quyền **mỗi request**. Ẩn/disable ở client CHỈ là UX, KHÔNG phải bảo mật — gọi thẳng API mà thiếu quyền vẫn bị từ chối bất kể FE hiển thị gì (AD-4, NFR-7).
+
+**Luật (không vi phạm):**
+
+- **Hai guard toàn cục qua `APP_GUARD`, ĐÚNG thứ tự** (khai trong `AuthModule`): `JwtAuthGuard` **trước** `PermissionsGuard` (Permissions đọc `request.account` do Jwt gắn). Mọi endpoint **mặc định cần access JWT** — fail-closed: endpoint domain mới (Epic 3+) tự động bị khoá tới khi khai quyền, KHÔNG thể "quên guard mà lộ".
+- **`@Public()`** opt-out cả hai guard — CHỈ cho route hạ-tầng-công-khai (`/health`, `/auth/login|refresh|logout`). Quên `@Public` cho route công khai ⇒ e2e fail 401 (lưới an toàn — sửa bằng `@Public`, KHÔNG nới guard).
+- **`@RequirePermissions(PERM.x, PERM.y)`** (semantics **AND** — đòi *tất cả* key) đánh dấu quyền cụ thể; tham số kiểu `PermissionKey` (registry, KHÔNG literal — AD-17). Endpoint KHÔNG khai = chỉ cần đăng nhập.
+- **`@CurrentAccount()`** lấy danh tính (`{ id, email, displayName }`) `JwtAuthGuard` gắn — controller KHÔNG đọc `request` thô, KHÔNG chạm `passwordHash`.
+- **Mã lỗi:** thiếu/không hợp lệ token → **401 `UNAUTHENTICATED`**; xác thực được nhưng thiếu quyền → **403 `FORBIDDEN`**. Guard ném `AppException` (message trung tính, KHÔNG leak lý do verify — chống enumeration); filter dựng envelope + traceId (AD-5).
+- **Quyền resolve TƯƠI mỗi request** qua `AccountPermissionsService.listForAccount` (AD-8) — KHÔNG suy quyền từ JWT claim/role. `JwtAuthGuard` kiểm `isActive` mỗi request ⇒ deactivate account có hiệu lực tức thì (không đợi hết TTL).
+- **`GET /me`** trả `{ id, email, displayName, permissions: string[] }` — `permissions` là effective set **sorted (tất định)**; contract chính tắc để FE (Story 2.6) dựng `PermissionSet`. Chỉ cần xác thực (mọi phiên đọc quyền CỦA MÌNH). `/me` là danh từ số ít ngoại lệ hạ-tầng (như `/health`).
+- **CẤM** để endpoint nghiệp vụ mới thiếu guard/`@RequirePermissions` — quên = mở toang. Thêm route domain: khai `@RequirePermissions(PERM.x)` cho quyền cần, dựa guard toàn cục lo xác thực.
+
 ## Lint / format (bắt buộc)
 
 - ESLint (flat config) + Prettier. Chạy: `npm run lint`, `npm run format`.

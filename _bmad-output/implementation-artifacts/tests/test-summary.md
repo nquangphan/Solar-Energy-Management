@@ -1,66 +1,74 @@
-# Test Automation Summary — Story 2.4 (Registry quyền chính tắc + lưu quyền theo account)
+# Test Automation Summary — Story 2.5 (`/me` + guard quyền server-side)
 
-**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Người chạy:** Đại Ca
-**Framework:** Jest + ts-jest (có sẵn trong `backend/`)
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-09 · **Người chạy:** Đại Ca
+**Framework:** Jest + supertest (hermetic — không cần Postgres)
+**Kết quả:** 20 suite / **120 test** xanh · lint + format sạch
 
-## Bối cảnh phạm vi test
+## Phạm vi
 
-Story 2.4 là feature **backend thuần, KHÔNG có bề mặt HTTP** (controller/`/me` = Story 2.5).
-Vì vậy không có API/E2E theo nghĩa request HTTP để sinh; "end-to-end" ở đây = phủ đủ
-**hợp đồng thật** của feature: registry SSOT, role-preset, service đọc/ghi quyền, artifact
-sinh tự động, source-guard. Test giữ **hermetic** (mock Prisma, đọc file) — chạy được
-không cần Postgres, mirror chiến lược Story 2.3.
+Backend-only feature (không UI). Sinh test **API/e2e** cho `GET /me`, hai guard toàn cục
+(`JwtAuthGuard`, `PermissionsGuard`) và các decorator (`@Public`, `@RequirePermissions`,
+`@CurrentAccount`). E2E dùng `AppModule` thật + override `PrismaService` no-op + mock service,
+ký JWT thật bằng `JwtService` cùng secret (`await import()` động sau khi set `JWT_ACCESS_SECRET`).
 
-## Gap phát hiện & đã tự động vá (auto-apply)
+## Gap phát hiện & auto-apply (2 test mở rộng, +3 case)
 
-| # | AC | Gap | Rủi ro nếu bỏ | Đã vá |
+| # | AC | Gap | Vì sao là gap | Đã vá |
 |---|----|-----|---------------|-------|
-| 1 | AC-1 | **Không test nào đọc file FE stub thật** để so registry byte-for-byte. `permission-registry.spec.ts` chỉ so literal HARDCODE trong chính test. | FE đổi tên literal (vd `orders.viewAll`) → không test backend nào bắt; Story 2.6 nối sai chuỗi. Đây là **action item Epic 1 retro** ("xác minh contract PermissionKey 1.10 khớp registry 2.4"). | ✅ `test/permission-registry-fe-stub-parity.spec.ts` (mới) |
-| 2 | AC-2 | **`setForAccount([])`** (thu hồi tất cả quyền / vô hiệu account — thao tác Epic 8) chưa test. | Regression im lặng ở đường "bỏ tick hết"; không xác nhận vẫn atomic delete + createMany rỗng. | ✅ thêm case vào `test/account-permissions.service.spec.ts` |
+| 1 | AC-1 | `/me` khi effective set **rỗng** → `200 { permissions: [] }` | Happy path chỉ phủ set có phần tử; hành vi mảng rỗng tất định (FE dựng `PermissionSet` từ đó) chưa kiểm | ✅ `test/me.e2e.spec.ts` (+1 case) |
+| 2 | AC-1 | Param decorator `@CurrentAccount` | Story đánh dấu optional, trước đó thiếu; chỉ được phủ **gián tiếp** qua `/me` | ✅ `test/auth-decorators.spec.ts` (+2 case: trả `request.account` / vắng → `undefined`) |
 
-## Test đã sinh / mở rộng
+**Không thêm (đã phủ — tránh padding):** AND-semantics nhiều key (unit `permissions.guard.spec`),
+account `isActive=false` → 401 (unit + e2e), sort tất định (case 200 đã đảo thứ tự input),
+regression `@Public` cho `/health` + `/auth/*` (đã chứng minh end-to-end ở `auth.e2e.spec` +
+`health.spec` chạy qua guard toàn cục).
 
-### Cross-repo drift-guard (mới)
-- [x] `test/permission-registry-fe-stub-parity.spec.ts` — đọc CHÍNH `web/…/permissions.ts` +
-  `mobile/…/app_permissions.dart`, khẳng định mọi permission literal FE ∈ registry backend
-  (byte-for-byte) và đủ 3 literal FE-stub (`orders.view_all`/`audit.read`/`permissions.manage`).
-  Fail rõ ràng nếu file FE thiếu (không im lặng xanh). *(view_own là entry backend-tường-minh
-  AC-2, FE suy scope từ có/không view_all nên không khai literal riêng.)*
+## Test theo file
 
-### Service data-API (mở rộng)
-- [x] `test/account-permissions.service.spec.ts` — thêm case `setForAccount([])`: thu hồi
-  toàn bộ quyền qua transaction atomic (delete + createMany rỗng).
+### API / E2E — `test/me.e2e.spec.ts`
+- [x] `GET /me` không header → 401 envelope `UNAUTHENTICATED` (+ `traceId`, KHÔNG `fieldErrors`)
+- [x] `GET /me` Bearer rác → 401 (verify fail, envelope generic)
+- [x] `GET /me` Bearer hợp lệ → 200 shape đúng, `permissions` sorted, KHÔNG `passwordHash`
+- [x] **(mới)** `GET /me` account không quyền → 200 `permissions: []`
+- [x] `GET /me` account `isActive=false` → 401
+- [x] `@RequirePermissions` thiếu quyền → 403 `FORBIDDEN`
+- [x] `@RequirePermissions` đủ quyền → 200
+- [x] Route guarded không token → 401 (chặn trước cả check quyền)
+
+### Unit guard — `test/jwt-auth.guard.spec.ts`, `test/permissions.guard.spec.ts`
+- [x] JwtAuthGuard: `@Public` skip · thiếu/sai/empty Bearer → 401 · verify throw → 401 (không leak) ·
+  account null/inactive → 401 · hợp lệ → gắn `request.account` (KHÔNG `passwordHash`)
+- [x] PermissionsGuard: `@Public` skip · không metadata → pass · `[]` → pass · đủ (AND) → pass ·
+  thiếu ≥1 → 403 · `request.account` vắng → 401 fail-closed
+
+### Unit decorator — `test/auth-decorators.spec.ts`
+- [x] `@Public` set `IS_PUBLIC_KEY=true`
+- [x] `@RequirePermissions(PERM.x, PERM.y)` set mảng đúng thứ tự · không tham số → `[]`
+- [x] **(mới)** `@CurrentAccount` trả `request.account` · vắng → `undefined`
 
 ## Coverage theo AC
 
-- **AC-1 (registry SSOT + artifact + source-guard):** key duy nhất · đủ 4 key · naming snake_case ·
-  17 key · type-guard · drift-guard artifact byte-for-byte · source-guard không literal ngoài
-  registry · **+ parity với FE stub thật (mới)** ✅
-- **AC-2 (RBAC per-account, view_all vs view_own):** hai entry tường minh · `listForAccount`
-  (map→Set, rỗng) · `setForAccount` (validate key lạ→ném, atomic, khử trùng, **+ thu hồi tất cả**) ✅
-- **AC-3 (`audit.read` chỉ Super Admin):** chỉ SUPER_ADMIN preset chứa `audit.read` · đúng một
-  preset · mọi key ∈ registry. Bất biến hermetic mà seed phụ thuộc (preset ⊇ audit.read, dedup)
-  đã phủ; phần ghi `account_permissions` end-to-end + seed super admin = **integration khi có
-  Postgres** (đúng thiết kế 2.4/2.3 — KHÔNG refactor `seed.ts` chỉ để test) ✅
-- **API/E2E HTTP:** N/A — Story 2.4 không có endpoint (guard/`/me` = Story 2.5).
+- **AC-1** (`/me` trả effective set): e2e shape + sorted + **empty-set (mới)** + no-leak `passwordHash`;
+  `@CurrentAccount` unit **(mới)** ✅
+- **AC-2** (enforce mỗi request 401/403): unit + e2e cả hai guard, gọi thẳng thiếu quyền → 403 ✅
+- **AC-3** (client gating chỉ UX): guard toàn cục fail-closed là ranh giới duy nhất; route test-only
+  chứng minh server từ chối bất kể client ✅
 
 ## Kết quả chạy
 
 ```
 cd backend && npx jest
-Test Suites: 16 passed, 16 total   (baseline 15 → +1)
-Tests:       92 passed, 92 total   (baseline 85 → +7, 0 regression)
-lint: sạch · format:check: sạch
+Test Suites: 20 passed, 20 total
+Tests:       120 passed, 120 total   (baseline 117 → +3, 0 regression)
+lint: sạch · format:check: sạch (không literal quyền — dùng PERM.*, AD-17)
 ```
 
 ## Bước tiếp theo
 
-- Chạy integration `account_permissions` end-to-end + seed super admin khi có Postgres (CI có DB).
-- Story 2.5 build `/me` + `JwtAuthGuard` + `@RequirePermissions` → khi đó sinh API/E2E HTTP thật
-  (status code, effective set, enforce theo quyền mỗi request — AD-4).
+- Integration cần Postgres: đọc `account_permissions` thật qua `/me`, kiểm `isActive` DB thật — chạy khi CI có DB.
+- Story 2.6 nối FE gating vào `/me` (web/mobile) — sẽ có e2e/UI phía FE.
 
 ## Câu hỏi tồn đọng
 
-- Không. Toàn bộ gap đã vá theo yêu cầu "auto-apply". Refactor `seed.ts` để unit-test được (thay
-  vì integration) là **thay đổi production ngoài phạm vi sinh test** — cần chủ dự án quyết nếu muốn.
-```
+- Không. Gap đã vá theo yêu cầu "auto-apply". Coverage còn lại (đọc DB thật) là **integration** đúng
+  thiết kế hermetic 2.3/2.4/2.5 — không refactor production chỉ để test.

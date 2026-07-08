@@ -127,6 +127,32 @@
           "auth"
         ]
       }
+    },
+    "/me": {
+      "get": {
+        "operationId": "MeController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Danh tính + bộ quyền hiệu lực (sorted) của phiên đang đăng nhập.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      }
     }
   },
   "info": {
@@ -138,6 +164,13 @@
   "tags": [],
   "servers": [],
   "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      }
+    },
     "schemas": {
       "HealthResponseDto": {
         "type": "object",
@@ -292,6 +325,40 @@
         },
         "required": [
           "refreshToken"
+        ]
+      },
+      "MeResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ID account (UUID)."
+          },
+          "email": {
+            "type": "string",
+            "description": "Email đăng nhập."
+          },
+          "displayName": {
+            "type": "string",
+            "description": "Tên hiển thị."
+          },
+          "permissions": {
+            "description": "Bộ quyền hiệu lực (sorted, tất định), mỗi phần tử là một key trong `openapi/permissions.json`; FE dựng `PermissionSet` từ mảng này.",
+            "example": [
+              "audit.read",
+              "orders.view_all"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "permissions"
         ]
       }
     }

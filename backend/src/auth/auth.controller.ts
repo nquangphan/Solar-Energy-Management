@@ -6,6 +6,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
+import { Public } from './public.decorator';
 import { AuthService } from './auth.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
@@ -18,8 +19,13 @@ import { RefreshRequestDto } from './dto/refresh-request.dto';
  *
  * Controller KHÔNG dựng envelope lỗi: `AuthService` ném `AppException`, filter trung
  * tâm (2.2) dựng envelope + traceId (AD-5).
+ *
+ * `@Public()` (cấp class) opt-out guard toàn cục fail-closed (2.5) cho cả ba route:
+ * đăng nhập/refresh/logout KHÔNG thể đòi access token TRƯỚC khi có token. Quên `@Public`
+ * ⇒ e2e `auth.e2e.spec.ts` fail 401 (lưới an toàn — sửa bằng `@Public`, KHÔNG nới guard).
  */
 @ApiTags('auth')
+@Public()
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}

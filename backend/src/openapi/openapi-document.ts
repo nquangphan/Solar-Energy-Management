@@ -42,6 +42,9 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
       'Hợp đồng API cross-repo cho web + mobile. Spec SINH TỪ code NestJS — CẤM SỬA TAY.',
     )
     .setVersion(getBackendVersion())
+    // Security scheme "bearer JWT" (2.5): FE gen client biết `/me` + endpoint guarded cần
+    // `Authorization: Bearer <accessToken>`. `@ApiBearerAuth()` trên controller tham chiếu scheme này.
+    .addBearerAuth()
     .build();
 
   // `extraModels`: ép `ErrorEnvelopeDto` + `FieldErrorDto` vào `components.schemas` dù
