@@ -1,0 +1,51 @@
+/* A11y floor (Story 1.10, UX-DR-26): touch target ≥44px (web) — usable outdoors
+   / with gloves. Load AFTER tokens.css + icons.css + components.css + shell.css.
+   This is a SEPARATE layer on purpose: it changes NO colour / border / visual
+   size (so the byte-for-byte shell + component drift-guards keep passing) — it
+   only guarantees each interactive control has a ≥44px touch target. No bundler
+   entry exists yet (YAGNI); the load-order note in gating/index.ts + this header
+   is the contract.
+
+   Two techniques (per the mockup-preservation rule):
+   (1) growable box/text controls (.btn, .navlink, .seg a, .tabs a, modal close):
+       floor the height with min-height:44px + inline-flex centering — the drawn
+       box may grow to the floor, which is the intended field-use size.
+   (2) small icon-only controls that MUST keep their drawn size (.topbar-back is
+       28×28, .topbar-action): keep the visible box, and expand only the HIT AREA
+       to ≥44×44 with a centered ::after overlay on a position:relative host —
+       the icon still draws at 28px, but taps within 44px register. */
+
+/* (1) Growable controls — floor height, keep content centered. */
+.btn,
+.seg a,
+.tabs a,
+.modal-head button{
+  min-height:44px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+/* .navlink is a full-width row: floor its height but keep the left alignment. */
+.sidebar .navlink{
+  min-height:44px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+}
+
+/* (2) Small icon-only controls — keep the drawn box, grow the hit area only. The
+   ::after has min-width/min-height 44px (no width/height), so it lays out as a
+   centered 44×44 transparent target that still belongs to the host element. */
+.topbar-back,
+.topbar-action{position:relative}
+.topbar-back::after,
+.topbar-action::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  min-width:44px;
+  min-height:44px;
+}

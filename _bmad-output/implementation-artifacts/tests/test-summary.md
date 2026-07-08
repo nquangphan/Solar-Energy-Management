@@ -1,58 +1,55 @@
-# Tóm tắt Tự động hoá Test — Story 1.9 (App shell web — Sidebar + Web frame)
+# Tóm tắt QA Automation — Story 1.10 (Primitive gating + Accessibility floor + Parity)
 
-**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** app-shell web (`web/src/design-system/shell/` — 8 component React + `shell.css`).
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Người chạy:** Đại Ca
+**Tính năng:** tầng gating (`gating/`) + a11y floor (`a11y/a11y.css` + `AppTokens.tapTargetMin`) web (React) & mobile (Flutter).
 
-**Framework:** `node --test` (text-based drift/behaviour guard). Web CHƯA có tsc/React runtime (`web/` chỉ `src/`, đúng contract Story 1.3–1.6) → test đọc `.css`/`.tsx` dạng chuỗi, khẳng định bất biến theo cấu trúc. **KHÔNG** thêm runner mới (tôn trọng quyết định story + YAGNI).
+## Bối cảnh & khung test
 
-## Cách tiếp cận
+Web (`web/src/`) **không có tsc/runtime build** (đúng tiền lệ Story 1.3–1.9) → không thể chạy E2E trình duyệt / import TS trực tiếp. Khung test chuẩn tắc là **Node text-guard** (`node --test "**/*.test.mjs"` trong `design-system/`). Toàn bộ test bổ sung bám pattern này — **KHÔNG** thêm transpiler/test-runner mới (theo quyết định YAGNI của story). Mobile Flutter đã `dart analyze` sạch (lượt QA này chỉ thêm file test, không đụng Dart source).
 
-Story 1.9 đã ở trạng thái `review` với 114 test (drift-guard CSS + source-guard TSX + parity cross-platform). Workflow QA rà coverage theo AC-1..AC-5, phát hiện các **hành vi shell đã hỗ trợ nhưng chưa được canh**, rồi auto-apply — thêm 1 file hành vi (theo tiền lệ `behavior-components.test.mjs`) + mở rộng file drift-guard CSS (surgical: không đụng shell source).
+## Khoảng trống phát hiện & auto-apply (7 gap, bám 3 AC)
 
-## Test đã thêm (11)
+| # | AC | Gap (trước không có guard) | Test đã thêm |
+|---|----|----------------------------|--------------|
+| 1 | AC-1 | Wiring `SIDEBAR_NAV`: `audit ⇒ PERM.auditRead` (chỉ Super Admin, FR-20), `permissions ⇒ PERM.permissionsManage`, field `NavLink.requires?` | `gating.test.mjs` (e) |
+| 2 | AC-1 | Bộ quyền stub 2 nền tảng **loại** `auditRead` (Audit gates out) nhưng có `ordersViewAll`+`permissionsManage` | `gating.test.mjs` (f) |
+| 3 | AC-1 | `key-agnostic`: literal quyền chỉ xuất hiện trong registry stub, KHÔNG lọt vào thân `filterNav`/`orderScope` | `gating.test.mjs` (d) mở rộng |
+| 4 | AC-2 | Parity mobile: nút icon-only `image_upload.dart` (add/remove) có `Semantics(button, label)` | `a11y-floor.test.mjs` |
+| 5 | AC-2 | "Tiền/VAT không bị cắt": `.mono` / `.table .num` KHÔNG `overflow:hidden`/`ellipsis` | `a11y-floor.test.mjs` |
+| 6 | AC-2 | Floor web phủ thêm `.topbar-action` + `.modal-head button` | `a11y-floor.test.mjs` mở rộng |
+| 7 | AC-3 | Bottom-nav mobile **giữ khoá cứng** — KHÔNG bị chèn gating (`filterNav`/`AppGate`/`requires`) vào 5 tab (UX-DR-15) | `parity.test.mjs` |
 
-### E2E / Hành vi component — `design-system/components/shell-behavior.test.mjs` (MỚI, +10)
+## Test đã sinh / mở rộng
 
-| # | Test | AC / Invariant |
-|---|------|-----|
-| 1 | `SIDEBAR_NAV` giữ đúng **8 link chuẩn tắc** theo thứ tự (key→icon→label) + section "Quản trị" | AC-1, Task 2 (Story 1.10 gate bộ này) |
-| 2 | Sidebar brand mặc định `ic-sun` + "Phương Nam" | AC-1 |
-| 3 | Sidebar tô active **chỉ** link có `key === activeKey`; icon navlink 16, logo 18 | AC-1 |
-| 4 | Seg đánh dấu active **chỉ** option `activeKey` | AC-3 |
-| 5 | Tabs đánh dấu active **chỉ** tab `activeKey` | AC-3 |
-| 6 | Topbar render back/eyebrow/action **có điều kiện** + chevron `ic-chevron-left` size 18 | AC-5 |
-| 7 | WebFrame hiển thị url là **text thuần** `.web-url` (KHÔNG anchor) | AC-2 |
-| 8 | SearchField ghép `.search` > `.si` (`ic-search`) + tái dùng `.field` + `...rest` | AC-3b |
-| 9 | WebShell lắp `WebFrame > [sidebar?] + .main[topbar? + children]` | AC-5a |
-| 10 | Toolbar wrapper `.toolbar` merge `className` tuỳ chọn | AC-3a |
+### Gating (AC-1/3) — `design-system/components/gating.test.mjs`
+- [x] Thêm (e) wiring `SIDEBAR_NAV`, (f) demo-set loại `auditRead`; mở rộng (d) guard literal xuất hiện **đúng 1 lần** trong registry (không lọt vào helper logic).
 
-### Drift-guard CSS — `design-system/components/shell-web.test.mjs` (MỞ RỘNG, +1)
+### Accessibility floor (AC-2/3) — `design-system/components/a11y-floor.test.mjs`
+- [x] Thêm guard `Semantics` icon-only mobile, guard money-không-cắt; mở rộng danh sách control web floor (`.topbar-action`, `.modal-head button`).
 
-Test "canonical literals & shell icon sizes": kích thước icon shell (back 18 / action 15 / search 16 / logo 18), navlink icon `16px #8fa39e` + active tint teal, `.web flex:1 1 760px`, `.web-app min-height:520px`, `.search .field padding-left:32px`, literal `#9fb2ad`/`#a9bab5`, `.seg a:last-child` reset viền, `.main padding:18px 20px`, brand logo `26×26` viền teal bo 7px.
+### Parity cross-platform (AC-3) — `design-system/components/parity.test.mjs`
+- [x] Thêm guard bottom-nav ungated (khoá cứng 5 tab, UX-DR-15).
 
-## Khoảng trống đã phát hiện & vá (auto-apply)
+## Coverage theo AC
 
-- **Bộ nav chuẩn tắc chưa canh:** `SIDEBAR_NAV` là contract Story 1.10 lọc theo quyền — nay pin 8 link + thứ tự + section.
-- **Logic chọn active chưa test:** "link/seg/tab nào sáng lên" là hành vi UX cốt lõi, trước chỉ test callback được phát; nay khẳng định class `active` chỉ gắn đúng `activeKey`.
-- **Composition/DOM wiring chưa test:** SearchField (tái dùng `.field` + icon), WebShell (`.main` bọc topbar+children, sidebar slot), WebFrame (url text thuần).
-- **Literal chuẩn tắc CSS chưa pin:** icon sizes, padding-left search, các hex `#8fa39e/#a9bab5/#9fb2ad`, sizing frame — "selectors exist" không phủ giá trị verbatim.
+- **AC-1 (gating):** Gate render-null · `can`/`filterNav`/`orderScope` · drop section rỗng · stub-marked (AD-17) + UX-only (AD-4) · key-agnostic · **wiring SIDEBAR_NAV + demo-set (Audit ẩn trừ Super Admin)** ✅
+- **AC-2 (a11y floor):** floor 44px web / 48dp mobile · aria-label web + **Semantics mobile** · **money-không-cắt** · Esc đóng overlay (đã có `behavior-components.test.mjs`) ✅
+- **AC-3 (parity):** gating song sinh 2 nền tảng · floor lệch giá trị **có chủ đích** (44≠48, dp≠px) · **bottom-nav khoá cứng ungated** ✅
+- **API test:** N/A — tầng design-system thuần trình bày (AD-1/2: không mạng/router/nghiệp vụ), không endpoint.
 
 ## Kết quả chạy
 
-| Suite | Lệnh | Trước | Sau |
-|---|---|---|---|
-| Design-system (Node) | `node --test "**/*.test.mjs"` | 114/114 | **125/125** ✅ (0 hồi quy) |
-
-## Coverage
-
-- **8/8 component** shell có test hành vi/composition (Topbar, Sidebar, WebFrame, Toolbar, Seg, Tabs, SearchField, WebShell).
-- **AC-1..AC-5** đều có khẳng định hành vi hoặc drift.
-- **API test:** N/A — shell thuần trình bày (AD-1/2: không mạng/router/nghiệp vụ), không endpoint để phủ.
+```
+cd design-system && npm test        # node --test "**/*.test.mjs"
+→ tests 140 · pass 140 · fail 0     (baseline 135 + 5 khối mới · 0 regression)
+```
 
 ## Bước tiếp theo
 
-- Chạy `node --test "**/*.test.mjs"` trong CI (repo greenfield, chưa có pipeline).
-- Khi web có tsc/React runtime (story web-app sau), phủ thêm render test thật lên trên các structural guard này.
+- Chạy suite trong CI (`npm --prefix design-system test`).
+- Correctness runtime (import/exec TS thật) nối khi có build ở Epic 2+ (`/me` thật thay `DEMO_PERMISSIONS`).
+- Bổ sung edge case khi màn nghiệp vụ Epic 3–8 lắp component gating thực tế.
 
 ## Câu hỏi tồn đọng
 
-- Không. Story 1.9 vốn ở `review`; workflow này chỉ mở rộng coverage, không đổi contract component.
+- Không. Story 1.10 vốn ở `review`; workflow này chỉ mở rộng coverage, không đổi contract gating/a11y.

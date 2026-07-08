@@ -60,4 +60,9 @@ class AppTokens {
 
   // Viền nét: flat blueprint — hierarchy via border width + surface steps.
   static const double borderWidth = 1.5;
+
+  // A11y floor (Story 1.10, UX-DR-26): min touch target in dp (Material 48).
+  // The web sibling floor is 44px, authored in a11y/a11y.css — dp≠px, so the
+  // two values differ ON PURPOSE, not a parity drift.
+  static const double tapTargetMin = 48.0;
 }

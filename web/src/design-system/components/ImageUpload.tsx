@@ -64,6 +64,7 @@ export function ImageUpload({
               type="file"
               accept={accept}
               multiple={multiple}
+              aria-label="Thêm ảnh"
               hidden
               onChange={(e) => {
                 const files = e.target.files;

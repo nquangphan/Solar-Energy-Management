@@ -45,7 +45,7 @@ class AppTopbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final bar = Container(
       padding: const EdgeInsets.symmetric(horizontal: 13.0, vertical: 10.0),
       decoration: const BoxDecoration(
         color: AppTokens.surface,
@@ -56,26 +56,23 @@ class AppTopbar extends StatelessWidget {
       child: Row(
         children: [
           if (onBack != null) ...[
-            Semantics(
-              button: true,
-              label: 'Quay lại',
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: onBack,
-                child: Container(
-                  width: 28.0,
-                  height: 28.0,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppTokens.surface,
-                    border: Border.all(
-                        color: AppTokens.line, width: AppTokens.borderWidth),
-                    borderRadius: BorderRadius.circular(AppTokens.radiusSm),
-                  ),
-                  child: const AppIcon('ic-chevron-left',
-                      size: 18.0, color: AppTokens.teal700),
-                ),
+            // Back button — DRAWN at 28×28 in flow (mockup-verbatim), so the
+            // topbar height stays 28 + 2·10 padding = 48 (web parity). Its ≥48dp
+            // touch target is added OUT OF FLOW by the overlay below, mirroring
+            // the web `.topbar-back::after` technique — hit area only, the bar
+            // never grows.
+            Container(
+              width: 28.0,
+              height: 28.0,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppTokens.surface,
+                border: Border.all(
+                    color: AppTokens.line, width: AppTokens.borderWidth),
+                borderRadius: BorderRadius.circular(AppTokens.radiusSm),
               ),
+              child: const AppIcon('ic-chevron-left',
+                  size: 18.0, color: AppTokens.teal700),
             ),
             const SizedBox(width: 10.0),
           ],
@@ -134,6 +131,33 @@ class AppTopbar extends StatelessWidget {
           ],
         ],
       ),
+    );
+
+    if (onBack == null) return bar;
+
+    // A11y floor (Story 1.10, UX-DR-26): an OUT-OF-FLOW ≥48dp touch target laid
+    // over the back button — `top/bottom: 0` spans the full 48dp bar height,
+    // `width: tapTargetMin` spans 48dp across (the 28×28 box sits inside it).
+    // Stack-overlaid like the web `::after`, so it expands the HIT AREA without
+    // changing any drawn size or the bar's height.
+    return Stack(
+      children: [
+        bar,
+        Positioned(
+          left: 0.0,
+          top: 0.0,
+          bottom: 0.0,
+          child: Semantics(
+            button: true,
+            label: 'Quay lại',
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: onBack,
+              child: const SizedBox(width: AppTokens.tapTargetMin),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -12,11 +12,21 @@ import type { MouseEvent } from 'react';
 
 import { Icon } from '../icons/Icon';
 import type { IconName } from '../icons/sprite';
+import { PERM } from '../gating/permissions';
+import type { PermissionKey } from '../gating/permissions';
 
 export interface NavLink {
   key: string;
   icon: IconName;
   label: string;
+  /**
+   * Permission this link requires (Story 1.10). Callers run
+   * `filterNav(SIDEBAR_NAV, perms)` BEFORE passing `sections` in; links whose
+   * `requires` is unmet are dropped (a gated-out item disappears, UX-DR-22).
+   * Undefined = always visible. The sidebar itself never gates — it renders
+   * exactly the sections it is handed.
+   */
+  requires?: PermissionKey;
 }
 
 export interface NavSection {
@@ -51,8 +61,8 @@ export const SIDEBAR_NAV: NavSection[] = [
   {
     title: 'Quản trị',
     links: [
-      { key: 'permissions', icon: 'ic-permissions', label: 'Phân quyền' },
-      { key: 'audit', icon: 'ic-audit', label: 'Audit' },
+      { key: 'permissions', icon: 'ic-permissions', label: 'Phân quyền', requires: PERM.permissionsManage },
+      { key: 'audit', icon: 'ic-audit', label: 'Audit', requires: PERM.auditRead },
       { key: 'profile', icon: 'ic-user', label: 'Hồ sơ' },
     ],
   },

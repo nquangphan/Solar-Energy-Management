@@ -73,5 +73,10 @@
       "emphasis": "ink"
     },
     "surfaceSteps": ["bg", "surface", "surface-2"]
+  },
+  "a11y": {
+    "$note": "Touch-target floor (Story 1.10, UX-DR-26). Per-platform BY DESIGN: mobile 48dp (Material), web 44px (WCAG/Apple pt). dp≠px — not a drift. The mobile value is emitted to AppTokens.tapTargetMin; the web value lives in a11y/a11y.css (authored, not a token).",
+    "tapTargetMinDp": 48,
+    "tapTargetMinPx": 44
   }
 }

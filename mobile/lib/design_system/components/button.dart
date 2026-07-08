@@ -76,21 +76,29 @@ class AppButton extends StatelessWidget {
       child: GestureDetector(
         onTap: onPressed,
         behavior: HitTestBehavior.opaque,
-        child: Container(
-          width: wide ? double.infinity : null,
-          alignment: Alignment.center,
-          padding: small
-              ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0)
-              : const EdgeInsets.symmetric(horizontal: 15.0, vertical: 9.0),
-          decoration: BoxDecoration(
-            color: colors.bg,
-            border:
-                Border.all(color: colors.border, width: AppTokens.borderWidth),
-            borderRadius: BorderRadius.circular(
-              small ? AppTokens.radiusSm : AppTokens.radiusDefault,
+        // A11y floor (Story 1.10, UX-DR-26): floor the button height at ≥48dp
+        // (tapTargetMin). The horizontal padding is unchanged; a button shorter
+        // than the floor grows up to it (the whole button IS the touch target),
+        // mirroring the web `.btn{min-height:44px}` rule.
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(minHeight: AppTokens.tapTargetMin),
+          child: Container(
+            width: wide ? double.infinity : null,
+            alignment: Alignment.center,
+            padding: small
+                ? const EdgeInsets.symmetric(horizontal: 10.0, vertical: 5.0)
+                : const EdgeInsets.symmetric(horizontal: 15.0, vertical: 9.0),
+            decoration: BoxDecoration(
+              color: colors.bg,
+              border: Border.all(
+                  color: colors.border, width: AppTokens.borderWidth),
+              borderRadius: BorderRadius.circular(
+                small ? AppTokens.radiusSm : AppTokens.radiusDefault,
+              ),
             ),
+            child: content,
           ),
-          child: content,
         ),
       ),
     );

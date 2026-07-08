@@ -117,16 +117,21 @@ class AppImageUpload extends StatelessWidget {
         Positioned(
           top: 2.0,
           right: 2.0,
-          child: GestureDetector(
-            onTap: () => onRemove!(item.id),
-            child: Container(
-              padding: const EdgeInsets.all(2.0),
-              decoration: const BoxDecoration(
-                color: AppTokens.surface,
-                shape: BoxShape.circle,
+          // A11y (Story 1.10, UX-DR-26): icon-only remove control needs a label.
+          child: Semantics(
+            button: true,
+            label: 'Xoá ảnh',
+            child: GestureDetector(
+              onTap: () => onRemove!(item.id),
+              child: Container(
+                padding: const EdgeInsets.all(2.0),
+                decoration: const BoxDecoration(
+                  color: AppTokens.surface,
+                  shape: BoxShape.circle,
+                ),
+                child: const AppIcon('ic-close',
+                    size: 12.0, color: AppTokens.ink2),
               ),
-              child:
-                  const AppIcon('ic-close', size: 12.0, color: AppTokens.ink2),
             ),
           ),
         ),
@@ -135,19 +140,25 @@ class AppImageUpload extends StatelessWidget {
   }
 
   Widget _addTile(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _openPickSheet(context),
-      child: const SizedBox(
-        width: 74.0,
-        height: 74.0,
-        child: CustomPaint(
-          painter: DashedRectPainter(
-            color: AppTokens.teal,
-            strokeWidth: AppTokens.borderWidth,
-            radius: AppTokens.radiusDefault,
-          ),
-          child: Center(
-            child: AppIcon('ic-plus', size: 20.0, color: AppTokens.teal700),
+    // A11y (Story 1.10, UX-DR-26): icon-only add control needs a label. The 74px
+    // tile already exceeds the ≥48dp touch floor.
+    return Semantics(
+      button: true,
+      label: 'Thêm ảnh',
+      child: GestureDetector(
+        onTap: () => _openPickSheet(context),
+        child: const SizedBox(
+          width: 74.0,
+          height: 74.0,
+          child: CustomPaint(
+            painter: DashedRectPainter(
+              color: AppTokens.teal,
+              strokeWidth: AppTokens.borderWidth,
+              radius: AppTokens.radiusDefault,
+            ),
+            child: Center(
+              child: AppIcon('ic-plus', size: 20.0, color: AppTokens.teal700),
+            ),
           ),
         ),
       ),
