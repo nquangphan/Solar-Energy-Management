@@ -1,0 +1,96 @@
+// hand-authored — web-only app-shell component (Story 1.9, mirror mockup
+// all-screens.html `.sidebar` CSS 282-293 + markup 599-610). Flat "Viền nét":
+// surface-2 fill + a 1.5px line right border, no elevation.
+//
+// Pure presentation: clicking a link only EMITS `onNavigate(key)` — the sidebar
+// never routes or navigates (AD-1/2). Unlike the mobile bottom-nav (5 tabs
+// locked via an internal constant), the web nav is passed in via the `sections`
+// prop, because Story 1.10 gates it per-permission — the sidebar renders exactly
+// what the caller hands it, nothing more (no gating here). SIDEBAR_NAV is the
+// canonical default set for callers/Story 1.10 to filter.
+import type { MouseEvent } from 'react';
+
+import { Icon } from '../icons/Icon';
+import type { IconName } from '../icons/sprite';
+
+export interface NavLink {
+  key: string;
+  icon: IconName;
+  label: string;
+}
+
+export interface NavSection {
+  /** Micro-uppercase section header (`.navsec`). Omit for the leading group. */
+  title?: string;
+  links: NavLink[];
+}
+
+export interface SidebarProps {
+  sections: NavSection[];
+  /** Key of the active link — tints it teal (`.navlink.active`). */
+  activeKey?: string;
+  onNavigate?: (key: string) => void;
+  /** Brand mark. Defaults to the canonical `ic-sun` + "Phương Nam". */
+  brand?: { icon?: IconName; label: string };
+}
+
+/**
+ * Canonical default nav (mockup 601-610). Callers (and the Story 1.10 gating
+ * primitive) filter this by permission — the sidebar itself holds no hard list.
+ */
+export const SIDEBAR_NAV: NavSection[] = [
+  {
+    links: [
+      { key: 'home', icon: 'ic-home', label: 'Trang chủ' },
+      { key: 'orders', icon: 'ic-orders', label: 'Đơn hàng' },
+      { key: 'customers', icon: 'ic-customer', label: 'Khách hàng' },
+      { key: 'catalog', icon: 'ic-catalog', label: 'Danh mục' },
+      { key: 'inventory', icon: 'ic-warehouse', label: 'Kho' },
+    ],
+  },
+  {
+    title: 'Quản trị',
+    links: [
+      { key: 'permissions', icon: 'ic-permissions', label: 'Phân quyền' },
+      { key: 'audit', icon: 'ic-audit', label: 'Audit' },
+      { key: 'profile', icon: 'ic-user', label: 'Hồ sơ' },
+    ],
+  },
+];
+
+export function Sidebar({ sections, activeKey, onNavigate, brand }: SidebarProps) {
+  const brandIcon = brand?.icon ?? 'ic-sun';
+  const brandLabel = brand?.label ?? 'Phương Nam';
+
+  const navigate = (key: string) => (e: MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault(); // links are anchors for CSS/semantics — never a real jump
+    onNavigate?.(key);
+  };
+
+  return (
+    <nav className="sidebar">
+      <div className="brand2">
+        <div className="logo">
+          <Icon name={brandIcon} size={18} />
+        </div>
+        <div className="t">{brandLabel}</div>
+      </div>
+      {sections.map((section, i) => (
+        <div key={section.title ?? `sec-${i}`}>
+          {section.title && <div className="navsec">{section.title}</div>}
+          {section.links.map((link) => (
+            <a
+              key={link.key}
+              href="#"
+              className={link.key === activeKey ? 'navlink active' : 'navlink'}
+              onClick={navigate(link.key)}
+            >
+              <Icon name={link.icon} size={16} />
+              {link.label}
+            </a>
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
+}

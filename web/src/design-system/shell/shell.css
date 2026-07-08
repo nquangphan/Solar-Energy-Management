@@ -1,0 +1,78 @@
+/* Hand-authored shell layer (Story 1.9). Copied verbatim from the visual source
+   of truth — mockups/all-screens.html lines 232-315 (topbar/web/sidebar/toolbar/
+   seg/tabs/media) + the shell-context icon sizes at 320-322. ONLY change vs. the
+   mockup: radius vars remapped --r/--r-sm/--r-lg -> --radius/--radius-sm/
+   --radius-lg to match the shipped token layer (Story 1.1, tokens.css). All other
+   values are the mockup verbatim (999px pill / 50% dot / #8fa39e / #a9bab5 /
+   #9fb2ad kept as-is) — mockup wins.
+
+   MUST load AFTER tokens.css (token vars), icons.css (svg.icn base) and
+   components.css (reuses .field + .kpis base). "Viền nét": flat blueprint —
+   hierarchy from 1.5px borders + surface steps only, never ad-hoc elevation.
+   Web shell has NO FAB, so ZERO shadow exceptions (unlike mobile 1.8). */
+
+/* ==================== TOPBAR (canonical screen top bar) ==================== */
+.topbar{display:flex;align-items:center;gap:10px;flex:0 0 auto;
+  padding:10px 13px;border-bottom:1.5px solid var(--ink);background:#fff}
+.topbar-back{flex:0 0 auto;width:28px;height:28px;border:1.5px solid var(--line);border-radius:8px;background:#fff;
+  color:var(--teal-700);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center}
+.topbar-title{flex:1;min-width:0;font-size:15px;font-weight:800;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar-eyebrow{display:block;font-size:10px;font-weight:800;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--teal);line-height:1.2}
+.topbar-action{flex:0 0 auto;font-size:12px;font-weight:800;color:var(--teal-700)}
+
+/* ==================== WEB / BROWSER FRAME ==================== */
+.web{flex:1 1 760px;min-width:0;border:1.5px solid var(--ink);border-radius:var(--radius-lg);overflow:hidden;background:#fff}
+.web-chrome{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface-2);
+  border-bottom:1.5px solid var(--line)}
+.web-dots{display:flex;gap:6px}
+.web-dots i{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--line);display:block}
+.web-url{flex:1;background:#fff;border:1.5px solid var(--line);border-radius:999px;padding:4px 12px;
+  font-size:11px;color:var(--muted);font-weight:600}
+.web-app{display:flex;min-height:520px}
+
+/* canonical web left-nav */
+.web .sidebar{width:186px;flex:0 0 186px;border-right:1.5px solid var(--line);background:var(--surface-2);padding:13px 10px}
+.sidebar .brand2{display:flex;align-items:center;gap:8px;margin:2px 4px 14px}
+.sidebar .brand2 .logo{width:26px;height:26px;border:1.5px solid var(--teal);border-radius:7px;display:flex;
+  align-items:center;justify-content:center;color:var(--teal);font-weight:900;font-size:14px}
+.sidebar .brand2 .t{font-size:12.5px;font-weight:900}
+.sidebar .navlink{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius-sm);
+  font-size:12px;font-weight:700;color:var(--ink-2);margin-bottom:2px}
+.sidebar .navlink .icn{width:16px;height:16px;color:#8fa39e}
+.sidebar .navlink.active{background:#fff;border:1.5px solid var(--teal);color:var(--teal-700)}
+.sidebar .navlink.active .icn{color:var(--teal)}
+.sidebar .navsec{font-size:9px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#a9bab5;margin:12px 10px 5px}
+
+.main{flex:1;min-width:0;padding:18px 20px;background:#fff}
+.main-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.main-head h3{font-size:17px;margin:0;letter-spacing:-.01em}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.search{flex:1;min-width:160px;position:relative}
+.search .field{padding-left:32px}
+.search .si{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#9fb2ad;font-size:13px}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.seg a{font-size:11.5px;font-weight:700;color:var(--ink-2);padding:6px 12px;border-right:1.5px solid var(--line)}
+.seg a:last-child{border-right:0}
+.seg a.active{background:var(--teal);color:#fff}
+.tabs{display:flex;gap:2px;border-bottom:1.5px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+.tabs a{font-size:12px;font-weight:700;color:var(--muted);padding:8px 12px;border-bottom:2px solid transparent;margin-bottom:-1.5px}
+.tabs a.active{color:var(--teal-700);border-bottom-color:var(--teal)}
+
+@media(max-width:900px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .web-app{flex-direction:column}
+  .web .sidebar{width:auto;flex:none;border-right:0;border-bottom:1.5px solid var(--line);display:flex;flex-wrap:wrap;gap:4px}
+  .sidebar .brand2,.sidebar .navsec{width:100%}
+}
+
+/* ---------- Shell-context icon sizes (mockup 320-322) ----------
+   Contextual overrides so an <Icon> inside a shell slot lands at the canonical
+   size even without an explicit `size` prop. Not present in icons.css/
+   components.css (those cover .btn/.banner/.table/.step), so added here — no
+   duplication. */
+.topbar-back .icn{width:18px;height:18px}
+.topbar-action .icn{width:15px;height:15px}
+.si .icn{width:16px;height:16px}
+.logo .icn{width:18px;height:18px}

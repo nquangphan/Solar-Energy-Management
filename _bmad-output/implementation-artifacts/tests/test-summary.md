@@ -1,59 +1,58 @@
-# Tóm tắt Tự động hoá Test — Story 1.7 (Flutter — thư viện widget parity)
+# Tóm tắt Tự động hoá Test — Story 1.9 (App shell web — Sidebar + Web frame)
 
-**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** thư viện widget Flutter parity (`mobile/lib/design_system/components/`, 21 widget `App`-prefix).
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** app-shell web (`web/src/design-system/shell/` — 8 component React + `shell.css`).
 
-**Framework:** `flutter_test` (widget render + tương tác THẬT trên VM) · `node:test` (parity cross-platform). **Không sinh API test** — story thuần tầng presentation, không backend/endpoint.
+**Framework:** `node --test` (text-based drift/behaviour guard). Web CHƯA có tsc/React runtime (`web/` chỉ `src/`, đúng contract Story 1.3–1.6) → test đọc `.css`/`.tsx` dạng chuỗi, khẳng định bất biến theo cấu trúc. **KHÔNG** thêm runner mới (tôn trọng quyết định story + YAGNI).
 
 ## Cách tiếp cận
 
-Story 1.7 đã ở trạng thái `review` với bộ test hiện có (44 Flutter + 92 Node). Workflow QA rà coverage theo 3 AC, phát hiện các **hành vi widget đã hỗ trợ nhưng chưa có test**, rồi auto-apply — thêm test vào đúng file/nhóm sẵn có (surgical: không tạo file test mới, không đụng widget source).
+Story 1.9 đã ở trạng thái `review` với 114 test (drift-guard CSS + source-guard TSX + parity cross-platform). Workflow QA rà coverage theo AC-1..AC-5, phát hiện các **hành vi shell đã hỗ trợ nhưng chưa được canh**, rồi auto-apply — thêm 1 file hành vi (theo tiền lệ `behavior-components.test.mjs`) + mở rộng file drift-guard CSS (surgical: không đụng shell source).
 
-## Test đã thêm (9)
+## Test đã thêm (11)
 
-### Tương tác — `mobile/test/design_system/components/behavior_interaction_test.dart` (+7)
+### E2E / Hành vi component — `design-system/components/shell-behavior.test.mjs` (MỚI, +10)
 
-| # | Test | AC / Invariant | Loại |
-|---|------|-----|-----|
-| 1 | `AppCartLineRow` sửa **đơn giá** → `onUnitPriceChange` phát số mới, `amount` giữ nguyên | AC-2 / AD-10/16 | happy |
-| 2 | `AppCartLineRow` **swipe-to-delete** (`Dismissible` endToStart) phát `onDelete` | AC-2 / UX-DR-24 | happy (native) |
-| 3 | `AppImageUpload` nhánh **thư viện** ("Chọn từ thư viện" → `pick(ImageSource.gallery)` → `onAdd`) | AC-2 / UX-DR-25 | happy |
-| 4 | `AppImageUpload` **`onRemove`** phát đúng `id` khi bấm nút xoá thumbnail | AC-2 | happy |
-| 5 | `AppImageUpload` đạt **`max`** → ẩn ô thêm (`ic-plus` vắng mặt) | AC-2 / UX-DR-25 | edge |
-| 6 | `AppShareButton` kết quả **huỷ/dismissed** → không throw, `onResult` nhận `dismissed` | AC-2 | error |
-| 7 | `AppConfirmDialog` nút **Huỷ** → `onCancel` bắn, `onConfirm` KHÔNG bắn, dialog đóng | AC-2 / AD-11 | negative |
+| # | Test | AC / Invariant |
+|---|------|-----|
+| 1 | `SIDEBAR_NAV` giữ đúng **8 link chuẩn tắc** theo thứ tự (key→icon→label) + section "Quản trị" | AC-1, Task 2 (Story 1.10 gate bộ này) |
+| 2 | Sidebar brand mặc định `ic-sun` + "Phương Nam" | AC-1 |
+| 3 | Sidebar tô active **chỉ** link có `key === activeKey`; icon navlink 16, logo 18 | AC-1 |
+| 4 | Seg đánh dấu active **chỉ** option `activeKey` | AC-3 |
+| 5 | Tabs đánh dấu active **chỉ** tab `activeKey` | AC-3 |
+| 6 | Topbar render back/eyebrow/action **có điều kiện** + chevron `ic-chevron-left` size 18 | AC-5 |
+| 7 | WebFrame hiển thị url là **text thuần** `.web-url` (KHÔNG anchor) | AC-2 |
+| 8 | SearchField ghép `.search` > `.si` (`ic-search`) + tái dùng `.field` + `...rest` | AC-3b |
+| 9 | WebShell lắp `WebFrame > [sidebar?] + .main[topbar? + children]` | AC-5a |
+| 10 | Toolbar wrapper `.toolbar` merge `className` tuỳ chọn | AC-3a |
 
-### Render/token — `mobile/test/design_system/components/components_render_test.dart` (+2)
+### Drift-guard CSS — `design-system/components/shell-web.test.mjs` (MỞ RỘNG, +1)
 
-| # | Test | AC | Loại |
-|---|------|-----|-----|
-| 8 | `AppScopeFlag` **on=true** → chữ `teal700`, KHÔNG gạch ngang | AC-1 | complement |
-| 9 | `AppErrorState` **không `onRetry`** → không render nút "Thử lại" | AC-1 | negative |
+Test "canonical literals & shell icon sizes": kích thước icon shell (back 18 / action 15 / search 16 / logo 18), navlink icon `16px #8fa39e` + active tint teal, `.web flex:1 1 760px`, `.web-app min-height:520px`, `.search .field padding-left:32px`, literal `#9fb2ad`/`#a9bab5`, `.seg a:last-child` reset viền, `.main padding:18px 20px`, brand logo `26×26` viền teal bo 7px.
 
 ## Khoảng trống đã phát hiện & vá (auto-apply)
 
-- **Money invariant chỉ phủ cột SL:** `onQtyChange` đã có test, nhưng cột **đơn giá** (`onUnitPriceChange`) — field editable thứ hai — chưa chạm runtime. Nay phủ, khẳng định lại "không nhân qty×price".
-- **Swipe-to-delete chưa có test:** điểm parity native-mobile đầu bảng (web hoãn sang mobile) trước chỉ test nút thùng rác; nhánh `Dismissible` giờ được exercise.
-- **ImageUpload một chiều:** chỉ nhánh camera + happy path; thư viện/`onRemove`/`max` chưa kiểm.
-- **Thiếu error/negative path:** share huỷ, confirm-cancel, error-state không-retry — các nhánh "không nên xảy ra" trước không được canh.
+- **Bộ nav chuẩn tắc chưa canh:** `SIDEBAR_NAV` là contract Story 1.10 lọc theo quyền — nay pin 8 link + thứ tự + section.
+- **Logic chọn active chưa test:** "link/seg/tab nào sáng lên" là hành vi UX cốt lõi, trước chỉ test callback được phát; nay khẳng định class `active` chỉ gắn đúng `activeKey`.
+- **Composition/DOM wiring chưa test:** SearchField (tái dùng `.field` + icon), WebShell (`.main` bọc topbar+children, sidebar slot), WebFrame (url text thuần).
+- **Literal chuẩn tắc CSS chưa pin:** icon sizes, padding-left search, các hex `#8fa39e/#a9bab5/#9fb2ad`, sizing frame — "selectors exist" không phủ giá trị verbatim.
 
 ## Kết quả chạy
 
 | Suite | Lệnh | Trước | Sau |
 |---|---|---|---|
-| Flutter widget/interaction | `cd mobile && flutter test` | 44/44 | **53/53** ✅ |
-| Flutter static analysis | `cd mobile && flutter analyze` | clean | **clean** ✅ |
-| Parity cross-platform (Node) | `cd design-system && npm test` | 92/92 | **92/92** ✅ (0 hồi quy) |
+| Design-system (Node) | `node --test "**/*.test.mjs"` | 114/114 | **125/125** ✅ (0 hồi quy) |
 
 ## Coverage
 
-- **21/21 widget** có test render; hành vi AC-2 (cart money invariant, upload no-network, share, overlay intent-only) nay phủ **cả 2 chiều** (happy + negative/edge/error).
-- Bất biến vẫn được canh (không đổi): no-shadow, no money-math, no-upload, no-status-mutation (source-guard) + parity 9 hex status + 3 tone banner byte-cho-byte.
+- **8/8 component** shell có test hành vi/composition (Topbar, Sidebar, WebFrame, Toolbar, Seg, Tabs, SearchField, WebShell).
+- **AC-1..AC-5** đều có khẳng định hành vi hoặc drift.
+- **API test:** N/A — shell thuần trình bày (AD-1/2: không mạng/router/nghiệp vụ), không endpoint để phủ.
 
 ## Bước tiếp theo
 
-- Chạy suite trong CI (Flutter + Node) — repo greenfield, chưa có pipeline.
-- Camera/share **thật** cần platform scaffold (android/ios) — hoãn sang Story 1.8 (app-shell) như Open Question #1; widget hiện test qua inject `pick`/`shareImpl` trên VM.
+- Chạy `node --test "**/*.test.mjs"` trong CI (repo greenfield, chưa có pipeline).
+- Khi web có tsc/React runtime (story web-app sau), phủ thêm render test thật lên trên các structural guard này.
 
 ## Câu hỏi tồn đọng
 
-- Không. Story 1.7 vốn ở `review`; workflow này chỉ mở rộng coverage, không đổi contract widget.
+- Không. Story 1.9 vốn ở `review`; workflow này chỉ mở rộng coverage, không đổi contract component.
