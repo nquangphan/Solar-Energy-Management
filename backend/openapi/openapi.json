@@ -64,6 +64,63 @@
           "database",
           "timestamp"
         ]
+      },
+      "FieldErrorDto": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Tên field bị lỗi (khớp property của DTO).",
+            "example": "email"
+          },
+          "code": {
+            "type": "string",
+            "description": "Mã lỗi field (constraint key của class-validator, vd \"isEmail\"), string ổn định để FE map.",
+            "example": "isEmail"
+          },
+          "message": {
+            "type": "string",
+            "description": "Mô tả người đọc được, có thể đổi/đa ngôn ngữ.",
+            "example": "email phải là địa chỉ email hợp lệ"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "message"
+        ]
+      },
+      "ErrorEnvelopeDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Mã lỗi string từ enum có tài liệu (ErrorCode). FE map lỗi theo mã này, KHÔNG theo message.",
+            "example": "VALIDATION_ERROR"
+          },
+          "message": {
+            "type": "string",
+            "description": "Mô tả lỗi người đọc được (có thể đổi/đa ngôn ngữ).",
+            "example": "Dữ liệu không hợp lệ"
+          },
+          "fieldErrors": {
+            "description": "Danh sách lỗi cấp field (chỉ có ở lỗi validation). Vắng mặt với lỗi không phải validation.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldErrorDto"
+            }
+          },
+          "traceId": {
+            "type": "string",
+            "description": "ID lần lỗi (UUID v4 hoặc x-request-id) — dùng để tra log server-side cùng sự cố.",
+            "example": "3f2b0c9e-8a1d-4e2f-9c7a-1b2c3d4e5f60"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "traceId"
+        ]
       }
     }
   }

@@ -6,6 +6,8 @@ import {
   SwaggerModule,
   type OpenAPIObject,
 } from '@nestjs/swagger';
+import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
+import { FieldErrorDto } from '../common/errors/dto/field-error.dto';
 
 /**
  * Nguồn CHÂN LÝ để dựng OpenAPI document TỪ code NestJS (AD-12). Cả script
@@ -42,7 +44,11 @@ export function buildOpenApiDocument(app: INestApplication): OpenAPIObject {
     .setVersion(getBackendVersion())
     .build();
 
-  return SwaggerModule.createDocument(app, config);
+  // `extraModels`: ép `ErrorEnvelopeDto` + `FieldErrorDto` vào `components.schemas` dù
+  // chưa endpoint nào tham chiếu — hợp đồng lỗi cross-repo (AD-5) để FE gen type ngay (AC-3).
+  return SwaggerModule.createDocument(app, config, {
+    extraModels: [ErrorEnvelopeDto, FieldErrorDto],
+  });
 }
 
 /**

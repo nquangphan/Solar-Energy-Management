@@ -40,6 +40,14 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(document.components?.schemas?.HealthResponseDto).toBeDefined();
   });
 
+  it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
+    // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
+    // nào tham chiếu) — chứng minh `extraModels` hoạt động.
+    const document = buildOpenApiDocument(app);
+    expect(document.components?.schemas?.ErrorEnvelopeDto).toBeDefined();
+    expect(document.components?.schemas?.FieldErrorDto).toBeDefined();
+  });
+
   it('spec version = version backend (AC-2 "versioned")', () => {
     // AC-2 yêu cầu spec "versioned": version của OpenAPI doc phải bám version
     // backend (package.json), không hardcode rời rạc.

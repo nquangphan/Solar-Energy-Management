@@ -48,6 +48,33 @@ model OrderLineItem {
 - **Drift-guard**: test regen in-memory rồi so **byte-for-byte** với file đã commit. Quên regen hoặc sửa tay → test fail (mirror drift-guard byte-for-byte của design-system Epic 1).
 - Version của spec = version backend (`package.json`) → spec versioned.
 
+## Error envelope — MỘT shape, MỘT nơi dựng (AD-5)
+
+Mọi lỗi backend trả về **đúng một** shape (`ErrorEnvelopeDto`):
+
+```jsonc
+{
+  "code": "VALIDATION_ERROR",        // string enum có tài liệu (ErrorCode); FE map theo MÃ, không theo message
+  "message": "Dữ liệu không hợp lệ", // người đọc được, có thể đổi/đa ngôn ngữ
+  "fieldErrors": [                    // CHỈ có ở lỗi validation; vắng mặt với lỗi khác
+    { "field": "email", "code": "isEmail", "message": "email phải hợp lệ" }
+  ],
+  "traceId": "3f2b0c9e-…"            // UUID v4 hoặc x-request-id — tra log server-side
+}
+```
+
+**Luật (không vi phạm):**
+
+- **CHỈ `common/errors/all-exceptions.filter.ts` (`@Catch()` global) được dựng envelope.** Không controller/service nào tự nặn — `no-controller-error-envelope.spec.ts` enforce (fail nếu controller/service nhắc `traceId`).
+- Code nghiệp vụ **ném lỗi**, không dựng envelope: `throw new AppException(ErrorCode.X, status, message[, fieldErrors])`, hoặc `HttpException` chuẩn của Nest (`NotFoundException`…). Filter dịch sang envelope + gắn `traceId`.
+- ValidationPipe (`APP_PIPE` trong `CommonModule`) đóng gói lỗi class-validator thành `AppException(VALIDATION_ERROR)` mang `fieldErrors`; filter dựng envelope.
+- Lỗi **không lường trước** → `INTERNAL` + 500 + message generic ("Lỗi hệ thống"); **KHÔNG leak** stack/chi tiết ra response, **log đầy đủ server-side** kèm `traceId`. `HttpException` **5xx** (vd `ServiceUnavailableException`) cũng được đối xử như lỗi server-side: giữ status, message generic, log đầy đủ — chỉ **4xx** mới phản chiếu message do dev soạn.
+- `fieldErrors` **chỉ** đảm bảo có ở lỗi validation DTO (class-validator). Một số lỗi `400` khác (vd body JSON hỏng → `BadRequestException` của body-parser) cũng mang `code: VALIDATION_ERROR` nhưng **không** kèm `fieldErrors` — FE không được giả định `VALIDATION_ERROR` luôn có `fieldErrors`.
+
+**Mã lỗi khởi đầu (`common/errors/error-code.ts`, tối giản YAGNI):** `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CONFLICT` (409), `INTERNAL` (500). **Mã lỗi domain** (pricing/VAT, transition, permission, tồn kho, trùng SĐT…) do **story sở hữu** tự khai theo cùng pattern `as const`, tái dùng `ErrorEnvelopeDto`. **KHÔNG** đổi/xoá mã đã publish mà không cân nhắc breaking FE.
+
+`ErrorEnvelopeDto` + `FieldErrorDto` được ép vào `components.schemas` của OpenAPI (`extraModels`) để FE gen type ngay (AC-3), dù chưa endpoint nào tham chiếu.
+
 ## Lint / format (bắt buộc)
 
 - ESLint (flat config) + Prettier. Chạy: `npm run lint`, `npm run format`.

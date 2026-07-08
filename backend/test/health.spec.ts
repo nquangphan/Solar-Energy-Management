@@ -1,10 +1,11 @@
 import type { Server } from 'node:http';
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { HealthResponseDto } from '../src/health/dto/health-response.dto';
+import { ErrorCode } from '../src/common/errors/error-code';
 
 /**
  * e2e cho `GET /health`: 200 + shape mong đợi; chứng minh controller gọi
@@ -30,9 +31,6 @@ describe('GET /health (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
     await app.init();
   });
 
@@ -85,9 +83,6 @@ describe('GET /health khi DB không kết nối được (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
     await app.init();
   });
 
@@ -95,12 +90,18 @@ describe('GET /health khi DB không kết nối được (e2e)', () => {
     await app.close();
   });
 
-  it('trả lỗi (không phải 200) và KHÔNG báo database: up khi ping DB fail', async () => {
+  it('trả envelope lỗi thống nhất (500 INTERNAL, generic, KHÔNG database:up) khi ping DB fail', async () => {
     const server = app.getHttpServer() as Server;
     const res = await request(server).get('/health');
 
-    expect(res.status).toBeGreaterThanOrEqual(500);
+    // Lỗi Prisma không lường trước → AllExceptionsFilter dựng envelope INTERNAL (AD-5, 2.2).
+    expect(res.status).toBe(500);
     expect(res.body).not.toMatchObject({ database: 'up' });
+    expect(res.body.code).toBe(ErrorCode.INTERNAL);
+    expect(res.body.message).toBe('Lỗi hệ thống');
+    expect(typeof res.body.traceId).toBe('string');
+    // KHÔNG leak chi tiết nội bộ ("DB unreachable") ra response.
+    expect(JSON.stringify(res.body)).not.toContain('DB unreachable');
     expect(queryRaw).toHaveBeenCalled();
   });
 });

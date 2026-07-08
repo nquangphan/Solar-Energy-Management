@@ -3,28 +3,22 @@
 // process manager). PHẢI đứng trước mọi import đọc process.env (PrismaService khởi tạo
 // trong DI đọc DATABASE_URL) — side-effect import này chạy trước khi bootstrap gọi.
 import 'dotenv/config';
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
 /**
  * Bootstrap HTTP server.
  *
- * `ValidationPipe` global (`whitelist` + `transform`) là nền cho contract-first:
- * request body được validate/strip theo DTO. Error envelope tập trung + exception
- * filter là phạm vi Story 2.2 — skeleton chỉ bật ValidationPipe.
+ * ValidationPipe global (`whitelist` + `transform` + exceptionFactory→fieldErrors) và
+ * exception filter trung tâm được đăng ký qua DI trong `CommonModule` (`APP_PIPE`/
+ * `APP_FILTER`) — KHÔNG `useGlobalPipes/Filters` ở đây — để runtime và mọi app-context
+ * test/OpenAPI dùng CHUNG một cấu hình (Story 2.2, AD-5).
  *
  * OpenAPI KHÔNG serve ở runtime tại đây; spec là build artifact sinh qua
  * `npm run openapi:gen` (AD-12). Xem `scripts/generate-openapi.ts`.
  */
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-    }),
-  );
 
   const rawPort = process.env.PORT;
   const port = rawPort ? Number(rawPort) : 3000;
