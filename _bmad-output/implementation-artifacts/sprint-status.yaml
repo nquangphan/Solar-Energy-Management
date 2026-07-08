@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-07
+# last_updated: 2026-07-08
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-07
+last_updated: 2026-07-08
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -27,7 +27,7 @@ development_status:
   epic-1: in-progress
   1-1-tang-token-dung-chung-mau-spacing-radius-quy-tac-vien-net: done
   1-2-he-thong-icon-svg-sprite-inline: done
-  1-3-react-button-card-frame-field: backlog
+  1-3-react-button-card-frame-field: done
   1-4-react-chip-status-chip-9-trang-thai-chip-chi-doc: backlog
   1-5-react-table-stepper-kpi-banner: backlog
   1-6-react-hanh-vi-gio-hang-trang-thai-danh-sach-overlay-share-upload: backlog

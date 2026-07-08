@@ -1,0 +1,39 @@
+/* Hand-authored component layer (Story 1.3). Copied verbatim from the visual
+   source of truth — mockups/all-screens.html lines 61-88 (+ .btn .icn line 324).
+   ONLY change vs. the mockup: radius vars remapped --r/--r-sm/--r-lg ->
+   --radius/--radius-sm/--radius-lg to match the shipped token layer (Story 1.1,
+   tokens.css). All other values are the mockup verbatim — mockup wins.
+
+   MUST load AFTER tokens.css (depends on token vars: --teal, --line, --ink,
+   --radius*, --font, ...). "Viền nét": flat blueprint — hierarchy comes from
+   1.5px borders + surface steps only, never ad-hoc elevation effects. */
+
+/* ---------- Buttons ---------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border:1.5px solid var(--teal);background:var(--surface);color:var(--teal-700);
+  font-weight:800;font-size:13px;border-radius:var(--radius);padding:9px 15px;cursor:pointer}
+.btn--primary{background:var(--teal);color:#fff;border-color:var(--teal)}
+.btn--accent{background:var(--lime-050);color:var(--lime-600);border-color:var(--lime)}
+.btn--ghost{border-color:var(--line);color:var(--ink-2)}
+.btn--danger{border-color:var(--danger);color:var(--danger)}
+.btn--sm{padding:5px 10px;font-size:11.5px;border-radius:var(--radius-sm)}
+.btn--wide{width:100%}
+.btn .icn{width:15px;height:15px}   /* icon trong nút — kết nối Icon (1.2) */
+
+/* ---------- Card + blueprint frame ---------- */
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-lg)}
+.card--ink{border-color:var(--ink)}
+.card--teal{border-color:var(--teal)}
+.frame{position:relative;border:1.5px solid var(--ink);border-radius:var(--radius-lg);background:var(--surface)}
+.frame > .frame-label{position:absolute;top:-8px;left:14px;background:var(--surface);padding:0 8px;
+  font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink)}
+.frame.on-bg > .frame-label{background:var(--bg)}
+
+/* ---------- Fields ---------- */
+.field{display:block;width:100%;border:1.5px solid var(--line);border-radius:var(--radius);
+  background:var(--surface);padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:var(--font)}
+.field::placeholder{color:#9fb2ad}
+.field:focus,.field.focus{border-color:var(--teal);outline:none}
+.field-lg{padding:13px 14px;font-size:15px}
+.flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
+.fgroup{margin-bottom:13px}

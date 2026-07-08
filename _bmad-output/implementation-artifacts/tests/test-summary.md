@@ -1,68 +1,50 @@
-# Tóm tắt Tự động hoá Test — Story 1.1 (Tầng token dùng chung)
+# Tóm tắt Tự động hoá Test — Story 1.3 (Button, Card, Frame, Field)
 
-**Tính năng:** Tầng design token chính tắc dùng chung web (React) + mobile (Flutter).
-**Ngày:** 2026-07-07
-**Loại test:** Contract / parity (chống lệch giá trị giữa hai nền tảng). Story chỉ giao **tầng token** — không có API endpoint, không có UI tương tác — nên "E2E" ở đây là **hợp đồng token chéo nền tảng**.
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** Tầng component design-system web (Story 1.3).
+
+**Loại test:** Drift-guard hợp đồng thị giác (đọc `components.css` dạng text, khẳng định đặc tả verbatim khớp mockup + Viền nét). Story chỉ giao **4 component nền web** — không có API endpoint, không có web app đang chạy — nên "E2E" ở đây là **hợp đồng CSS component chống lệch mockup**, đúng pattern Story 1.1/1.2.
 
 ## Framework phát hiện
 
-- **Web / SSOT:** Node.js built-in test runner (`node --test`) — không phụ thuộc ngoài. Chạy: `cd design-system && npm test`.
-- **Mobile:** `flutter test`. Chạy: `cd mobile && flutter test`.
-- Giữ nguyên framework sẵn có của repo (không thêm dependency).
+- **Node.js built-in test runner** (`node --test`), zero-dependency, file `*.test.mjs`. Chạy: `cd design-system && npm test` (glob `**/*.test.mjs`).
+- **Không sinh API test** — Story 1.3 thuần front-end trình bày, không backend/endpoint (AD-16).
+- **Không sinh browser E2E** — repo chưa có web app/bundler đang chạy. Story đã **chốt hoãn** JSX render test tới story có web tooling (YAGNI). Không đảo ngược quyết định đó ở đây.
 
-## Test đã sinh / mở rộng
+## Test đã mở rộng — `design-system/components/components.test.mjs`
 
-### Node parity suite — `design-system/tokens/parity.test.mjs`
-
-| # | Test | AC |
-|---|---|---|
-| 1 | Output web + mobile tái sinh giống hệt từ SSOT (drift guard) | 1–4 |
-| 2 | Hex màu byte-identical qua json/ts/css/dart | 1 |
-| 3 | Đủ 14 nhóm màu canonical | 1 |
-| 4 | Spacing scale + radius giống nhau qua các nền tảng | 2 |
-| 5 | 4 role typography khớp thang chuẩn | 3 |
-| 6 | Không có token shadow/gradient (Viền nét) | 4 |
-| **7** *(mới)* | **Alias spacing (gutter/page-x/pscroll) giống nhau + đúng giá trị** | **2** |
-| **8** *(mới)* | **Đủ 5 role gồm `meta` + letter-spacing tới output** | **3** |
-| **9** *(mới)* | **`.mono` canh phải chữ số tabular (tiền/số lượng)** | **3** |
-| **10** *(mới)* | **`statusChip.sets` tồn tại & rỗng — chốt phạm vi, để dành Story 1.4** | scope |
-
-### Flutter suite — `mobile/test/design_system/tokens/app_tokens_test.dart`
+Giữ nguyên 4 test cũ; **thêm 4 test mới** để vá khoảng trống coverage so với AC:
 
 | # | Test | AC |
-|---|---|---|
-| 1 | Màu canonical khớp nguồn thiết kế — **mở rộng: pin đủ 17/17 giá trị** (thêm `lime-600`, `lime-050`, `ink-2`, `muted`) | 1 |
-| 2 | Spacing + radius scale khớp | 2 |
-| 3 | Role typography khớp | 3 |
-| 4 | Viền nét: border 1.5, không dùng API depth trang trí | 4 |
+|---|------|-----|
+| Mới | `Button variants keep their verbatim declarations` — primary (nền teal + `#fff`), accent text `--lime-600`, ghost (line/ink-2), danger, `--wide` width:100%, `.btn .icn` 15px (nối Icon 1.2) | 1 |
+| Mới | `Card/Frame variants keep their verbatim declarations` — giá trị `.card--ink`/`--teal`, `.frame-label` nổi trên viền (`position:absolute;top:-8px`), `.frame.on-bg` phủ `--bg` | 2 |
+| Mới | `Field/label keep their verbatim declarations` — `.field::placeholder{#9fb2ad}`, `.field-lg` size đăng nhập, selector `.field.focus`, `.flabel` micro-uppercase + muted | 3 |
+| Mới | `every var() referenced in components.css is defined in tokens.css` — **guard tích hợp chéo file**, tổng quát hoá gotcha `--r*`: mọi typo/biến chưa ship (vd `var(--teel)`) nay làm fail suite. Noi theo pattern parity token/icon. Đã xác minh **không rỗng** (bắt được `var(--teel)`). | 1/2/3/4 |
 
 ## Khoảng trống đã phát hiện & vá (auto-apply)
 
 | Gap | AC | Trước | Sau |
-|---|---|---|---|
-| G1 | 2 | Giá trị alias (gutter/page-x/pscroll) chưa được khẳng định phía web — đổi `page-x` vẫn pass | Test 7 pin `{gutter:12, page-x:22, pscroll:12}` + kiểm CSS/Dart |
-| G2 | 3 | Role `meta` (12.5px/600) thiếu trong Node suite | Test 8 khẳng định `meta` tới CSS + Dart |
-| G3 | 3 | Letter-spacing (`-.02em`/`-.01em`/`.1em`) chưa kiểm | Test 8 khẳng định trong CSS output |
-| G4 | scope | Không có chốt cho điểm mở rộng `statusChip.sets` | Test 10 khẳng định tồn tại & rỗng (chống scope-creep vào 1.4) |
-| G5 | 1 | Dart chỉ pin 13/17 màu | Bổ sung `lime-600`/`lime-050`/`ink-2`/`muted` → 17/17 |
-| G6 | 3 | `.mono` mới kiểm `tabular-nums`, chưa kiểm canh phải | Test 9 khẳng định `text-align: right` |
+|-----|-----|-------|-----|
+| G1 | 1 | Biến thể Button (primary/ghost/danger/accent-text/wide/`.btn .icn`) chỉ kiểm selector, giá trị đổi vẫn pass | Pin giá trị verbatim từng biến thể |
+| G2 | 2 | `.card--ink/--teal` border-color, `.frame-label` toạ độ nổi, `.frame.on-bg` nền chưa kiểm | Pin đủ giá trị |
+| G3 | 3 | `.field::placeholder`, `.field-lg` size, `.field.focus`, `.flabel` uppercase/muted chưa kiểm | Pin đủ giá trị |
+| G4 | 1/2/3/4 | Không có guard "mọi `var(--X)` tồn tại trong tokens.css" — lớp lỗi `--r*` chỉ bị chặn theo tên cụ thể | Test integrity chéo file, tổng quát |
 
 ## Coverage
 
-- **Nhóm màu:** 17/17 giá trị pin trên cả hai nền tảng (14 nhóm canonical).
-- **Spacing:** 7/7 scale + 3/3 alias, đối chiếu chéo nền tảng.
-- **Radius:** 4/4.
-- **Typography:** 5/5 role + letter-spacing + `.mono`.
-- **Viền nét (AC-4):** cấm shadow/gradient + border 1.5 + bậc nền — đủ.
-- **4/4 Acceptance Criteria** có test trực tiếp; điểm mở rộng phạm vi (statusChip) được chốt.
+- **Selector + biến thể (AC-1/2/3):** đủ (test cũ) → nay **kèm giá trị verbatim** từng biến thể.
+- **Viền nét (AC-4):** 0 shadow/gradient/background-image — giữ.
+- **Remap radius `--r*` → `--radius*`:** giữ.
+- **Tích hợp token chéo file:** mọi `var()` trong `components.css` phải tồn tại trong `tokens.css` — **mới**.
+- **Logic React `.tsx`:** chưa có (hoãn — xem dưới).
 
-## Kết quả chạy
+**Kết quả chạy:** `30 test, 30 pass, 0 fail` (26 → +4). Không hồi quy suite token (1.1) / icon (1.2).
 
-- `design-system` → **10/10 pass** (`node --test "tokens/**/*.test.mjs"`).
-- `mobile` → **4/4 pass** (`flutter test`).
+## Giới hạn đã biết (kế thừa, đã hoãn — không phải gap mới)
+
+4 component React (`Button/Card/Frame/Field.tsx`) chưa có test render/ánh xạ prop runtime. Việc này cần JSX transform + React/jsdom mà repo cố tình chưa đưa vào (chưa có bundler/tsc — quyết định YAGNI cấp story). **Không** scaffold ở đây để tránh over-engineering. Hợp đồng class mà component phát ra (`.btn--*`, `.card--*`, `field-lg`, …) được ghim gián tiếp bởi drift-guard: mọi class phát ra đều phải tồn tại trong `components.css`. Test JSX render đầy đủ thuộc về story dựng web tooling.
 
 ## Bước tiếp theo
 
-- Chạy cả hai lệnh test trong CI (chưa có pipeline CI trong repo — greenfield).
-- Story 1.4 sẽ điền `statusChip.sets` (9 bộ hex) — Test 10 sẽ cần cập nhật thành "9 bộ" khi story đó chạy.
-- Web build/tsconfig tới cùng Story 1.3; khi đó có thể thêm test type-check cho `tokens.ts`.
+- Chạy trong CI: `cd design-system && npm test` (repo chưa có pipeline CI — greenfield).
+- Khi có bundler/tsc web: thêm JSX render test cho 4 component (prop → class, `Field` nối `label`↔`htmlFor` a11y, spread `...rest`).
