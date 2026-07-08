@@ -17,7 +17,19 @@ import { AppModule } from './app.module';
  * OpenAPI KHÔNG serve ở runtime tại đây; spec là build artifact sinh qua
  * `npm run openapi:gen` (AD-12). Xem `scripts/generate-openapi.ts`.
  */
+/** Độ dài tối thiểu cho `JWT_ACCESS_SECRET` — chặn ký JWT bằng secret rỗng/yếu. */
+const MIN_JWT_SECRET_LENGTH = 32;
+
 async function bootstrap(): Promise<void> {
+  // Fail-fast (như pattern PORT): thiếu/quá ngắn secret ký JWT → dừng ngay lúc bootstrap
+  // thay vì phát access token ký bằng secret rỗng (JwtModule đọc secret này lúc import).
+  const jwtSecret = process.env.JWT_ACCESS_SECRET;
+  if (!jwtSecret || jwtSecret.trim().length < MIN_JWT_SECRET_LENGTH) {
+    throw new Error(
+      `JWT_ACCESS_SECRET thiếu hoặc quá ngắn (cần ≥${MIN_JWT_SECRET_LENGTH} ký tự).`,
+    );
+  }
+
   const app = await NestFactory.create(AppModule);
 
   const rawPort = process.env.PORT;

@@ -40,6 +40,17 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(document.components?.schemas?.HealthResponseDto).toBeDefined();
   });
 
+  it('spec chứa 3 route /auth/* + schema auth (FE gen được client đăng nhập, AD-12)', () => {
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/auth/login']).toBeDefined();
+    expect(document.paths['/auth/refresh']).toBeDefined();
+    expect(document.paths['/auth/logout']).toBeDefined();
+    expect(document.components?.schemas?.LoginRequestDto).toBeDefined();
+    expect(document.components?.schemas?.AuthTokensDto).toBeDefined();
+    expect(document.components?.schemas?.RefreshRequestDto).toBeDefined();
+    expect(document.components?.schemas?.LogoutRequestDto).toBeDefined();
+  });
+
   it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
     // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
     // nào tham chiếu) — chứng minh `extraModels` hoạt động.

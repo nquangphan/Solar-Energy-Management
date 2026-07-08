@@ -75,6 +75,25 @@ Mọi lỗi backend trả về **đúng một** shape (`ErrorEnvelopeDto`):
 
 `ErrorEnvelopeDto` + `FieldErrorDto` được ép vào `components.schemas` của OpenAPI (`extraModels`) để FE gen type ngay (AC-3), dù chưa endpoint nào tham chiếu.
 
+## Auth — JWT access (stateless) + refresh opaque (revocable) (AD-12)
+
+Đăng nhập (Story 2.3) phát **hai** token với vai trò khác nhau:
+
+```jsonc
+// POST /auth/login (creds đúng) & POST /auth/refresh → 200
+{ "accessToken": "<JWT>", "refreshToken": "<opaque>", "expiresIn": 900 }
+```
+
+**Luật (không vi phạm):**
+
+- **Access token = JWT** ký bằng `JWT_ACCESS_SECRET`, TTL ngắn (mặc định 15m), **stateless**. Payload tối thiểu `{ sub: accountId }` — KHÔNG nhét permission (Story 2.5 resolve quyền qua `/me`). Guard verify access-token thuộc **Story 2.5**; 2.3 chỉ **ký/phát**.
+- **Refresh token = opaque random** (không phải JWT), lưu **HASH SHA-256 tất định** ở `sessions.refreshTokenHash` (KHÔNG lưu token thô) để **tra + thu hồi được** (AD-12). Dùng SHA-256 (không argon2) vì token entropy cao cần tra theo hash; argon2id chỉ dành cho **mật khẩu** (`PasswordService`).
+- **Rotate** khi refresh: thu hồi phiên cũ (`revokedAt = now`) + phát phiên mới → refresh token cũ dùng lại không được. **Logout** = set `revokedAt` (idempotent, trung tính — không tiết lộ token có tồn tại).
+- **Login sai = `UNAUTHENTICATED` (401) + message generic GIỐNG HỆT** cho mọi nhánh (email lạ / account inactive / sai mật khẩu) → chống user-enumeration. Ném `AppException`; filter trung tâm dựng envelope (AD-5). KHÔNG bao giờ trả `passwordHash`/field account nhạy cảm.
+- **Fail-fast secret:** thiếu/quá ngắn `JWT_ACCESS_SECRET` (< 32 ký tự) → `main.ts` `throw` lúc bootstrap (không ký JWT bằng secret rỗng).
+- **`Account`** (danh tính) là entity **base** tạo ở 2.3; Story 2.4 **mở rộng** cùng entity với registry quyền + `AccountPermission` (migration riêng, KHÔNG tạo lại bảng). Một entity, hai story bồi đắp — KHÔNG hai nhánh danh tính (AD-8).
+- Route `/auth/login|refresh|logout` là **ngoại lệ hạ-tầng-xác-thực có chủ ý** (như `/health`) — không áp quy ước "danh từ số nhiều" cho verb auth.
+
 ## Lint / format (bắt buộc)
 
 - ESLint (flat config) + Prettier. Chạy: `npm run lint`, `npm run format`.

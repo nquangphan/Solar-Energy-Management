@@ -20,6 +20,12 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "include": ["src/**/*", "test/**/*", "scripts/**/*", "prisma.config.ts"],
+  "include": [
+    "src/**/*",
+    "test/**/*",
+    "scripts/**/*",
+    "prisma.config.ts",
+    "prisma/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist"]
 }

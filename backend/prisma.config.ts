@@ -14,6 +14,8 @@ export default defineConfig({
   schema: 'prisma/schema.prisma',
   migrations: {
     path: 'prisma/migrations',
+    // Lệnh `prisma db seed` chạy — upsert account admin đầu tiên (Story 2.3).
+    seed: 'ts-node prisma/seed.ts',
   },
   datasource: {
     url: env('DATABASE_URL'),

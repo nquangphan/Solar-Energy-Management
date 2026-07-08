@@ -2,16 +2,18 @@ import { Module } from '@nestjs/common';
 import { CommonModule } from './common/common.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
 
 /**
- * Root module của skeleton.
+ * Root module.
  *
  * `CommonModule` = tầng API dùng chung (exception filter + ValidationPipe global qua DI).
- * CHỈ import hạ tầng: `PrismaModule` (DB access duy nhất, AD-1) + `HealthModule`
- * (endpoint chứng minh wiring). KHÔNG import module domain (accounts/orders/…) —
- * chúng thuộc story sở hữu và sẽ tự đăng ký khi được tạo (chống scope-creep).
+ * Hạ tầng: `PrismaModule` (DB access duy nhất, AD-1) + `HealthModule` (wiring).
+ * `AuthModule` = module DOMAIN đầu tiên (Story 2.3 — đăng nhập JWT); nó tự import
+ * `AccountsModule` (danh tính) — chỉ nối đúng cái auth cần, chống scope-creep. Module
+ * domain khác (orders/…) tự đăng ký khi story sở hữu tạo chúng.
  */
 @Module({
-  imports: [CommonModule, PrismaModule, HealthModule],
+  imports: [CommonModule, PrismaModule, HealthModule, AuthModule],
 })
 export class AppModule {}

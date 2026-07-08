@@ -8,12 +8,15 @@
 //  - CLI/migrate: connection URL khai ở `prisma.config.ts` (datasource.url = env).
 // Vì vậy datasource block ở đây CHỈ khai `provider` (Prisma 7 không cho `url` ở schema).
 //
-// Skeleton (Story 2.1) CHỦ Ý chưa khai model nào: model đầu tiên (`Account`)
-// thuộc Story 2.4 và migration tạo bảng land cùng nó (YAGNI — mỗi story tạo
-// chỉ entity nó cần). Health endpoint ping DB bằng `SELECT 1`, không cần bảng.
+// Story 2.3 (Đăng nhập JWT) khai model ĐẦU TIÊN của dự án: `Account` (danh tính) +
+// `Session` (refresh token thu hồi được) + migration đầu tiên. Đây là chủ ý ĐÈ ghi
+// chú cũ của skeleton 2.1 ("Account thuộc 2.4"): login (2.3) cần danh tính TRƯỚC
+// quyền (2.4). `Account` ở đây là BASE tối giản (chỉ field xác thực); Story 2.4 MỞ
+// RỘNG cùng entity này với registry quyền + `AccountPermission` (migration riêng,
+// KHÔNG tạo lại bảng) — một entity, hai story bồi đắp, KHÔNG hai nhánh danh tính (AD-8).
 //
-// Convention khi thêm model ở story sau (xem CONVENTIONS.md):
-//   model Account { ... @@map("accounts") }   // entity PascalCase -> bảng snake_case số nhiều
+// Convention (xem CONVENTIONS.md): entity PascalCase → bảng snake_case số nhiều (@@map);
+// cột snake_case (@map). ID UUID v4.
 
 datasource db {
   provider = "postgresql"
@@ -21,4 +24,34 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+}
+
+/// Chủ sở hữu danh tính đăng nhập (AD-8). BASE tối giản cho xác thực ở 2.3; quyền
+/// (registry + AccountPermission) do Story 2.4 mở rộng — KHÔNG thêm cột quyền ở đây.
+model Account {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  displayName  String    @map("display_name")
+  isActive     Boolean   @default(true) @map("is_active")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  sessions     Session[]
+
+  @@map("accounts")
+}
+
+/// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH
+/// của refresh token (KHÔNG lưu token thô). Logout/rotate set `revokedAt`.
+model Session {
+  id               String    @id @default(uuid())
+  accountId        String    @map("account_id")
+  account          Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([accountId])
+  @@map("sessions")
 }
