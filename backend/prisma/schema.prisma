@@ -1,0 +1,24 @@
+// Prisma schema — Phương Nam Solar backend.
+//
+// AD-1: Backend là chủ sở hữu DB DUY NHẤT. Credential DB chỉ nằm ở `.env`
+// (gitignored) qua `DATABASE_URL`; web/mobile KHÔNG có đường/biến chạm DB.
+//
+// Prisma 7 bỏ engine Rust mặc định → dùng driver adapter (`@prisma/adapter-pg`):
+//  - Runtime: `PrismaService` truyền adapter cho `PrismaClient` (đọc DATABASE_URL).
+//  - CLI/migrate: connection URL khai ở `prisma.config.ts` (datasource.url = env).
+// Vì vậy datasource block ở đây CHỈ khai `provider` (Prisma 7 không cho `url` ở schema).
+//
+// Skeleton (Story 2.1) CHỦ Ý chưa khai model nào: model đầu tiên (`Account`)
+// thuộc Story 2.4 và migration tạo bảng land cùng nó (YAGNI — mỗi story tạo
+// chỉ entity nó cần). Health endpoint ping DB bằng `SELECT 1`, không cần bảng.
+//
+// Convention khi thêm model ở story sau (xem CONVENTIONS.md):
+//   model Account { ... @@map("accounts") }   // entity PascalCase -> bảng snake_case số nhiều
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}

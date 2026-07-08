@@ -1,0 +1,70 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "HealthController_check",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Backend còn sống và kết nối được DB.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "health"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Phương Nam Solar API",
+    "description": "Hợp đồng API cross-repo cho web + mobile. Spec SINH TỪ code NestJS — CẤM SỬA TAY.",
+    "version": "0.1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "schemas": {
+      "HealthResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Trạng thái tổng thể của backend.",
+            "example": "ok",
+            "enum": [
+              "ok"
+            ]
+          },
+          "database": {
+            "type": "string",
+            "description": "Kết quả ping DB qua PrismaService (chứng minh wiring AD-1).",
+            "example": "up",
+            "enum": [
+              "up"
+            ]
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Thời điểm phản hồi, ISO-8601 UTC (client hiển thị UTC+7).",
+            "example": "2026-07-08T09:00:00.000Z",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "status",
+          "database",
+          "timestamp"
+        ]
+      }
+    }
+  }
+}

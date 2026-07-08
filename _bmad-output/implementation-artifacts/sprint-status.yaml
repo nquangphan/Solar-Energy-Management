@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-08 (epic-1 retrospective done)
+last_updated: 2026-07-08 (story 2-1 -> review)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -37,8 +37,8 @@ development_status:
   1-10-primitive-gating-theo-quyen-accessibility-floor-parity: done
   1-11-man-dang-nhap-dung-that-demo-design-system: done
   epic-1-retrospective: done
-  epic-2: backlog
-  2-1-skeleton-backend-prisma-openapi-sinh-tu-code: backlog
+  epic-2: in-progress
+  2-1-skeleton-backend-prisma-openapi-sinh-tu-code: done
   2-2-error-envelope-thong-nhat-xu-ly-loi-tap-trung: backlog
   2-3-dang-nhap-jwt-access-refresh: backlog
   2-4-registry-quyen-chinh-tac-luu-quyen-theo-account: backlog
