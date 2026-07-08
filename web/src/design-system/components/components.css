@@ -64,3 +64,68 @@
 .scope-flag{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:var(--radius-full);background:#fff}
 .scope-flag.on{border:1.5px solid var(--teal);color:var(--teal-700)}
 .scope-flag.off{border:1.5px solid var(--line);color:#9fb2ad;text-decoration:line-through}
+
+/* ---------- Data / feedback layer (Story 1.5) — Banner, Table, Stepper, KPI ----------
+   Appended verbatim from mockups/all-screens.html lines 111-149, plus the icon
+   context-sizing rules from the mockup icon block (lines 326-328) so <Icon>
+   renders at the mockup size inside these components — same pattern as the
+   shipped `.btn .icn` (Story 1.3, mockup line 324). ONLY change vs. the mockup:
+   radius vars remapped --r -> --radius (.banner) and --r-lg -> --radius-lg (.kpi)
+   to consume the shipped token layer (tokens.css, Story 1.1). All other values
+   are the mockup verbatim.
+
+   "Viền nét" (UX-DR-4): flat blueprint — hierarchy via 1.5px borders + surface
+   steps only. THE ONE sanctioned exception in this block is the stepper `current`
+   ring (a 3px teal-050 outline drawn as a finite DOUBLE BORDER, 0 blur/offset),
+   approved by DESIGN.md line 217, NOT a decorative drop-shadow.
+
+   The non-token hex literals below are canonical component constants left as
+   literals ON PURPOSE (not in tokens.css): Table zebra #F7FBFA; Banner warn
+   #FBF0DA/#8A5C08, info #DEF1F6/#0C6B84, danger #FAE6E6/#B22C2C; Stepper #fff
+   (.bul bg), #9fb2ad (default .bul text), #c3d3ce (.gate .bul), #a9bab5
+   (.gate .st-label). Adding them to the token layer is Story 1.1 scope-creep. */
+
+/* Banner (AC-4): warn base; --info/--danger override border+bg+text. */
+.banner{display:flex;gap:9px;align-items:flex-start;border:1.5px solid var(--warn);
+  background:#FBF0DA;color:#8A5C08;border-radius:var(--radius);padding:10px 12px;font-size:12px;font-weight:600}
+.banner b{font-weight:800}
+.banner--info{border-color:var(--info);background:#DEF1F6;color:#0C6B84}
+.banner--danger{border-color:var(--danger);background:#FAE6E6;color:#B22C2C}
+.banner .icn{width:16px;height:16px;margin-top:1px}   /* icon slot — kết nối Icon (1.2) */
+
+/* Dense table (AC-1): micro-uppercase header on surface-2, 1px td borders, last row borderless. */
+.table{width:100%;border-collapse:collapse;font-size:12.5px}
+.table th{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);
+  text-align:left;padding:8px 12px;background:var(--surface-2);border-bottom:1.5px solid var(--line)}
+.table td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:middle}
+.table tr:last-child td{border-bottom:0}
+.table .num{text-align:right}
+.table .strong{color:var(--ink);font-weight:800}
+.table tr.zebra td{background:#F7FBFA}
+.table .num .icn{width:14px;height:14px}   /* icon trong ô số — kết nối Icon (1.2) */
+
+/* Stepper (AC-2/5): 26px nodes + 1.5px bars; done=teal solid, current=teal ring
+   (sanctioned double border), gate=dashed border. No disabled/grayed variant —
+   inapplicable steps are dropped from `steps` by the caller (UX-DR-11). */
+.stepper{display:flex;flex-wrap:wrap;gap:0}
+.step{display:flex;align-items:center;gap:0}
+.step .node{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:64px;text-align:center}
+.step .bul{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#9fb2ad}
+.step .st-label{font-size:9.5px;font-weight:700;color:var(--muted);letter-spacing:.02em;max-width:74px}
+.step .bar{width:26px;height:1.5px;background:var(--line);margin-top:-18px}
+.step.done .bul{border-color:var(--teal);background:var(--teal);color:#fff}
+.step.done .st-label{color:var(--ink-2)}
+.step.current .bul{border-color:var(--teal);background:#fff;color:var(--teal-700);box-shadow:0 0 0 3px var(--teal-050)}
+.step.current .st-label{color:var(--teal-700);font-weight:800}
+.step.gate .bul{border-style:dashed;color:#c3d3ce}
+.step.gate .st-label{color:#a9bab5}
+.step .bul .icn{width:14px;height:14px}   /* tick trong node — kết nối Icon (1.2) */
+
+/* KPI (AC-3): line-bordered lg card; display 23px/900 value; delta always ok. */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{border:1.5px solid var(--line);border-radius:var(--radius-lg);padding:12px 14px}
+.kpi .k-l{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.kpi .k-v{font-size:23px;font-weight:900;letter-spacing:-.02em;margin-top:5px}
+.kpi .k-d{font-size:11px;font-weight:700;color:var(--ok);margin-top:2px}
+.kpi.accent{border-color:var(--teal);background:var(--teal-050)}

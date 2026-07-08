@@ -56,10 +56,24 @@ test('core declarations match the mockup verbatim (AC-1/2/3)', () => {
   assert.ok(css.includes('outline:none'), '.field:focus must set outline:none');
 });
 
-// (3) Viền nét — flat blueprint, no ad-hoc elevation (AC-4).
-test('no shadow/gradient/background-image — flat "Viền nét" (AC-4)', () => {
-  const banned = /box-shadow|shadow|gradient|background-image/i;
-  assert.ok(!banned.test(css), 'components.css must contain 0 shadow/gradient/background-image (Viền nét)');
+// (3) Viền nét — flat blueprint, no ad-hoc elevation (AC-4/5, UX-DR-4/11).
+// gradient/background-image are banned outright. box-shadow is allowed ONLY as
+// the stepper `current` ring: 0 0 0 3px var(--teal-050) — a finite double border
+// (0 blur/offset), sanctioned by DESIGN.md line 217. Any box-shadow with a blur
+// or offset (a real drop-shadow) still fails.
+test('no gradient/background-image + only the sanctioned stepper ring box-shadow (AC-4/5)', () => {
+  const bannedFill = /gradient|background-image/i;
+  assert.ok(!bannedFill.test(css), 'components.css must contain 0 gradient/background-image (Viền nét)');
+
+  const SANCTIONED_RING = '0 0 0 3px var(--teal-050)';
+  const shadows = [...css.matchAll(/box-shadow\s*:\s*([^;}]+)/gi)].map((m) => m[1].trim());
+  for (const shadow of shadows) {
+    assert.equal(
+      shadow,
+      SANCTIONED_RING,
+      `only box-shadow allowed is the stepper current ring '${SANCTIONED_RING}' (finite double border, DESIGN.md 217); found '${shadow}'`,
+    );
+  }
 });
 
 // (4) Radius vars must be remapped to the shipped token layer (--radius*),
@@ -189,4 +203,83 @@ test('ktype/scope-flag keep their verbatim declarations (AC-1)', () => {
 test('chip pill radius is remapped to var(--radius-full), no raw 999/9999px', () => {
   assert.ok(css.includes('var(--radius-full)'), 'chip/ktype/scope-flag must use var(--radius-full)');
   assert.ok(!/border-radius:9{3,4}px/.test(css), 'components.css must not keep literal 999px/9999px — remap to var(--radius-full)');
+});
+
+// ---------- Data / feedback layer drift-guard (Story 1.5) ----------
+// Banner/Table/Stepper/KPI are hand-authored verbatim from the mockup (lines
+// 111-149). These assertions fail if a selector is dropped, a core declaration
+// or canonical hex drifts, or the radius remap is forgotten. (Flatness + the
+// sanctioned ring are covered by test 3; cross-file token integrity by test 8 —
+// both scan the whole file, including this block.)
+
+// (14) Every Banner/Table/Stepper/KPI selector + variant must be present.
+test('all data/feedback selectors and variants exist (AC-1/2/3/4)', () => {
+  const required = [
+    '.banner', '.banner b', '.banner--info', '.banner--danger',
+    '.table', '.table th', '.table td', '.table .num', '.table .strong', '.table tr.zebra',
+    '.stepper', '.step', '.step .node', '.step .bul', '.step .st-label', '.step .bar',
+    '.step.done', '.step.current', '.step.gate',
+    '.kpis', '.kpi', '.kpi .k-l', '.kpi .k-v', '.kpi .k-d', '.kpi.accent',
+  ];
+  for (const sel of required) {
+    assert.ok(css.includes(sel), `components.css missing selector: ${sel}`);
+  }
+});
+
+// (15) Table core declarations, verbatim from the mockup (AC-1).
+test('Table core declarations match the mockup verbatim (AC-1)', () => {
+  assert.ok(css.includes('.table{width:100%;border-collapse:collapse;font-size:12.5px}'), '.table base verbatim');
+  assert.ok(css.includes('background:var(--surface-2)'), '.table th must be on surface-2');
+  assert.ok(css.includes('text-transform:uppercase'), '.table th must be micro-uppercase');
+  assert.ok(css.includes('border-bottom:1.5px solid var(--line)'), '.table th must have 1.5px bottom border');
+  assert.ok(css.includes('.table td{padding:9px 12px;border-bottom:1px solid var(--line);color:var(--ink-2);vertical-align:middle}'), '.table td verbatim');
+  assert.ok(css.includes('.table tr:last-child td{border-bottom:0}'), '.table last row must drop its border');
+  assert.ok(css.includes('.table .num{text-align:right}'), '.table .num must right-align');
+  assert.ok(css.includes('.table .strong{color:var(--ink);font-weight:800}'), '.table .strong must be ink + 800');
+  assert.ok(css.includes('.table tr.zebra td{background:#F7FBFA}'), '.table zebra must be #F7FBFA (canonical literal)');
+});
+
+// (16) Stepper core declarations, incl. the sanctioned ring + dashed gate (AC-2/5).
+test('Stepper core declarations match the mockup verbatim (AC-2/5)', () => {
+  assert.ok(css.includes('.step .bul{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line);background:#fff;'), '.step .bul 26px circle verbatim');
+  assert.ok(css.includes('.step .bar{width:26px;height:1.5px;background:var(--line);margin-top:-18px}'), '.step .bar verbatim');
+  assert.ok(css.includes('.step.done .bul{border-color:var(--teal);background:var(--teal);color:#fff}'), '.step.done must be teal solid + white');
+  assert.ok(/\.step\.current \.bul\{[^}]*box-shadow:0 0 0 3px var\(--teal-050\)\}/.test(css), '.step.current must carry the sanctioned teal-050 ring');
+  assert.ok(css.includes('.step.gate .bul{border-style:dashed;color:#c3d3ce}'), '.step.gate must be dashed border');
+  assert.ok(css.includes('.step .st-label{font-size:9.5px'), '.st-label must be micro 9.5px');
+});
+
+// (17) KPI core declarations, verbatim from the mockup (AC-3).
+test('KPI core declarations match the mockup verbatim (AC-3)', () => {
+  assert.ok(css.includes('.kpi{border:1.5px solid var(--line);border-radius:var(--radius-lg);padding:12px 14px}'), '.kpi base verbatim');
+  assert.ok(css.includes('.kpi .k-v{font-size:23px;font-weight:900;letter-spacing:-.02em;margin-top:5px}'), '.k-v must be display 23px/900');
+  assert.ok(css.includes('.kpi .k-d{font-size:11px;font-weight:700;color:var(--ok);margin-top:2px}'), '.k-d must always be ok-green');
+  assert.ok(css.includes('.kpi.accent{border-color:var(--teal);background:var(--teal-050)}'), '.kpi.accent must be teal border + teal-050 bg');
+});
+
+// (18) Banner core declarations + the 3 tones, verbatim from the mockup (AC-4).
+test('Banner core declarations match the mockup verbatim (AC-4)', () => {
+  assert.ok(css.includes('border:1.5px solid var(--warn)') && css.includes('background:#FBF0DA;color:#8A5C08'), '.banner warn base verbatim');
+  assert.ok(css.includes('border-radius:var(--radius)'), '.banner must use var(--radius)');
+  assert.ok(css.includes('.banner b{font-weight:800}'), '.banner b must be weight 800');
+  assert.ok(css.includes('.banner--info{border-color:var(--info);background:#DEF1F6;color:#0C6B84}'), '.banner--info verbatim');
+  assert.ok(css.includes('.banner--danger{border-color:var(--danger);background:#FAE6E6;color:#B22C2C}'), '.banner--danger verbatim');
+});
+
+// (19) Radius remap: .kpi uses var(--radius-lg); the whole file keeps no raw
+// var(--r*) (test 4's regex already covers --r/--r-sm/--r-lg — re-assert here
+// so a forgotten Story-1.5 remap is pinned to this block).
+test('data/feedback radius vars are remapped, no raw var(--r*)', () => {
+  assert.ok(css.includes('.kpi{border:1.5px solid var(--line);border-radius:var(--radius-lg)'), '.kpi must use var(--radius-lg), not var(--r-lg)');
+  assert.ok(!/var\(--r(-sm|-lg)?\)/.test(css), 'components.css must keep no raw var(--r)/var(--r-sm)/var(--r-lg)');
+});
+
+// (20) Icon context-sizing: <Icon> renders a plain `.icn`, so the mockup sizes it
+// in context (mockup lines 326-328). Without these rules the Stepper tick and
+// Banner icon fall back to the 18px .icn default — a drift from the mockup. Same
+// pattern as the shipped `.btn .icn` (Story 1.3).
+test('icon context sizing matches the mockup (banner 16px, stepper/table num 14px)', () => {
+  assert.ok(css.includes('.banner .icn{width:16px;height:16px;margin-top:1px}'), '.banner .icn must be 16px (mockup)');
+  assert.ok(css.includes('.table .num .icn{width:14px;height:14px}'), '.table .num .icn must be 14px (mockup)');
+  assert.ok(css.includes('.step .bul .icn{width:14px;height:14px}'), '.step .bul .icn must be 14px (mockup)');
 });

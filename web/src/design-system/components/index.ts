@@ -30,3 +30,16 @@ export type { CustomerTypeChipProps } from './CustomerTypeChip';
 
 export { ScopeFlag } from './ScopeFlag';
 export type { ScopeFlagProps } from './ScopeFlag';
+
+// Data / feedback layer (Story 1.5): Table, Stepper, KPI, Banner.
+export { Table } from './Table';
+export type { TableProps } from './Table';
+
+export { Stepper } from './Stepper';
+export type { StepperProps, StepItem, StepState } from './Stepper';
+
+export { Kpi } from './Kpi';
+export type { KpiProps } from './Kpi';
+
+export { Banner } from './Banner';
+export type { BannerProps, BannerTone } from './Banner';
