@@ -19,6 +19,7 @@ class AppField extends StatefulWidget {
     this.placeholder,
     this.size = AppFieldSize.normal,
     this.keyboardType,
+    this.obscureText = false,
     this.semanticsLabel,
   });
 
@@ -32,6 +33,10 @@ class AppField extends StatefulWidget {
   final String? placeholder;
   final AppFieldSize size;
   final TextInputType? keyboardType;
+
+  /// Masks input (parity with web `<Field type="password"/>`). Used by the
+  /// login screen's password field (Story 1.11).
+  final bool obscureText;
 
   /// a11y label when no visible [label] is shown (e.g. inline table fields).
   final String? semanticsLabel;
@@ -88,6 +93,7 @@ class _AppFieldState extends State<AppField> {
       controller: _controller,
       onChanged: widget.onChanged,
       keyboardType: widget.keyboardType,
+      obscureText: widget.obscureText,
       cursorColor: AppTokens.teal,
       style: TextStyle(
         color: AppTokens.ink,

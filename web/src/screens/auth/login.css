@@ -1,0 +1,64 @@
+/* hand-authored — Story 1.11 login-screen layout wrapper. This is
+   composition-level styling (centering + brand lockup), NOT a design-system
+   component — the inputs/button/card/banner are shipped components. Only token
+   vars for every colour; flat borders, no elevation effects (Viền nét,
+   UX-DR-4). Load AFTER tokens.css / components.css / shell.css (barrel contract). */
+
+.login-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-26);
+  background: var(--bg);
+}
+
+.login-card {
+  width: 360px;
+  padding: var(--space-26) var(--space-22);
+}
+
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: var(--space-16);
+}
+
+.login-mark {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width) solid var(--teal);
+  border-radius: 11px;
+  color: var(--teal);
+  margin-bottom: var(--space-8);
+}
+
+.login-title {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.login-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.login-forgot {
+  text-align: center;
+  margin-top: var(--space-12);
+}
+
+.login-forgot-link {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--teal-700);
+  text-decoration: none;
+}
