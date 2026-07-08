@@ -1,57 +1,59 @@
-# Tóm tắt Tự động hoá Test — Story 1.4 (Chip, Status-chip 9 trạng thái, chip chỉ đọc)
+# Tóm tắt Tự động hoá Test — Story 1.7 (Flutter — thư viện widget parity)
 
-**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** Tầng chip web (Story 1.4) — `StatusChip` (9 trạng thái canonical, đọc-only), `CustomerTypeChip` (`.ktype`), `ScopeFlag` (`.scope-flag`).
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** thư viện widget Flutter parity (`mobile/lib/design_system/components/`, 21 widget `App`-prefix).
 
-**Loại test:** Source-guard tĩnh trên `.tsx` (đọc mã nguồn dạng text, khẳng định bất biến) — cùng kỹ thuật với drift-guard CSS. Repo **chưa có** bundler/tsc/React runtime (quyết định YAGNI cấp story), nên "E2E" ở đây là **hợp đồng nguồn component** chống biến chip thành nút, không phải render DOM.
+**Framework:** `flutter_test` (widget render + tương tác THẬT trên VM) · `node:test` (parity cross-platform). **Không sinh API test** — story thuần tầng presentation, không backend/endpoint.
 
-## Framework phát hiện
+## Cách tiếp cận
 
-- **Node.js built-in test runner** (`node --test`), zero-dependency, file `*.test.mjs`. Chạy: `cd design-system && npm test` (glob `**/*.test.mjs`).
-- **Không sinh API test** — Story 1.4 thuần front-end trình bày, không backend/endpoint.
-- **Không sinh browser E2E** — repo chưa có web app/bundler. JSX render test đã **chốt hoãn** tới story có web tooling (không đảo ngược quyết định đó).
+Story 1.7 đã ở trạng thái `review` với bộ test hiện có (44 Flutter + 92 Node). Workflow QA rà coverage theo 3 AC, phát hiện các **hành vi widget đã hỗ trợ nhưng chưa có test**, rồi auto-apply — thêm test vào đúng file/nhóm sẵn có (surgical: không tạo file test mới, không đụng widget source).
 
-## Test đã tạo — `design-system/components/chip-components.test.mjs` (mới)
+## Test đã thêm (9)
 
-Giữ nguyên drift-guard CSS chip cũ (test 9–13 trong `components.test.mjs`); **thêm 8 test source-guard** vá khoảng trống lớn nhất: 3 component `.tsx` trước đây **không có** test tự động nào.
+### Tương tác — `mobile/test/design_system/components/behavior_interaction_test.dart` (+7)
 
-| # | Test | AC |
-|---|------|-----|
-| 1 | **Read-only guard** — 3 component KHÔNG chứa `onClick`/handler chuột-phím, `<button>`, `role`/`tabIndex`, `...rest` (quét mã đã strip comment) | 3 (UX-DR-23) |
-| 2 | Mỗi chip render `<span>` tĩnh | 1/3 |
-| 3 | Union `StatusKey` = **đúng 9** key canonical (chặn trạng thái tự chế) | 2 |
-| 4 | `STATUS_LABELS` ánh xạ đủ 9 trạng thái → nhãn canonical verbatim | 2 |
-| 5 | `StatusChip` ghép `chip chip--{status}` + `.dot`, mặc định nhãn = `STATUS_LABELS[status]` | 1/2 |
-| 6 | `ScopeFlag` map prop `on` → class `on`/`off` | 1 |
-| 7 | `CustomerTypeChip` gắn class `.ktype` | 1 |
-| 8 | Barrel `index.ts` re-export đủ tầng chip (3 component + type) | — |
+| # | Test | AC / Invariant | Loại |
+|---|------|-----|-----|
+| 1 | `AppCartLineRow` sửa **đơn giá** → `onUnitPriceChange` phát số mới, `amount` giữ nguyên | AC-2 / AD-10/16 | happy |
+| 2 | `AppCartLineRow` **swipe-to-delete** (`Dismissible` endToStart) phát `onDelete` | AC-2 / UX-DR-24 | happy (native) |
+| 3 | `AppImageUpload` nhánh **thư viện** ("Chọn từ thư viện" → `pick(ImageSource.gallery)` → `onAdd`) | AC-2 / UX-DR-25 | happy |
+| 4 | `AppImageUpload` **`onRemove`** phát đúng `id` khi bấm nút xoá thumbnail | AC-2 | happy |
+| 5 | `AppImageUpload` đạt **`max`** → ẩn ô thêm (`ic-plus` vắng mặt) | AC-2 / UX-DR-25 | edge |
+| 6 | `AppShareButton` kết quả **huỷ/dismissed** → không throw, `onResult` nhận `dismissed` | AC-2 | error |
+| 7 | `AppConfirmDialog` nút **Huỷ** → `onCancel` bắn, `onConfirm` KHÔNG bắn, dialog đóng | AC-2 / AD-11 | negative |
+
+### Render/token — `mobile/test/design_system/components/components_render_test.dart` (+2)
+
+| # | Test | AC | Loại |
+|---|------|-----|-----|
+| 8 | `AppScopeFlag` **on=true** → chữ `teal700`, KHÔNG gạch ngang | AC-1 | complement |
+| 9 | `AppErrorState` **không `onRetry`** → không render nút "Thử lại" | AC-1 | negative |
 
 ## Khoảng trống đã phát hiện & vá (auto-apply)
 
-| Gap | AC | Trước | Sau |
-|-----|-----|-------|-----|
-| G1 | 3 | Bất biến **read-only** (chip không bao giờ là nút) — story ghi "verify bằng review thủ công", **không** test tự động. Đây là AC dễ mắc nhất | Guard tự động chặn `onClick`/`<button>`/`role`/`tabindex`/`...rest` trên cả 3 component |
-| G2 | 2 | Union `StatusKey` + `STATUS_LABELS` chỉ được suy gián tiếp qua 9 class CSS; TS layer không kiểm | Pin đúng 9 key + nhãn canonical verbatim |
-| G3 | 1 | Logic ghép class (`chip--{status}`+dot, `on`/`off`, `.ktype`) chưa kiểm | Pin hợp đồng render từng component |
-| G4 | — | Barrel export tầng chip chưa kiểm — xoá 1 export vẫn qua drift-guard CSS | Kiểm đủ 3 component + type |
+- **Money invariant chỉ phủ cột SL:** `onQtyChange` đã có test, nhưng cột **đơn giá** (`onUnitPriceChange`) — field editable thứ hai — chưa chạm runtime. Nay phủ, khẳng định lại "không nhân qty×price".
+- **Swipe-to-delete chưa có test:** điểm parity native-mobile đầu bảng (web hoãn sang mobile) trước chỉ test nút thùng rác; nhánh `Dismissible` giờ được exercise.
+- **ImageUpload một chiều:** chỉ nhánh camera + happy path; thư viện/`onRemove`/`max` chưa kiểm.
+- **Thiếu error/negative path:** share huỷ, confirm-cancel, error-state không-retry — các nhánh "không nên xảy ra" trước không được canh.
 
-**Chống báo động giả:** guard read-only strip comment trước khi quét — docstring component có nhắc "onClick"/"role" (giải thích rằng bị cấm) nên không được làm fail test. Đây là bẫy Story 1.3 từng gặp.
+## Kết quả chạy
+
+| Suite | Lệnh | Trước | Sau |
+|---|---|---|---|
+| Flutter widget/interaction | `cd mobile && flutter test` | 44/44 | **53/53** ✅ |
+| Flutter static analysis | `cd mobile && flutter analyze` | clean | **clean** ✅ |
+| Parity cross-platform (Node) | `cd design-system && npm test` | 92/92 | **92/92** ✅ (0 hồi quy) |
 
 ## Coverage
 
-- **Component chip (TSX):** 3/3 — read-only, ghép class, hợp đồng union/nhãn.
-- **CSS chip:** 9/9 trạng thái + 2 biến thể cờ (drift-guard cũ).
-- **Barrel export:** đủ.
-- **Suite: 43/43 pass** (35 → +8). Không hồi quy token (1.1) / icon (1.2) / component 1.3.
-
-## Guard là load-bearing (đã chứng minh)
-
-Tiêm `onClick` thật vào JSX của `StatusChip` → suite **fail** đúng test read-only; revert → xanh lại. Guard bắt được vi phạm thực, không phải test rỗng.
-
-## Giới hạn đã biết (kế thừa, đã hoãn — không phải gap mới)
-
-Chưa có test render JSX runtime (prop → DOM) vì repo cố tình chưa có bundler/tsc/React (YAGNI cấp story). Guard khẳng định bất biến trên **mã nguồn**, không phải DOM thực. Thêm React + JSX transform chỉ để render 3 span tĩnh là over-engineering — thuộc story dựng web tooling.
+- **21/21 widget** có test render; hành vi AC-2 (cart money invariant, upload no-network, share, overlay intent-only) nay phủ **cả 2 chiều** (happy + negative/edge/error).
+- Bất biến vẫn được canh (không đổi): no-shadow, no money-math, no-upload, no-status-mutation (source-guard) + parity 9 hex status + 3 tone banner byte-cho-byte.
 
 ## Bước tiếp theo
 
-- Chạy trong CI: `cd design-system && npm test` (repo chưa có pipeline CI — greenfield).
-- Khi có bundler/tsc web: nâng guard read-only thành render assertion thật, thêm test prop→DOM cho tầng chip.
+- Chạy suite trong CI (Flutter + Node) — repo greenfield, chưa có pipeline.
+- Camera/share **thật** cần platform scaffold (android/ios) — hoãn sang Story 1.8 (app-shell) như Open Question #1; widget hiện test qua inject `pick`/`shareImpl` trên VM.
+
+## Câu hỏi tồn đọng
+
+- Không. Story 1.7 vốn ở `review`; workflow này chỉ mở rộng coverage, không đổi contract widget.

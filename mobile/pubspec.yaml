@@ -15,9 +15,16 @@ dependencies:
   # Renders the shared icon sprite as inline SVG strings with currentColor
   # (Story 1.2). Icon data is bundled in app_icons.dart — 0 network assets.
   flutter_svg: ^2.3.0
+  # Behaviour layer (Story 1.7). The widgets only INVOKE these plugins to pick a
+  # file / open the OS share sheet — they never upload (AD-3). Both are injected
+  # in widget tests (no platform channel on the test VM).
+  image_picker: ^1.1.2
+  share_plus: ^10.1.4
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Static analysis floor (project-context requires analysis_options.yaml).
+  flutter_lints: ^4.0.0
 
 flutter:
