@@ -48,6 +48,22 @@ model OrderLineItem {
 - **Drift-guard**: test regen in-memory rồi so **byte-for-byte** với file đã commit. Quên regen hoặc sửa tay → test fail (mirror drift-guard byte-for-byte của design-system Epic 1).
 - Version của spec = version backend (`package.json`) → spec versioned.
 
+## Permission registry — SSOT + generated artifact (AD-17)
+
+Quyền dùng CHUNG cho ba bên (FE gating, BE guard, noti resolver) — **một** nguồn, không literal rải rác.
+
+- **Nguồn chân lý DUY NHẤT:** `src/accounts/domain/permission-registry.ts` (chủ sở hữu `accounts/domain`). Đây là **NƠI DUY NHẤT** được chứa permission string literal; mọi nơi khác `import { PERM }` (định danh). **Source-guard** `no-permission-literal-outside-registry.spec.ts` quét `src/` (bỏ comment, giữ string) → fail nếu literal quyền lọt ra file khác.
+- **Naming key:** `domain.action` **snake_case** (vd `orders.view_all`, `payments.record`). 4 key giữ **nguyên văn** literal FE stub Story 1.10 (`orders.view_all`/`orders.view_own`/`audit.read`/`permissions.manage`) để Story 2.6 đổi *nguồn*, không đổi *chuỗi*. "Xem tất cả đơn" (`orders.view_all`) và "đơn của mình" (`orders.view_own`) là **hai entry tường minh** (AC-2).
+- **Lưu quyền per-account:** bảng `account_permissions` (`account_id × permission`), `permission` kiểu **String** validate theo registry ở tầng app (`AccountPermissionsService.setForAccount` ném `VALIDATION_ERROR` nếu key ngoài registry) — KHÔNG Postgres-enum (registry evolve không cần migration enum). Nguồn chân lý RBAC = bộ quyền trên từng Account (AD-8).
+- **Preset = hằng số code** (`domain/role-presets.ts`, Role → key[]): **nạp giá trị lúc tạo/seed, KHÔNG ràng buộc sau** (AD-8) — Phase 1 không bảng `Role` DB. **CHỈ `SUPER_ADMIN`** chứa `audit.read` (AC-3, chỉ một account Super Admin chỉ định qua seed).
+- **Artifact SINH TỰ ĐỘNG — CẤM SỬA TAY:** `openapi/permissions.json` sinh từ registry. Đổi bộ quyền = sửa `permission-registry.ts` rồi:
+
+  ```bash
+  npm run permissions:gen
+  ```
+
+- **Drift-guard** `permissions-drift.spec.ts`: regen in-memory so **byte-for-byte** với file committed (mirror OpenAPI drift-guard). FE (Story 2.6) gen key từ artifact này.
+
 ## Error envelope — MỘT shape, MỘT nơi dựng (AD-5)
 
 Mọi lỗi backend trả về **đúng một** shape (`ErrorEnvelopeDto`):

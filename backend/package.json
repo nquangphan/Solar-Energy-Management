@@ -17,6 +17,7 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "test": "jest",
     "openapi:gen": "ts-node scripts/generate-openapi.ts",
+    "permissions:gen": "ts-node scripts/generate-permissions.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy"

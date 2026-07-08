@@ -37,8 +37,26 @@ model Account {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
   sessions     Session[]
+  permissions  AccountPermission[]
 
   @@map("accounts")
+}
+
+/// Quyền lưu THEO account — nguồn chân lý RBAC per-account (AD-8). Join
+/// `account_id × permission`; `permission` là một `PermissionKey` (registry
+/// `accounts/domain`) lưu kiểu **String**, validate ở tầng app (`setForAccount`) — KHÔNG
+/// Postgres-enum để registry evolve không cần migration enum mỗi lần thêm key (nhất quán
+/// ERD "string status"). Story 2.4 CHỈ thêm bảng này; KHÔNG tạo lại `accounts`/`sessions`.
+model AccountPermission {
+  id         String   @id @default(uuid())
+  accountId  String   @map("account_id")
+  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  permission String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([accountId, permission])
+  @@index([accountId])
+  @@map("account_permissions")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

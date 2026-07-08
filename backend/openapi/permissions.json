@@ -1,0 +1,87 @@
+[
+  {
+    "key": "orders.view_all",
+    "label": "Xem tất cả đơn",
+    "group": "orders"
+  },
+  {
+    "key": "orders.view_own",
+    "label": "Chỉ xem đơn của mình",
+    "group": "orders"
+  },
+  {
+    "key": "audit.read",
+    "label": "Xem Audit log (Super Admin)",
+    "group": "audit"
+  },
+  {
+    "key": "permissions.manage",
+    "label": "Quản lý account & phân quyền",
+    "group": "accounts"
+  },
+  {
+    "key": "quotes.create_edit",
+    "label": "Tạo/sửa báo giá",
+    "group": "quotes"
+  },
+  {
+    "key": "orders.confirm",
+    "label": "Chốt đơn",
+    "group": "orders"
+  },
+  {
+    "key": "discounts.apply",
+    "label": "Áp chiết khấu",
+    "group": "discounts"
+  },
+  {
+    "key": "discounts.approve",
+    "label": "Duyệt chiết khấu",
+    "group": "discounts"
+  },
+  {
+    "key": "construction.transition",
+    "label": "Chuyển bước thi công",
+    "group": "construction"
+  },
+  {
+    "key": "delivery.confirm",
+    "label": "Xác nhận giao hàng",
+    "group": "delivery"
+  },
+  {
+    "key": "payments.record",
+    "label": "Ghi nhận thanh toán",
+    "group": "payments"
+  },
+  {
+    "key": "catalog.manage",
+    "label": "Sửa danh mục & giá",
+    "group": "catalog"
+  },
+  {
+    "key": "contracts.generate",
+    "label": "Sinh hợp đồng",
+    "group": "contracts"
+  },
+  {
+    "key": "dashboard.finance_view",
+    "label": "Xem dashboard tài chính",
+    "group": "dashboard"
+  },
+  {
+    "key": "customers.manage",
+    "label": "Quản lý khách hàng",
+    "group": "customers"
+  },
+  {
+    "key": "inventory.manage",
+    "label": "Nhập/Xuất kho",
+    "group": "inventory"
+  },
+  {
+    "key": "invoices.manage",
+    "label": "Tạo/xuất hoá đơn",
+    "group": "invoices"
+  }
+]

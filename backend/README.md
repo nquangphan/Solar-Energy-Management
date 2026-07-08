@@ -26,6 +26,7 @@ npm run prisma:generate
 | `npm run lint` / `npm run format` | Lint & format |
 | `npm test` | Jest (e2e health + wiring + source-guard + OpenAPI drift-guard) |
 | `npm run openapi:gen` | Sinh `openapi/openapi.json` từ code (không cần server/DB) |
+| `npm run permissions:gen` | Sinh `openapi/permissions.json` từ registry quyền (không cần server/DB) |
 | `npm run prisma:migrate:dev` | Tạo/chạy migration (dev — cần Postgres) |
 | `npm run prisma:migrate:deploy` | Áp migration đã commit (không tạo mới — dùng cho CI/prod) |
 | `npx prisma db seed` | Seed account admin đầu tiên (đọc `SEED_ADMIN_*` từ `.env`) |
@@ -35,12 +36,16 @@ npm run prisma:generate
 Cần một Postgres đang chạy + `.env` có `DATABASE_URL` + `JWT_ACCESS_SECRET` (≥32 ký tự) + `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (xem `.env.example`). Sau đó:
 
 ```bash
-npm run prisma:migrate:deploy   # tạo bảng accounts + sessions từ migration đã commit
-npx prisma db seed              # tạo account admin để đăng nhập
+npm run prisma:migrate:deploy   # tạo bảng accounts + sessions + account_permissions từ migration đã commit
+npx prisma db seed              # tạo account admin; SEED_ADMIN_IS_SUPER_ADMIN=true → cấp preset SUPER_ADMIN
 npm run start:dev               # POST /auth/login với email/mật khẩu admin
 ```
 
 Token trả về: `{ accessToken (JWT ngắn), refreshToken (opaque), expiresIn }`. Refresh qua `POST /auth/refresh` (rotate), thu hồi qua `POST /auth/logout`. Chi tiết luật token/phiên: `CONVENTIONS.md#Auth`.
+
+## Quyền per-account & registry (Story 2.4)
+
+Quyền là **một registry chính tắc** (`src/accounts/domain/permission-registry.ts`, AD-17) — nguồn duy nhất, cấm literal ngoài registry. Lưu per-account ở bảng `account_permissions`; preset role là hằng số code (`domain/role-presets.ts`), chỉ `SUPER_ADMIN` có `audit.read`. Artifact `openapi/permissions.json` **sinh tự động** (`npm run permissions:gen`) — FE gen key từ đó (Story 2.6). Chi tiết: `CONVENTIONS.md#Permission registry`.
 
 ## Ranh giới (đọc `CONVENTIONS.md`)
 
