@@ -115,3 +115,78 @@ test('every var() referenced in components.css is defined in tokens.css', () => 
   const missing = [...referenced].filter((name) => !defined.has(name));
   assert.deepEqual(missing, [], `components.css references undefined token(s): ${missing.join(', ')}`);
 });
+
+// ---------- Chip layer drift-guard (Story 1.4) ----------
+// The 9 canonical status colors + chip/ktype/scope-flag rules are hand-authored
+// verbatim from the mockup (lines 90-109). These assertions fail if a chip rule
+// is dropped, a canonical hex is drifted/invented, or the pill radius remap is
+// forgotten. (AC-4 flatness + cross-file token integrity are already covered by
+// tests 3 and 8 above, which scan the whole file including the chip block.)
+
+// (9) Every chip selector + the 2 flag variants must be present. Missing one of
+// the 9 states = fail (AC-1/2).
+test('all chip selectors and variants exist (AC-1/2)', () => {
+  const required = [
+    '.chip', '.chip .dot',
+    '.chip--baogia', '.chip--choduyet', '.chip--dachot', '.chip--dacoc',
+    '.chip--thicong', '.chip--nghiemthu', '.chip--danggiao', '.chip--hoanthanh',
+    '.chip--huy',
+    '.ktype', '.scope-flag', '.scope-flag.on', '.scope-flag.off',
+  ];
+  for (const sel of required) {
+    assert.ok(css.includes(sel), `components.css missing chip selector: ${sel}`);
+  }
+});
+
+// (10) Each of the 9 states carries its exact canonical bg/fg/border triplet
+// (AC-2). Drift-guard against changing or inventing a status color.
+test('9 status chips keep their verbatim hex triplets (AC-2)', () => {
+  const triplets = [
+    ['baogia', '#EAF3F1', '#3A5450', '#CFE5E0'],
+    ['choduyet', '#FBF0DA', '#8A5C08', '#EFD9A8'],
+    ['dachot', '#DCF3EF', '#0B7264', '#B7E5DD'],
+    ['dacoc', '#E7F5D9', '#4B7A15', '#CDE9AC'],
+    ['thicong', '#FCEAD4', '#985B08', '#F2D3A6'],
+    ['nghiemthu', '#E4EEFA', '#345C9C', '#C4D8F0'],
+    ['danggiao', '#DEF1F6', '#0C6B84', '#B7E0EB'],
+    ['hoanthanh', '#DEF3E6', '#137A4C', '#B7E5CA'],
+    ['huy', '#FAE6E6', '#B22C2C', '#F0C7C7'],
+  ];
+  for (const [key, bg, fg, border] of triplets) {
+    // Bind the triplet to ITS selector's rule (…{background;color;border-color}) so a
+    // full color SWAP between two states — where both triplets still exist elsewhere in
+    // the file — is caught, not only an invented hex. The trailing } also rejects extra
+    // declarations sneaking onto the rule.
+    const rule = new RegExp(`\\.chip--${key}\\s*\\{background:${bg};color:${fg};border-color:${border}\\}`);
+    assert.ok(
+      rule.test(css),
+      `.chip--${key} must be {background:${bg};color:${fg};border-color:${border}} on its own rule (canonical, AC-2)`,
+    );
+  }
+});
+
+// (11) Chip core spec: 11px/700 pill, transparent 1.5px border (so .chip--*
+// sets border-color), and the 6px currentColor dot (AC-1).
+test('chip core declarations match the mockup verbatim (AC-1)', () => {
+  assert.ok(css.includes('font-size:11px'), '.chip must be font-size:11px');
+  assert.ok(css.includes('font-weight:700'), '.chip must be font-weight:700');
+  assert.ok(css.includes('border:1.5px solid transparent'), '.chip must have a transparent 1.5px border');
+  assert.ok(css.includes('.chip .dot{width:6px;height:6px'), '.chip .dot must be 6px');
+  assert.ok(css.includes('background:currentColor'), '.chip .dot must use currentColor');
+});
+
+// (12) ktype/scope-flag reference the correct tokens + the off flag's
+// strike-through spec (AC-1).
+test('ktype/scope-flag keep their verbatim declarations (AC-1)', () => {
+  assert.ok(css.includes('.ktype{font-size:10.5px;font-weight:800;color:var(--ink);border:1.5px solid var(--lime)'), '.ktype must be lime-bordered ink pill');
+  assert.ok(css.includes('.scope-flag.on{border:1.5px solid var(--teal);color:var(--teal-700)}'), '.scope-flag.on must be teal border + teal-700 text');
+  assert.ok(css.includes('.scope-flag.off{border:1.5px solid var(--line);color:#9fb2ad;text-decoration:line-through}'), '.scope-flag.off must be line border + muted strike-through');
+});
+
+// (13) Pill radius remap: the chip block consumes var(--radius-full); the raw
+// mockup literals 999px/9999px must NOT survive (parallel to the --r* guard,
+// test 4). The .dot{border-radius:50%} circle is unaffected.
+test('chip pill radius is remapped to var(--radius-full), no raw 999/9999px', () => {
+  assert.ok(css.includes('var(--radius-full)'), 'chip/ktype/scope-flag must use var(--radius-full)');
+  assert.ok(!/border-radius:9{3,4}px/.test(css), 'components.css must not keep literal 999px/9999px — remap to var(--radius-full)');
+});

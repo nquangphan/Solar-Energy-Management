@@ -37,3 +37,30 @@
 .field-lg{padding:13px 14px;font-size:15px}
 .flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
 .fgroup{margin-bottom:13px}
+
+/* ---------- Status chips (9 order states) — Story 1.4 ----------
+   Appended verbatim from mockups/all-screens.html lines 90-109. ONLY change vs.
+   the mockup: the pill radius 999px -> var(--radius-full) at .chip/.ktype/
+   .scope-flag (3 places) to consume the shipped pill token (tokens.css,
+   --radius-full 9999px; DESIGN.md UX-DR-2 "full only for chip/pill"). The 9
+   status hex triplets are canonical constants left as literals ON PURPOSE (not
+   tokens). .chip .dot{border-radius:50%} is a circle, NOT the pill token. */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  padding:3px 9px;border-radius:var(--radius-full);border:1.5px solid transparent;white-space:nowrap}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
+.chip--baogia    {background:#EAF3F1;color:#3A5450;border-color:#CFE5E0}
+.chip--choduyet  {background:#FBF0DA;color:#8A5C08;border-color:#EFD9A8}
+.chip--dachot    {background:#DCF3EF;color:#0B7264;border-color:#B7E5DD}
+.chip--dacoc     {background:#E7F5D9;color:#4B7A15;border-color:#CDE9AC}
+.chip--thicong   {background:#FCEAD4;color:#985B08;border-color:#F2D3A6}
+.chip--nghiemthu {background:#E4EEFA;color:#345C9C;border-color:#C4D8F0}
+.chip--danggiao  {background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB}
+.chip--hoanthanh {background:#DEF3E6;color:#137A4C;border-color:#B7E5CA}
+.chip--huy       {background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7}
+
+/* customer type + scope flags */
+.ktype{font-size:10.5px;font-weight:800;color:var(--ink);border:1.5px solid var(--lime);
+  background:var(--lime-050);padding:3px 10px;border-radius:var(--radius-full)}
+.scope-flag{font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:var(--radius-full);background:#fff}
+.scope-flag.on{border:1.5px solid var(--teal);color:var(--teal-700)}
+.scope-flag.off{border:1.5px solid var(--line);color:#9fb2ad;text-decoration:line-through}

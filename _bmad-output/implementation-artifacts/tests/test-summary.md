@@ -1,50 +1,57 @@
-# Tóm tắt Tự động hoá Test — Story 1.3 (Button, Card, Frame, Field)
+# Tóm tắt Tự động hoá Test — Story 1.4 (Chip, Status-chip 9 trạng thái, chip chỉ đọc)
 
-**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** Tầng component design-system web (Story 1.3).
+**Workflow:** bmad-qa-generate-e2e-tests · **Ngày:** 2026-07-08 · **Tính năng:** Tầng chip web (Story 1.4) — `StatusChip` (9 trạng thái canonical, đọc-only), `CustomerTypeChip` (`.ktype`), `ScopeFlag` (`.scope-flag`).
 
-**Loại test:** Drift-guard hợp đồng thị giác (đọc `components.css` dạng text, khẳng định đặc tả verbatim khớp mockup + Viền nét). Story chỉ giao **4 component nền web** — không có API endpoint, không có web app đang chạy — nên "E2E" ở đây là **hợp đồng CSS component chống lệch mockup**, đúng pattern Story 1.1/1.2.
+**Loại test:** Source-guard tĩnh trên `.tsx` (đọc mã nguồn dạng text, khẳng định bất biến) — cùng kỹ thuật với drift-guard CSS. Repo **chưa có** bundler/tsc/React runtime (quyết định YAGNI cấp story), nên "E2E" ở đây là **hợp đồng nguồn component** chống biến chip thành nút, không phải render DOM.
 
 ## Framework phát hiện
 
 - **Node.js built-in test runner** (`node --test`), zero-dependency, file `*.test.mjs`. Chạy: `cd design-system && npm test` (glob `**/*.test.mjs`).
-- **Không sinh API test** — Story 1.3 thuần front-end trình bày, không backend/endpoint (AD-16).
-- **Không sinh browser E2E** — repo chưa có web app/bundler đang chạy. Story đã **chốt hoãn** JSX render test tới story có web tooling (YAGNI). Không đảo ngược quyết định đó ở đây.
+- **Không sinh API test** — Story 1.4 thuần front-end trình bày, không backend/endpoint.
+- **Không sinh browser E2E** — repo chưa có web app/bundler. JSX render test đã **chốt hoãn** tới story có web tooling (không đảo ngược quyết định đó).
 
-## Test đã mở rộng — `design-system/components/components.test.mjs`
+## Test đã tạo — `design-system/components/chip-components.test.mjs` (mới)
 
-Giữ nguyên 4 test cũ; **thêm 4 test mới** để vá khoảng trống coverage so với AC:
+Giữ nguyên drift-guard CSS chip cũ (test 9–13 trong `components.test.mjs`); **thêm 8 test source-guard** vá khoảng trống lớn nhất: 3 component `.tsx` trước đây **không có** test tự động nào.
 
 | # | Test | AC |
 |---|------|-----|
-| Mới | `Button variants keep their verbatim declarations` — primary (nền teal + `#fff`), accent text `--lime-600`, ghost (line/ink-2), danger, `--wide` width:100%, `.btn .icn` 15px (nối Icon 1.2) | 1 |
-| Mới | `Card/Frame variants keep their verbatim declarations` — giá trị `.card--ink`/`--teal`, `.frame-label` nổi trên viền (`position:absolute;top:-8px`), `.frame.on-bg` phủ `--bg` | 2 |
-| Mới | `Field/label keep their verbatim declarations` — `.field::placeholder{#9fb2ad}`, `.field-lg` size đăng nhập, selector `.field.focus`, `.flabel` micro-uppercase + muted | 3 |
-| Mới | `every var() referenced in components.css is defined in tokens.css` — **guard tích hợp chéo file**, tổng quát hoá gotcha `--r*`: mọi typo/biến chưa ship (vd `var(--teel)`) nay làm fail suite. Noi theo pattern parity token/icon. Đã xác minh **không rỗng** (bắt được `var(--teel)`). | 1/2/3/4 |
+| 1 | **Read-only guard** — 3 component KHÔNG chứa `onClick`/handler chuột-phím, `<button>`, `role`/`tabIndex`, `...rest` (quét mã đã strip comment) | 3 (UX-DR-23) |
+| 2 | Mỗi chip render `<span>` tĩnh | 1/3 |
+| 3 | Union `StatusKey` = **đúng 9** key canonical (chặn trạng thái tự chế) | 2 |
+| 4 | `STATUS_LABELS` ánh xạ đủ 9 trạng thái → nhãn canonical verbatim | 2 |
+| 5 | `StatusChip` ghép `chip chip--{status}` + `.dot`, mặc định nhãn = `STATUS_LABELS[status]` | 1/2 |
+| 6 | `ScopeFlag` map prop `on` → class `on`/`off` | 1 |
+| 7 | `CustomerTypeChip` gắn class `.ktype` | 1 |
+| 8 | Barrel `index.ts` re-export đủ tầng chip (3 component + type) | — |
 
 ## Khoảng trống đã phát hiện & vá (auto-apply)
 
 | Gap | AC | Trước | Sau |
 |-----|-----|-------|-----|
-| G1 | 1 | Biến thể Button (primary/ghost/danger/accent-text/wide/`.btn .icn`) chỉ kiểm selector, giá trị đổi vẫn pass | Pin giá trị verbatim từng biến thể |
-| G2 | 2 | `.card--ink/--teal` border-color, `.frame-label` toạ độ nổi, `.frame.on-bg` nền chưa kiểm | Pin đủ giá trị |
-| G3 | 3 | `.field::placeholder`, `.field-lg` size, `.field.focus`, `.flabel` uppercase/muted chưa kiểm | Pin đủ giá trị |
-| G4 | 1/2/3/4 | Không có guard "mọi `var(--X)` tồn tại trong tokens.css" — lớp lỗi `--r*` chỉ bị chặn theo tên cụ thể | Test integrity chéo file, tổng quát |
+| G1 | 3 | Bất biến **read-only** (chip không bao giờ là nút) — story ghi "verify bằng review thủ công", **không** test tự động. Đây là AC dễ mắc nhất | Guard tự động chặn `onClick`/`<button>`/`role`/`tabindex`/`...rest` trên cả 3 component |
+| G2 | 2 | Union `StatusKey` + `STATUS_LABELS` chỉ được suy gián tiếp qua 9 class CSS; TS layer không kiểm | Pin đúng 9 key + nhãn canonical verbatim |
+| G3 | 1 | Logic ghép class (`chip--{status}`+dot, `on`/`off`, `.ktype`) chưa kiểm | Pin hợp đồng render từng component |
+| G4 | — | Barrel export tầng chip chưa kiểm — xoá 1 export vẫn qua drift-guard CSS | Kiểm đủ 3 component + type |
+
+**Chống báo động giả:** guard read-only strip comment trước khi quét — docstring component có nhắc "onClick"/"role" (giải thích rằng bị cấm) nên không được làm fail test. Đây là bẫy Story 1.3 từng gặp.
 
 ## Coverage
 
-- **Selector + biến thể (AC-1/2/3):** đủ (test cũ) → nay **kèm giá trị verbatim** từng biến thể.
-- **Viền nét (AC-4):** 0 shadow/gradient/background-image — giữ.
-- **Remap radius `--r*` → `--radius*`:** giữ.
-- **Tích hợp token chéo file:** mọi `var()` trong `components.css` phải tồn tại trong `tokens.css` — **mới**.
-- **Logic React `.tsx`:** chưa có (hoãn — xem dưới).
+- **Component chip (TSX):** 3/3 — read-only, ghép class, hợp đồng union/nhãn.
+- **CSS chip:** 9/9 trạng thái + 2 biến thể cờ (drift-guard cũ).
+- **Barrel export:** đủ.
+- **Suite: 43/43 pass** (35 → +8). Không hồi quy token (1.1) / icon (1.2) / component 1.3.
 
-**Kết quả chạy:** `30 test, 30 pass, 0 fail` (26 → +4). Không hồi quy suite token (1.1) / icon (1.2).
+## Guard là load-bearing (đã chứng minh)
+
+Tiêm `onClick` thật vào JSX của `StatusChip` → suite **fail** đúng test read-only; revert → xanh lại. Guard bắt được vi phạm thực, không phải test rỗng.
 
 ## Giới hạn đã biết (kế thừa, đã hoãn — không phải gap mới)
 
-4 component React (`Button/Card/Frame/Field.tsx`) chưa có test render/ánh xạ prop runtime. Việc này cần JSX transform + React/jsdom mà repo cố tình chưa đưa vào (chưa có bundler/tsc — quyết định YAGNI cấp story). **Không** scaffold ở đây để tránh over-engineering. Hợp đồng class mà component phát ra (`.btn--*`, `.card--*`, `field-lg`, …) được ghim gián tiếp bởi drift-guard: mọi class phát ra đều phải tồn tại trong `components.css`. Test JSX render đầy đủ thuộc về story dựng web tooling.
+Chưa có test render JSX runtime (prop → DOM) vì repo cố tình chưa có bundler/tsc/React (YAGNI cấp story). Guard khẳng định bất biến trên **mã nguồn**, không phải DOM thực. Thêm React + JSX transform chỉ để render 3 span tĩnh là over-engineering — thuộc story dựng web tooling.
 
 ## Bước tiếp theo
 
 - Chạy trong CI: `cd design-system && npm test` (repo chưa có pipeline CI — greenfield).
-- Khi có bundler/tsc web: thêm JSX render test cho 4 component (prop → class, `Field` nối `label`↔`htmlFor` a11y, spread `...rest`).
+- Khi có bundler/tsc web: nâng guard read-only thành render assertion thật, thêm test prop→DOM cho tầng chip.
