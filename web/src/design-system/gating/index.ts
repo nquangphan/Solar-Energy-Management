@@ -15,3 +15,8 @@ export type { GateProps } from './Gate';
 
 export { can, orderScope, filterNav, PERM, DEMO_PERMISSIONS } from './permissions';
 export type { PermissionKey, PermissionSet } from './permissions';
+
+// Registry-derived key SSOT (Story 2.6, AD-17) — generated from
+// backend/openapi/permissions.json; a drift-guard test keeps it byte-for-byte.
+export { PERMISSION_KEYS } from './permission-keys.generated';
+export type { PermissionKeyName } from './permission-keys.generated';

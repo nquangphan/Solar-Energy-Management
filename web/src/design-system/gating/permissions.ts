@@ -65,20 +65,26 @@ export function filterNav<L extends GatedLink, S extends GatedSection<L>>(
 }
 
 /**
- * STUB permission keys — Epic 1 PLACEHOLDER ONLY. Epic 2 replaces this with the
- * permission registry generated from backend code (AD-17). This is NOT the source
- * of truth; the backend always enforces every request (AD-4) — hiding UI is only
- * UX. Do not clone these literals across the codebase: when `/me` lands, swap
- * `PERM` / `DEMO_PERMISSIONS` and the `requires` values in `SIDEBAR_NAV` in ONE
- * place, leaving `Gate` / `can` / `filterNav` / `orderScope` untouched.
+ * Named permission keys used by the UI. Every value is a key from the canonical
+ * backend registry (AD-17); Story 2.6 binds them to `backend/openapi/permissions.json`
+ * via a drift-guard test (permission-keys.test.mjs) so no value can drift, and
+ * `permission-keys.generated.ts` is the registry-derived SSOT for future imports.
+ * This is NOT the source of truth; the backend always enforces every request
+ * (AD-4) — hiding UI is only UX. When `/me` lands (Epic 2), the effective set is
+ * sourced from the session provider, not the `DEMO_PERMISSIONS` stub below,
+ * leaving `Gate` / `can` / `filterNav` / `orderScope` untouched.
  */
 export const PERM = {
   /** May view ALL orders (vs only their own) — drives `orderScope` (FR-18). */
   ordersViewAll: 'orders.view_all',
+  /** May view ONLY their own orders — the `'mine'` scope (FR-18). */
+  ordersViewOwn: 'orders.view_own',
   /** May read the audit log — Super Admin only (FR-20). */
   auditRead: 'audit.read',
   /** May manage account permissions (the Phân quyền screen, Epic 8). */
   permissionsManage: 'permissions.manage',
+  /** May view the finance dashboard numbers (FR-19, Epic 8). */
+  dashboardFinanceView: 'dashboard.finance_view',
 } as const;
 
 /**

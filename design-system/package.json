@@ -8,9 +8,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "build": "node tokens/build-tokens.mjs && node icons/build-icons.mjs",
+    "build": "node tokens/build-tokens.mjs && node icons/build-icons.mjs && node permissions/build-permission-keys.mjs",
     "build:tokens": "node tokens/build-tokens.mjs",
     "build:icons": "node icons/build-icons.mjs",
+    "build:permissions": "node permissions/build-permission-keys.mjs",
     "test": "node --test \"**/*.test.mjs\""
   }
 }

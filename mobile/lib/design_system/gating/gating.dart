@@ -5,4 +5,5 @@
 // are Epic 1 placeholders, swapped for `/me` in Epic 2.
 
 export 'app_gate.dart';
+export 'app_permission_keys.g.dart';
 export 'app_permissions.dart';
