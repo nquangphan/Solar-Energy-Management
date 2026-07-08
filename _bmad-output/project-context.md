@@ -1,7 +1,7 @@
 ---
 project_name: Phương Nam Solar — Phase 1
 type: project-context
-updated: 2026-07-07
+updated: 2026-07-08
 status: complete
 optimized_for_llm: true
 sections_completed: [stack, architecture-invariants, api-contract, coding-style, scout, testing, workflow, gotchas]
@@ -62,6 +62,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 - **Lint/format bắt buộc:** ESLint + Prettier (TS backend/web); `dart format` + `analysis_options.yaml` (Flutter). Không mỗi người/file một kiểu.
 - **Naming/format:** entity PascalCase · bảng snake_case số nhiều · file/route kebab-case · ID UUID v4 (trừ `Customer` PK = SĐT E.164) · ngày ISO-8601 UTC (client hiển thị UTC+7) · tiền integer đồng.
 - **Kiến trúc code:** Backend = NestJS module theo domain (`orders`, `customers`, `products`, `inventory`, `payments`, `accounts`, `notifications`…). Mobile = Clean Architecture + BLoC. Web = React function components + hooks.
+- **Design-system SSOT + generator (Epic 1 đã dựng):** `design-system/tokens/design-tokens.json` và `design-system/icons/icons.json` là **nguồn chân lý duy nhất**; generator zero-dep `build-tokens.mjs`/`build-icons.mjs` derive **mọi** output web (`web/src/design-system/…`) + mobile (`mobile/lib/design_system/…`). **KHÔNG sửa tay file generated** (vd `app_tokens.dart`, `tokens.ts/css`, `sprite.ts`) — sửa SSOT rồi `cd design-system && npm run build`; drift-guard byte-for-byte sẽ fail nếu output cũ. Thêm token/a11y (vd `tapTargetMin`) đi qua SSOT+generator, không hardcode.
 
 ### Scout-before-code — kiểm tra tồn tại + ảnh hưởng
 
@@ -73,6 +74,8 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 
 - Bắt buộc test cho phần dễ sai/tiền bạc: **pricing/VAT, `applyTransition` (gate cờ+quyền), permission resolve, snapshot giá, ghi nhận thanh toán, chặn tồn**.
 - Backend: unit cho domain + e2e cho endpoint quan trọng (chốt, `preview-total`, chuyển trạng thái). FE: test component design-system + luồng critical (giỏ hàng, chốt).
+- **Design-system guard (Epic 1):** chạy `cd design-system && npm test` (`node --test "**/*.test.mjs"`) — drift-guard (output generated không cũ) + source-guard (bất biến: cấm số học tiền client, cấm upload R2, cấm đổi status, read-only chip, Viền nét 0 shadow) + parity byte-for-byte web↔Flutter. Guard quét TOÀN VĂN file như text → **tránh viết chuỗi bị cấm (`shadow`/`gradient`/`box-shadow:`/`var(--r)`/`.toUpperCase()`) trong comment** (false-positive tái diễn). Mobile: `cd mobile && flutter test` + `flutter analyze`.
+- **Hiện trạng web tooling (tới hết Epic 1):** `web/` mới chỉ `src/`, CHƯA có tsc/bundler/JSDOM → `.tsx` chưa typecheck/runtime-test, chỉ được bảo vệ bằng Node text-guard + review. Correctness runtime web nối khi dựng web app (Epic 2). Đừng cố `tsc` web/ cho tới lúc đó.
 
 ### Development Workflow
 

@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-08
+last_updated: 2026-07-08 (epic-1 retrospective done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -36,7 +36,7 @@ development_status:
   1-9-app-shell-web-sidebar-web-frame: done
   1-10-primitive-gating-theo-quyen-accessibility-floor-parity: done
   1-11-man-dang-nhap-dung-that-demo-design-system: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
   epic-2: backlog
   2-1-skeleton-backend-prisma-openapi-sinh-tu-code: backlog
   2-2-error-envelope-thong-nhat-xu-ly-loi-tap-trung: backlog
@@ -102,3 +102,25 @@ development_status:
   9-5-tuy-chon-thong-bao-theo-loai: backlog
   9-6-nhac-theo-lich-bao-gia-sap-het-han-lead-nguoi: backlog
   epic-9-retrospective: optional
+
+action_items:
+  - epic: 1
+    action: "Cải thiện drift-guard: strip/loại comment trước khi assert để triệt false-positive tái diễn (6 story)"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 1
+    action: "Đưa web tooling (tsc + bundler + test runtime) vào scope Story 2.1; typecheck toàn bộ .tsx tích luỹ từ Epic 1"
+    owner: "Winston (Architect) + Amelia"
+    status: open
+  - epic: 1
+    action: "Chốt alpha backdrop scrim (.32 hay khác) với chủ design, ghi vào DESIGN.md"
+    owner: "Sally (UX)"
+    status: open
+  - epic: 1
+    action: "Xác minh contract PermissionKey/filterNav (Story 1.10) khớp registry enum (Story 2.4) trước khi code 2.6"
+    owner: "Winston (Architect)"
+    status: open
+  - epic: 1
+    action: "Lên scaffold android/ios cho mobile khi Epic 2/9 cần app chạy thật (camera/share)"
+    owner: "Amelia (Dev)"
+    status: open
