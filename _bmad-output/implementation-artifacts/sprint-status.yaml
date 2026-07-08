@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-08 (story 1-7 -> review)
+# last_updated: 2026-07-08 (story 1-8 -> done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -32,7 +32,7 @@ development_status:
   1-5-react-table-stepper-kpi-banner: done
   1-6-react-hanh-vi-gio-hang-trang-thai-danh-sach-overlay-share-upload: done
   1-7-flutter-thu-vien-widget-tuong-duong-parity-component: done
-  1-8-app-shell-mobile-topbar-bottom-nav-5-tab-fab-phone-frame: backlog
+  1-8-app-shell-mobile-topbar-bottom-nav-5-tab-fab-phone-frame: done
   1-9-app-shell-web-sidebar-web-frame: backlog
   1-10-primitive-gating-theo-quyen-accessibility-floor-parity: backlog
   1-11-man-dang-nhap-dung-that-demo-design-system: backlog
