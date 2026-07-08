@@ -89,6 +89,23 @@ void main() {
       expect(selected, isEmpty);
     });
 
+    testWidgets('tapping the TOP of the raised FAB ring fires onCreateQuote',
+        (tester) async {
+      // Regression: the FAB used to be raised with Transform.translate, which
+      // overflowed the nav's hit bounds — the top ~22px of the ring was dead.
+      var create = 0;
+      await tester.pumpWidget(_host(
+        AppBottomNav(activeIndex: 0, onCreateQuote: () => create++),
+      ));
+
+      // A point well above the ic-plus centre, inside the raised ring — this is
+      // the band that was previously not hit-testable.
+      final center = tester.getCenter(_iconNamed('ic-plus'));
+      await tester.tapAt(Offset(center.dx, center.dy - 24));
+      await tester.pump();
+      expect(create, 1);
+    });
+
     testWidgets('tapping a tab with a null onSelect does not throw',
         (tester) async {
       await tester.pumpWidget(_host(const AppBottomNav(activeIndex: 0)));

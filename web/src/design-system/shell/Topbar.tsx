@@ -22,9 +22,11 @@ export interface TopbarProps {
   action?: ReactNode;
   /** Fired when `action` is tapped. */
   onAction?: () => void;
+  /** Accessible name for the action — required when `action` is icon-only. */
+  actionLabel?: string;
 }
 
-export function Topbar({ title, eyebrow, onBack, action, onAction }: TopbarProps) {
+export function Topbar({ title, eyebrow, onBack, action, onAction, actionLabel }: TopbarProps) {
   return (
     <div className="topbar">
       {onBack && (
@@ -42,9 +44,14 @@ export function Topbar({ title, eyebrow, onBack, action, onAction }: TopbarProps
         {title}
       </div>
       {action && (
-        <div className="topbar-action" onClick={onAction}>
+        <button
+          type="button"
+          className="topbar-action"
+          aria-label={actionLabel}
+          onClick={onAction}
+        >
           {action}
-        </div>
+        </button>
       )}
     </div>
   );

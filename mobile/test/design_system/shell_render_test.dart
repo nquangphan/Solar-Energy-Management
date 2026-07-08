@@ -127,11 +127,16 @@ void main() {
       );
     });
 
-    testWidgets('FAB is a 46px teal circle with ic-plus', (tester) async {
+    testWidgets('FAB is a 46px teal circle with ic-plus, raised above the bar',
+        (tester) async {
       await tester.pumpWidget(_host(const AppBottomNav(activeIndex: 0)));
       // The FAB core paints ic-plus in surface (white) on teal.
       expect(_icon(tester, 'ic-plus').color, AppTokens.surface);
-      expect(find.byType(Transform), findsWidgets); // -22px raise
+      // It is raised: the ic-plus centre sits above the vertical middle of the
+      // nav (layout-based raise, replacing the old bounds-overflowing Transform).
+      final navCentreY = tester.getCenter(find.byType(AppBottomNav)).dy;
+      final plusCentreY = tester.getCenter(_iconNamed('ic-plus')).dy;
+      expect(plusCentreY, lessThan(navCentreY));
     });
   });
 

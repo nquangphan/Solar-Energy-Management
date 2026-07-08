@@ -128,12 +128,15 @@ class AppIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final svg = AppIcons.registry[name];
     assert(svg != null, 'Unknown icon: $name');
+    // In release the assert is stripped; an unknown name must degrade to empty
+    // space, not crash the SVG parser with an empty string.
+    if (svg == null) return SizedBox(width: size, height: size);
     final resolved = color ??
         DefaultTextStyle.of(context).style.color ??
         IconTheme.of(context).color ??
         const Color(0xFF000000);
     return SvgPicture.string(
-      svg ?? '',
+      svg,
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(resolved, BlendMode.srcIn),

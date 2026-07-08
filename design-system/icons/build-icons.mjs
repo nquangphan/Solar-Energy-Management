@@ -51,6 +51,20 @@ function svgString(attrs, body) {
   );
 }
 
+// Escape a value for safe emission into a single-quoted JS/TS string literal.
+// Icon bodies come from icons.json and are embedded verbatim into generated
+// source; without escaping a `'` or `\` in a path would produce broken output
+// that the drift guard cannot see (both committed and fresh output share the
+// same defect). ASCII SVG data has none today; this keeps it safe if it changes.
+function jsLit(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+// Same, for a single-quoted Dart string literal — `$` also triggers Dart
+// string interpolation and must be escaped.
+function dartLit(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/\$/g, '\\$').replace(/'/g, "\\'");
+}
+
 // 13 keeps the mockup's `.icn-xs` name; the other variants get `.icn-<n>`.
 function sizeClass(n) {
   return n === 13 ? 'icn-xs' : `icn-${n}`;
@@ -59,9 +73,9 @@ function sizeClass(n) {
 // --- Web: sprite.ts (sprite markup + canonical name/size unions) ----------
 function buildSprite(t) {
   const names = Object.keys(t.icons);
-  const nameLines = names.map((n) => `  '${n}',`).join('\n');
+  const nameLines = names.map((n) => `  '${jsLit(n)}',`).join('\n');
   const symbolLines = names
-    .map((n) => `  '${openTag(t.attrs, n)}${t.icons[n]}</symbol>',`)
+    .map((n) => `  '${jsLit(`${openTag(t.attrs, n)}${t.icons[n]}</symbol>`)}',`)
     .join('\n');
   const sizeList = t.sizes.variants.join(', ');
 
@@ -134,12 +148,16 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
  * Renders a canonical sprite icon via <use href="#ic-*">. Colour is inherited
  * from CSS \`color\` (currentColor) — set the colour on an ancestor (teal when
  * active, muted otherwise); never hard-code an icon colour here.
+ *
+ * Decorative by default (aria-hidden): the accessible name comes from the
+ * surrounding button/label. For a meaningful standalone icon, override via
+ * \`aria-hidden={false}\` + an \`aria-label\`/\`role="img"\` in \`...rest\`.
  */
 export function Icon({ name, size = ${t.sizes.default}, className, ...rest }: IconProps) {
   const sizeClass = size === ${t.sizes.default} ? '' : SIZE_CLASS[size];
   const cls = ['icn', sizeClass, className].filter(Boolean).join(' ');
   return (
-    <svg className={cls} {...rest}>
+    <svg className={cls} aria-hidden {...rest}>
       <use href={\`#\${name}\`} />
     </svg>
   );
@@ -151,9 +169,9 @@ export function Icon({ name, size = ${t.sizes.default}, className, ...rest }: Ic
 function buildDart(t) {
   const names = Object.keys(t.icons);
   const registryLines = names
-    .map((n) => `    '${n}': '${svgString(t.attrs, t.icons[n])}',`)
+    .map((n) => `    '${dartLit(n)}': '${dartLit(svgString(t.attrs, t.icons[n]))}',`)
     .join('\n');
-  const nameLines = names.map((n) => `    '${n}',`).join('\n');
+  const nameLines = names.map((n) => `    '${dartLit(n)}',`).join('\n');
   const sizeList = t.sizes.variants.map((n) => `${n}.0`).join(', ');
 
   return `// ${GEN_NOTE}
@@ -196,12 +214,15 @@ class AppIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final svg = AppIcons.registry[name];
     assert(svg != null, 'Unknown icon: \$name');
+    // In release the assert is stripped; an unknown name must degrade to empty
+    // space, not crash the SVG parser with an empty string.
+    if (svg == null) return SizedBox(width: size, height: size);
     final resolved = color ??
         DefaultTextStyle.of(context).style.color ??
         IconTheme.of(context).color ??
         const Color(0xFF000000);
     return SvgPicture.string(
-      svg ?? '',
+      svg,
       width: size,
       height: size,
       colorFilter: ColorFilter.mode(resolved, BlendMode.srcIn),

@@ -1,7 +1,11 @@
 // hand-authored — web-only design-system component (Story 1.6).
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Icon } from '../icons/Icon';
+
+// Focusable descendants inside a modal, in DOM order (for the Tab trap).
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
 
 export interface DialogProps {
   open: boolean;
@@ -35,6 +39,7 @@ export function Dialog({
   children,
 }: DialogProps) {
   const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   // Read onClose through a latest-ref so the focus/listener effect can key on
   // [open] only. Callers pass an inline onClose arrow (new identity each render);
   // depending on it would re-run this effect on every commit while open and
@@ -44,12 +49,42 @@ export function Dialog({
 
   useEffect(() => {
     if (!open) return;
+    const modal = ref.current;
+    // Remember what had focus so we can restore it on close (keyboard/SR users
+    // keep their place instead of being dropped to <body>).
+    const restoreTo = document.activeElement as HTMLElement | null;
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape') {
+        onCloseRef.current();
+        return;
+      }
+      // Focus trap: aria-modal="true" promises focus stays inside the dialog.
+      if (e.key !== 'Tab' || !modal) return;
+      const items = Array.from(modal.querySelectorAll<HTMLElement>(FOCUSABLE));
+      if (items.length === 0) {
+        e.preventDefault();
+        modal.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === modal)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener('keydown', onKeyDown);
-    ref.current?.focus();
-    return () => document.removeEventListener('keydown', onKeyDown);
+    modal?.focus();
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      restoreTo?.focus?.();
+    };
   }, [open]);
 
   if (!open) return null;
@@ -61,12 +96,13 @@ export function Dialog({
         className={modalCls}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
         ref={ref}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <span className="mt">{title}</span>
+          <span className="mt" id={titleId}>{title}</span>
           <button
             type="button"
             className="btn btn--ghost btn--sm"

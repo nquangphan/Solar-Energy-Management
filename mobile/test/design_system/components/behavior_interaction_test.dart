@@ -35,6 +35,7 @@ class _DismissHostState extends State<_DismissHost> {
               ? const SizedBox.shrink()
               : AppCartLineRow(
                   name: 'Tấm pin',
+                  id: 'line-1',
                   qty: 1,
                   unitPrice: 100,
                   amount: 100,
@@ -111,6 +112,7 @@ void main() {
       await tester.pumpWidget(_host(
         AppCartLineRow(
           name: 'Tấm pin',
+          id: 'line-1',
           qty: 1,
           unitPrice: 100,
           amount: 100,

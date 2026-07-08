@@ -34,7 +34,11 @@ class AppCartLineRow extends StatelessWidget {
     this.onQtyChange,
     this.onUnitPriceChange,
     this.onDelete,
-  });
+  }) : assert(
+          onDelete == null || id != null,
+          'Provide a stable [id] when [onDelete] is set: two lines with the same '
+          'name would otherwise share a Dismissible key and crash on swipe.',
+        );
 
   final String name;
 

@@ -71,7 +71,11 @@ export function CartLineRow({
             inputMode="numeric"
             aria-label="Số lượng"
             value={qty}
-            onChange={(e) => onQtyChange?.(Number(e.target.value))}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              // Guard against NaN from non-numeric input reaching preview-total.
+              if (Number.isFinite(n)) onQtyChange?.(n);
+            }}
           />
         ) : (
           <span className="num mono">{qty}</span>
@@ -84,7 +88,11 @@ export function CartLineRow({
             inputMode="numeric"
             aria-label="Đơn giá"
             value={unitPrice}
-            onChange={(e) => onUnitPriceChange?.(Number(e.target.value))}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              // Guard against NaN from non-numeric input reaching preview-total.
+              if (Number.isFinite(n)) onUnitPriceChange?.(n);
+            }}
           />
         ) : (
           <span className="num mono">{unitPrice}</span>

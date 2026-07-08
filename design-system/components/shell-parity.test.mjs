@@ -14,21 +14,37 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/components -> root
 
-const mockup = readFileSync(
-  resolve(
-    repoRoot,
-    '_bmad-output/planning-artifacts/ux-designs',
-    'ux-Solar-Energy-Management-2026-07-06/mockups/all-screens.html',
-  ),
-  'utf8',
-);
+// Resolve the mockup SSOT without pinning a date: pick the newest `ux-*` design
+// folder that actually contains mockups/all-screens.html. The previous hard-coded
+// `ux-…-2026-07-06/` path broke whenever the ux-designs folder was regenerated
+// under a new date.
+function resolveMockupPath() {
+  const uxRoot = resolve(repoRoot, '_bmad-output/planning-artifacts/ux-designs');
+  if (!existsSync(uxRoot)) {
+    throw new Error(
+      `Shell parity guard needs the UX mockup SSOT but ${uxRoot} is missing. ` +
+        'Ensure the ux-designs artifacts are present (or committed as a test fixture).',
+    );
+  }
+  const candidates = readdirSync(uxRoot, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name.startsWith('ux-'))
+    .map((d) => resolve(uxRoot, d.name, 'mockups/all-screens.html'))
+    .filter((p) => existsSync(p))
+    .sort(); // date-suffixed names sort lexically == chronologically
+  if (candidates.length === 0) {
+    throw new Error(`No ux-*/mockups/all-screens.html found under ${uxRoot}`);
+  }
+  return candidates[candidates.length - 1]; // newest
+}
+
+const mockup = readFileSync(resolveMockupPath(), 'utf8');
 
 const shellDir = resolve(repoRoot, 'mobile/lib/design_system/shell');
 const topbar = readFileSync(resolve(shellDir, 'app_topbar.dart'), 'utf8');
@@ -81,9 +97,11 @@ test('botnav FAB: 46px, -22 raise, 3px band, teal-700 ring — mockup ↔ Flutte
   assert.ok(mockup.includes('margin-top:-22px'));
   assert.ok(mockup.includes('border:3px solid #fff'));
   assert.ok(mockup.includes('box-shadow:0 0 0 1.5px var(--teal-700)'));
-  // Flutter FAB: 46 core, -22 translate, 3px band, teal700 ring
+  // Flutter FAB: 46 core, 22px raise, 3px band, teal700 ring. The raise is a
+  // layout offset (`_fabRaise`) so the whole ring stays hit-testable — NOT a
+  // Transform, which overflowed the nav bounds and dropped taps on the top band.
   assert.match(botnav, /width:\s*46\.0,\s*height:\s*46\.0/);
-  assert.match(botnav, /Offset\(0\.0,\s*-22\.0\)/);
+  assert.match(botnav, /_fabRaise\s*=\s*22\.0/);
   assert.match(botnav, /padding:\s*const EdgeInsets\.all\(3\.0\)/);
   assert.match(botnav, /color:\s*AppTokens\.teal700/);
 });

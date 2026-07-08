@@ -184,6 +184,7 @@ class _AppConfirmDialogState extends State<AppConfirmDialog> {
   bool _resolved = false;
 
   void _confirm() {
+    if (_resolved) return;
     _resolved = true;
     Navigator.of(context).pop();
     widget.onConfirm();

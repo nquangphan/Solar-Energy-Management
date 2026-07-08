@@ -106,7 +106,13 @@ class AppImageUpload extends StatelessWidget {
       ),
       child: item.path != null
           ? Image.file(File(item.path!),
-              width: 74.0, height: 74.0, fit: BoxFit.cover)
+              width: 74.0,
+              height: 74.0,
+              fit: BoxFit.cover,
+              // A stale/unreadable path throws at paint; fall back to the
+              // placeholder glyph instead of a red error box.
+              errorBuilder: (_, __, ___) =>
+                  const AppIcon('ic-image', size: 24.0, color: _thumbGlyph))
           : const AppIcon('ic-image', size: 24.0, color: _thumbGlyph),
     );
 

@@ -38,8 +38,16 @@ export async function shareFiles(opts: ShareFilesOptions): Promise<ShareResult> 
     const a = document.createElement('a');
     a.href = url;
     a.download = file.name;
+    // The anchor must be in the document for a programmatic download click in
+    // some engines, and the object URL must outlive the click — revoking it in
+    // the same tick cancels the download in Safari/Firefox. Defer cleanup.
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 0);
     return 'downloaded';
   }
 

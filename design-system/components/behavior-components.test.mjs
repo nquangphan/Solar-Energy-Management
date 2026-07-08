@@ -68,13 +68,17 @@ const barrel = read('index.ts');
 // source for any money arithmetic.
 test('CartLineRow does NO client money math — amount is rendered from prop (AD-10/16)', () => {
   const code = stripCommentsAndStrings(cartLineRow);
-  const moneyMath = /qty\s*\*\s*unit|unit\w*\s*\*\s*qty|\*\s*unitPrice|qty\s*\*|unitPrice\s*\*/i;
+  // Any multiplication between two expressions is money math here regardless of
+  // the variable names — a rename (`quantity * price`) must not slip through.
+  // Drop import/export lines first so `import * as X` isn't read as a `*`.
+  const codeNoImports = code.replace(/^\s*(?:import|export)\b.*$/gm, '');
+  const anyMultiply = /[A-Za-z_$)\]]\s*\*\s*[A-Za-z_$(]/;
   assert.ok(
-    !moneyMath.test(code),
-    'CartLineRow must not compute qty × unitPrice / any total — amount comes from the backend',
+    !anyMultiply.test(codeNoImports),
+    'CartLineRow must not multiply anything (qty × price / any total) — amount comes from the backend',
   );
   assert.ok(
-    !/\breduce\s*\(|\.sum\b|toFixed|toLocaleString/.test(code),
+    !/\breduce\s*\(|\.sum\b|toFixed|toLocaleString/.test(codeNoImports),
     'CartLineRow must not sum or format money — that is backend/preview-total',
   );
   // It DOES render the backend amount directly.
@@ -139,6 +143,12 @@ test('ImageUpload does NOT upload — no fetch/R2/signed/upload() (AD-3)', () =>
   assert.ok(!/\bR2\b/.test(code), 'ImageUpload must not reference R2');
   assert.ok(!/signed/i.test(code), 'ImageUpload must not build a signed URL');
   assert.ok(!/\bupload\s*\(/.test(code), 'ImageUpload must not call upload()');
+  // Any other network egress is also forbidden — a non-fetch primitive would
+  // exfiltrate the picked file just as well (mirrors the shell network ban).
+  assert.ok(
+    !/XMLHttpRequest|\bsendBeacon\b|\bWebSocket\b|\baxios\b|\bimport\s*\(/.test(code),
+    'ImageUpload must not use XHR/sendBeacon/WebSocket/axios/dynamic import — no network egress (AD-3)',
+  );
   // It DOES pick files and emit them.
   assert.ok(/type="file"/.test(imageUpload), 'ImageUpload must use <input type="file">');
   assert.ok(/accept/.test(imageUpload), 'ImageUpload must forward an accept filter');

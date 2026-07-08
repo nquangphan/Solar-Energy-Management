@@ -55,24 +55,65 @@ class AppBottomNav extends StatelessWidget {
   /// `onSelect`.
   final VoidCallback? onCreateQuote;
 
+  // The bar (fill + border + labels) plus the height the centre FAB rises above
+  // it. Both fixed so the raised FAB lives INSIDE the widget's hit bounds: a
+  // Transform-raised FAB overflows the parent box and Flutter drops taps in the
+  // overflow band (rejects out-of-bounds positions before reaching the FAB).
+  static const double _barHeight = 58.0;
+  static const double _fabRaise = 22.0;
+
   @override
   Widget build(BuildContext context) {
     assert(_tabs.length == 5, 'botnav is locked to exactly 5 tabs');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 2.0),
-      decoration: const BoxDecoration(
-        color: AppTokens.surface,
-        border: Border(
-          top: BorderSide(color: AppTokens.ink, width: AppTokens.borderWidth),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+    return SizedBox(
+      height: _barHeight + _fabRaise,
+      child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          for (var i = 0; i < _tabs.length; i++)
-            Expanded(
-              child: i == 2 ? _fab(_tabs[i]) : _item(_tabs[i], i),
+          // Bar pinned to the bottom (surface fill + 1.5px ink border-top). The
+          // centre cell is an empty spacer — the FAB is drawn in the raised
+          // overlay so it can rise above the bar while staying hit-testable.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: _barHeight,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 2.0),
+              decoration: const BoxDecoration(
+                color: AppTokens.surface,
+                border: Border(
+                  top: BorderSide(color: AppTokens.ink, width: AppTokens.borderWidth),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var i = 0; i < _tabs.length; i++)
+                    Expanded(
+                      child: i == 2 ? const SizedBox.shrink() : _item(_tabs[i], i),
+                    ),
+                ],
+              ),
             ),
+          ),
+          // Raised centre FAB, centred over the middle column and fully within
+          // the SizedBox bounds so the whole ring (including its top) hit-tests.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Row(
+              children: [
+                for (var i = 0; i < _tabs.length; i++)
+                  Expanded(
+                    child: i == 2
+                        ? Center(child: _fab(_tabs[i]))
+                        : const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -80,29 +121,34 @@ class AppBottomNav extends StatelessWidget {
 
   Widget _item(_Tab tab, int index) {
     final active = index == activeIndex;
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onSelect == null ? null : () => onSelect!(index),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 7.0, bottom: 9.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppIcon(tab.icon,
-                size: 22.0, color: active ? AppTokens.teal : _restIcon),
-            const SizedBox(height: 2.0),
-            Text(
-              tab.label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: active ? AppTokens.teal700 : AppTokens.muted,
-                fontFamily: AppTokens.fontFamily,
-                fontSize: 9.5,
-                fontWeight: FontWeight.w700,
-                height: 1.1,
+    return Semantics(
+      button: true,
+      selected: active,
+      label: tab.label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onSelect == null ? null : () => onSelect!(index),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 7.0, bottom: 9.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(tab.icon,
+                  size: 22.0, color: active ? AppTokens.teal : _restIcon),
+              const SizedBox(height: 2.0),
+              Text(
+                tab.label,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: active ? AppTokens.teal700 : AppTokens.muted,
+                  fontFamily: AppTokens.fontFamily,
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -110,12 +156,13 @@ class AppBottomNav extends StatelessWidget {
 
   /// Centre FAB: a 46px teal circle with a 3px white band + a 1.5px teal-700
   /// ring, built as TWO nested Containers (0 blur) — the same sanctioned Viền
-  /// nét exception as the AppStepper `current` ring, NOT a BoxShadow. It sits
-  /// -22px above the bar via Transform.translate (a margin cannot overflow the
-  /// Row bounds), which keeps hit-testing at the shifted position.
+  /// nét exception as the AppStepper `current` ring, NOT a BoxShadow. It is
+  /// raised above the bar by the overlay `Positioned` in `build` (a layout
+  /// offset, not a Transform), so the whole ring stays inside the hit bounds.
   Widget _fab(_Tab tab) {
-    return Transform.translate(
-      offset: const Offset(0.0, -22.0),
+    return Semantics(
+      button: true,
+      label: tab.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onCreateQuote,

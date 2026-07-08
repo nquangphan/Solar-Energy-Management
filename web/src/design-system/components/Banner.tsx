@@ -9,6 +9,11 @@ export type BannerTone = 'warn' | 'info' | 'danger';
 export interface BannerProps {
   tone?: BannerTone;
   icon?: IconName; // optional left icon (warn/danger usually carry one; info often not)
+  /**
+   * ARIA live role for dynamically-shown banners (e.g. form validation errors):
+   * 'alert' announces assertively, 'status' politely. Omit for static banners.
+   */
+  role?: 'alert' | 'status';
   children: ReactNode;
 }
 
@@ -18,10 +23,10 @@ export interface BannerProps {
  * auxiliary and optional. Wrap emphasis in <b> in children (CSS `.banner b`
  * makes it weight 800).
  */
-export function Banner({ tone = 'warn', icon, children }: BannerProps) {
+export function Banner({ tone = 'warn', icon, role, children }: BannerProps) {
   const cls = ['banner', tone !== 'warn' && `banner--${tone}`].filter(Boolean).join(' ');
   return (
-    <div className={cls}>
+    <div className={cls} role={role}>
       {icon && <Icon name={icon} />}
       {children}
     </div>

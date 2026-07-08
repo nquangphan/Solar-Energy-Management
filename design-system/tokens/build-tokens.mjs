@@ -35,7 +35,7 @@ function camel(name) {
 }
 
 function num(n) {
-  return Number.isInteger(n) ? String(n) : String(n);
+  return String(n);
 }
 // Dart wants explicit doubles.
 function dartNum(n) {
@@ -158,6 +158,12 @@ ${roleVars}
 
 // --- Mobile: app_tokens.dart ----------------------------------------------
 function dartColor(hex) {
+  // Only #RRGGBB is supported — a 3-digit (#RGB) or malformed value would emit a
+  // broken `Color(0xFF…)` that the parity guard (self-consistent generation)
+  // cannot catch. Fail loudly at build time instead.
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+    throw new Error(`dartColor expects a #RRGGBB hex, got: ${hex}`);
+  }
   return `Color(0xFF${hex.slice(1).toUpperCase()})`;
 }
 function buildDart(t) {

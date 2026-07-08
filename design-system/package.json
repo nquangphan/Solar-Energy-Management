@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Single source of truth for Phương Nam Solar design tokens; generates web + mobile outputs.",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "node tokens/build-tokens.mjs && node icons/build-icons.mjs",
     "build:tokens": "node tokens/build-tokens.mjs",

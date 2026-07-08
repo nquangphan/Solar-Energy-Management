@@ -90,6 +90,11 @@ test('sprite + registry contain 0 external references and no raster (AC-1, AC-3)
   // No emoji / non-ASCII glyphs smuggled into the icon data.
   for (const body of Object.values(t.icons)) {
     assert.ok(/^[\x00-\x7F]*$/.test(body), 'icon body must be plain ASCII SVG markup (no emoji/raster)');
+    // Bodies are embedded into single-quoted JS/TS and Dart string literals by
+    // the generator. `'` `\` `` ` `` would break the literal and `$` interpolates
+    // in Dart — the generator escapes them, but reject them here so the source of
+    // truth stays trivially safe and a malformed mobile registry can never ship.
+    assert.ok(!/['\\`$]/.test(body), `icon body must not contain ' \\ \` or $ (breaks generated string literals): ${body}`);
   }
 });
 

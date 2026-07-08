@@ -21,12 +21,16 @@ export interface IconProps extends Omit<SVGProps<SVGSVGElement>, 'name'> {
  * Renders a canonical sprite icon via <use href="#ic-*">. Colour is inherited
  * from CSS `color` (currentColor) — set the colour on an ancestor (teal when
  * active, muted otherwise); never hard-code an icon colour here.
+ *
+ * Decorative by default (aria-hidden): the accessible name comes from the
+ * surrounding button/label. For a meaningful standalone icon, override via
+ * `aria-hidden={false}` + an `aria-label`/`role="img"` in `...rest`.
  */
 export function Icon({ name, size = 18, className, ...rest }: IconProps) {
   const sizeClass = size === 18 ? '' : SIZE_CLASS[size];
   const cls = ['icn', sizeClass, className].filter(Boolean).join(' ');
   return (
-    <svg className={cls} {...rest}>
+    <svg className={cls} aria-hidden {...rest}>
       <use href={`#${name}`} />
     </svg>
   );

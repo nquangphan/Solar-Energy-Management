@@ -54,7 +54,7 @@ export function LoginScreen() {
 
           <form onSubmit={handleSubmit} noValidate>
             {error && (
-              <Banner tone="danger" icon="ic-alert">
+              <Banner tone="danger" icon="ic-alert" role="alert">
                 {error}
               </Banner>
             )}
