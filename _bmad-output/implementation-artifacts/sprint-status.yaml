@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-09 (story 2-8 -> in-progress)
+# last_updated: 2026-07-09 (retrospective Epic 2 -> done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-09 (story 2-8 -> in-progress)
+last_updated: 2026-07-09 (retrospective Epic 2 -> done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -46,7 +46,7 @@ development_status:
   2-6-noi-ui-gating-vao-me-tren-hai-nen-tang: done
   2-7-domain-event-port-eventbus-notificationdispatcher-no-op-audit-subscriber: done
   2-8-quen-mat-khau-ho-so-doi-mat-khau: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
   epic-3: backlog
   3-1-crud-san-pham-gia: backlog
   3-2-gia-phan-tang-sau-co: backlog
@@ -107,7 +107,7 @@ action_items:
   - epic: 1
     action: "Cải thiện drift-guard: strip/loại comment trước khi assert để triệt false-positive tái diễn (6 story)"
     owner: "Amelia (Dev)"
-    status: open
+    status: in-progress
   - epic: 1
     action: "Đưa web tooling (tsc + bundler + test runtime) vào scope Story 2.1; typecheck toàn bộ .tsx tích luỹ từ Epic 1"
     owner: "Winston (Architect) + Amelia"
@@ -119,8 +119,44 @@ action_items:
   - epic: 1
     action: "Xác minh contract PermissionKey/filterNav (Story 1.10) khớp registry enum (Story 2.4) trước khi code 2.6"
     owner: "Winston (Architect)"
-    status: open
+    status: done
   - epic: 1
     action: "Lên scaffold android/ios cho mobile khi Epic 2/9 cần app chạy thật (camera/share)"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 2
+    action: "Dựng Postgres + chạy prisma migrate deploy 5 migration trên DB rỗng + prisma db seed; /health ping DB thật"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 2
+    action: "Thêm lane integration test cần DB (skip khi vắng DB): login-refresh-logout, unique constraint account_permissions, reset-password end-to-end"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 2
+    action: "Quyết định sản phẩm: kênh gửi mã đặt lại mật khẩu (admin đặt hộ / SMTP / SMS) — tính năng đã code nhưng mã chưa tới tay người dùng"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+  - epic: 2
+    action: "Quyết TD-1: tạo story app-scaffold web trước Story 3.4, hoặc ghi nhận chấp nhận text-guard-only xuyên Epic 3"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+  - epic: 2
+    action: "Backfill hồ sơ Story 2.8: tick 14 task, điền Dev Agent Record (model, debug log, completion notes, file list)"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 2
+    action: "Chốt cách chuẩn hoá SĐT E.164 (thư viện vs tự viết) trước khi code Story 3.3; chuẩn hoá chỉ ở backend"
+    owner: "Winston (Architect)"
+    status: open
+  - epic: 2
+    action: "Hoàn tất strip-comment cho design-system guard: trích helper dùng chung, sửa shell-tsx.test.mjs và components.test.mjs scan trên code đã strip"
+    owner: "Amelia (Dev)"
+    status: open
+  - epic: 2
+    action: "Quyết stance thu hồi access token (chấp nhận cửa sổ 15 phút vs denylist) trước Epic 8"
+    owner: "Winston (Architect)"
+    status: open
+  - epic: 2
+    action: "Đánh giá rate-limit IP cho 3 endpoint công khai (login, forgot-password, reset-password)"
     owner: "Amelia (Dev)"
     status: open

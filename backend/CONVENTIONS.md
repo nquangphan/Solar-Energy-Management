@@ -19,7 +19,7 @@ Hợp đồng đặt tên & quy ước cho **mọi** story backend. Nguồn: `AR
 
 ## Prisma `@@map` / `@map` (khi thêm model ở story sau)
 
-Entity Prisma PascalCase → map sang bảng snake_case số nhiều. Skeleton (2.1) **chưa** khai model nào; đây là mẫu cho story sở hữu entity (Account = 2.4, Order = E4…):
+Entity Prisma PascalCase → map sang bảng snake_case số nhiều. Skeleton (2.1) cố ý **chưa** khai model nào; mỗi story sở hữu entity của nó (`Account`+`Session` = 2.3 · `AccountPermission` = 2.4 · `AuditLog` = 2.7 · `PasswordResetCode` = 2.8 · `Order` = E4…). Mẫu:
 
 ```prisma
 model Account {
@@ -110,6 +110,28 @@ Mọi lỗi backend trả về **đúng một** shape (`ErrorEnvelopeDto`):
 - **Fail-fast secret:** thiếu/quá ngắn `JWT_ACCESS_SECRET` (< 32 ký tự) → `main.ts` `throw` lúc bootstrap (không ký JWT bằng secret rỗng).
 - **`Account`** (danh tính) là entity **base** tạo ở 2.3; Story 2.4 **mở rộng** cùng entity với registry quyền + `AccountPermission` (migration riêng, KHÔNG tạo lại bảng). Một entity, hai story bồi đắp — KHÔNG hai nhánh danh tính (AD-8).
 - Route `/auth/login|refresh|logout` là **ngoại lệ hạ-tầng-xác-thực có chủ ý** (như `/health`) — không áp quy ước "danh từ số nhiều" cho verb auth.
+
+## Đặt lại / đổi mật khẩu (Story 2.8)
+
+Ba route: `POST /auth/forgot-password` + `POST /auth/reset-password` (công khai, `@Public()`) và `POST /auth/change-password` (**cần Bearer** — nằm ở `change-password.controller.ts` riêng vì `AuthController` đã `@Public()` cấp class; **KHÔNG** nới guard).
+
+**Luật (không vi phạm):**
+
+- **Mã 6 chữ số sinh bằng `crypto.randomInt(0, 1_000_000)`** (rejection sampling ⇒ không modulo bias). **KHÔNG** dùng `% 1000000` trên `randomBytes`.
+- **Lưu HASH argon2id**, không bao giờ lưu/trả/log mã thô. Khác refresh token (SHA-256): mã 6 số chỉ ~20 bit entropy nên fast-hash sẽ vỡ tức thì nếu DB lộ. **Tra theo `accountId`**, KHÔNG theo `codeHash` (mã ngắn có thể trùng hash giữa các account).
+- **Bộ kiểm soát bù (đủ cả bộ, không bỏ cái nào):** TTL `PASSWORD_RESET_CODE_TTL_MINUTES` (mặc định 5') · **single-use** (`consumedAt` lật bằng cổng **atomic** `updateMany` + kiểm `count === 1`) · trần `PASSWORD_RESET_MAX_ATTEMPTS` (mặc định 5, tăng **atomic trước khi verify**) · **cooldown** = vòng đời mã (còn mã sống thì không phát mã mới).
+- **Chống user-enumeration:** `forgot-password` **luôn** trả cùng `200 { expiresInSeconds }` dù email tồn tại hay không, cân bằng timing bằng dummy hash (mirror `AuthService.login`). `reset-password` trả **một** `AppException(UNAUTHENTICATED, 401)` + **một** message duy nhất (`RESET_FAILED_MESSAGE`) cho **mọi** nhánh sai: email lạ / không có mã sống / mã sai / mã hết hạn / vượt trần thử.
+- **Sau reset VÀ sau change-password: thu hồi MỌI `Session`** của account (`session.updateMany({ revokedAt: null } → now)`).
+- **Change-password** bắt buộc verify mật khẩu hiện tại; mật khẩu mới trùng mật khẩu cũ → `400 VALIDATION_ERROR` + `fieldErrors[].field = 'newPassword'`.
+- **Audit đi QUA `EventBus`, KHÔNG gọi trực tiếp** (AD-18): `PasswordResetService`/`AuthService` chỉ inject `EventBus`, publish `PasswordResetRequested` / `PasswordResetCompleted` / `PasswordChanged` **sau khi commit**. **CẤM** inject `AuditService`/`NotificationDispatcher` — source-guard enforce.
+- **CẤM tuyệt đối bí mật trong payload event:** `before`/`after` KHÔNG chứa mật khẩu thô, `passwordHash`, hay mã xác thực. `AuditLog` là bản ghi **bất biến vĩnh viễn**.
+- **Password policy** (`dto/password-policy.ts`, dùng chung reset + change): ≥8 ký tự, có chữ **và** số. *Ghi nợ: NIST SP 800-63B Rev 4 khuyến nghị **bỏ** composition rule, ưu tiên độ dài + blocklist mật khẩu đã lộ. Giữ rule hiện tại vì là hợp đồng UX đã chốt — không tự ý đảo.*
+
+**Giới hạn đã biết (đừng giấu, đừng coi là đã xử):**
+
+- **Thu hồi phiên KHÔNG tức thì:** access JWT là stateless ⇒ sau reset/change, access token cũ **vẫn hợp lệ tối đa `ACCESS_TOKEN_TTL`** (mặc định 15 phút). Thu hồi tức thì cần denylist / kiểm DB mỗi request.
+- **Không có rate-limit IP** trên 3 endpoint công khai. Trần attempt + cooldown + response trung tính chặn **đoán mã** và **enumeration**, **không** chặn spam/DoS.
+- **Mã chưa tới tay người dùng:** chưa có kênh email/SMS; `NotificationDispatcher` bản đầu chỉ log. Luồng Quên mật khẩu chưa dùng được self-service.
 
 ## Guard quyền server-side — fail-closed toàn cục + `/me` (AD-4, Story 2.5)
 

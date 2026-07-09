@@ -24,7 +24,7 @@ npm run prisma:generate
 | `npm run start:dev` | Chạy dev (watch) |
 | `npm run build` / `npm run start:prod` | Build & chạy production |
 | `npm run lint` / `npm run format` | Lint & format |
-| `npm test` | Jest (e2e health + wiring + source-guard + OpenAPI drift-guard) |
+| `npm test` | Jest — 31 suite (unit + e2e + 6 source-guard kiến trúc + drift-guard OpenAPI/permissions). Hermetic: **không cần Postgres** |
 | `npm run openapi:gen` | Sinh `openapi/openapi.json` từ code (không cần server/DB) |
 | `npm run permissions:gen` | Sinh `openapi/permissions.json` từ registry quyền (không cần server/DB) |
 | `npm run prisma:migrate:dev` | Tạo/chạy migration (dev — cần Postgres) |
@@ -36,7 +36,7 @@ npm run prisma:generate
 Cần một Postgres đang chạy + `.env` có `DATABASE_URL` + `JWT_ACCESS_SECRET` (≥32 ký tự) + `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (xem `.env.example`). Sau đó:
 
 ```bash
-npm run prisma:migrate:deploy   # tạo bảng accounts + sessions + account_permissions từ migration đã commit
+npm run prisma:migrate:deploy   # tạo accounts, sessions, account_permissions, audit_logs, password_reset_codes
 npx prisma db seed              # tạo account admin; SEED_ADMIN_IS_SUPER_ADMIN=true → cấp preset SUPER_ADMIN
 npm run start:dev               # POST /auth/login với email/mật khẩu admin
 ```
@@ -50,6 +50,19 @@ Quyền là **một registry chính tắc** (`src/accounts/domain/permission-reg
 ## Enforce quyền server-side + `/me` (Story 2.5)
 
 Guard **fail-closed toàn cục**: mọi endpoint mặc định cần `Authorization: Bearer <accessToken>` (`APP_GUARD`: `JwtAuthGuard` → `PermissionsGuard`). `@Public()` mở route hạ-tầng (`/health`, `/auth/*`); `@RequirePermissions(PERM.x)` (AND) đòi quyền cụ thể; thiếu token → 401, thiếu quyền → 403. `GET /me` trả bộ quyền hiệu lực `{ id, email, displayName, permissions: string[] }` (sorted) để FE dựng phiên — server enforce mỗi request, client gating chỉ UX (AD-4). Chi tiết: `CONVENTIONS.md#Guard quyền server-side`.
+
+## Đặt lại & đổi mật khẩu (Story 2.8)
+
+Ba route: `POST /auth/forgot-password` (công khai — trả `{ expiresInSeconds }`, **cùng một response** dù email tồn tại hay không), `POST /auth/reset-password` (công khai — mã 6 số + mật khẩu mới → `204`), `POST /auth/change-password` (**cần Bearer** — verify mật khẩu hiện tại → `204`). Sau reset **và** sau change: **mọi phiên bị thu hồi**.
+
+Hai biến env (xem `.env.example`, có giá trị mặc định):
+
+| Biến | Mặc định | Việc |
+|---|---|---|
+| `PASSWORD_RESET_CODE_TTL_MINUTES` | `5` | Vòng đời mã 6 số; cũng là cooldown gửi lại mã |
+| `PASSWORD_RESET_MAX_ATTEMPTS` | `5` | Số lần nhập sai tối đa trước khi mã bị khoá |
+
+> ⚠️ **Phase 1 mã KHÔNG tới tay người dùng cuối.** Stack chưa có kênh email/SMS; `PasswordResetRequested` chỉ được `NotificationDispatcher` (no-op) ghi log. Luồng Quên mật khẩu **chưa dùng được self-service** cho tới khi chốt kênh gửi. Chi tiết: `CONVENTIONS.md#Đặt lại / đổi mật khẩu`.
 
 ## Domain event qua `EventBus` port (Story 2.7)
 
