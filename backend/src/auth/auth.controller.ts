@@ -8,10 +8,14 @@ import {
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { Public } from './public.decorator';
 import { AuthService } from './auth.service';
+import { PasswordResetService } from './password-reset.service';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
 import { LoginRequestDto } from './dto/login-request.dto';
 import { LogoutRequestDto } from './dto/logout-request.dto';
 import { RefreshRequestDto } from './dto/refresh-request.dto';
+import { ForgotPasswordRequestDto } from './dto/forgot-password-request.dto';
+import { ForgotPasswordResponseDto } from './dto/forgot-password-response.dto';
+import { ResetPasswordRequestDto } from './dto/reset-password-request.dto';
 
 /**
  * Endpoint xác thực. `/auth/login|refresh|logout` là **ngoại lệ hạ-tầng-xác-thực có
@@ -20,15 +24,22 @@ import { RefreshRequestDto } from './dto/refresh-request.dto';
  * Controller KHÔNG dựng envelope lỗi: `AuthService` ném `AppException`, filter trung
  * tâm (2.2) dựng envelope + traceId (AD-5).
  *
- * `@Public()` (cấp class) opt-out guard toàn cục fail-closed (2.5) cho cả ba route:
- * đăng nhập/refresh/logout KHÔNG thể đòi access token TRƯỚC khi có token. Quên `@Public`
- * ⇒ e2e `auth.e2e.spec.ts` fail 401 (lưới an toàn — sửa bằng `@Public`, KHÔNG nới guard).
+ * `@Public()` (cấp class) opt-out guard toàn cục fail-closed (2.5) cho MỌI route ở đây:
+ * đăng nhập/refresh/logout và quên/đặt lại mật khẩu đều KHÔNG thể đòi access token TRƯỚC
+ * khi có token. Quên `@Public` ⇒ e2e `auth.e2e.spec.ts` fail 401 (lưới an toàn — sửa bằng
+ * `@Public`, KHÔNG nới guard).
+ *
+ * Vì class này công khai TOÀN BỘ, `POST /auth/change-password` (cần phiên hợp lệ) nằm ở
+ * `ChangePasswordController` riêng — thêm nó vào đây sẽ vô tình mở nó cho mọi người.
  */
 @ApiTags('auth')
 @Public()
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
@@ -62,5 +73,32 @@ export class AuthController {
   })
   async logout(@Body() body: LogoutRequestDto): Promise<void> {
     await this.auth.logout(body.refreshToken);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: ForgotPasswordResponseDto,
+    description:
+      'Luôn 200 với cùng một body, dù email tồn tại hay không (chống dò email hợp lệ).',
+  })
+  forgotPassword(
+    @Body() body: ForgotPasswordRequestDto,
+  ): Promise<ForgotPasswordResponseDto> {
+    return this.passwordReset.requestCode(body.email);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({
+    description: 'Mật khẩu đã đổi, mã đã tiêu thụ, mọi phiên đã bị thu hồi.',
+  })
+  @ApiUnauthorizedResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc email lạ (UNAUTHENTICATED, một message duy nhất).',
+  })
+  async resetPassword(@Body() body: ResetPasswordRequestDto): Promise<void> {
+    await this.passwordReset.reset(body.email, body.code, body.newPassword);
   }
 }

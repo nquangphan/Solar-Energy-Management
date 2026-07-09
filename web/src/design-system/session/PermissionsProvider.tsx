@@ -16,7 +16,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { PermissionSet } from '../gating/permissions';
-import type { MePort } from './me-port';
+import type { MePort, MeResponse } from './me-port';
 import { toPermissionSet } from './session';
 import type { SessionStatus } from './session';
 
@@ -24,6 +24,12 @@ import type { SessionStatus } from './session';
 export interface PermissionsState {
   status: SessionStatus;
   perms: PermissionSet;
+  /**
+   * The raw `/me` identity (`null` until ready, or on error). The Hồ sơ screen
+   * reads `displayName`/`email` from here rather than fetching `/me` a second
+   * time — the provider already has the payload.
+   */
+  me: MeResponse | null;
 }
 
 const EMPTY_PERMS: PermissionSet = new Set<string>();
@@ -31,6 +37,7 @@ const EMPTY_PERMS: PermissionSet = new Set<string>();
 const PermissionsContext = createContext<PermissionsState>({
   status: 'loading',
   perms: EMPTY_PERMS,
+  me: null,
 });
 
 export interface PermissionsProviderProps {
@@ -40,7 +47,7 @@ export interface PermissionsProviderProps {
 }
 
 /**
- * Fetches `/me` once via `port`, then provides `{ status, perms }`. While
+ * Fetches `/me` once via `port`, then provides `{ status, perms, me }`. While
  * `status === 'loading'` the shell shows a `Skeleton`; on failure `status`
  * becomes `'error'` and the shell shows a `Banner`/`ErrorState` (design-system
  * components — no ad-hoc UI, AD-13). No caching/persistence (YAGNI): the session
@@ -50,6 +57,7 @@ export function PermissionsProvider({ port, children }: PermissionsProviderProps
   const [state, setState] = useState<PermissionsState>({
     status: 'loading',
     perms: EMPTY_PERMS,
+    me: null,
   });
 
   useEffect(() => {
@@ -57,10 +65,10 @@ export function PermissionsProvider({ port, children }: PermissionsProviderProps
     port
       .fetchMe()
       .then((me) => {
-        if (alive) setState({ status: 'ready', perms: toPermissionSet(me) });
+        if (alive) setState({ status: 'ready', perms: toPermissionSet(me), me });
       })
       .catch(() => {
-        if (alive) setState({ status: 'error', perms: EMPTY_PERMS });
+        if (alive) setState({ status: 'error', perms: EMPTY_PERMS, me: null });
       });
     return () => {
       alive = false;

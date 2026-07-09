@@ -8,8 +8,11 @@
 // `/me` payload the backend returns.
 
 export 'me_port.dart';
+export 'password_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
-// TEST/DEMO-ONLY — not a real session source (see fake_me_port.dart).
+// TEST/DEMO-ONLY — not a real session source (see fake_me_port.dart,
+// fake_password_port.dart). They enforce no security rule; the backend owns all of them.
 export 'fake_me_port.dart';
+export 'fake_password_port.dart';

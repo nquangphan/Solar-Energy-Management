@@ -51,6 +51,54 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(document.components?.schemas?.LogoutRequestDto).toBeDefined();
   });
 
+  it('spec chứa 3 route mật khẩu + DTO (FE gen được client quên/đổi mật khẩu, AD-12)', () => {
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/auth/forgot-password']).toBeDefined();
+    expect(document.paths['/auth/reset-password']).toBeDefined();
+    expect(document.paths['/auth/change-password']).toBeDefined();
+    expect(
+      document.components?.schemas?.ForgotPasswordRequestDto,
+    ).toBeDefined();
+    expect(
+      document.components?.schemas?.ForgotPasswordResponseDto,
+    ).toBeDefined();
+    expect(document.components?.schemas?.ResetPasswordRequestDto).toBeDefined();
+    expect(
+      document.components?.schemas?.ChangePasswordRequestDto,
+    ).toBeDefined();
+  });
+
+  it('chỉ /auth/change-password yêu cầu bearer; quên/đặt-lại mật khẩu là công khai (AD-4)', () => {
+    // Hợp đồng hiển thị trong spec: người QUÊN mật khẩu chưa có token, nên hai route kia
+    // phải công khai; còn ĐỔI mật khẩu bắt buộc phiên hợp lệ. Spec lệch = FE gen sai client.
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/auth/change-password'].post?.security).toEqual([
+      { bearer: [] },
+    ]);
+    expect(
+      document.paths['/auth/forgot-password'].post?.security,
+    ).toBeUndefined();
+    expect(
+      document.paths['/auth/reset-password'].post?.security,
+    ).toBeUndefined();
+  });
+
+  it('KHÔNG response schema nào phơi mã xác thực hay passwordHash', () => {
+    // Mã rời server qua kênh gửi, không bao giờ qua response; `passwordHash` không bao giờ
+    // rời server. Nếu ai thêm field đó vào một DTO response, spec sẽ tố giác ngay.
+    const document = buildOpenApiDocument(app);
+    const responseDtos = [
+      'ForgotPasswordResponseDto',
+      'AuthTokensDto',
+      'MeResponseDto',
+    ];
+    for (const name of responseDtos) {
+      const schema = JSON.stringify(document.components?.schemas?.[name]);
+      expect(schema).not.toMatch(/passwordHash/);
+      expect(schema).not.toMatch(/"code"/);
+    }
+  });
+
   it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
     // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
     // nào tham chiếu) — chứng minh `extraModels` hoạt động.

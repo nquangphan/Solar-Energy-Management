@@ -5,6 +5,7 @@ import { AccountsService } from '../src/accounts/accounts.service';
 import { PasswordService } from '../src/auth/password.service';
 import type { AuthConfig } from '../src/auth/auth.config';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import type { EventBus } from '../src/events/event-bus';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
 
@@ -43,16 +44,26 @@ describe('AuthService (unit, hermetic)', () => {
   const config: AuthConfig = {
     accessTokenTtlSeconds: 900,
     refreshTokenTtlMs: 30 * 24 * 60 * 60 * 1000,
+    passwordResetTtlMs: 5 * 60 * 1000,
+    passwordResetMaxAttempts: 5,
   };
 
-  let accounts: { findByEmail: jest.Mock; findById: jest.Mock };
+  let accounts: {
+    findByEmail: jest.Mock;
+    findById: jest.Mock;
+    updatePasswordHash: jest.Mock;
+  };
   let sessionRepo: SessionRepoMock;
   let jwt: JwtService;
   let passwords: PasswordService;
   let service: AuthService;
 
   beforeEach(() => {
-    accounts = { findByEmail: jest.fn(), findById: jest.fn() };
+    accounts = {
+      findByEmail: jest.fn(),
+      findById: jest.fn(),
+      updatePasswordHash: jest.fn().mockResolvedValue(undefined),
+    };
     sessionRepo = {
       create: jest.fn().mockResolvedValue({}),
       findUnique: jest.fn(),
@@ -62,11 +73,16 @@ describe('AuthService (unit, hermetic)', () => {
     jwt = new JwtService({ secret: TEST_JWT_SECRET });
     passwords = new PasswordService();
     const prisma = { session: sessionRepo } as unknown as PrismaService;
+    const eventBus = {
+      publish: jest.fn().mockResolvedValue(undefined),
+      subscribe: jest.fn(),
+    } as unknown as EventBus;
     service = new AuthService(
       accounts as unknown as AccountsService,
       passwords,
       jwt,
       prisma,
+      eventBus,
       config,
     );
   });

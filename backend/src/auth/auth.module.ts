@@ -4,6 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { AccountsModule } from '../accounts/accounts.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { ChangePasswordController } from './change-password.controller';
+import { PasswordResetService } from './password-reset.service';
 import { PasswordService } from './password.service';
 import { AUTH_CONFIG, loadAuthConfig } from './auth.config';
 import { MeController } from './me.controller';
@@ -24,15 +26,20 @@ import { PermissionsGuard } from './permissions.guard';
  * thứ tự chạy ⇒ **Jwt TRƯỚC Permissions** (Permissions đọc `request.account` do Jwt gắn).
  * Route công khai opt-out bằng `@Public()` (`/health`, `/auth/*`). Export guard/decorator
  * KHÔNG cần vì đã toàn cục; module domain sau chỉ cần `@RequirePermissions`.
+ *
+ * Story 2.8 — `PasswordResetService` + `ChangePasswordController`. `EventBus` inject được
+ * mà KHÔNG import gì (EventsModule `@Global`); tuyệt đối KHÔNG import `AuditModule`/
+ * `NotificationsModule` ở đây — producer chỉ biết cái port (AD-18).
  */
 @Module({
   imports: [
     AccountsModule,
     JwtModule.register({ secret: process.env.JWT_ACCESS_SECRET }),
   ],
-  controllers: [AuthController, MeController],
+  controllers: [AuthController, ChangePasswordController, MeController],
   providers: [
     AuthService,
+    PasswordResetService,
     PasswordService,
     { provide: AUTH_CONFIG, useFactory: loadAuthConfig },
     { provide: APP_GUARD, useClass: JwtAuthGuard },

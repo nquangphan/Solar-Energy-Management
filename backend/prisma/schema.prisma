@@ -38,6 +38,7 @@ model Account {
   updatedAt    DateTime  @updatedAt @map("updated_at")
   sessions     Session[]
   permissions  AccountPermission[]
+  passwordResetCodes PasswordResetCode[]
 
   @@map("accounts")
 }
@@ -77,6 +78,26 @@ model AuditLog {
   @@index([actorAccountId])
   @@index([targetType, targetId])
   @@map("audit_logs")
+}
+
+/// Mã đặt lại mật khẩu — LƯU HASH, không bao giờ lưu/đọc mã thô (mirror Session.refreshTokenHash,
+/// AD-12). Mã entropy thấp (6 chữ số ≈ 20 bit) ⇒ an toàn dựa vào: TTL ngắn + single-use
+/// (`consumedAt`) + trần số lần thử (`attemptCount`) + response trung tính. Vì entropy thấp,
+/// hash bằng argon2id (KHÔNG SHA-256): nếu DB bị đọc, fast-hash của 10⁶ khả năng vỡ tức thì.
+/// Tra cứu theo `accountId` (KHÔNG theo hash) — argon2 salt ngẫu nhiên nên hash không tra được,
+/// và mã 6 số có thể trùng nhau giữa các account.
+model PasswordResetCode {
+  id           String    @id @default(uuid())
+  accountId    String    @map("account_id")
+  account      Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  codeHash     String    @map("code_hash")
+  attemptCount Int       @default(0) @map("attempt_count")
+  expiresAt    DateTime  @map("expires_at")
+  consumedAt   DateTime? @map("consumed_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([accountId])
+  @@map("password_reset_codes")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

@@ -64,7 +64,12 @@ class AppButton extends StatelessWidget {
             AppIcon(icon!, size: 15.0, color: colors.fg),
             const SizedBox(width: 6.0),
           ],
-          if (child != null) child! else if (label != null) Text(label!),
+          // Let a long label ellipsize instead of overflowing a width-bounded
+          // (e.g. `wide`) button on a narrow frame.
+          if (child != null)
+            Flexible(child: child!)
+          else if (label != null)
+            Flexible(child: Text(label!, overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-09 (story 2-7 -> done)
+# last_updated: 2026-07-09 (story 2-8 -> in-progress)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-09 (story 2-7 -> done)
+last_updated: 2026-07-09 (story 2-8 -> in-progress)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -45,7 +45,7 @@ development_status:
   2-5-endpoint-me-guard-quyen-server-side-moi-request: done
   2-6-noi-ui-gating-vao-me-tren-hai-nen-tang: done
   2-7-domain-event-port-eventbus-notificationdispatcher-no-op-audit-subscriber: done
-  2-8-quen-mat-khau-ho-so-doi-mat-khau: backlog
+  2-8-quen-mat-khau-ho-so-doi-mat-khau: done
   epic-2-retrospective: optional
   epic-3: backlog
   3-1-crud-san-pham-gia: backlog

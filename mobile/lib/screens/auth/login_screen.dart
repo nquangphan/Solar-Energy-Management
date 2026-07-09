@@ -17,7 +17,10 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/tokens/app_tokens.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.onForgotPassword});
+
+  /// Emits "show the Quên mật khẩu screen" (Story 2.8). No router here (AD-1/2).
+  final VoidCallback? onForgotPassword;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -96,10 +99,10 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: _submit,
             ),
             const SizedBox(height: AppTokens.space16),
-            // s-forgot = Story 2.8; link presentational, chưa có router (AD-1/2).
+            // s-forgot landed ở Story 2.8; tap chỉ EMIT ý định (AD-1/2).
             Center(
               child: GestureDetector(
-                onTap: () {},
+                onTap: widget.onForgotPassword,
                 child: const Text(
                   'Quên mật khẩu?',
                   style: TextStyle(

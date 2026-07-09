@@ -30,18 +30,24 @@ enum SessionStatus { loading, ready, error }
 /// (Story 2.5). Never treat a hidden nav item / shrunk AppGate as access control.
 Set<PermissionKey> toPermissionSet(MeResponse me) => me.permissions.toSet();
 
-/// InheritedWidget exposing the effective session `{ status, perms }` to the
+/// InheritedWidget exposing the effective session `{ status, perms, me }` to the
 /// tree. Read it with `PermissionsScope.of(context)`.
 class PermissionsScope extends InheritedWidget {
   const PermissionsScope({
     super.key,
     required this.status,
     required this.perms,
+    this.me,
     required super.child,
   });
 
   final SessionStatus status;
   final Set<PermissionKey> perms;
+
+  /// The raw `/me` identity (null until ready, or on error). The Hồ sơ screen
+  /// reads `displayName`/`email` from here rather than fetching `/me` a second
+  /// time — the provider already has the payload.
+  final MeResponse? me;
 
   /// Order-list scope selector (AC-3, FR-18): `'all'` vs `'mine'`, ready for
   /// Epic 5. Same pure `orderScope(perms)` from the gating primitive — only its
@@ -57,7 +63,9 @@ class PermissionsScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(PermissionsScope oldWidget) =>
-      status != oldWidget.status || perms != oldWidget.perms;
+      status != oldWidget.status ||
+      perms != oldWidget.perms ||
+      me != oldWidget.me;
 }
 
 /// Fetches `/me` once via [port], maps it to a permission set, and provides it to
@@ -83,6 +91,7 @@ class PermissionsProvider extends StatefulWidget {
 class _PermissionsProviderState extends State<PermissionsProvider> {
   SessionStatus _status = SessionStatus.loading;
   Set<PermissionKey> _perms = const {};
+  MeResponse? _me;
 
   @override
   void initState() {
@@ -96,12 +105,14 @@ class _PermissionsProviderState extends State<PermissionsProvider> {
       if (!mounted) return;
       setState(() {
         _perms = toPermissionSet(me);
+        _me = me;
         _status = SessionStatus.ready;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _perms = const {};
+        _me = null;
         _status = SessionStatus.error;
       });
     }
@@ -112,6 +123,7 @@ class _PermissionsProviderState extends State<PermissionsProvider> {
     return PermissionsScope(
       status: _status,
       perms: _perms,
+      me: _me,
       child: widget.child,
     );
   }

@@ -1,0 +1,73 @@
+/* hand-authored — Story 2.8 profile-screen layout wrapper. Composition-level
+   styling (column layout + identity card internals), NOT a design-system
+   component — the card/frame/inputs/buttons/banners are shipped components. Only
+   token vars for every colour; flat borders, no elevation effects (Viền nét,
+   UX-DR-4). The mockup's `kv` and `notecard` are composed here from Card/Banner
+   rather than added to the design-system (that would pull in SSOT + parity
+   guards, out of scope). Load AFTER tokens.css / components.css / shell.css. */
+
+.profile-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.profile-identity {
+  padding: var(--space-22);
+}
+
+.profile-avatar {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--border-width) solid var(--teal);
+  border-radius: var(--radius-lg);
+  color: var(--teal);
+  margin-bottom: var(--space-8);
+}
+
+.profile-name {
+  font-size: 17px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  margin-bottom: var(--space-16);
+}
+
+/* Definition list = the mockup's `kv` rows, without inventing a component. */
+.profile-kv {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  row-gap: var(--space-8);
+  margin: 0;
+}
+
+.profile-kv dt {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.profile-kv dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.profile-change {
+  max-width: 520px;
+}
+
+.profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+}

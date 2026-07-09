@@ -56,9 +56,16 @@
   margin-top: var(--space-12);
 }
 
+/* Rendered as a <button> (it emits intent, it does not navigate), so the native
+   chrome is reset back to the link look the mockup shows. */
 .login-forgot-link {
   font-size: 12px;
   font-weight: 700;
   color: var(--teal-700);
   text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
 }

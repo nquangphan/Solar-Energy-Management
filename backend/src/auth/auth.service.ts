@@ -5,9 +5,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/errors/app.exception';
 import { ErrorCode } from '../common/errors/error-code';
 import { AccountsService } from '../accounts/accounts.service';
+import { EventBus } from '../events/event-bus';
 import { PasswordService } from './password.service';
 import { AUTH_CONFIG, type AuthConfig } from './auth.config';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
+import { PasswordChanged } from './domain/password-events';
 
 /**
  * Message DUY NHẤT cho MỌI nhánh auth-fail (email lạ / account inactive / sai mật khẩu
@@ -19,8 +21,11 @@ const AUTH_FAILED_MESSAGE = 'Thông tin đăng nhập không đúng';
 
 /**
  * Xác thực: login (phát access JWT + refresh opaque), refresh (rotate + revoke phiên
- * cũ), logout (revoke phiên, idempotent). AD-12: session thu hồi được ⇒ refresh token
- * lưu HASH server-side ở `sessions`.
+ * cũ), logout (revoke phiên, idempotent), changePassword (self-service). AD-12: session
+ * thu hồi được ⇒ refresh token lưu HASH server-side ở `sessions`.
+ *
+ * Inject `EventBus` — PORT DUY NHẤT phát domain event (AD-18). Hệ quả nghiệp vụ (audit,
+ * notification) đến qua consumer tự đăng ký; service này KHÔNG biết consumer nào tồn tại.
  *
  * Thiết kế token (xem CONVENTIONS.md#Auth):
  *  - Access = **JWT** ký `JWT_ACCESS_SECRET`, TTL ngắn, stateless (guard 2.5 verify).
@@ -41,6 +46,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
+    private readonly eventBus: EventBus,
     @Inject(AUTH_CONFIG) private readonly config: AuthConfig,
   ) {
     this.dummyHash = this.passwords.hash(randomBytes(16).toString('hex'));
@@ -116,6 +122,61 @@ export class AuthService {
       where: { refreshTokenHash: hashToken(refreshToken), revokedAt: null },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Tự đổi mật khẩu (self-service, cần phiên hợp lệ). Bắt buộc verify mật khẩu HIỆN TẠI —
+   * một phiên bị chiếm KHÔNG được phép tự đổi mật khẩu (OWASP). Mật khẩu mới trùng mật
+   * khẩu cũ bị từ chối. Ghi hash mới + **thu hồi mọi phiên** trong CÙNG một transaction:
+   * nếu chỉ ghi được một nửa, kẻ đang giữ phiên bị chiếm vẫn truy cập được — đúng thứ mà
+   * "thu hồi mọi phiên" sinh ra để chặn. Publish `PasswordChanged` SAU khi commit; audit
+   * đến qua `AuditSubscriber` (AD-18) — service này KHÔNG ghi audit trực tiếp.
+   */
+  async changePassword(
+    accountId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const account = await this.accounts.findById(accountId);
+    // Verify LUÔN (dummy hash khi account vắng) — cân bằng thời gian phản hồi.
+    const currentOk = await this.passwords.verify(
+      account?.passwordHash ?? (await this.dummyHash),
+      currentPassword,
+    );
+    if (!account || !currentOk) {
+      throw new AppException(
+        ErrorCode.UNAUTHENTICATED,
+        401,
+        'Mật khẩu hiện tại không đúng',
+      );
+    }
+    if (newPassword === currentPassword) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Mật khẩu mới phải khác mật khẩu hiện tại.',
+        [
+          {
+            field: 'newPassword',
+            code: 'sameAsCurrent',
+            message: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
+          },
+        ],
+      );
+    }
+
+    const newPasswordHash = await this.passwords.hash(newPassword);
+    await this.prisma.$transaction(async (tx) => {
+      await this.accounts.updatePasswordHash(account.id, newPasswordHash, tx);
+      await tx.session.updateMany({
+        where: { accountId: account.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
+
+    // Publish SAU khi commit: đổi mật khẩu KHÔNG được rollback vì audit ghi lỗi
+    // (`InProcessEventBus` cô lập + log lỗi consumer).
+    await this.eventBus.publish(new PasswordChanged(account.id, new Date()));
   }
 
   /** Ký access JWT + sinh refresh opaque + lưu phiên (băm refresh). */

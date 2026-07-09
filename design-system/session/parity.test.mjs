@@ -23,9 +23,11 @@ const mobDir = resolve(repoRoot, 'mobile/lib/design_system/session');
 test('the session module ships on BOTH platforms (twin files)', () => {
   const parityFiles = {
     'me-port.ts': 'me_port.dart',
+    'password-port.ts': 'password_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',
+    'fake-password-port.ts': 'fake_password_port.dart',
     'SessionGatingExample.tsx': 'app_session_gating_example.dart',
     'index.ts': 'session.dart',
   };
@@ -43,6 +45,31 @@ test('/me → PermissionSet mapping is symmetric (both build a Set from permissi
   // Both expose the same three-state lifecycle.
   assert.ok(webSession.includes("'loading'") && webSession.includes("'ready'") && webSession.includes("'error'"), 'web must expose loading/ready/error');
   assert.ok(mobSession.includes('SessionStatus') && mobSession.includes('loading') && mobSession.includes('ready') && mobSession.includes('error'), 'mobile must expose loading/ready/error');
+});
+
+test('the password port exposes the SAME three methods on both platforms (Story 2.8)', () => {
+  const webPort = readFileSync(resolve(webDir, 'password-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'password_port.dart'), 'utf8');
+  for (const method of ['requestResetCode', 'resetPassword', 'changePassword']) {
+    assert.ok(webPort.includes(method), `web PasswordPort missing ${method}`);
+    assert.ok(mobPort.includes(method), `mobile PasswordPort missing ${method}`);
+  }
+  // The port must never carry the verification code INBOUND: `requestResetCode`
+  // returns only the code lifetime. A `code` in a RESPONSE shape would mean the
+  // backend leaked it — the whole reset flow collapses if that is ever allowed.
+  assert.match(webPort, /requestResetCode\(email: string\): Promise<\{ expiresInSeconds: number \}>/, 'web requestResetCode must resolve only expiresInSeconds');
+  assert.match(mobPort, /Future<int> requestResetCode\(String email\)/, 'mobile requestResetCode must resolve only the code lifetime');
+});
+
+test('the session provider exposes the /me identity on both platforms (Story 2.8)', () => {
+  // The Hồ sơ screen needs displayName/email. The provider ALREADY fetched /me —
+  // it must expose the payload, not force a second call.
+  const provider = readFileSync(resolve(webDir, 'PermissionsProvider.tsx'), 'utf8');
+  const hook = readFileSync(resolve(webDir, 'use-permissions.ts'), 'utf8');
+  const mobSession = readFileSync(resolve(mobDir, 'app_session.dart'), 'utf8');
+  assert.match(provider, /me: MeResponse \| null/, 'web PermissionsState must carry `me`');
+  assert.match(hook, /\bme\b/, 'usePermissions must re-expose `me`');
+  assert.match(mobSession, /final MeResponse\? me;/, 'mobile PermissionsScope must carry `me`');
 });
 
 test('both platforms derive permission keys from the SAME registry (AD-17)', () => {

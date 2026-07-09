@@ -7,6 +7,7 @@
 // `/me` payload the backend returns.
 
 export type { MePort, MeResponse } from './me-port';
+export type { PasswordPort } from './password-port';
 export { toPermissionSet } from './session';
 export type { SessionStatus } from './session';
 export { PermissionsProvider, usePermissionsContext } from './PermissionsProvider';
@@ -15,5 +16,7 @@ export { usePermissions } from './use-permissions';
 export type { UsePermissions } from './use-permissions';
 export { SessionGatingExample } from './SessionGatingExample';
 
-// TEST/DEMO-ONLY — not a real session source (see fake-me-port.ts).
+// TEST/DEMO-ONLY — not a real session source (see fake-me-port.ts,
+// fake-password-port.ts). They enforce no security rule; the backend owns all of them.
 export { FakeMePort, DEMO_ME } from './fake-me-port';
+export { FakePasswordPort, DEMO_EXPIRES_IN_SECONDS } from './fake-password-port';

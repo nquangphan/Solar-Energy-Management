@@ -6,7 +6,8 @@
 //
 // Demo UI — logic xác thực thật (JWT access+refresh) nối ở Story 2.3; đây chỉ
 // validate trình bày (rỗng/định dạng). KHÔNG gọi mạng, KHÔNG token, KHÔNG router
-// (AD-1/2). Màn "Quên mật khẩu" (s-forgot) = Story 2.8 — ở đây chỉ có link.
+// (AD-1/2). Màn "Quên mật khẩu" (s-forgot) landed ở Story 2.8 — link ở đây chỉ
+// EMIT ý định qua `onForgotPassword`; caller quyết định hiển thị màn nào.
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
@@ -16,7 +17,12 @@ import { WebShell } from '../../design-system/shell';
 
 import './login.css';
 
-export function LoginScreen() {
+export interface LoginScreenProps {
+  /** Emits "show the Quên mật khẩu screen". No router here (AD-1/2). */
+  onForgotPassword?: () => void;
+}
+
+export function LoginScreen({ onForgotPassword }: LoginScreenProps = {}) {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -79,10 +85,16 @@ export function LoginScreen() {
           </form>
 
           <div className="login-forgot">
-            {/* s-forgot = Story 2.8; link presentational, chưa có router (AD-1/2). */}
-            <a className="login-forgot-link" href="#">
+            {/* Nút, không phải anchor: nó không điều hướng đi đâu cả — nó phát ý định
+                cho caller (chưa có router, AD-1/2). `<a href="#">` sẽ nói dối cả trình
+                đọc màn hình lẫn bàn phím. */}
+            <button
+              type="button"
+              className="login-forgot-link"
+              onClick={onForgotPassword}
+            >
               Quên mật khẩu?
-            </a>
+            </button>
           </div>
         </Card>
       </div>

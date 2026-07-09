@@ -59,7 +59,7 @@ class AppBottomNav extends StatelessWidget {
   // it. Both fixed so the raised FAB lives INSIDE the widget's hit bounds: a
   // Transform-raised FAB overflows the parent box and Flutter drops taps in the
   // overflow band (rejects out-of-bounds positions before reaching the FAB).
-  static const double _barHeight = 58.0;
+  static const double _barHeight = 64.0;
   static const double _fabRaise = 22.0;
 
   @override

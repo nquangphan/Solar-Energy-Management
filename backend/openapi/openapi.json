@@ -128,6 +128,120 @@
         ]
       }
     },
+    "/auth/forgot-password": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Luôn 200 với cùng một body, dù email tồn tại hay không (chống dò email hợp lệ).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForgotPasswordResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/reset-password": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Mật khẩu đã đổi, mã đã tiêu thụ, mọi phiên đã bị thu hồi."
+          },
+          "401": {
+            "description": "Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc email lạ (UNAUTHENTICATED, một message duy nhất).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/change-password": {
+      "post": {
+        "operationId": "ChangePasswordController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Mật khẩu đã đổi; mọi phiên (kể cả phiên hiện tại) đã bị thu hồi."
+          },
+          "400": {
+            "description": "Mật khẩu mới không đạt chính sách hoặc trùng mật khẩu hiện tại (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Thiếu access token, hoặc mật khẩu hiện tại không đúng (UNAUTHENTICATED).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/me": {
       "get": {
         "operationId": "MeController_me",
@@ -325,6 +439,76 @@
         },
         "required": [
           "refreshToken"
+        ]
+      },
+      "ForgotPasswordRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email đã đăng ký của tài khoản cần đặt lại mật khẩu.",
+            "example": "admin@example.com"
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "ForgotPasswordResponseDto": {
+        "type": "object",
+        "properties": {
+          "expiresInSeconds": {
+            "type": "number",
+            "description": "Số giây mã xác thực còn hiệu lực. Hằng số từ config — không tiết lộ tài khoản có tồn tại hay không.",
+            "example": 300
+          }
+        },
+        "required": [
+          "expiresInSeconds"
+        ]
+      },
+      "ResetPasswordRequestDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "Email đã đăng ký (cùng email đã yêu cầu mã).",
+            "example": "admin@example.com"
+          },
+          "code": {
+            "type": "string",
+            "description": "Mã xác thực 6 chữ số đã nhận.",
+            "example": "000000"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "Mật khẩu mới. Tối thiểu 8 ký tự, có chữ và số.",
+            "example": "MatKhauMoi123"
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "newPassword"
+        ]
+      },
+      "ChangePasswordRequestDto": {
+        "type": "object",
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "description": "Mật khẩu hiện tại — bắt buộc để một phiên bị chiếm không tự đổi được.",
+            "example": "MatKhauCu123"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "Mật khẩu mới. Tối thiểu 8 ký tự, có chữ và số. Phải khác mật khẩu hiện tại.",
+            "example": "MatKhauMoi456"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
         ]
       },
       "MeResponseDto": {
