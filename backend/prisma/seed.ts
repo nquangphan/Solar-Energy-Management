@@ -19,7 +19,8 @@ import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
  * với driver adapter — source-guard AD-1 chỉ quét `src/`.
  */
 async function main(): Promise<void> {
-  const email = process.env.SEED_ADMIN_EMAIL?.trim();
+  // Lowercase to match AccountsService.normalizeEmail — email is case-insensitive.
+  const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
   if (!email || !password) {
     throw new Error(

@@ -15,7 +15,15 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 
-import { Banner, Button, Card, Field, Frame } from '../../design-system/components';
+import {
+  Banner,
+  Button,
+  Card,
+  ErrorState,
+  Field,
+  Frame,
+  Skeleton,
+} from '../../design-system/components';
 import { Icon } from '../../design-system/icons/Icon';
 import { filterNav } from '../../design-system/gating/permissions';
 import type { PasswordPort } from '../../design-system/session/password-port';
@@ -33,7 +41,7 @@ export interface ProfileScreenProps {
 const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$/;
 
 export function ProfileScreen({ port }: ProfileScreenProps) {
-  const { perms, me } = usePermissions();
+  const { status, perms, me } = usePermissions();
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -49,6 +57,9 @@ export function ProfileScreen({ port }: ProfileScreenProps) {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    // Clear a prior success banner: a later validation error must not show the
+    // green "changed" banner alongside the red one.
+    setDone(false);
     if (current.trim() === '') {
       setError('Nhập mật khẩu hiện tại.');
       return;
@@ -69,6 +80,26 @@ export function ProfileScreen({ port }: ProfileScreenProps) {
     } catch {
       setError('Không đổi được mật khẩu. Kiểm tra mật khẩu hiện tại.');
     }
+  }
+
+  // Until /me resolves, the identity is unknown — show a loading/error state
+  // instead of an identity card full of empty strings.
+  if (status !== 'ready') {
+    return (
+      <WebShell
+        url="app.phuongnamsolar.vn/ho-so"
+        sidebar={<Sidebar sections={filterNav(SIDEBAR_NAV, perms)} activeKey="profile" />}
+        topbar={<Topbar eyebrow="TÀI KHOẢN" title="Hồ sơ" />}
+      >
+        <div className="profile-wrap">
+          {status === 'error' ? (
+            <ErrorState message="Không tải được hồ sơ" />
+          ) : (
+            <Skeleton />
+          )}
+        </div>
+      </WebShell>
+    );
   }
 
   return (

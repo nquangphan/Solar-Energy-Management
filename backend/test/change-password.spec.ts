@@ -45,6 +45,7 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
     updatePasswordHash: jest.Mock;
   };
   let txSessionRepo: { updateMany: jest.Mock };
+  let txResetRepo: { updateMany: jest.Mock };
   let transaction: jest.Mock;
   let eventBus: { publish: jest.Mock; subscribe: jest.Mock };
   let passwords: PasswordService;
@@ -57,6 +58,7 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
       updatePasswordHash: jest.fn().mockResolvedValue(undefined),
     };
     txSessionRepo = { updateMany: jest.fn().mockResolvedValue({ count: 3 }) };
+    txResetRepo = { updateMany: jest.fn().mockResolvedValue({ count: 0 }) };
     eventBus = {
       publish: jest.fn().mockResolvedValue(undefined),
       subscribe: jest.fn(),
@@ -64,7 +66,7 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
     passwords = new PasswordService();
 
     transaction = jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
-      cb({ session: txSessionRepo }),
+      cb({ session: txSessionRepo, passwordResetCode: txResetRepo }),
     );
 
     const prisma = {
@@ -171,5 +173,15 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
     // Ghi account đi qua CÙNG tx client với revoke phiên.
     expect(accounts.updatePasswordHash.mock.calls[0][2]).toBeDefined();
     expect(txSessionRepo.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('tiêu thụ mọi mã reset còn sống trong cùng transaction (mã cũ không đổi được mật khẩu lần nữa)', async () => {
+    await service.changePassword(ACCOUNT_ID, CURRENT_PASSWORD, NEW_PASSWORD);
+
+    expect(txResetRepo.updateMany).toHaveBeenCalledTimes(1);
+    const consume = txResetRepo.updateMany.mock.calls[0][0];
+    expect(consume.where.accountId).toBe(ACCOUNT_ID);
+    expect(consume.where.consumedAt).toBeNull();
+    expect(consume.data.consumedAt).toBeInstanceOf(Date);
   });
 });

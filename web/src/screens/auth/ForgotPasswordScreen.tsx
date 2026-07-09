@@ -57,7 +57,14 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
   useEffect(() => {
     if (step !== 'verify') return;
     const id = setInterval(() => {
-      setRemaining((left) => (left <= 0 ? 0 : left - 1));
+      // Stop at zero (parity with mobile) — no point ticking an idle interval.
+      setRemaining((left) => {
+        if (left <= 1) {
+          clearInterval(id);
+          return 0;
+        }
+        return left - 1;
+      });
     }, 1000);
     return () => clearInterval(id);
   }, [step]);

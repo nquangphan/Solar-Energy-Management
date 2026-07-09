@@ -132,6 +132,10 @@ Ba route: `POST /auth/forgot-password` + `POST /auth/reset-password` (công khai
 - **Thu hồi phiên KHÔNG tức thì:** access JWT là stateless ⇒ sau reset/change, access token cũ **vẫn hợp lệ tối đa `ACCESS_TOKEN_TTL`** (mặc định 15 phút). Thu hồi tức thì cần denylist / kiểm DB mỗi request.
 - **Không có rate-limit IP** trên 3 endpoint công khai. Trần attempt + cooldown + response trung tính chặn **đoán mã** và **enumeration**, **không** chặn spam/DoS.
 - **Mã chưa tới tay người dùng:** chưa có kênh email/SMS; `NotificationDispatcher` bản đầu chỉ log. Luồng Quên mật khẩu chưa dùng được self-service.
+- **Cooldown mã reset KHÔNG atomic (đua):** `requestResetCode` là read-then-write (`findFirst(live)` → `create`), chưa có ràng buộc DB ⇒ N request `forgot-password` đồng thời cùng email có thể tạo N mã sống, làm yếu phòng thủ của mã 6 số (mỗi mã có trần attempt riêng). Trần-attempt và single-use *đã* atomic; chỉ cooldown thì chưa. **Cần fix khi mở kênh gửi mã** (cùng B-8): partial unique index `(account_id) WHERE consumed_at IS NULL` + xử lý P2002 như "đang có mã sống". Chưa khai thác được end-to-end vì mã chưa có kênh gửi.
+- **Audit ghi best-effort (có thể MẤT im lặng):** producer publish **sau** commit; `InProcessEventBus` cô lập + nuốt lỗi consumer ⇒ nếu `AuditService.record` throw (DB lỗi), thay đổi nghiệp vụ đã commit nhưng `AuditLog` không ghi, không ai quan sát được. Đúng cho notification, nhưng với audit append-only thì là trade-off Phase-1. Nếu audit cần mức compliance: ghi audit trong tx của producer, hoặc dead-letter để phát hiện mất.
+- **Authz cho route không khai `@RequirePermissions` = allow mọi user đã đăng nhập** (authn fail-closed, authz thì không). Chủ ý cho `/me`; nhưng route nghiệp vụ Epic 4+ **quên** khai quyền sẽ lộ cho mọi user. Cần source-guard "mọi handler không `@Public` phải có `@RequirePermissions`" trước khi thêm route nghiệp vụ.
+- **Chưa có nút "Gửi lại mã":** đồng hồ "Gửi lại mã sau MM:SS" ở màn Quên mật khẩu hàm ý một affordance chưa nối (hoãn cùng kênh gửi mã).
 
 ## Guard quyền server-side — fail-closed toàn cục + `/me` (AD-4, Story 2.5)
 

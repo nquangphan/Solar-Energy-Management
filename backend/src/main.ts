@@ -32,6 +32,10 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule);
 
+  // Drain the Prisma pool on SIGTERM/SIGINT: without this, PrismaService's
+  // onModuleDestroy ($disconnect) never runs on a prod deploy/restart.
+  app.enableShutdownHooks();
+
   const rawPort = process.env.PORT;
   const port = rawPort ? Number(rawPort) : 3000;
   if (!Number.isInteger(port) || port < 0 || port > 65535) {

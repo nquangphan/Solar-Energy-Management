@@ -21,9 +21,19 @@ export type AccountsTransactionClient = Prisma.TransactionClient;
 export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Chuẩn hoá email về chữ thường + trim — email không phân biệt hoa/thường.
+   * Dùng ở MỌI nơi ghi/đọc account theo email để tránh lệch hoa/thường.
+   */
+  static normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
   /** Tra account theo email đăng nhập (`@unique`). `null` nếu không tồn tại. */
   findByEmail(email: string): Promise<Account | null> {
-    return this.prisma.account.findUnique({ where: { email } });
+    return this.prisma.account.findUnique({
+      where: { email: AccountsService.normalizeEmail(email) },
+    });
   }
 
   /** Tra account theo id (UUID). `null` nếu không tồn tại. */

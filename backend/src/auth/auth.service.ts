@@ -110,6 +110,17 @@ export class AuthService {
         AUTH_FAILED_MESSAGE,
       );
     }
+    // Re-check the account still exists and is active — a deactivated account must
+    // not keep rotating refresh tokens (the per-request guard blocks its access
+    // tokens, but refresh should not churn sessions for a disabled account).
+    const account = await this.accounts.findById(session.accountId);
+    if (!account || !account.isActive) {
+      throw new AppException(
+        ErrorCode.UNAUTHENTICATED,
+        401,
+        AUTH_FAILED_MESSAGE,
+      );
+    }
     return this.issueTokens(session.accountId);
   }
 
@@ -171,6 +182,12 @@ export class AuthService {
       await tx.session.updateMany({
         where: { accountId: account.id, revokedAt: null },
         data: { revokedAt: new Date() },
+      });
+      // Consume any live reset code: after the user knows their password, an
+      // outstanding code must not still be usable to change it again.
+      await tx.passwordResetCode.updateMany({
+        where: { accountId: account.id, consumedAt: null },
+        data: { consumedAt: new Date() },
       });
     });
 

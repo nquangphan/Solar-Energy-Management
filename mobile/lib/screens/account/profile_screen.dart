@@ -66,6 +66,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _submit() async {
+    // Clear a prior success banner so a later validation error can't render the
+    // green "changed" banner alongside the red one.
+    if (_done) setState(() => _done = false);
     final String current = _current.text.trim();
     final String password = _password.text;
     if (current.isEmpty) {
@@ -97,24 +100,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final me = PermissionsScope.of(context).me;
+    final scope = PermissionsScope.of(context);
+    final me = scope.me;
+
+    // Until /me resolves, identity is unknown — show a loading/error state rather
+    // than an identity card full of empty strings.
+    final Widget body;
+    if (scope.status == SessionStatus.loading) {
+      body = const Center(child: AppSkeleton(width: 200.0));
+    } else if (scope.status == SessionStatus.error) {
+      body = const AppErrorState(message: 'Không tải được hồ sơ');
+    } else {
+      body = SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _identity(me?.displayName ?? '', me?.email ?? ''),
+            const SizedBox(height: AppTokens.space16),
+            _changePassword(),
+          ],
+        ),
+      );
+    }
 
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: const AppTopbar(eyebrow: 'TÀI KHOẢN', title: 'Hồ sơ'),
         bottomNav: const AppBottomNav(activeIndex: _menuTabIndex),
-        // Scrollable: the identity card + change-password form is taller than a
-        // phone viewport, and the keyboard shrinks it further.
-        body: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _identity(me?.displayName ?? '', me?.email ?? ''),
-              const SizedBox(height: AppTokens.space16),
-              _changePassword(),
-            ],
-          ),
-        ),
+        body: body,
       ),
     );
   }

@@ -34,7 +34,13 @@ import { PermissionsGuard } from './permissions.guard';
 @Module({
   imports: [
     AccountsModule,
-    JwtModule.register({ secret: process.env.JWT_ACCESS_SECRET }),
+    JwtModule.register({
+      secret: process.env.JWT_ACCESS_SECRET,
+      // Pin HS256 explicitly so a key-type/library change can never open an
+      // algorithm-confusion (or alg:none) hole. Symmetric secret ⇒ HS-only today.
+      signOptions: { algorithm: 'HS256' },
+      verifyOptions: { algorithms: ['HS256'] },
+    }),
   ],
   controllers: [AuthController, ChangePasswordController, MeController],
   providers: [

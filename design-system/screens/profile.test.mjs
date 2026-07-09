@@ -105,7 +105,8 @@ test('identity is read from the session provider, not re-fetched', () => {
   assert.match(web, /usePermissions\(\)/, 'ProfileScreen.tsx must read usePermissions()');
   assert.match(web, /\bme\?\.displayName\b/, 'ProfileScreen.tsx must render me.displayName');
   assert.match(web, /\bme\?\.email\b/, 'ProfileScreen.tsx must render me.email');
-  assert.match(mobile, /PermissionsScope\.of\(context\)\.me/, 'profile_screen.dart must read PermissionsScope.of(context).me');
+  assert.match(mobile, /PermissionsScope\.of\(context\)/, 'profile_screen.dart must read from PermissionsScope.of(context)');
+  assert.match(mobile, /\.me\b/, 'profile_screen.dart must read .me from the session scope (no re-fetch)');
   for (const [name, src] of [['web', web], ['mobile', mobile]]) {
     assert.ok(!/fetchMe\(/.test(src), `${name} profile screen must not call fetchMe() again`);
   }

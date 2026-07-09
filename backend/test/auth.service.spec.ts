@@ -206,6 +206,8 @@ describe('AuthService (unit, hermetic)', () => {
       sessionRepo.findUnique.mockResolvedValue(activeSession());
       // Revoke ATOMIC thắng cuộc: lật đúng 1 dòng (revokedAt null → now).
       sessionRepo.updateMany.mockResolvedValue({ count: 1 });
+      // Refresh re-checks the account is still active before issuing new tokens.
+      accounts.findById.mockResolvedValue(makeAccount('$argon2id$stub', true));
 
       const tokens = await service.refresh('old-token');
 
@@ -231,6 +233,18 @@ describe('AuthService (unit, hermetic)', () => {
       expect(newSessionData.accountId).toBe('acc-1');
       expect(newSessionData.refreshTokenHash).toBe(sha256(tokens.refreshToken));
       expect(newSessionData.refreshTokenHash).not.toBe(sha256('old-token'));
+    });
+
+    it('account bị vô hiệu → refresh bị từ chối (không rotate cho account inactive)', async () => {
+      sessionRepo.findUnique.mockResolvedValue(activeSession());
+      sessionRepo.updateMany.mockResolvedValue({ count: 1 });
+      accounts.findById.mockResolvedValue(makeAccount('$argon2id$stub', false));
+
+      const err = await catchAppException(service.refresh('old-token'));
+      expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
+      expect(err.getStatus()).toBe(401);
+      // Không phát phiên mới cho account đã vô hiệu.
+      expect(sessionRepo.create).not.toHaveBeenCalled();
     });
 
     it('token đã thu hồi → AppException(UNAUTHENTICATED), KHÔNG rotate', async () => {

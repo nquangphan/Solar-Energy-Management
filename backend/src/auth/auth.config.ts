@@ -42,8 +42,10 @@ const MS_PER_MINUTE = 60 * 1000;
 export function loadAuthConfig(): AuthConfig {
   const accessTokenTtl =
     process.env.ACCESS_TOKEN_TTL?.trim() || DEFAULT_ACCESS_TTL;
-  const refreshDays =
-    Number(process.env.REFRESH_TOKEN_TTL_DAYS) || DEFAULT_REFRESH_TTL_DAYS;
+  const refreshDays = positiveOrDefault(
+    Number(process.env.REFRESH_TOKEN_TTL_DAYS),
+    DEFAULT_REFRESH_TTL_DAYS,
+  );
   const resetMinutes = positiveOrDefault(
     Number(process.env.PASSWORD_RESET_CODE_TTL_MINUTES),
     DEFAULT_PASSWORD_RESET_TTL_MINUTES,
