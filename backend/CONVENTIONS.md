@@ -126,6 +126,18 @@ Server là **ranh giới bảo mật DUY NHẤT**: backend enforce quyền **m�
 - **`GET /me`** trả `{ id, email, displayName, permissions: string[] }` — `permissions` là effective set **sorted (tất định)**; contract chính tắc để FE (Story 2.6) dựng `PermissionSet`. Chỉ cần xác thực (mọi phiên đọc quyền CỦA MÌNH). `/me` là danh từ số ít ngoại lệ hạ-tầng (như `/health`).
 - **CẤM** để endpoint nghiệp vụ mới thiếu guard/`@RequirePermissions` — quên = mở toang. Thêm route domain: khai `@RequirePermissions(PERM.x)` cho quyền cần, dựa guard toàn cục lo xác thực.
 
+## Domain Event & EventBus (AD-18, Story 2.7)
+
+Mọi hành động nghiệp vụ **có hệ quả** (E4+) phát tín hiệu qua **MỘT `EventBus` port DUY NHẤT** — producer publish, consumer subscribe. Side-effect (audit, push) là **cross-cutting** lắp qua event, KHÔNG nhét trong service nghiệp vụ. Đây là seam để "bộ gửi thật lắp sau (Epic 9) KHÔNG phải mở lại code chức năng".
+
+**Luật (không vi phạm):**
+
+- **Producer chỉ `eventBus.publish(event)`** — inject `EventBus` (abstract class kiêm DI token, `src/events/`), **CẤM** gọi FCM/notification/audit trực tiếp. Đổi implementation port (queue/retry ở Epic 9) KHÔNG đụng producer. Source-guard `no-direct-side-effect-outside-eventbus.spec.ts` chặn: cấm `firebase-admin` ngoài `notifications/`; cấm inject `NotificationDispatcher`/`AuditSubscriber`/`AuditService` ngoài module sở hữu.
+- **Thêm chức năng E4+ = định nghĩa concrete `DomainEvent` + publish**, KHÔNG tự gọi side-effect. Base `DomainEvent` (`src/events/domain-event.ts`) là **DOMAIN thuần** (không import Nest/Prisma), mang 5 chiều audit: `type` (gì) / `occurredAt` (khi nào) / `actorAccountId` (ai, optional=system) / `target` (đối tượng) / `before`+`after` (trước→sau). Concrete event do story sở hữu khai riêng — 2.7 CHỈ khai base contract (YAGNI).
+- **Consumer tự đăng ký `onModuleInit`** (`this.eventBus.subscribe(this)`): `AuditSubscriber` (ghi `AuditLog`) và `NotificationDispatcher` (bản đầu no-op/log; Epic 9 thay bằng FCM). EventsModule (@Global) KHÔNG biết consumer nào — thêm consumer = thêm module, không sửa nền.
+- **Fan-out đồng bộ + cô lập lỗi:** `InProcessEventBus.publish` await từng subscriber trong `try/catch` riêng — một subscriber ném → **log** (Logger, KHÔNG nuốt im lặng) + tiếp tục subscriber còn lại; `publish` KHÔNG sập vì một consumer hỏng. In-process đủ cho Phase 1 (~20 user, YAGNI — chưa cần queue/broker).
+- **`AuditLog` append-only** (bảng `audit_logs`, AD-8): `AuditService` CHỈ `create` (KHÔNG `update`/`delete`/`upsert`) — nhật ký bất biến. `actorAccountId` lưu String **KHÔNG FK cascade** để bản ghi sống sót khi account bị vô hiệu/xoá. Đọc audit chỉ **Super Admin** (gate `audit.read`) = **Story 8.5**; 2.7 chỉ dựng đường **ghi**, KHÔNG endpoint mới → `openapi.json` không đổi.
+
 ## Lint / format (bắt buộc)
 
 - ESLint (flat config) + Prettier. Chạy: `npm run lint`, `npm run format`.

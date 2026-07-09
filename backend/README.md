@@ -51,6 +51,10 @@ Quyền là **một registry chính tắc** (`src/accounts/domain/permission-reg
 
 Guard **fail-closed toàn cục**: mọi endpoint mặc định cần `Authorization: Bearer <accessToken>` (`APP_GUARD`: `JwtAuthGuard` → `PermissionsGuard`). `@Public()` mở route hạ-tầng (`/health`, `/auth/*`); `@RequirePermissions(PERM.x)` (AND) đòi quyền cụ thể; thiếu token → 401, thiếu quyền → 403. `GET /me` trả bộ quyền hiệu lực `{ id, email, displayName, permissions: string[] }` (sorted) để FE dựng phiên — server enforce mỗi request, client gating chỉ UX (AD-4). Chi tiết: `CONVENTIONS.md#Guard quyền server-side`.
 
+## Domain event qua `EventBus` port (Story 2.7)
+
+Hành động nghiệp vụ có hệ quả (E4+) publish domain event qua **một `EventBus` port** (AD-18); `AuditSubscriber` (ghi `AuditLog` append-only) và `NotificationDispatcher` (bản đầu no-op/log; Epic 9 thay bằng FCM) **subscribe** — producer KHÔNG gọi audit/notification/FCM trực tiếp. Chi tiết: `CONVENTIONS.md#Domain Event & EventBus`.
+
 ## Ranh giới (đọc `CONVENTIONS.md`)
 
 - Chỉ `PrismaService` chạm DB — không `new PrismaClient()` nơi khác (source-guard enforce). `prisma/seed.ts` là CLI script (ngoài `src/`) nên được phép tự tạo client với driver adapter.
