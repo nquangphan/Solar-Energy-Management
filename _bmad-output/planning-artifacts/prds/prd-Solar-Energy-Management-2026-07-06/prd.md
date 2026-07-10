@@ -22,15 +22,15 @@ Khi Phase 1 vững, nó là xương sống vận hành để mở ra cổng đ�
 
 ## 2. Đối tượng người dùng
 
-App dùng nội bộ, ~20 người, 6 vai trò. Không có tài khoản khách hàng trong Phase 1.
+App dùng nội bộ, ~20 người, ba vai trò chính. Không có tài khoản khách hàng trong Phase 1.
 
 ### 2.1 Jobs To Be Done
 
 - **Thợ khảo sát:** ra báo giá đúng và đẹp ngay trước mặt khách, chốt tại chỗ, không phải về văn phòng.
 - **Kế toán:** ghi nhận thu tiền theo đợt và nắm tình hình tài chính mà không phải tổng hợp tay.
 - **Đội thi công / Kho:** biết đơn nào tới lượt mình, đang ở bước nào, cần làm gì.
-- **Quản lý/Chủ:** thấy toàn cảnh doanh thu, số đơn, trạng thái đơn bất cứ lúc nào; duyệt chiết khấu.
-- **Admin:** cấp tài khoản và cấu hình quyền theo đúng vai trò từng người.
+- **Quản lý kinh doanh:** thấy toàn cảnh doanh thu, số đơn, trạng thái đơn bất cứ lúc nào; duyệt chiết khấu.
+- **Chủ doanh nghiệp (Admin):** cấp tài khoản, cấu hình quyền theo vai trò, cấu hình danh mục (nguồn khách, VAT, cờ tính năng).
 
 ### 2.2 Non-Users (v1)
 
@@ -63,7 +63,9 @@ App dùng nội bộ, ~20 người, 6 vai trò. Không có tài khoản khách h
 - **Báo giá** — Đơn ở các trạng thái trước khi chốt (đang dựng/gửi khách). Không phải đối tượng riêng.
 - **Hợp đồng** — văn bản HĐ Thi công hoặc HĐ Mua bán sinh từ một Đơn theo template tĩnh, tham chiếu số báo giá.
 - **Chốt** — hành động chuyển Đơn sang trạng thái "Đã chốt"; tại thời điểm này giá được **Snapshot** vào từng Dòng báo giá.
-- **Dòng báo giá (line item)** — một dòng trong Đơn: hoặc tham chiếu một **Sản phẩm** trong Danh mục, hoặc là **Dòng tự do/gói** (mô tả tay). Gồm: tên, đơn vị, số lượng, đơn giá, thành tiền, diễn giải.
+- **Dòng báo giá (line item)** — một dòng trong Đơn: hoặc tham chiếu một **Sản phẩm** trong Danh mục, hoặc là **Dòng tự do** (mô tả tay). Gồm: tên, đơn vị, số lượng, đơn giá, thành tiền, diễn giải, bảo hành (tuỳ chọn).
+- **Dòng tự do** — dòng nhập tay không trỏ tới Sản phẩm, không trừ tồn kho. Dùng để ghi chú hoặc sản phẩm không trong danh mục.
+- **Gói vật tư** — tập hợp các Sản phẩm được nhóm lại làm checklist trên UI; chọn gói → tick các sản phẩm con → mỗi tick thành một Dòng báo giá bình thường trỏ vào Product thật. Gói KHÔNG lưu lên Đơn.
 - **Cờ phạm vi** — 3 cờ bật/tắt trên mỗi Đơn: **Thiết bị**, **Thi công**, **Vận chuyển**. Quyết định các bước trạng thái áp dụng cho Đơn.
 - **Loại khách** — Cá nhân hoặc Thương mại; là **preset** đặt giá trị mặc định cho Cờ phạm vi + nhãn báo cáo, sửa được từng Đơn.
 - **Trạng thái** — bước trong vòng đời Đơn (xem §4.2).
@@ -79,7 +81,9 @@ App dùng nội bộ, ~20 người, 6 vai trò. Không có tài khoản khách h
 - **Tồn kho** — số lượng hiện có của một Sản phẩm trong kho; tăng khi **Nhập kho**, giảm khi **Xuất kho**.
 - **Phiếu kho** — bản ghi nhập/xuất kho một hoặc nhiều Sản phẩm; Xuất kho có thể gắn với một Đơn.
 - **Hoá đơn** — chứng từ hoá đơn tạo từ một Đơn, lưu vào hệ thống và xuất PDF. Phase 1 KHÔNG tích hợp nhà cung cấp hoá đơn điện tử (để Phase sau).
-- **Super Admin** — một account Admin được chỉ định là cao nhất (không phải role thứ 7). Riêng quyền xem **Audit log** chỉ Super Admin có.
+- **Super Admin** — người làm và vận hành app (ngoài tổ chức khách hàng). Có mọi quyền khi được cấp. Không bị cấp chặn (luật không-leo-thang quyền).
+- **Admin** — chủ doanh nghiệp (khách thuê làm app). Có quyền cấp tài khoản, cấu hình hệ thống.
+- **Quản lý (QUAN_LY)** — quản lý kinh doanh. KHÔNG phải chủ doanh nghiệp.
 - **Thông báo đẩy (Push)** — thông báo tự động tới thiết bị/hộp thư của account khi có sự kiện nghiệp vụ hoặc nhắc theo lịch; gửi qua Firebase FCM; đích đến tôn trọng phân quyền.
 - **Device token** — mã định danh thiết bị của một account để nhận Push (FCM); một account có thể có nhiều Device token.
 
@@ -96,8 +100,9 @@ Người có quyền tạo Đơn mới, chọn Khách hàng và Loại khách, t
 **Consequences (testable):**
 - Thêm/bớt/sửa số lượng một Dòng → tổng trước VAT, tiền VAT, tổng sau VAT cập nhật ngay không cần lưu thủ công.
 - Dòng pick từ Sản phẩm tự điền đơn giá theo Danh mục hiện tại (trước Chốt).
-- Cho phép Dòng tự do/gói: nhập tay tên (nhiều dòng mô tả), đơn vị, số lượng, đơn giá, diễn giải.
-- Mỗi Dòng có trường "Diễn giải" (bảo hành/ghi chú) và cờ đánh dấu "linh động/dự kiến". `[ASSUMPTION: cờ linh động chỉ mang tính hiển thị, không đổi cách tính tiền.]`
+- Cho phép **Dòng tự do:** nhập tay tên (nhiều dòng mô tả), đơn vị, số lượng, đơn giá, diễn giải; không trỏ tới Sản phẩm, không trừ tồn.
+- Cho phép **Gói vật tư:** chọn gói → hiện danh sách sản phẩm con → user tick → mỗi item tick thành một Dòng bình thường trỏ Product thật; user tự nhập số lượng. Gói KHÔNG lưu lên Đơn.
+- Mỗi Dòng có trường "Diễn giải" (ghi chú), trường riêng "Bảo hành", và cờ đánh dấu "linh động/dự kiến". `[ASSUMPTION: cờ linh động chỉ mang tính hiển thị, không đổi cách tính tiền.]`
 
 #### FR-2: Cờ phạm vi & Loại khách
 Người dùng đặt Loại khách để nạp preset Cờ phạm vi mặc định, và bật/tắt từng Cờ trên Đơn.
@@ -141,8 +146,8 @@ Báo giá (nháp)
   → [nếu có chiết khấu] Chờ duyệt chiết khấu → (duyệt) → 
 Đã chốt
   → Thanh toán theo Lịch (mỗi đợt ghi nhận → cập nhật) 
-  → [cờ Thi công] Lên lịch thi công → Đang thi công → Nghiệm thu
-  → [cờ Vận chuyển] Đang giao hàng → Đã giao
+  → [cờ Thi công] Đang thi công → Nghiệm thu
+  → [cờ Thiết bị] Đã giao (hoặc Đang giao nếu cờ Vận chuyển bật → Đã giao)
 Hoàn thành        (khi thanh toán đủ + nghiệm thu/đã giao xong)
 Huỷ               (có thể từ nhiều trạng thái)
 ```
@@ -152,11 +157,13 @@ Huỷ               (có thể từ nhiều trạng thái)
 **Functional Requirements:**
 
 #### FR-7: Máy trạng thái gate theo Cờ phạm vi
-Hệ thống chỉ cho phép/hiển thị các bước hợp lệ với Cờ phạm vi của Đơn.
+Hệ thống chỉ cho phép/hiển thị các bước hợp lệ với Cờ phạm vi của Đơn. Bước "Đã giao" gate theo **cờ Thiết bị** (đơn có hàng hoá); bước "Đang giao" gate theo **cờ Vận chuyển**.
 **Consequences (testable):**
-- Đơn KHÔNG bật Thi công → không có bước Lên lịch/Đang thi công/Nghiệm thu.
-- Đơn KHÔNG bật Vận chuyển → không có bước giao hàng.
-- Đơn chỉ Thiết bị → Báo giá → Đã chốt → (thanh toán) → Hoàn thành.
+- Đơn KHÔNG bật Thi công → không có bước Đang thi công/Nghiệm thu.
+- Đơn bật Thiết bị, KHÔNG bật Vận chuyển → `… → Đã giao` (khách tự tới lấy).
+- Đơn bật cả Thiết bị lẫn Vận chuyển → `… → Đang giao → Đã giao`.
+- Đơn KHÔNG bật Thiết bị → bỏ qua bước giao, chỉ thi công/nghiệm thu.
+- Đơn chỉ Thiết bị (KHÔNG thi công) → Báo giá → Đã chốt → (thanh toán) → Đã giao → Hoàn thành.
 
 #### FR-8: Chuyển trạng thái theo sự kiện
 Một số trạng thái tự nhảy khi có hành động nghiệp vụ tương ứng.
@@ -292,7 +299,7 @@ Hệ thống ghi mọi hành động thay đổi dữ liệu (tạo/sửa/xoá, 
 **Consequences (testable):**
 - Mỗi bản ghi: ai (Account), làm gì, đối tượng nào, lúc nào, giá trị trước→sau (khi áp dụng).
 - Bản ghi không sửa/xoá được.
-- Chỉ một account **Super Admin** được xem Audit log.
+- Chỉ account có quyền `audit.read` được xem Audit log. Quyền này cấp được cho account bất kỳ qua màn Phân quyền.
 
 ### 4.9 Nền tảng & Chia sẻ
 
@@ -301,11 +308,12 @@ Hệ thống ghi mọi hành động thay đổi dữ liệu (tạo/sửa/xoá, 
 **Functional Requirements:**
 
 #### FR-21: Xuất & chia sẻ báo giá
-Sau Chốt (và khi cần), người dùng xuất báo giá và chia sẻ cho khách.
+Sau Chốt (và khi cần), người dùng xuất báo giá và chia sẻ cho khách. Bảng dòng vật tư trên PDF bao gồm cột **Bảo hành**.
 **Consequences (testable):**
 - Xuất PDF báo giá; nút Share dùng native share bottom sheet của hệ thống.
 - Ưu tiên chia sẻ HÌNH ẢNH báo giá (hoặc PDF). Web hành xử tương tự (share/download).
 - Bản xuất (báo giá / hợp đồng) có khối chữ ký (Người lập phiếu / Giám đốc) + logo & thông tin công ty theo mẫu thật.
+- Cột Bảo hành hiển thị giá trị từ `OrderLineItem.warrantyMonths`; hiển thị rỗng nếu dòng không có bảo hành (công lắp, phí, tự do).
 
 #### FR-22: Đăng nhập & phiên
 Người dùng đăng nhập; phiên áp đúng bộ Quyền của Account.
@@ -340,16 +348,22 @@ Người có quyền thêm/xoá Ảnh đính kèm ở màn chi tiết Đơn ngo�
 **Functional Requirements:**
 
 #### FR-25: Nhập / Xuất kho & Tồn kho
+Tồn kho gồm hai con số: **onHand** (hàng thật trong kho, dùng cho phiếu nhập/xuất), **reserved** (hàng đã hứa cho đơn đã chốt). **Khả dụng = onHand − reserved**.
 Người có quyền tạo Phiếu kho (nhập/xuất) cập nhật Tồn kho theo Sản phẩm.
 **Consequences (testable):**
-- Nhập kho tăng Tồn; Xuất kho giảm Tồn; xem được Tồn hiện tại theo Sản phẩm.
+- Nhập kho: tăng `onHand`; Xuất kho: giảm `onHand` + `reserved`.
+- Chốt đơn: tăng `reserved` tương ứng. Không chặn chốt khi thiếu tồn (cảnh báo sớm + danh sách cần mua). Khả dụng âm hiển thị dạng "Còn 5 · Đã hứa 20 · Cần nhập 15".
+- Xem được Khả dụng hiện tại theo Sản phẩm.
 - Mọi Phiếu kho ghi Audit log (ai, khi nào, số lượng, sản phẩm).
+- `reserved` là tổng của `StockMovement` theo đơn, KHÔNG phải một cột `int` cộng-trừ.
+- **Một Đơn, một Phiếu xuất kho** — unique trên `(orderId, orderVersionId)`, idempotent khi retry.
 
-#### FR-26: Xuất kho gắn Đơn
-Xuất kho có thể gắn với một Đơn (giao vật tư / cấp vật tư thi công).
+#### FR-26: Xuất kho gắn Đơn & Snapshot giá vốn
+Xuất kho có thể gắn với một Đơn (giao vật tư / cấp vật tư thi công). Lúc xác nhận phiếu xuất: `onHand` trừ, `reserved` trừ, snapshot `costPriceSnapshot`.
 **Consequences (testable):**
 - Từ Đơn có cờ Vận chuyển/Thi công, tạo được Phiếu xuất kho theo các Dòng vật tư của Đơn.
-- Khi tồn không đủ: **cảnh báo và CHẶN** — không cho xuất quá tồn.
+- **Chặn ở khâu xuất kho** — khi xuất: nếu `onHand` không đủ → CHẶN, không cho xuất quá tồn (FR-25 chốt không chặn).
+- Xác nhận phiếu xuất: người có `inventory.manage` đếm hàng → xác nhận → trừ `onHand` + `reserved` → snapshot `costPriceSnapshot` (bình quân gia quyền tính từ `Product.costPrice` lúc đó) → publish event `StockIssued` → ghi Audit (người xác nhận).
 - Phase 1 quản lý **một kho** duy nhất.
 
 ### 4.12 Hoá đơn (lưu DB + xuất PDF)
@@ -422,7 +436,7 @@ Người nhận = các account **có Quyền** liệt kê (tra trong ma trận p
 | 2 | Chiết khấu được duyệt/từ chối | Người phụ trách đơn (người đề xuất) |
 | 3 | Đơn Đã chốt | **Ghi nhận thanh toán** + Xem tất cả đơn + Xem dashboard tài chính |
 | 4 | Đã cọc (sẵn sàng thi công) | **Chuyển bước thi công** |
-| 5 | Lên lịch thi công | **Chuyển bước thi công** + người được giao |
+| 5 | Bắt đầu thi công (Đang thi công) | **Chuyển bước thi công** + người được giao |
 | 6 | Nghiệm thu / Hoàn thành | **Ghi nhận thanh toán** + Xem dashboard tài chính |
 | 7 | Đang giao hàng (bỏ mối) | **Xác nhận giao hàng** |
 | 8 | Đơn bị huỷ | Người phụ trách đơn + Xem tất cả đơn + Xem dashboard tài chính |
@@ -433,6 +447,48 @@ Người nhận = các account **có Quyền** liệt kê (tra trong ma trận p
 | 13 | Được giao đơn/việc | Người được giao (account cụ thể) |
 
 *Ánh xạ theo Quyền để nhất quán với mô hình phân quyền per-account (FR-17/18): đổi ai giữ quyền nào thì người nhận noti tự đổi theo, không cần sửa cấu hình noti.*
+
+### 4.15 Nguồn khách, Bảo hành & Lợi nhuận
+
+**Mô tả:** Ba nhóm bổ sung sau khi Phase 1 khởi động: ghi lại kênh mang khách về, theo dõi hạn bảo hành từng món trong đơn, và đo lợi nhuận gộp trên vật tư.
+
+**Functional Requirements:**
+
+#### FR-35: Nguồn khách
+Danh mục **Nguồn khách** ghi lại kênh tiếp cận (Facebook, Zalo, Fanpage, Đại lý, Khác). `Customer.sourceId` bắt buộc khi tạo khách; `Order.sourceId` snapshot lúc tạo đơn.
+**Consequences (testable):**
+- Bảng `CustomerSource { id, name, description, active, sortOrder, isOther }`. Seed 5 dòng: Facebook, Zalo, Fanpage, Đại lý, Khác; mỗi dòng có mô tả phân biệt (vd "Fanpage — khách inbox trang công ty").
+- Xoá = `active: false`. Hard delete bị chặn (khách cũ vẫn trỏ vào).
+- `isOther` đúng một dòng; dòng đó không xoá/deactivate được. Backend nhận biết "Khác" bằng **cờ**, không bằng so chuỗi tên.
+- `Customer.sourceId` KHÔNG có giá trị mặc định trên form. `Customer.sourceNote` bắt buộc khi nguồn có `isOther`.
+- `Order.sourceId` = snapshot `Customer.sourceId` lúc tạo đơn; khách quay lại qua kênh khác thì `Customer.sourceId` đổi, nhưng đơn cũ giữ kênh cũ (cùng bài học với `unitPriceSnapshot`, FR-5).
+- Màn cấu hình danh mục gate bởi quyền `settings.manage`. Đổi tên nguồn → ghi Audit.
+
+#### FR-36: Bảo hành theo dòng vật tư
+Mỗi Dòng vật tư có thời hạn bảo hành riêng, mặc định lấy từ Sản phẩm, sửa được lúc lên đơn.
+**Consequences (testable):**
+- `Product.warrantyMonths` — mặc định của sản phẩm. `OrderLineItem.warrantyMonths` — giá trị thật, sửa được lúc lên đơn.
+- `OrderLineItem.warrantyStartAt` — **đóng băng lúc DÒNG ĐÓ chốt lần đầu**, không phải lúc Đơn chốt. Lý do: sửa đơn tạo `OrderVersion` mới; nếu lấy mốc theo Đơn thì sửa một dòng ghi chú sẽ gia hạn bảo hành toàn bộ hàng cũ, còn hàng mới thêm lại bị lùi ngày.
+- Lưu **tháng** (int); hiển thị "5 năm" khi chia hết 12, "18 tháng" khi không.
+- Công lắp / phí lắp đặt: `warrantyMonths = null`, không hiện ô. Không viết validation chặn.
+- Dòng tự do: ô bảo hành ẩn sau link `+ Thêm bảo hành`. Không mặc định, không bắt buộc.
+- Phase 1 chỉ **tra cứu**: SĐT → đơn → từng item + hạn còn lại. Không phiếu yêu cầu bảo hành, không vòng đời, không ảnh, không nhắc sắp hết hạn.
+- **Mốc tính từ ngày chốt đơn là quyết định có ý thức.** Đơn thi công chốt tháng 1, nghiệm thu tháng 4 → khách mất 3 tháng bảo hành so với ngày nghiệm thu. Chủ dự án đã biết và chấp nhận đánh đổi này để giữ mốc đơn giản, không phụ thuộc nhánh vòng đời.
+
+#### FR-37: Báo cáo lợi nhuận gộp trên vật tư
+Giá vốn nhập ở phiếu nhập kho, đóng băng lúc **xuất kho**, và chỉ đo lợi nhuận **gộp trên vật tư**.
+**Consequences (testable):**
+- `StockVoucherLine.unitCost` bắt buộc lúc tạo phiếu nhập → hệ thống tự tính **bình quân gia quyền** → cập nhật `Product.costPrice`. Một chỗ gõ duy nhất.
+- `OrderLineItem.costPriceSnapshot` đóng băng lúc **xác nhận phiếu xuất kho**, không phải lúc chốt đơn. Lý do: đơn được phép chốt khi thiếu tồn (FR-25), nên giá vốn lúc chốt là giá của hàng chưa mua. Giá bán là lời hứa (đóng băng lúc chốt); giá vốn là sự thật (chỉ biết khi hàng rời kho).
+- **Đơn chưa xuất kho KHÔNG có trong báo cáo lợi nhuận** — chưa lãi gì.
+- Người duyệt chiết khấu (FR-18) thấy **biên ước tính**, đọc `Product.costPrice` hiện hành, dán nhãn rõ là ước tính.
+- Dòng không có giá vốn xác định (công lắp, phí lắp đặt, dòng tự do) → `costPriceSnapshot = unitPriceSnapshot` → lãi dòng = 0. Nhờ vậy công thức chạy **không nhánh `if`**.
+- **Công thức:** Lợi nhuận gộp = Σ `(unitPriceSnapshot − costPriceSnapshot) × qty`.
+- Báo cáo là **MỘT bảng, BỐN cách nhóm** chọn bằng hàng chip: theo đơn / theo tháng / theo sale (`Order.assigneeAccountId`) / theo nguồn khách (`Order.sourceId`). Không dựng bốn màn hình.
+- Dòng KPI trên cùng: doanh thu, giá vốn, lợi nhuận gộp, biên %.
+- **Nhãn bắt buộc trên báo cáo:** "Lợi nhuận gộp trên vật tư. Chưa trừ nhân công, vận chuyển, chi phí chung."
+- Quyền `costs.view` gate đọc `Product.costPrice` và báo cáo lợi nhuận. Guard server-side: response cho account thiếu quyền **không chứa trường `costPrice`** (AD-4 — ẩn ở UI không phải bảo mật).
+- Tồn đầu kỳ: ngày go-live kho đã có hàng nhưng chưa có phiếu nhập nào; phải gõ một **phiếu nhập tồn đầu kỳ** lúc triển khai, nếu không báo cáo tháng đầu rỗng. `[ASSUMPTION: người triển khai chịu trách nhiệm bước này.]`
 
 ## 5. Non-Goals (rõ ràng)
 
@@ -449,13 +505,19 @@ Người nhận = các account **có Quyền** liệt kê (tra trong ma trận p
 Báo giá kiêm đơn (giỏ hàng, dòng tự do/gói, VAT, cờ phạm vi, snapshot, versioning) · máy trạng thái gate theo cờ + auto-transition · lịch thanh toán nhiều đợt + ghi nhận · quản lý khách hàng (SĐT làm khoá) · sinh hợp đồng (Thi công/Mua bán) · danh mục vật tư & giá (giá phân tầng sau cờ) · **quản lý tồn kho** (1 kho, nhập/xuất/tồn, xuất gắn đơn, chặn khi thiếu tồn) · **hoá đơn** (tạo từ đơn, lưu DB + xuất PDF) · phân quyền per-account + role preset · dashboard doanh thu/đơn/trạng thái · audit log · đính kèm ảnh (theo bước chuyển trạng thái + bổ sung trong chi tiết đơn) · **thông báo đẩy** (push mobile qua FCM + hộp thư in-app, đích theo quyền, 13 loại) · Web + Mobile (online) + chia sẻ native.
 
 ### 6.2 Ngoài phạm vi MVP
-- Cổng đại lý tự đặt hàng — Phase sau (khách chưa có account).
-- Hạn mức chiết khấu tự quyết — Phase sau.
-- CRM đầy đủ — Phase sau.
-- Offline mode cho mobile — không làm Phase 1.
-- Tích hợp HĐĐT nhà cung cấp — Phase sau (Phase 1 chỉ hoá đơn nội bộ lưu DB + PDF).
-- Nhiều kho / kiểm kê định kỳ — Phase sau (Phase 1 chỉ 1 kho).
-- Sổ sách kế toán / báo cáo thuế đầy đủ — ngoài phạm vi.
+- **Cổng đại lý tự đặt hàng** — Phase sau (khách chưa có account).
+- **Hạn mức chiết khấu tự quyết** — Phase sau; Phase 1 mọi chiết khấu phải duyệt.
+- **CRM đầy đủ** — Phase sau; Phase 1 chỉ danh sách follow-up.
+- **Offline mode** — không làm Phase 1; app cần kết nối mạng.
+- **Tích hợp HĐĐT nhà cung cấp** — Phase sau; Phase 1 chỉ hoá đơn nội bộ lưu DB + PDF.
+- **Nhiều kho / kiểm kê định kỳ** — Phase sau; Phase 1 chỉ 1 kho.
+- **Sổ sách kế toán / báo cáo thuế** — ngoài phạm vi. Chỉ ghi nhận thanh toán + tạo hoá đơn (lưu DB + PDF).
+- **Báo cáo công nợ** — dữ liệu `PaymentSchedule`/`Installment`/`Payment` có sẵn từ Epic 7; cần story màn báo cáo ở Phase sau.
+- **Báo cáo KPI Sale** — một màn riêng ở Phase sau; báo cáo lợi nhuận nhóm theo sale đã phục vụ phần lớn nhu cầu Phase 1.
+- **Phiếu yêu cầu bảo hành** (vòng đời, ảnh) — Phase sau; Phase 1 chỉ tra cứu bảo hành theo SĐT.
+- **Nhắc sắp hết hạn bảo hành** — Phase sau; Phase 1 không có.
+- **BOM / định mức vật tư** — Phase sau; không cần Phase 1.
+- **Serial number tracking** — Phase sau; không cần Phase 1.
 
 ## 7. Success Metrics
 

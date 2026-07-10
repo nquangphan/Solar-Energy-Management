@@ -4,11 +4,11 @@ type: architecture-spine
 purpose: build-substrate
 altitude: initiative
 paradigm: layered client-server (backend là chủ sở hữu duy nhất của DB + nghiệp vụ)
-scope: 'Phase 1 — app quản lý nội bộ Phương Nam Solar: Web (React) + Mobile (Flutter) là REST client thuần; Backend (NestJS) sở hữu DB + toàn bộ business logic; file/ảnh trên Cloudflare R2; design system per-platform là deliverable đầu tiên; push/notifications qua Firebase FCM (mobile) + hộp thư in-app. Governs FR-1..FR-34.'
+scope: 'Phase 1 — app quản lý nội bộ Phương Nam Solar: Web (React) + Mobile (Flutter) là REST client thuần; Backend (NestJS) sở hữu DB + toàn bộ business logic; file/ảnh trên Cloudflare R2; design system per-platform là deliverable đầu tiên; push/notifications qua Firebase FCM (mobile) + hộp thư in-app. Governs FR-1..FR-37.'
 status: final
 created: '2026-07-07'
 updated: '2026-07-07'
-binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34]
+binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37]
 sources:
   - ../../prds/prd-Solar-Energy-Management-2026-07-06/prd.md
   - ../../ux-designs/ux-Solar-Energy-Management-2026-07-06/DESIGN.md
@@ -91,7 +91,7 @@ flowchart TD
 
 - **Binds:** FR-16, FR-17, FR-18, FR-20
 - **Prevents:** đổi định nghĩa Role hồi tố account đã tạo; mọi Admin xem được Audit.
-- **Rule:** nguồn chân lý = bộ quyền lưu trên từng Account. Role = preset áp lúc tạo (nạp giá trị, không ràng buộc sau). Quyền xem Audit log chỉ dành cho một account **Super Admin** được chỉ định.
+- **Rule:** nguồn chân lý = bộ quyền lưu trên từng Account. Role = preset áp lúc tạo (nạp giá trị, không ràng buộc sau). Mô hình vai trò (Phase 1): `SUPER_ADMIN` = **người làm và vận hành app** (ngoài tổ chức khách hàng), có mọi quyền; `ADMIN` = **chủ doanh nghiệp** (khách thuê làm app); `QUAN_LY` = quản lý kinh doanh (KHÔNG phải chủ). Không tồn tại "team IT". Quyền xem Audit log (`audit.read`) là **quyền cấp được cho account bất kỳ** qua màn Phân quyền; ràng buộc bất biến chỉ nói về **preset**: không preset nào ngoài `SUPER_ADMIN` mang sẵn `audit.read` (`role-presets.ts` + test `role-presets.spec.ts`, AC-3). Endpoint Audit gate theo **quyền** `audit.read`, KHÔNG theo tên role.
 
 ### AD-9 — Khách hàng định danh bằng SĐT `[ADOPTED]`
 
@@ -127,13 +127,13 @@ flowchart TD
 
 - **Binds:** FR-30, FR-31, FR-32, FR-33, FR-34
 - **Prevents:** business logic rò xuống Remote Config; push logic rải rác khắp service.
-- **Rule:** mobile tích hợp Firebase FCM (push), Crashlytics, Analytics, Remote Config. Backend có **một** module `notifications/` gửi push qua `firebase-admin` khi có sự kiện nghiệp vụ + job nhắc theo lịch; entity `DeviceToken` gắn theo `Account` (nhiều token/account). Remote Config **CHỈ** cho config/feature-flag cấp app — **KHÔNG** thay business flag ở backend (vd cờ giá phân tầng vẫn ở DB, là nguồn chân lý nghiệp vụ).
+- **Rule:** mobile tích hợp Firebase FCM (push), Crashlytics, Analytics, Remote Config. Backend có **một** module `notifications/` gửi push qua `firebase-admin` khi có sự kiện nghiệp vụ + job nhắc theo lịch; entity `DeviceToken` gắn theo `Account` (nhiều token/account). Remote Config **CHỈ** cho config/feature-flag cấp app — **KHÔNG** thay business flag ở backend. **Cờ giá phân tầng (FR-15) vẫn lưu trên DB** — đó là nguồn chân lý nghiệp vụ, được quản lý bằng dữ liệu DB, KHÔNG bằng Remote Config. Việc **bấm cờ** (bật/tắt tính năng) được gate bởi quyền `system.feature_flags` (chỉ `SUPER_ADMIN` mang sẵn).
 
 ### AD-15 — Đích thông báo xác định theo QUYỀN, không theo role `[ADOPTED]`
 
-- **Binds:** FR-31, FR-34
+- **Binds:** FR-31, FR-34, AD-8
 - **Prevents:** targeting theo role (lệch khi đổi quyền); rò thông tin đơn cho account không có quyền xem; "người phụ trách/được giao" suy diễn lại lệch với bộ lọc "đơn của mình".
-- **Rule:** người nhận push xác định theo **QUYỀN** (ma trận phân quyền per-account §4.6, qua AD-8), **KHÔNG** theo role: đẩy cho account có Quyền tương ứng **+** người phụ trách/được giao đơn. Quyền sở hữu/giao đơn định nghĩa bằng **đúng hai trường trên `Order`**: `ownerAccountId` (người tạo/phụ trách) và `assigneeAccountId` (nullable, nếu người được giao khác người tạo). **CẢ** bộ lọc permission "xem đơn của mình" **LẪN** việc chọn đích noti "người phụ trách/được giao" của AD-15 đều phân giải off **chính hai trường này** — một định nghĩa, hai bên tiêu thụ, không suy diễn lại. Luôn lọc theo quyền xem đơn ("xem tất cả đơn" vs "đơn của mình") — không đẩy nội dung đơn cho account không có quyền xem. Đổi ai giữ quyền nào thì người nhận noti tự đổi theo, không sửa cấu hình noti.
+- **Rule:** người nhận push xác định theo **QUYỀN** (ma trận phân quyền per-account, AD-8), **KHÔNG** theo role: đẩy cho account có Quyền tương ứng **+** người phụ trách/được giao đơn. Quyền sở hữu/giao đơn định nghĩa bằng **đúng hai trường trên `Order`**: `ownerAccountId` (người tạo/phụ trách) và `assigneeAccountId` (nullable, nếu người được giao khác người tạo). **CẢ** bộ lọc permission "xem đơn của mình" (FR-17) **LẪN** việc chọn đích noti "người phụ trách/được giao" của AD-15 đều phân giải off **chính hai trường này** — một định nghĩa, hai bên tiêu thụ, không suy diễn lại. Luôn lọc theo quyền xem đơn (`orders.view_all` vs `orders.view_own`) — không đẩy nội dung đơn cho account không có quyền xem. Đổi ai giữ quyền nào thì người nhận noti tự đổi theo, không sửa cấu hình noti.
 
 ### AD-16 — Pricing & VAT: một thuật toán, một bộ tính `[ADOPTED]`
 
@@ -153,6 +153,24 @@ flowchart TD
 - **Prevents:** producer gọi FCM/notification trực tiếp; retrofit "gọi push" vào từng chức năng ở cuối dự án; logic side-effect rải rác.
 - **Rule:** Mọi hành động nghiệp vụ có hệ quả (chốt, duyệt chiết khấu, ghi cọc/thanh toán, chuyển trạng thái, chặn xuất tồn…) **publish một domain event** qua **MỘT `EventBus` port duy nhất** (định nghĩa ở nền backend, bản đầu no-op/log). Producer **KHÔNG** gọi FCM/notification/audit trực tiếp. Các consumer (notifications gửi push theo AD-15, audit ghi log) **subscribe** port. Port + điểm publish được chừa sẵn ngay khi build mỗi chức năng; bộ gửi lắp sau không cần mở lại code chức năng.
 
+### AD-19 — Tồn kho hai con số: onHand + reserved, StockMovement là ledger append-only `[ADOPTED]`
+
+- **Binds:** FR-25, FR-26
+- **Prevents:** một cột `reserved` cộng-trừ bị sai khi retry chốt/xuất (không idempotent); khả dụng hiển thị sai thực tế.
+- **Rule:** `StockItem` có **hai con số độc lập**: `onHand` (hàng thật trong kho, chỉ phiếu nhập/xuất kho đụng vào) và `reserved` (hàng đã hứa cho đơn đã chốt). Khả dụng = `onHand − reserved`. `StockMovement` là ledger append-only với unique constraint trên `(orderId, orderVersionId)` → chốt/xuất idempotent khi retry; `reserved` là **tổng của `StockMovement.qty`**, không phải một cột cộng-trừ. Chốt đơn khi thiếu tồn: **CHO CHỐT, không chặn**; cảnh báo sớm ở màn báo giá. Chặn nằm ở khâu **xuất kho** (FR-26). Một Đơn, một phiếu xuất.
+
+### AD-20 — Hai mốc đóng băng khác nhau: giá bán lúc chốt, giá vốn lúc xuất kho `[ADOPTED]`
+
+- **Binds:** FR-5, FR-25, FR-36, FR-37
+- **Prevents:** duyệt chiết khấu thấy biên sai thực tế; báo cáo lợi nhuận bao gồm đơn chưa xuất kho; giá vốn sai khi đơn chốt lúc thiếu hàng.
+- **Rule:** `OrderLineItem.unitPriceSnapshot` (giá bán) đóng băng lúc **chốt đơn lần đầu** — vì nó là **lời hứa với khách** (FR-5). `OrderLineItem.costPriceSnapshot` (giá vốn) đóng băng lúc **xuất kho** — vì nó là **sự thật**, chỉ xác định khi hàng rời kho. Hệ quả: (a) duyệt chiết khấu thấy **biên ước tính** (đọc `Product.costPrice` hiện hành), dán nhãn rõ là ước tính; (b) báo cáo lợi nhuận chỉ đọc `costPriceSnapshot`, **đơn chưa xuất kho không có trong báo cáo** — chưa xác định lãi; (c) sửa đơn đã chốt → version mới → `warrantyStartAt` đặt theo dòng, dòng cũ giữ ngày cũ, không gia hạn hết bảo hành. Bảo hành mốc từ ngày chốt đơn là quyết định có ý thức (đơn thi công chốt tháng 1, nghiệm thu tháng 4 → mất 3 tháng bảo hành).
+
+### AD-21 — Không leo thang quyền: không cấp/sửa/vô hiệu hoá tài khoản mà mình không có quyền `[ADOPTED]`
+
+- **Binds:** FR-17, FR-18
+- **Prevents:** chủ doanh nghiệp tự cấp cho mình mọi quyền; vô hiệu hoá tài khoản Super Admin để độc chiếm app.
+- **Rule:** Bất biến thi hành ở `account-permissions.service.ts` + test (tương tự `audit.read` ở `role-presets.spec.ts`): (1) **Không cấp được quyền mình không có** — `setForAccount()` phải kiểm actor có toàn bộ key yêu cầu trước khi ghi; (2) **Không sửa/vô hiệu hoá account mang quyền mà mình không có**. Hệ quả: làn ranh giữa vai trò rõ ràng, không ai tự lên quyền được.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -169,6 +187,7 @@ flowchart TD
 | Logging / Audit | AuditLog bất biến (ai/gì/đối tượng/khi nào/trước→sau) cho mọi mutation nghiệp vụ; append-only; đọc chỉ Super Admin |
 | Idempotency | thao tác tiền (ghi thanh toán, chốt) idempotent, an toàn khi retry (NFR SM-1) |
 | Push / Notification | người nhận resolve qua permission engine (AD-8/AD-15), không theo role; payload mang `type` + deep-link (`{ type, targetId, deeplink }`) mở đúng màn/đơn; lọc theo quyền xem đơn (AD-15) |
+| **Đường đỏ: `settings.manage`** | **Quyền cấu hình hệ thống KHÔNG BAO GIỜ gate:** màn phân quyền (8.2), ma trận quyền (8.4), hay audit log (8.5). Nếu không, account có `settings.manage` sẽ tự cấp cho mình mọi quyền trong một click. Ràng buộc thi hành ở `account-permissions.service.ts` + test (tuân AD-21) |
 
 ## Stack
 
@@ -205,9 +224,11 @@ erDiagram
     ACCOUNT ||--o{ ATTACHMENT : uploads
     ACCOUNT ||--o{ DEVICE_TOKEN : registers
     ACCOUNT ||--o{ NOTIFICATION : receives
+    CUSTOMER_SOURCE ||--o{ CUSTOMER : "used by"
     CUSTOMER ||--o{ ORDER : places
     ORDER ||--o{ ORDER_VERSION : versions
     ORDER ||--o| ORDER_VERSION : "current version"
+    ORDER ||--o| CUSTOMER_SOURCE : "sourceId snapshot"
     ORDER_VERSION ||--o{ ORDER_LINE_ITEM : owns
     ORDER ||--|| PAYMENT_SCHEDULE : has
     PAYMENT_SCHEDULE ||--o{ INSTALLMENT : "split into"
@@ -217,17 +238,23 @@ erDiagram
     ORDER ||--o{ DISCOUNT_APPROVAL : requests
     ORDER ||--o{ ATTACHMENT : has
     ORDER ||--o{ STOCK_VOUCHER : "issue for"
+    ORDER ||--o{ STOCK_MOVEMENT : "reserves/issues"
     PRODUCT ||--o{ PRODUCT_PRICE : "tiered by"
+    PRODUCT ||--o{ PRODUCT_GROUP_ITEM : "items in group"
     PRODUCT ||--o{ ORDER_LINE_ITEM : "referenced by"
     PRODUCT ||--|| STOCK_ITEM : "stock of"
     PRODUCT ||--o{ STOCK_VOUCHER_LINE : moves
+    PRODUCT_GROUP ||--o{ PRODUCT_GROUP_ITEM : "contains"
     STOCK_VOUCHER ||--o{ STOCK_VOUCHER_LINE : contains
+    STOCK_ITEM ||--o{ STOCK_MOVEMENT : "ledger of"
+    ORDER_VERSION ||--o{ STOCK_MOVEMENT : "versioning"
     ORDER {
         uuid id
         string status
         uuid currentVersionId FK
         uuid ownerAccountId FK
         uuid assigneeAccountId FK
+        uuid sourceId FK
         bool scopeThietBi
         bool scopeThiCong
         bool scopeVanChuyen
@@ -247,11 +274,17 @@ erDiagram
         uuid id
         uuid orderVersionId FK
         int unitPriceSnapshot
+        int catalogPriceSnapshot
+        int costPriceSnapshot
         int qty
+        int warrantyMonths
+        datetime warrantyStartAt
     }
     CUSTOMER {
         string sdt PK
         string custType
+        uuid sourceId FK
+        string sourceNote
     }
     DEVICE_TOKEN {
         uuid id
@@ -260,6 +293,41 @@ erDiagram
         string platform
         datetime createdAt
     }
+    PRODUCT {
+        uuid id PK
+        string name
+        string sku
+        int costPrice
+        bool tracksStock
+        bool priceEditable
+        int warrantyMonths
+    }
+    PRODUCT_PRICE {
+        uuid id PK
+        uuid productId FK
+        int minQty
+        int price
+    }
+    STOCK_ITEM {
+        uuid id PK
+        uuid productId FK
+        int onHand
+        int reserved
+    }
+    STOCK_VOUCHER {
+        uuid id PK
+        uuid orderId FK
+        string type
+        string status
+        datetime createdAt
+    }
+    STOCK_VOUCHER_LINE {
+        uuid id PK
+        uuid stockVoucherId FK
+        uuid productId FK
+        int qty
+        int unitCost
+    }
     NOTIFICATION {
         uuid id
         uuid accountId FK
@@ -267,6 +335,36 @@ erDiagram
         string payload
         string deeplink
         bool read
+        datetime createdAt
+    }
+    CUSTOMER_SOURCE {
+        uuid id PK
+        string name
+        string description
+        bool active
+        int sortOrder
+        bool isOther
+    }
+    PRODUCT_GROUP {
+        uuid id PK
+        string name
+        string description
+        bool active
+        datetime createdAt
+    }
+    PRODUCT_GROUP_ITEM {
+        uuid id PK
+        uuid productGroupId FK
+        uuid productId FK
+        int displayOrder
+    }
+    STOCK_MOVEMENT {
+        uuid id PK
+        uuid stockItemId FK
+        uuid orderId FK
+        uuid orderVersionId FK
+        int qty
+        string type
         datetime createdAt
     }
 ```
@@ -279,7 +377,6 @@ stateDiagram-v2
     state "Chờ duyệt chiết khấu" as ChoDuyet
     state "Đã chốt" as DaChot
     state "Đã cọc" as DaCoc
-    state "Lên lịch thi công" as LenLich
     state "Đang thi công" as DangTC
     state "Nghiệm thu" as NghiemThu
     state "Đang giao hàng" as DangGiao
@@ -292,8 +389,7 @@ stateDiagram-v2
     ChoDuyet --> DaChot : duyệt then Chốt
     BaoGia --> DaChot : Chốt (snapshot giá)
     DaChot --> DaCoc : auto (đủ đợt cọc)
-    DaCoc --> LenLich : cờ Thi công
-    LenLich --> DangTC
+    DaCoc --> DangTC : cờ Thi công
     DangTC --> NghiemThu
     DaCoc --> DangGiao : cờ Vận chuyển
     DangGiao --> DaGiao
@@ -333,9 +429,10 @@ flowchart LR
 ```text
 backend/
   src/
-    common/         # error envelope, exception filter, interceptors, guards (AD-4, AD-5)
-    auth/           # JWT access+refresh, /me effective permissions (AD-12)
-    accounts/       # Account, Role preset, Permission matrix (AD-8)
+    common/         # error envelope, exception filter, interceptors, ValidationPipe (AD-5)
+    events/         # EventBus port (abstract kiêm DI token) + InProcessEventBus, @Global (AD-18)
+    auth/           # JWT access+refresh, /me, guard quyền + decorator, reset/đổi mật khẩu (AD-4, AD-12)
+    accounts/       # Account, Permission registry (SSOT), Role preset, quyền per-account (AD-8, AD-17)
     customers/      # Customer, SĐT là PK (AD-9)
     catalog/        # Product + tiered price (FR-14, FR-15)
     orders/         # Order hợp nhất, line items, versions, state machine, snapshot (AD-6, AD-7, AD-11)
@@ -351,6 +448,8 @@ backend/
     prisma/         # PrismaService — điểm truy cập DB duy nhất (AD-1)
     storage/        # R2 client wrapper (AD-3)
 ```
+
+> **Biến thể có chủ đích (hiện thực Epic 2, ghi lại 2026-07-09):** `JwtAuthGuard`/`PermissionsGuard` + decorator (`@Public`, `@RequirePermissions`, `@CurrentAccount`) nằm ở **`auth/`**, không phải `common/` như cây trên vẽ ban đầu — vì guard phụ thuộc `JwtService` (AuthModule) + `AccountsModule`; đặt ở `common/` sẽ **đảo ngược hướng phụ thuộc** (common → domain). Bất biến AD-4 là "guard enforce mỗi request", vị trí file là thứ yếu. `common/` giữ error envelope + exception filter + ValidationPipe. `events/` không có trong cây gốc (AD-18 chỉ nói "port ở nền backend") — đặt module riêng `@Global` vì nhiều domain tiêu thụ.
 
 ## Capability → Architecture Map
 
@@ -381,7 +480,8 @@ backend/
 - **Giới hạn định dạng/dung lượng ảnh** — nơi lưu đã chốt (R2, AD-3); giới hạn kích thước/định dạng + nén để lại cho implementation (FR-24).
 - **CI/CD & môi trường triển khai** — VPS provider, pipeline, container/orchestration cụ thể chưa quyết (solo dev, ưu tiên đơn giản).
 - **Monitoring / backup** — chiến lược backup Postgres, retention R2, alerting để lại cho vận hành.
-- **Chi tiết OpenAPI codegen & auth token TTL** — access/refresh TTL, rotation, revocation cụ thể chốt ở implementation (AD-12).
+- ~~**Auth token TTL, rotation, revocation**~~ — **ĐÃ CHỐT ở Story 2.3** (2026-07-08): access = JWT stateless TTL **15m** (`ACCESS_TOKEN_TTL`); refresh = opaque `randomBytes(32)` lưu **hash SHA-256** ở `sessions`, TTL **30 ngày** (`REFRESH_TOKEN_TTL_DAYS`); **rotate** mỗi lần refresh (cổng atomic `updateMany` + `count === 1` — chống replay); logout/reset/change-password set `revokedAt`. **Giới hạn còn lại:** thu hồi phiên không làm access token cũ hết hiệu lực ngay (≤15m). Chi tiết: `backend/CONVENTIONS.md#Auth`.
+- **Chi tiết OpenAPI codegen (FE)** — sinh client TS/Dart từ `openapi.json` vẫn hoãn tới khi có app-runtime web/mobile (AD-12). Hiện FE khai type khớp contract bằng tay + comment TODO.
 - **Web push (trình duyệt)** — Phase sau; Phase 1 web dùng hộp thư in-app + badge, chưa push trình duyệt (§4.14, FR-31/32).
 - **Ngưỡng thời gian nhắc theo lịch** — báo giá "sắp hết hiệu lực" báo trước bao lâu (noti #11) và "lead nguội" sau bao nhiêu ngày (noti #12) chốt khi làm epics (FR-34).
 - **Chọn job scheduler** — NestJS Schedule vs cron ngoài vs queue cho job nhắc lịch để lại cho implementation (FR-34).

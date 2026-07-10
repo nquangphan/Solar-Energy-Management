@@ -125,23 +125,24 @@ UX-DR-27: Both platforms conform to DESIGN.md as one shared design system (same 
 
 ### FR Coverage Map
 
-### FR Coverage Map
-
 - FR-1..FR-6: Epic 4 — Báo giá/giỏ hàng, cờ phạm vi, VAT, chốt+snapshot, versioning
 - FR-7, FR-8, FR-9, FR-10: Epic 5 — máy trạng thái, auto-transition, danh sách/follow-up
-- FR-11, FR-12: Epic 7 — lịch thanh toán + ghi nhận
+- FR-11, FR-12: Epic 7 — lịch thanh toán + ghi nhận (chặn đợt đầu 0%)
 - FR-13: Epic 7 — sinh hợp đồng
-- FR-14, FR-15: Epic 3 — danh mục vật tư + giá phân tầng
-- FR-16, FR-17, FR-18: Epic 8 — phân quyền/account (engine ở Epic 2)
+- FR-14, FR-15: Epic 3 — danh mục vật tư (+ cột costPrice, tracksStock, priceEditable, warrantyMonths) + giá phân tầng
+- FR-16, FR-17, FR-18: Epic 8 — phân quyền/account (engine ở Epic 2, luật không-leo-thang ở E2); phân quyền gate cấu hình ngôn ngữ (settings.manage)
 - FR-19: Epic 8 — dashboard
-- FR-20: Epic 8 — audit log (màn xem); ghi audit cross-cutting E3–E7
+- FR-20: Epic 8 — audit log (màn xem, gate theo quyền audit.read); ghi audit cross-cutting E3–E7
 - FR-21: Epic 4 — xuất PDF + share
-- FR-22: Epic 1 (UI đăng nhập demo) + Epic 2 (auth thật + quyền)
+- FR-22: Epic 1 (UI đăng nhập demo) + Epic 2 (auth thật + quyền, 20 quyền)
 - FR-23, FR-24: Epic 5 — đính kèm ảnh
-- FR-25, FR-26: Epic 6 — tồn kho + phiếu kho + chặn thiếu tồn
+- FR-25, FR-26: Epic 6 — tồn kho (hai con số onHand+reserved), phiếu kho (+ bình quân gia quyền), chặn ở xuất không chốt, StockMovement idempotent, phiếu nhập trả
 - FR-27, FR-28: Epic 7 — hoá đơn (DB + PDF)
-- FR-29: Epic 3 — khách hàng (SĐT khoá chính)
+- FR-29: Epic 3 — khách hàng (SĐT khoá chính, + sourceId/sourceNote; danh mục Nguồn khách E3.5; gói vật tư E3.6)
 - FR-30, FR-31, FR-32, FR-33, FR-34: Epic 9 — thông báo đẩy
+- FR-35: Epic 3 — nguồn khách (3.5, 3.3) · Epic 4 — snapshot `Order.sourceId` (4.1)
+- FR-36: Epic 4 — bảo hành theo dòng (4.9) · Epic 5 — tra cứu theo SĐT (5.9)
+- FR-37: Epic 6 — giá vốn & snapshot lúc xuất (6.3, 6.4) · Epic 8 — báo cáo lợi nhuận gộp (8.6)
 
 
 ## Epic List
@@ -149,35 +150,35 @@ UX-DR-27: Both platforms conform to DESIGN.md as one shared design system (same 
 ## Epic List
 
 ### Epic 1: Design System & App Shell (làm trước — AD-13)
-Dựng tầng design system từ DESIGN.md cho CẢ web lẫn mobile trước mọi màn tính năng: token → thư viện component React (web) → thư viện widget Flutter (mobile) → app shell (topbar, bottom-nav 5-tab + FAB, sidebar, frame, icon SVG sprite) → màn Đăng nhập dựng thật để chứng minh design system dùng được. Ship kèm 1 màn, không phải thư viện treo kệ.
+Dựng tầng design system từ DESIGN.md cho CẢ web lẫn mobile trước mọi màn tính năng: token → thư viện component React (web) → thư viện widget Flutter (mobile) → app shell (topbar, bottom-nav 5-tab + FAB, sidebar, frame, icon SVG sprite) → màn Đăng nhập dựng thật để chứng minh design system dùng được. Thêm chip "Đã giao" vào 9 chip trạng thái (10 chip). Ship kèm 1 màn, không phải thư viện treo kệ.
 **FRs covered:** FR-22 (UI đăng nhập, demo) · UX-DR-1..27
 
 ### Epic 2: Nền tảng Backend & Đăng nhập/Quyền
-Backend skeleton (NestJS + PostgreSQL + OpenAPI sinh-từ-code + error-envelope + central error handler); xác thực JWT access+refresh thật; permission registry + endpoint /me + UI gating theo quyền; quên mật khẩu; hồ sơ. CHỪA SẴN **Domain Event port + Notification dispatcher (no-op/log)** để các epic sau publish event — producer không gọi FCM trực tiếp.
+Backend skeleton (NestJS + PostgreSQL + OpenAPI sinh-từ-code + error-envelope + central error handler); xác thực JWT access+refresh thật; permission registry (20 quyền: 17 cũ + 3 mới: settings.manage, system.feature_flags, costs.view) + endpoint /me + UI gating theo quyền; quên mật khẩu; hồ sơ; luật không-leo-thang quyền (không cấp quyền mình không có, không sửa account mang quyền mình không có); source-guard (mọi handler không @Public phải có @RequirePermissions). CHỪA SẴN **Domain Event port + Notification dispatcher (no-op/log)** để các epic sau publish event — producer không gọi FCM trực tiếp.
 **FRs covered:** FR-22
 
-### Epic 3: Danh mục vật tư & Khách hàng
-CRUD sản phẩm + giá phân tầng (sau cờ); CRUD khách hàng (SĐT E.164 khoá chính) + tra SĐT chọn/tạo mới inline.
+### Epic 3: Danh mục vật tư & Khách hàng & Nguồn khách & Gói vật tư
+CRUD sản phẩm + giá phân tầng (sau cờ) + cột mới (costPrice, tracksStock, priceEditable, warrantyMonths); CRUD khách hàng (SĐT E.164 khoá chính, thêm sourceId/sourceNote) + tra SĐT chọn/tạo mới inline; danh mục Nguồn khách (5 dòng seed, gate settings.manage); gói vật tư (ProductGroup/ProductGroupItem checklist).
 **FRs covered:** FR-14, FR-15, FR-29
 
 ### Epic 4: Báo giá, Chốt & Duyệt chiết khấu (trái tim)
 Giỏ hàng + cờ phạm vi + VAT qua /orders/preview-total; chốt + snapshot giá; sửa đơn = bản update + lịch sử; xuất PDF + share ảnh; chọn/tạo khách inline; áp + duyệt chiết khấu. Mỗi hành động **publish domain event** (OrderConfirmed, DiscountRequested/Resolved…).
 **FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-21
 
-### Epic 5: Vòng đời đơn & Thi công (nhánh cá nhân)
-applyTransition engine gate theo cờ + auto-transition; danh sách đơn (+ follow-up + empty/loading/error); chi tiết đơn (stepper + tabs + lịch sử bản update); chuyển trạng thái + đính kèm ảnh (optional); huỷ đơn; nhánh Thi công (Khảo sát→Lên lịch→Đang thi công→Nghiệm thu). **Publish StatusChanged event.**
+### Epic 5: Vòng đời đơn & Thi công & Bảo hành (nhánh cá nhân)
+applyTransition engine gate theo cờ + auto-transition; danh sách đơn (+ follow-up + empty/loading/error); chi tiết đơn (stepper + tabs + lịch sử bản update); chuyển trạng thái + đính kèm ảnh (optional); huỷ đơn (giải phóng reserved, phiếu nhập trả); nhánh Thi công (bỏ "Lên lịch", Đang thi công→Nghiệm thu); tra cứu bảo hành theo SĐT. **Publish StatusChanged event.**
 **FRs covered:** FR-7, FR-8, FR-9, FR-10, FR-23, FR-24
 
 ### Epic 6: Giao hàng & Tồn kho (nhánh bỏ mối)
-Nhánh Giao hàng (Đang giao→Đã giao) dùng lại engine E5; tồn kho hiện tại; phiếu nhập/xuất; xuất kho gắn đơn; chặn khi thiếu tồn (**publish StockOutBlocked event**).
+Nhánh Giao hàng (Đang giao→Đã giao, gate cờ Thiết bị) dùng lại engine E5; tồn kho hiện tại (onHand + reserved + khả dụng); phiếu nhập/xuất + bình quân gia quyền giá vốn; xuất kho gắn đơn (một đơn một phiếu, snapshot costPriceSnapshot lúc xuất); chặn ở khâu xuất (không chặn chốt); StockMovement ledger (idempotent); phiếu nhập trả khi huỷ đơn đã xuất (**publish StockOutBlocked/StockIssued event**).
 **FRs covered:** FR-25, FR-26
 
 ### Epic 7: Thanh toán, Hợp đồng & Hoá đơn
 Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng thái (**publish DepositRecorded/PaymentRecorded event**); sinh HĐ Thi công/Mua bán (PDF); tạo hoá đơn (lưu DB + PDF).
 **FRs covered:** FR-11, FR-12, FR-13, FR-27, FR-28
 
-### Epic 8: Quản trị — Dashboard, Phân quyền & Audit
-Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role) + form account; màn xem Audit log (chỉ Super Admin). (Ghi audit là cross-cutting, nhúng ở E3–E7.)
+### Epic 8: Quản trị — Dashboard, Phân quyền, Audit & Báo cáo lợi nhuận
+Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role, luật không-leo-thang) + form account; màn xem Audit log (gate theo quyền audit.read, không role); báo cáo lợi nhuận gộp (một bảng, bốn cách nhóm: đơn/tháng/sale/nguồn khách, dòng KPI trên cùng, nhãn bắt buộc). (Ghi audit là cross-cutting, nhúng ở E3–E7.)
 **FRs covered:** FR-16, FR-17, FR-18, FR-19, FR-20
 
 ### Epic 9: Thông báo đẩy (lắp bộ gửi phía sau port)
@@ -272,6 +273,14 @@ As a người dùng nội bộ, I want màn Đăng nhập dựng bằng chính d
 - **Given** đây là bản demo UI (FR-22 phần giao diện), **When** người dùng nhập SĐT/email + mật khẩu, **Then** form validate rỗng/định dạng và hiển thị vùng lỗi bằng component Banner/field-error — logic xác thực thật nối ở Epic 2 (FR-22).
 - **Given** cả hai nền tảng, **When** so sánh màn Đăng nhập, **Then** nhận ra là cùng một màn (parity), khác khung + điều hướng (UX-DR-27).
 
+### Story 1.12: Thêm chip trạng thái "Đã giao" vào design system (9 → 10 chip)
+As a lập trình viên nền tảng, I want thêm chip trạng thái "Đã giao" (`dagiao`) vào StatusChip trên cả web và mobile, So that vòng đời đơn có đủ bước giao hàng và parity test cập nhật.
+**Acceptance Criteria:**
+- **Given** 9 chip trạng thái đã có, **When** thêm chip mới, **Then** thêm chip `dagiao: 'Đã giao'` với bộ 3 hex fg/bg/border đúng theo quy tắc thiết kế "Viền nét" và màu Năng Lượng Sạch; tổng cộng 10 chip (UX-DR-8).
+- **Given** file `web/src/design-system/components/StatusChip.tsx`, **When** sửa, **Then** thêm `dagiao` vào enum/object status colors, không sửa 9 chip cũ (ad-hoc additive, không breaking) (UX-DR-8).
+- **Given** thư viện widget Flutter, **When** cập nhật tương đương, **Then** thêm widget `DaGiaoChip` hoặc tương đương trên mobile, cùng bộ màu (UX-DR-8).
+- **Given** parity test (`design-system/session/parity.test.mjs`), **When** chạy, **Then** kiểm 10 chip match toàn bộ trên cả web và mobile, không thiếu hoặc sai màu (UX-DR-27).
+
 ## Epic 2: Nền tảng Backend & Đăng nhập/Quyền
 _Backend skeleton (NestJS + PostgreSQL + OpenAPI sinh-từ-code + error-envelope tập trung); JWT access+refresh; permission registry + `/me` + UI gating; quên mật khẩu; hồ sơ. Chừa sẵn Domain Event port + NotificationDispatcher (no-op/log) để các epic sau publish event (AD-18)._
 
@@ -331,13 +340,28 @@ As a người dùng nội bộ, I want đặt lại mật khẩu qua mã và xem
 - **Given** màn Hồ sơ, **When** người dùng đổi mật khẩu, **Then** kiểm mật khẩu cũ, cập nhật mật khẩu mới, ghi Audit qua event.
 - **Given** cả hai màn, **When** dựng, **Then** dùng component design system (Field, Button, Banner), parity web+mobile.
 
+### Story 2.9: Ba quyền mới vào registry + role-presets + bất biến test + sinh lại openapi/permissions.json
+As a lập trình viên backend, I want thêm ba quyền mới (`settings.manage`, `system.feature_flags`, `costs.view`) vào registry chính tắc + cập nhật role-presets + thêm bất biến test, So that phân quyền phủ toàn bộ nhóm tính năng mới.
+**Acceptance Criteria:**
+- **Given** ba quyền mới từ PRD §5, **When** append vào `permission-registry.ts`, **Then** thêm cuối registry theo thứ tự deterministic: `settings.manage` (cấu hình danh mục), `system.feature_flags` (cờ tính năng), `costs.view` (xem giá vốn & lợi nhuận) **And** không đổi thứ tự 17 key cũ (AD-17).
+- **Given** `role-presets.ts`, **When** cập nhật, **Then** thêm `costs.view` vào preset `ADMIN`, `KE_TOAN`, `QUAN_LY`; thêm `settings.manage` vào `ADMIN`, `QUAN_LY` (không `KE_TOAN`/roles khác); `system.feature_flags` **chỉ** ở `SUPER_ADMIN`, không append ở `ADMIN_PRESET` (AC-3) **And** sửa comment sai dòng ~13 (câu "một account Admin được chỉ định là Super Admin" sai — nên là "SUPER_ADMIN = người vận hành app, ngoài tổ chức khách") (FR-18, AC-3).
+- **Given** bất biến `system.feature_flags`, **When** test ở `role-presets.spec.ts`, **Then** viết test khẳng định `system.feature_flags` KHÔNG nằm ở `ADMIN_PRESET`, chỉ append vào `SUPER_ADMIN` (cùng khuôn test `audit.read`) (AC-3).
+- **Given** ba quyền mới thêm vào registry, **When** build, **Then** artifact `openapi/permissions.json` được sinh lại, cập nhật danh sách key + định nghĩa (AD-12, AD-17).
+
+### Story 2.10: Luật không-leo-thang quyền + source-guard trong account-permissions.service.ts
+As a lập trình viên backend, I want thực thi luật không-leo-thang (không cấp quyền mình không có, không sửa/vô hiệu hoá account mang quyền mình không có) + source-guard, So that phân quyền an toàn không cho chủ tự gia tăng quyền hay xoá Super Admin.
+**Acceptance Criteria:**
+- **Given** hành động cấp quyền cho account khác ở `setForAccount()`, **When** execute, **Then** kiểm: người gọi có toàn bộ quyền chuẩn bị cấp không? KHÔNG → từ chối (luật #1: không cấp quyền mình không có) **And** publish event ghi Audit khi cấp quyền (AD-18, FR-18).
+- **Given** hành động sửa/vô hiệu hoá account, **When** execute, **Then** kiểm: account target có quyền mà người gọi không có không? CÓ → từ chối; KHÔNG → cho sửa (luật #2: không sửa account mang quyền mình không có) (FR-18).
+- **Given** source-guard tại `CONVENTIONS.md:137`, **When** scan (dùng test `src/**/*.controller.ts`), **Then** khẳng định: "mọi handler không @Public phải có @RequirePermissions"—nếu handler public quay mà quên permission guard, test fail (AD-4, NFR-7) **And** Story này phải xong TRƯỚC Epic 3 (vì E3+ đụng giá vốn `Product.costPrice`, nếu route quên permission → mọi user đọc được giá vốn).
+
 ## Epic 3: Danh mục vật tư & Khách hàng
 _CRUD sản phẩm + giá phân tầng (sau cờ); CRUD khách hàng (SĐT E.164 khoá chính) + tra SĐT chọn/tạo mới inline (FR-14, FR-15, FR-29)._
 
-### Story 3.1: CRUD Sản phẩm & giá
+### Story 3.1: CRUD Sản phẩm & giá + cột mới (costPrice, tracksStock, priceEditable, warrantyMonths)
 As a người có quyền sửa danh mục, I want thêm/sửa/xoá Sản phẩm và cập nhật giá bất kỳ lúc nào, So that báo giá luôn lấy giá mới nhất từ danh mục.
 **Acceptance Criteria:**
-- **Given** quyền "sửa danh mục & giá", **When** tạo/sửa/xoá Sản phẩm (tên, đơn vị, giá), **Then** thay đổi lưu vào entity `Product` và phản ánh ngay vào báo giá đang dựng (chưa chốt) (FR-14).
+- **Given** quyền "sửa danh mục & giá", **When** tạo/sửa/xoá Sản phẩm (tên, đơn vị, giá), **Then** thay đổi lưu vào entity `Product` và phản ánh ngay vào báo giá đang dựng (chưa chốt) **And** thêm cột: `costPrice` (giá vốn, integer đồng), `tracksStock` (boolean — pin/inverter/battery/dây=true; công lắp/phí lắp=false), `priceEditable` (phí lắp đặt=true; tấm pin=false), `warrantyMonths` (bảo hành mặc định tính bằng tháng, nullable) (FR-14, §2, §3).
 - **Given** một Đơn đã chốt, **When** sửa giá danh mục, **Then** KHÔNG hồi tố đơn đã chốt (FR-14, ánh xạ FR-5).
 - **Given** mọi thay đổi Sản phẩm/giá, **When** lưu, **Then** publish domain event → ghi Audit log (ai/gì/trước→sau) (FR-14, AD-18).
 
@@ -348,29 +372,49 @@ As a người có quyền sửa danh mục, I want bật/tắt giá phân tầng
 - **Given** cờ giá phân tầng BẬT, **When** cấu hình giá, **Then** lưu nhiều mức qua entity `ProductPrice` và chọn mức theo ngữ cảnh (vd theo Loại khách) (FR-15).
 - **Given** cờ là business flag, **When** lưu, **Then** cờ nằm trong DB là nguồn chân lý, không đặt ở Remote Config (AD-14).
 
-### Story 3.3: CRUD Khách hàng — SĐT E.164 khoá chính, chặn trùng
-As a người có quyền quản lý khách hàng, I want tạo/sửa Khách hàng với SĐT là khoá chính chuẩn hoá E.164, So that mỗi khách định danh duy nhất và nhất quán khắp hệ thống.
+### Story 3.3: CRUD Khách hàng — SĐT E.164 khoá chính, chặn trùng, thêm sourceId/sourceNote
+As a người có quyền quản lý khách hàng, I want tạo/sửa Khách hàng với SĐT là khoá chính chuẩn hoá E.164 và ghi nguồn, So that mỗi khách định danh duy nhất và biết khách từ đâu.
 **Acceptance Criteria:**
 - **Given** một SĐT thô do client gửi, **When** backend lưu Khách hàng, **Then** domain `customers` chuẩn hoá về E.164 (`+84…`) — client KHÔNG tự chuẩn hoá; PK của `Customer` là SĐT chuẩn hoá (AD-9).
 - **Given** Loại khách, **When** nhập dữ liệu, **Then** Cá nhân lưu họ tên/CCCD/địa chỉ/SĐT; Thương mại lưu tên/MST/địa chỉ/SĐT/tài khoản NH (FR-29).
 - **Given** một SĐT đã tồn tại (sau chuẩn hoá), **When** tạo khách trùng SĐT, **Then** hệ thống chặn tạo trùng (một SĐT = một Khách hàng) (FR-29) **And** thay đổi khách ghi Audit qua event.
+- **Given** Khách hàng mới, **When** nhập dữ liệu, **Then** `sourceId` (FK → `CustomerSource`) **bắt buộc, KHÔNG có mặc định** trên form; `sourceNote` (mô tả tự do) **bắt buộc KHI nguồn có cờ `isOther`** (§1).
 
 ### Story 3.4: Tra SĐT chọn/tạo khách inline + màn danh sách/chi tiết khách
 As a người có quyền quản lý khách hàng, I want tra SĐT để chọn khách cũ hoặc tạo mới ngay tại chỗ, So that dựng đơn nhanh mà không rời màn.
 **Acceptance Criteria:**
 - **Given** một SĐT nhập trong luồng tra cứu, **When** backend tra, **Then** chạy cùng bộ chuẩn hoá E.164 trước khi kiểm tra tính duy nhất; trùng → trả khách cũ để điền sẵn (AD-9, FR-29).
 - **Given** SĐT không tìm thấy, **When** hiển thị kết quả, **Then** hiện "SĐT chưa có trong hệ thống." + nút "Tạo khách hàng mới" inline (FR-29, UX-DR-19).
+
+### Story 3.5: Danh mục Nguồn khách — CRUD + Seed + Cấu hình (gate `settings.manage`)
+As a người có quyền cấu hình hệ thống, I want quản lý danh mục Nguồn khách (bảng `CustomerSource`), So that mỗi khách ghi rõ nguồn mà nó đến.
+**Acceptance Criteria:**
+- **Given** danh mục Nguồn khách, **When** backend seed, **Then** tạo 5 dòng: Facebook, Zalo, Fanpage, Đại lý, Khác, mỗi dòng có `name`, `description` (một câu để phân biệt, vd "Fanpage — khách inbox trang công ty"), `active` (boolean), `sortOrder` (int), `isOther` (boolean — **chỉ một** dòng có `isOther=true`) (§1).
+- **Given** dòng Nguồn "Khác" có `isOther=true`, **When** xử lý, **Then** backend nhận biết "Khác" bằng cờ `isOther`, KHÔNG bằng so chuỗi tên; dòng này KHÔNG xoá, KHÔNG deactivate được (§1).
+- **Given** sửa Nguồn khách, **When** đổi tên, **Then** ghi Audit log (không chặn được việc đổi nghĩa, chỉ ghi vết) (§1, AD-18).
+- **Given** xoá Nguồn khách, **When** soft-delete, **Then** set `active=false` (hard delete bị chặn, vì khách cũ vẫn trỏ vào) (§1).
+- **Given** màn cấu hình Nguồn khách, **When** render, **Then** gate bởi quyền `settings.manage` (chỉ user có quyền này mới xem được); dùng Table + button CRUD (FR-18, AD-17, UX-DR-10).
+
+### Story 3.6: Gói vật tư — ProductGroup/ProductGroupItem + Checklist trên UI
+As a người có quyền sửa danh mục, I want tạo gói vật tư là danh sách sản phẩm con, So that user chọn gói → hiện list item → tick → thành dòng.
+**Acceptance Criteria:**
+- **Given** khái niệm Gói vật tư, **When** thiết kế, **Then** Gói là **checklist trên UI**, KHÔNG phải sản phẩm, KHÔNG phải dòng tự do; entity `ProductGroup` + `ProductGroupItem { productId }` (§2).
+- **Given** user chọn gói, **When** dựng báo giá, **Then** hiện danh sách sản phẩm con, user tick từng item, **mỗi item tick thành một `OrderLineItem` bình thường** trỏ vào `Product` thật (KHÔNG snapshot, KHÔNG BOM, KHÔNG lưu gói lên Đơn) (§2).
+- **Given** item gói được tick, **When** thêm, **Then** user nhập số lượng, giá = giá item × số lượng, KHÔNG có giá trọn gói mặc định (§2).
+- **Given** gói vật tư, **When** xem chi tiết đơn, **Then** gói KHÔNG hiển thị (in PDF), chỉ thấy dòng item thất vãn từ gói (Phase 1 KHÔNG BOM, không cần) (§2).
 - **Given** màn Danh sách khách + Chi tiết khách, **When** dựng, **Then** dùng Table + trạng thái empty/loading/error, xem được thông tin theo Loại khách; parity web+mobile (FR-29).
 
 ## Epic 4: Báo giá, Chốt & Duyệt chiết khấu (trái tim)
 _Giỏ hàng + cờ phạm vi + VAT qua `/orders/preview-total`; chốt + snapshot giá; sửa đơn = bản update mới + lịch sử; xuất PDF + share ảnh; áp + duyệt chiết khấu. Mỗi hành động nghiệp vụ publish domain event (AD-18). FR-1..6, FR-21._
 
-### Story 4.1: Tạo Đơn + dựng giỏ hàng (Order/OrderVersion/OrderLineItem)
+### Story 4.1: Tạo Đơn + dựng giỏ hàng + snapshot Order.sourceId (Order/OrderVersion/OrderLineItem)
 As a người có quyền tạo báo giá, I want tạo Đơn mới và thêm/sửa/xoá Dòng báo giá, So that dựng báo giá kiểu giỏ hàng ngay tại hiện trường.
 **Acceptance Criteria:**
 - **Given** mô hình dữ liệu, **When** tạo Đơn, **Then** `OrderVersion` sở hữu TẤT CẢ line item, `Order` không sở hữu line trực tiếp; `Order` có `ownerAccountId` + `assigneeAccountId` (nullable); mọi đọc dòng phân giải qua `currentVersionId` (AD-6, AD-15).
 - **Given** một Dòng báo giá, **When** thêm/sửa/xoá, **Then** hỗ trợ dòng pick từ Sản phẩm (auto-điền đơn giá theo danh mục hiện tại, trước chốt) và dòng tự do/gói nhập tay (tên nhiều dòng, đơn vị, số lượng, đơn giá, diễn giải); cờ "linh động/dự kiến" chỉ hiển thị (FR-1, UX-DR-24).
 - **Given** tạo Đơn, **When** lưu, **Then** publish domain event `OrderCreated` qua EventBus (AD-18) **And** chọn Khách hàng qua tra SĐT (Epic 3).
+- **Given** tạo Đơn từ Khách hàng có `sourceId`, **When** lưu Đơn, **Then** **snapshot `Order.sourceId` lúc tạo**, copy từ `Customer.sourceId` (lý do: khách quay lại qua kênh khác thì `Customer.sourceId` đổi, nhưng đơn cũ phải giữ nguyên kênh đã mang nó về — cùng bài học với `unitPriceSnapshot`, FR-5) (§1).
+- **Given** dòng phí lắp đặt (Product có `priceEditable=true`), **When** thêm vào đơn, **Then** dòng này có `priceEditable=true`, giá có thể sửa; gói vật tư đẻ ra dòng trỏ Product thật (mỗi item gói thành một dòng item bình thường) (§2).
 
 ### Story 4.2: Xem trước tổng realtime qua `POST /orders/preview-total`
 As a người có quyền tạo báo giá, I want tổng tiền cập nhật tức thì khi sửa dòng, So that chốt giá cùng khách ngay tại chỗ mà không lệch với backend.
@@ -393,26 +437,29 @@ As a người có quyền tạo báo giá, I want cấu hình VAT (tick áp/khô
 - **Given** thuật toán VAT, **When** backend tính, **Then** `VAT = round-half-up(subtotal × vatRate)` ở mức GRAND-SUBTOTAL với MỘT điểm làm tròn duy nhất, `vatRate` phân giải một lần (AD-16).
 - **Given** metadata Đơn, **When** nhập, **Then** lưu công suất kWp và hạn hiệu lực báo giá (vd "48h kể từ ngày lên PO"), hiển thị trên báo giá (Phase 1 chỉ hiển thị, không auto khoá) (FR-4).
 
-### Story 4.5: Chốt Đơn + snapshot giá
+### Story 4.5: Chốt Đơn + snapshot giá + warranty + giá catalog song song giá đã sửa
 As a người có quyền chốt đơn, I want bấm Chốt để đóng băng giá, So that giá đã báo cho khách không đổi khi danh mục thay đổi sau này.
 **Acceptance Criteria:**
 - **Given** một Đơn "Báo giá", **When** bấm Chốt (qua dialog xác nhận nêu "Chốt sẽ đóng băng giá"), **Then** snapshot đơn giá mọi Dòng vào `OrderVersion.OrderLineItem.unitPriceSnapshot` và snapshot `vatRate`+`vatMode` hiệu lực lên `OrderVersion`; `currentVersionId` trỏ bản này; Đơn → "Đã chốt" (FR-5, AD-6, AD-16).
 - **Given** sau Chốt, **When** sửa giá danh mục, **Then** giá các Dòng của đơn đã chốt KHÔNG đổi (FR-5).
+- **Given** mỗi Dòng báo giá, **When** chốt, **Then** snapshot `OrderLineItem.warrantyMonths` (giá trị bảo hành, mặc định từ `Product.warrantyMonths`, sửa được lúc lên đơn) lên `OrderVersion` (§3).
+- **Given** dòng có `priceEditable=true` (phí lắp), **When** lưu, **Then** `OrderLineItem` lưu **song song** giá catalog (từ `Product.unitPrice`) và giá đã sửa (`unitPriceSnapshot` lúc chốt); chênh lệch không nằm trong bóng tối để audit chiết khấu (§2).
 - **Given** thao tác tiền, **When** Chốt bị retry, **Then** idempotent, không chốt/ghi trùng; publish domain event `OrderConfirmed` qua EventBus (NFR-1, AD-18).
 
-### Story 4.6: Sửa Đơn đã chốt — bản update mới + lịch sử
+### Story 4.6: Sửa Đơn đã chốt — bản update mới + re-snapshot reserved + chặn thiếu tồn khi re-chốt
 As a người có quyền sửa đơn, I want sửa đơn đã chốt bằng cách sinh bản update mới, So that giữ nguyên lịch sử và không ghi đè bản cũ.
 **Acceptance Criteria:**
 - **Given** một Đơn đã chốt, **When** mở lại để sửa, **Then** tạo `OrderVersion` MỚI (không ghi đè), repoint `Order.currentVersionId` sang bản mới, giữ các bản cũ (FR-6, AD-6).
-- **Given** bản update mới được chốt lại, **When** re-finalize, **Then** re-snapshot giá + vatRate/vatMode lên bản mới; bản mới nhất (theo `currentVersionId`) là bản hiệu lực, không suy ra bằng timestamp/số đếm (FR-6, AD-6).
+- **Given** bản update mới được chốt lại, **When** re-finalize, **Then** re-snapshot giá + vatRate/vatmode lên bản mới **AND** huỷ `StockMovement` version cũ, tạo `StockMovement` mới với số lượng update; tính lại `reserved` theo version mới; không đủ khả dụng → **chặn re-chốt** (§2, FR-26).
 - **Given** trang chi tiết Đơn, **When** xem lịch sử, **Then** thấy bản nào/ai/khi nào/đổi gì; sửa đơn publish event `OrderRevised` + ghi Audit (FR-6, AD-18).
 
-### Story 4.7: Áp chiết khấu + duyệt chiết khấu
+### Story 4.7: Áp chiết khấu + duyệt chiết khấu (biên ước tính)
 As a người có quyền áp chiết khấu, I want áp chiết khấu và gửi đi duyệt, So that giảm giá cho khách theo đúng quy trình kiểm soát.
 **Acceptance Criteria:**
 - **Given** một Đơn, **When** áp chiết khấu, **Then** Đơn → "Chờ duyệt chiết khấu" và tạo `DiscountApproval`; publish event `DiscountRequested` (không đẩy FCM trực tiếp) (FR-18, AD-18).
 - **Given** một chiết khấu chờ duyệt, **When** người có quyền duyệt chiết khấu Đồng ý/Từ chối kèm lý do, **Then** Đơn chuyển tương ứng (duyệt → được Chốt; từ chối → về Báo giá); publish `DiscountResolved`; mọi bước ghi Audit (FR-18).
 - **Given** màn Duyệt chiết khấu, **When** dựng, **Then** dùng Dialog xác nhận có hệ quả (UX-DR-20); không có hạn mức tự quyết — mọi chiết khấu phải duyệt.
+- **Given** người duyệt chiết khấu xem Đơn, **When** duyệt, **Then** thấy **biên ước tính** = `(unitPrice − Product.costPrice) / unitPrice`, đọc thẳng `Product.costPrice` hiện hành **với nhãn rõ ràng là ước tính** (chưa xuất kho → chưa biết giá vốn thật); lý do: Đại Ca cho chốt khi thiếu tồn, giá vốn lúc chốt là giá của hàng chưa mua (§3).
 
 ### Story 4.8: Xuất & chia sẻ báo giá (PDF + ảnh)
 As a người có quyền tạo báo giá, I want xuất báo giá PDF/hình ảnh và chia sẻ qua native share, So that gửi ngay cho khách qua Zalo tại hiện trường.
@@ -420,6 +467,15 @@ As a người có quyền tạo báo giá, I want xuất báo giá PDF/hình ả
 - **Given** một Đơn (sau chốt hoặc khi cần), **When** xuất, **Then** tạo PDF và ưu tiên IMAGE báo giá, có khối chữ ký (Người lập/Giám đốc) + logo & thông tin công ty theo mẫu (FR-21).
 - **Given** file xuất, **When** lưu, **Then** binary ở Cloudflare R2, DB chỉ lưu metadata + object key; đọc qua signed URL/proxy, không public bucket (AD-3).
 - **Given** nút Share, **When** bấm, **Then** mở native share sheet ưu tiên hình ảnh; web = share/download tương đương (FR-21, UX-DR-21).
+
+### Story 4.9: Bảo hành theo dòng vật tư (warrantyMonths field + warranty start date)
+As a người tạo báo giá, I want cấu hình bảo hành cho từng dòng vật tư và lưu mốc bảo hành, So that biết khi nào hết hạn bảo hành cho khách.
+**Acceptance Criteria:**
+- **Given** mỗi Dòng báo giá, **When** sửa, **Then** có ô bảo hành (đơn vị tháng, `OrderLineItem.warrantyMonths`, snapshot lúc chốt), mặc định từ `Product.warrantyMonths`, sửa được lúc lên đơn (§3).
+- **Given** dòng Công lắp / Phí lắp đặt (Product có `priceEditable=true` hoặc công lắp), **When** thêm, **Then** ô bảo hành **ẩn** (đặt `warrantyMonths=null`), không hiện input, không nhắc bảo hành; dòng tự do tương tự (§3).
+- **Given** dòng Bảo hành tách (nếu khách mua thêm bảo hành), **When** thêm, **Then** link ô "Thêm bảo hành" (dòng tự do có thể nhập `warrantyMonths` nếu cần, không bắt buộc) (§3).
+- **Given** mỗi dòng chốt, **When** lần đầu tiên Đơn chốt, **Then** **đóng băng `OrderLineItem.warrantyStartAt`** = ngày chốt của **DÒNG ĐÓ** (không phải ngày chốt Đơn) — lý do: nếu tạo version mới sửa một dòng ghi chú tháng 6 sẽ tạo version mới và gia hạn bảo hành toàn đơn; đặt mốc trên dòng thì hàng cũ giữ ngày cũ, hàng mới thêm lấy ngày mới (§3).
+- **Given** mỗi dòng có bảo hành, **When** hiển thị, **Then** lưu **tháng** (int); UI hiển thị "5 năm" khi `warrantyMonths` chia hết 12, "18 tháng" khi không (§3).
 
 ## Epic 5: Vòng đời đơn & Thi công (nhánh cá nhân)
 _applyTransition engine gate theo cờ + permission + audit; auto-transition; danh sách đơn (+follow-up, empty/loading/error); chi tiết đơn (stepper/tabs/lịch sử); chuyển trạng thái + ảnh optional; huỷ; nhánh Thi công. Publish StatusChanged. FR-7,8,9,10,23,24._
@@ -466,63 +522,96 @@ As a người có quyền, I want thêm/xoá ảnh bổ sung trong chi tiết đ
 - **Given** một ảnh, **When** xoá, **Then** chỉ người đã tải lên hoặc người có quyền chỉnh sửa đơn mới xoá được; thêm/xoá ghi Audit (FR-24).
 - **Given** upload, **When** thêm ảnh, **Then** mobile chụp/chọn thư viện, web chọn file; binary ở R2 (FR-24, AD-3, UX-DR-25).
 
-### Story 5.7: Huỷ đơn kèm lý do
-As a người có quyền, I want huỷ đơn kèm lý do, So that đóng đơn không tiếp tục mà vẫn lưu vết.
+### Story 5.7: Huỷ đơn — giải phóng reserved, phiếu nhập trả khi đã xuất
+As a người có quyền, I want huỷ đơn kèm lý do, So that đóng đơn không tiếp tục mà vẫn lưu vết tồn kho.
 **Acceptance Criteria:**
 - **Given** một Đơn ở trạng thái cho phép huỷ, **When** người có quyền huỷ, **Then** đi qua `applyTransition()` sang "Huỷ", bắt buộc nhập lý do (FR-9, AD-11).
-- **Given** hành động huỷ, **When** xác nhận, **Then** qua Dialog nêu hậu quả; ghi Audit + publish `StatusChanged` (UX-DR-20, AD-18).
+- **Given** hành động huỷ **TRƯỚC khi xuất kho**, **When** xác nhận, **Then** qua Dialog nêu hậu quả; huỷ `StockMovement` → **giải phóng `reserved`** ngay; ghi Audit + publish `StatusChanged` (UX-DR-20, AD-18, §2).
+- **Given** hành động huỷ **SAU khi xuất kho** (đã giảm `onHand`), **When** xác nhận, **Then** **KHÔNG tự cộng tồn**; phải tạo **phiếu nhập trả** từ lúc xuất để lên tồn lại (§2).
+- **Given** huỷ, **When** xác nhận, **Then** publish `StatusChanged` + ghi Audit.
 
-### Story 5.8: Nhánh Thi công (Lên lịch → Đang thi công → Nghiệm thu)
+### Story 5.8: Nhánh Thi công — bỏ "Lên lịch" (Đang thi công → Nghiệm thu)
 As a người có quyền chuyển bước thi công, I want các bước thi công chỉ hiện khi cờ Thi công bật, So that đơn có thi công đi đúng chuỗi, đơn không thi công không lộ bước thừa.
 **Acceptance Criteria:**
-- **Given** Đơn bật cờ Thi công, **When** sau "Đã cọc", **Then** engine cho các bước Lên lịch thi công → Đang thi công → Nghiệm thu qua allowed-transition table (FR-7, AD-7).
+- **Given** Đơn bật cờ Thi công, **When** sau "Đã cọc", **Then** engine cho các bước Đang thi công → Nghiệm thu qua allowed-transition table (bỏ bước "Lên lịch thi công" không còn) (FR-7, AD-7, §2).
 - **Given** Đơn KHÔNG bật cờ Thi công, **When** dựng vòng đời, **Then** không có bước thi công nào xuất hiện (FR-7).
-- **Given** mỗi bước thi công, **When** chuyển, **Then** đi qua `applyTransition()` (permission + audit + event), cho đính kèm ảnh optional (FR-9, FR-23).
+- **Given** mỗi bước thi công (Đang thi công, Nghiệm thu), **When** chuyển, **Then** đi qua `applyTransition()` (permission + audit + event), cho đính kèm ảnh optional (FR-9, FR-23).
+
+### Story 5.9: Tra cứu bảo hành theo SĐT khách hàng
+As a người chịu trách nhiệm bảo hành, I want tra cứu bảo hành theo SĐT khách để hỗ trợ khách hàng, So that biết đơn nào/item nào còn hạn bảo hành.
+**Acceptance Criteria:**
+- **Given** màn Tra cứu bảo hành, **When** nhập SĐT, **Then** backend chuẩn hoá E.164, tìm Khách hàng, trả danh sách đơn của khách với item có bảo hành (§3).
+- **Given** danh sách kết quả, **When** chọn Đơn, **Then** hiển thị: mỗi dòng vật tư + ngày bảo hành bắt đầu + số tháng bảo hành + hạn bảo hành (tính = ngày bắt đầu + số tháng) + trạng thái "Còn hạn" / "Sắp hết" / "Hết hạn" (§3).
+- **Given** Phase 1, **When** tra cứu, **Then** chỉ hiển thị thông tin bảo hành, KHÔNG tạo phiếu yêu cầu bảo hành hay vòng đời bảo hành (§3).
 
 ## Epic 6: Giao hàng & Tồn kho (nhánh bỏ mối)
 _Nhánh Giao hàng dùng lại engine E5; tồn kho hiện tại; phiếu nhập/xuất; xuất kho gắn đơn; chặn khi thiếu tồn (publish StockOutBlocked). FR-25, FR-26._
 
-### Story 6.1: Nhánh Giao hàng (Đang giao → Đã giao)
-As a người có quyền xác nhận giao hàng, I want các bước giao hàng chỉ hiện khi cờ Vận chuyển bật, So that đơn bỏ mối đi đúng chuỗi giao hàng.
+### Story 6.1: Nhánh Giao hàng — "Đã giao" gate theo cờ Thiết bị (Đang giao → Đã giao)
+As a người có quyền xác nhận giao hàng, I want các bước giao hàng chỉ hiện khi Đơn có hàng hoá (cờ Thiết bị), So that đơn bỏ mối đi đúng chuỗi giao hàng.
 **Acceptance Criteria:**
-- **Given** Đơn bật cờ Vận chuyển, **When** sau "Đã cọc", **Then** engine cho bước Đang giao hàng → Đã giao qua cùng `applyTransition()` (FR-7, AD-11).
-- **Given** Đơn KHÔNG bật cờ Vận chuyển, **When** dựng vòng đời, **Then** không có bước giao hàng nào xuất hiện (FR-7).
-- **Given** mỗi bước giao, **When** chuyển, **Then** permission-gated + ghi Audit + publish `StatusChanged`, đính kèm ảnh optional (FR-9, FR-23, AD-18).
+- **Given** Đơn bật cờ Thiết bị (có hàng hoá), **When** sau "Đã cọc" và nếu có cờ Vận chuyển, **Then** engine cho bước Đang giao → Đã giao; nếu KHÔNG cờ Vận chuyển, **Then** thẳng sang Đã giao (khách tự tới lấy) (FR-7, AD-7, §2).
+- **Given** Đơn KHÔNG cờ Thiết bị (chỉ công lắp, không hàng), **When** dựng vòng đời, **Then** không có bước giao hàng nào xuất hiện (FR-7, §2).
+- **Given** "Đã giao" trạng thái, **When** chuyển, **Then** xác nhận phiếu xuất kho + trừ tồn + ghi Audit + publish `StatusChanged`, đính kèm ảnh optional (FR-9, FR-23, AD-18, §2).
 
-### Story 6.2: Tồn kho hiện tại theo Sản phẩm
-As a người có quyền nhập/xuất kho, I want xem tồn hiện tại theo Sản phẩm, So that biết còn bao nhiêu trước khi xuất.
+### Story 6.2: Tồn kho hiện tại — hai con số `onHand` + `reserved` + khả dụng
+As a người có quyền nhập/xuất kho, I want xem tồn hiện tại theo Sản phẩm (on-hand + reserved + khả dụng), So that biết còn bao nhiêu để cấp mà không xuất quá.
 **Acceptance Criteria:**
-- **Given** mỗi Sản phẩm, **When** xem Tồn kho, **Then** hiển thị on-hand hiện tại từ entity `StockItem` (một kho duy nhất ở Phase 1) (FR-25).
+- **Given** mỗi Sản phẩm, **When** xem Tồn kho, **Then** hiển thị:
+  - `onHand` — hàng thật trong kho (từ entity `StockItem`, chỉ phiếu nhập/xuất kho được đụng)
+  - `reserved` — hàng đã hứa cho đơn đã chốt (tổng của `StockMovement`, không phải biến cộng-trừ)
+  - **Khả dụng = `onHand` − `reserved`** — con số sale nhìn thấy, có thể âm
+  - (một kho duy nhất ở Phase 1) (FR-25, §2).
+- **Given** khả dụng âm, **When** hiển thị, **Then** hiện dạng `"Còn 5 · Đã hứa 20 · Cần nhập 15"` thay vì hiện số âm trần trụi; cảnh báo ngay khi thêm dòng vào báo giá (§2).
+- **Given** gộp sản phẩm khả dụng âm, **When** tính danh sách cần mua, **Then** mỗi sản phẩm với khả dụng âm = cần nhập số lượng tương ứng (§2).
 - **Given** màn Tồn kho, **When** dựng, **Then** dùng Table + trạng thái empty/loading/error, số canh phải `.mono`, parity web+mobile (FR-25, UX-DR-10).
 
-### Story 6.3: Phiếu nhập/xuất kho
-As a người có quyền nhập/xuất kho, I want tạo Phiếu kho nhập/xuất cập nhật tồn, So that tồn kho luôn khớp thực tế và có lưu vết.
+### Story 6.3: Phiếu nhập/xuất kho + giá vốn + bình quân gia quyền
+As a người có quyền nhập/xuất kho, I want tạo Phiếu kho nhập/xuất cập nhật tồn và giá vốn, So that tồn kho luôn khớp thực tế, lợi nhuận tính đúng.
 **Acceptance Criteria:**
-- **Given** một Phiếu kho, **When** tạo nhập/xuất, **Then** entity `StockVoucher` + `StockVoucherLine`; nhập tăng tồn, xuất giảm tồn on-hand (FR-25).
+- **Given** một Phiếu kho, **When** tạo nhập/xuất, **Then** entity `StockVoucher` + `StockVoucherLine`; nhập tăng tồn, xuất giảm tồn on-hand (FR-25, §2).
+- **Given** tạo phiếu nhập kho, **When** nhập, **Then** `StockVoucherLine.unitCost` **bắt buộc** (giá nhập đơn vị, integer đồng); sau khi lưu phiếu, hệ thống tự tính **bình quân gia quyền** → cập nhật `Product.costPrice` (một chỗ gõ, không phải nhớ sửa hai nơi) (§4).
+- **Given** tồn đầu kỳ, **When** triển khai, **Then** user gõ một phiếu nhập tồn đầu kỳ lúc go-live; nếu quên, báo cáo lợi nhuận tháng đầu rỗng (§4).
 - **Given** mỗi Phiếu kho, **When** lưu, **Then** ghi Audit (ai/khi nào/số lượng/sản phẩm) qua event (FR-25, AD-18).
 
-### Story 6.4: Xuất kho gắn Đơn
-As a người có quyền nhập/xuất kho, I want tạo phiếu xuất từ các Dòng vật tư của Đơn, So that cấp vật tư/giao hàng khớp đúng đơn.
+### Story 6.4: Xuất kho gắn Đơn — MỘT Đơn MỘT phiếu xuất + snapshot costPriceSnapshot lúc xuất
+As a người có quyền nhập/xuất kho, I want tạo phiếu xuất từ các Dòng vật tư của Đơn (một đơn một phiếu), So that cấp vật tư/giao hàng khớp đúng đơn.
 **Acceptance Criteria:**
-- **Given** một Đơn có cờ Vận chuyển/Thi công, **When** tạo phiếu xuất, **Then** phiếu xuất tạo được từ các Dòng vật tư của Đơn và gắn `orderId` (FR-26).
-- **Given** phiếu xuất gắn đơn, **When** lưu, **Then** ghi Audit + liên kết đơn truy được (FR-26).
+- **Given** một Đơn có cờ Vận chuyển/Thi công, **When** tạo phiếu xuất, **Then** **MỘT Đơn chỉ có MỘT phiếu xuất** (unique trên `(orderId, orderVersionId)`), phiếu xuất tạo được từ các Dòng vật tư của Đơn và gắn `orderId` (FR-26, §2).
+- **Given** tạo phiếu xuất và xác nhận (gắn transition "Đã giao"), **When** xuất kho, **Then** **snapshot `OrderLineItem.costPriceSnapshot`** = giá vốn lúc XUẤT KHO, không phải lúc chốt — lý do: Đại Ca cho chốt khi thiếu tồn, giá vốn lúc chốt là giá hàng **chưa mua**; giá bán snapshot lúc chốt (lời hứa), giá vốn snapshot lúc xuất (sự thật) (§4).
+- **Given** phiếu xuất gắn đơn, **When** lưu + xác nhận, **Then** ghi Audit + liên kết đơn truy được; publish `StockIssued` event (FR-26, AD-18).
 
-### Story 6.5: Chặn khi thiếu tồn
-As a người có quyền nhập/xuất kho, I want hệ thống cảnh báo và chặn khi tồn không đủ, So that không xuất quá tồn gây sai lệch kho.
+### Story 6.5: Chặn khi thiếu tồn — ở khâu XUẤT, KHÔNG chặn chốt
+As a người có quyền nhập/xuất kho, I want hệ thống cảnh báo và chặn khi tồn không đủ lúc xuất, So that không xuất quá tồn gây sai lệch kho.
 **Acceptance Criteria:**
-- **Given** một phiếu xuất vượt tồn hiện có, **When** lưu, **Then** hệ thống CẢNH BÁO và CHẶN, không cho xuất quá tồn, hiển thị "Không đủ tồn — không thể xuất quá số tồn hiện có." (FR-26, UX-DR-19).
+- **Given** một Đơn chốt khi thiếu tồn, **When** lưu Đơn, **Then** CHO CHỐT (không chặn lúc chốt) — cảnh báo sớm ngay lúc thêm dòng vào báo giá ("Kho còn 5"), nhưng chốt không chặn (§2).
+- **Given** một phiếu xuất vượt tồn hiện có, **When** lưu, **Then** hệ thống CẢNH BÁO và **CHẶN ở khâu XUẤT KHO**, không cho xuất quá tồn, hiển thị "Không đủ tồn — không thể xuất quá số tồn hiện có." (FR-26, §2, UX-DR-19).
 - **Given** một lần xuất bị chặn, **When** xử lý, **Then** publish event `StockOutBlocked` qua EventBus (không đẩy FCM trực tiếp) (AD-18).
 - **Given** thao tác xuất, **When** kiểm tồn, **Then** kiểm và trừ tồn thực hiện ở backend, client chỉ hiển thị kết quả (AD-2).
 
-## Epic 7: Thanh toán, Hợp đồng & Hoá đơn
+### Story 6.6: Giữ chỗ tồn khi chốt đơn — StockMovement ledger idempotent
+As a lập trình viên tồn kho, I want giữ chỗ tồn lúc chốt đơn bằng `StockMovement` ledger, So that `reserved` chính xác khi re-chốt.
+**Acceptance Criteria:**
+- **Given** chốt Đơn lần đầu, **When** lưu, **Then** tạo `StockMovement` với `orderId`, `orderVersionId`, số lượng item vật tư; `reserved` là **tổng của `StockMovement`**, KHÔNG phải biến cộng-trừ (§2).
+- **Given** `StockMovement` unique trên `(orderId, orderVersionId)`, **When** chốt/re-chốt, **Then** thao tác tiền **idempotent** — gọi Chốt API hai lần không tạo movement trùng; lần đầu tạo, lần thứ hai skip hoặc update (NFR-1, §2).
+- **Given** sửa Đơn → tạo version mới + re-chốt, **When** re-finalize, **Then** huỷ movement version cũ, tạo movement mới theo version mới (Story 4.6).
+- **Phụ thuộc:** story này **sửa luồng chốt của Epic 4** nhưng phải nằm ở Epic 6 vì cần `StockItem` (6.2) tồn tại trước. Hệ quả: Epic 4 chưa xong hẳn khi hết Story 4.9 — hành vi giữ chỗ tồn lúc chốt chỉ hoàn chỉnh sau story này.
+
+### Story 6.7: Phiếu nhập trả khi huỷ đơn đã xuất kho
+As a người quản lý tồn kho, I want tạo phiếu nhập trả khi huỷ đơn đã xuất, So that tồn lên lại chính xác khi đơn bị huỷ.
+**Acceptance Criteria:**
+- **Given** Đơn huỷ **SAU khi xuất kho** (đã giảm `onHand`), **When** xác nhận huỷ, **Then** KHÔNG tự cộng tồn; phải tạo **phiếu nhập trả** từ phiếu xuất lúc đó để lên tồn lại (§2).
+- **Given** phiếu nhập trả, **When** tạo, **Then** entity `StockVoucher` loại "nhập", gắn phiếu xuất gốc, cùng giá vốn (`unitCost` = `costPriceSnapshot` lúc xuất) để báo cáo lợi nhuận không lệch (§2, §4).
+- **Given** tạo phiếu trả, **When** lưu, **Then** tăng lại `onHand`, ghi Audit, gắn link Đơn huỷ (FR-24, AD-18).
 _Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng thái (publish DepositRecorded/PaymentRecorded); sinh HĐ Thi công/Mua bán (PDF); tạo hoá đơn (DB + PDF). FR-11,12,13,27,28._
 
-### Story 7.1: Cấu hình Lịch thanh toán nhiều đợt
+### Story 7.1: Cấu hình Lịch thanh toán nhiều đợt (chặn đợt đầu 0%)
 As a người có quyền, I want cấu hình Lịch thanh toán các đợt (%/số tiền + điều kiện), So that đơn có kế hoạch thu tiền rõ ràng.
 **Acceptance Criteria:**
 - **Given** một Đơn, **When** cấu hình lịch, **Then** tạo `PaymentSchedule` + `Installment` hỗ trợ nhiều đợt (vd 20/70/10), một đợt 100%, hoặc tuỳ chỉnh; mỗi đợt có % hoặc số tiền + mô tả điều kiện (FR-11).
 - **Given** tổng các đợt, **When** lưu, **Then** cảnh báo nếu tổng ≠ tổng sau VAT của Đơn (FR-11).
 - **Given** tiền các đợt, **When** tính, **Then** là integer đồng, không float (AD-10).
+- **Given** cấu hình lịch thanh toán, **When** đợt đầu = 0% (hoặc 0 tiền), **Then** **chặn** — không cho lưu lịch có đợt đầu 0%; luật này chặn tại **cấu hình** (khi tạo lịch), KHÔNG tại lúc áp vào đơn (§3 Plan).
 
 ### Story 7.2: Ghi nhận thanh toán → auto chuyển trạng thái
 As a người có quyền ghi nhận thanh toán, I want ghi tiền theo từng đợt và để trạng thái tự nhảy, So that công nợ và vòng đời đơn tự cập nhật không cần thao tác riêng.
@@ -581,14 +670,26 @@ As a Admin, I want mỗi quyền chuyển trạng thái và quyền duyệt là 
 - **Given** phạm vi xem đơn, **When** khai báo, **Then** "xem tất cả đơn" và "đơn của mình" là hai entry tường minh trong registry (FR-18, AD-17).
 - **Given** một chiết khấu, **When** áp, **Then** cần duyệt bởi account có quyền duyệt chiết khấu (không hạn mức tự quyết) (FR-18).
 
-### Story 8.5: Màn xem Audit log (chỉ Super Admin)
-As a Super Admin, I want xem nhật ký Audit bất biến, So that có bằng chứng minh bạch mọi hành động.
+### Story 8.5: Màn xem Audit log (gate theo quyền `audit.read`, không theo role)
+As a người có quyền `audit.read`, I want xem nhật ký Audit bất biến, So that có bằng chứng minh bạch mọi hành động.
 **Acceptance Criteria:**
 - **Given** AuditLog append-only (đã ghi cross-cutting ở E2–E7), **When** xem, **Then** mỗi bản ghi có ai/làm gì/đối tượng/khi nào/trước→sau; bản ghi không sửa/xoá được (FR-20, AD-8).
-- **Given** quyền xem Audit, **When** render nav, **Then** CHỈ account Super Admin thấy mục Audit; mọi account khác không thấy trong nav/menu (FR-20, UX-DR-22).
+- **Given** quyền xem Audit, **When** render nav, **Then** CHỈ account có quyền `audit.read` thấy mục Audit; mọi account khác không thấy trong nav/menu **— gate theo QUYỀN, KHÔNG theo role** (FR-20, UX-DR-22, §5).
+- **Given** quyền `audit.read` ban đầu chỉ ở `SUPER_ADMIN` preset, **When** cấp, **Then** admin có thể cấp `audit.read` cho account bất kỳ qua màn Phân quyền (Story 8.2); cấp/gỡ quyền này giữ nguyên luật không-leo-thang (Story 2.10) (FR-20, AC-3).
 - **Given** màn Audit, **When** dựng, **Then** dùng Table + bộ lọc theo thời gian/đối tượng, parity web (mobile qua Menu) (FR-20).
 
-## Epic 9: Thông báo đẩy (lắp bộ gửi phía sau port)
+### Story 8.6: Báo cáo lợi nhuận gộp — một bảng, bốn cách nhóm (bằng chip)
+As a quản lý hoặc kế toán, I want báo cáo lợi nhuận gộp trên vật tư, So that nắm hiệu suất kinh doanh từ nhiều góc độ.
+**Acceptance Criteria:**
+- **Given** báo cáo lợi nhuận, **When** dựng, **Then** **MỘT bảng duy nhất** với dữ liệu lợi nhuận, **BỐN cách nhóm** chọn bằng chip hoặc tab (KHÔNG dựng bốn màn riêng):
+  - Nhóm theo **Đơn** (mỗi hàng một đơn)
+  - Nhóm theo **Tháng** (mỗi hàng một tháng)
+  - Nhóm theo **Sale** (`assigneeAccountId` — người phụ trách)
+  - Nhóm theo **Nguồn khách** (`Order.sourceId`) (§4).
+- **Given** bảng báo cáo, **When** render, **Then** có **dòng KPI trên cùng** hiển thị: Doanh thu tổng, Giá vốn tổng, Lợi nhuận gộp tổng, Biên % (dùng component KPI, Story 1.5); dùng Table với số canh phải `.mono` (UX-DR-12, UX-DR-10, §4).
+- **Given** dữ liệu lợi nhuận, **When** tính, **Then** công thức: `Lợi nhuận gộp = Σ(unitPriceSnapshot − costPriceSnapshot) × qty` cho mỗi dòng; đơn chưa xuất kho KHÔNG có trong báo cáo (chưa lãi gì); dòng không có giá vốn (công lắp/phí lắp/dòng tự do) → đặt `costPriceSnapshot = unitPriceSnapshot` → lãi dòng = 0 (§4).
+- **Given** màn báo cáo, **When** render, **Then** hiển thị **nhãn bắt buộc**: `"Lợi nhuận gộp trên vật tư. Chưa trừ nhân công, vận chuyển, chi phí chung."` (§4).
+- **Given** quyền xem báo cáo, **When** gate, **Then** gate theo `costs.view` (quyền mới Story 2.9); nếu không có quyền không hiển thị mục báo cáo (§5).
 _Firebase mobile (FCM/Crashlytics/Analytics/Remote Config); đăng ký device token; subscribe domain event → resolve người nhận THEO QUYỀN (AD-15/17) + người phụ trách đơn, lọc theo quyền xem → gửi FCM; hộp thư in-app; bật/tắt theo loại; nhắc theo lịch. Lắp sau EventBus port của Epic 2 — không mở lại E4–E7. FR-30,31,32,33,34._
 
 ### Story 9.1: Thiết lập Firebase mobile

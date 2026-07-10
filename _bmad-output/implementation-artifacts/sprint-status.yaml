@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-09 (retrospective Epic 2 -> done)
+# last_updated: 2026-07-10 (yêu cầu mới khách hàng: +10 story)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-09 (retrospective Epic 2 -> done)
+last_updated: 2026-07-10 (yêu cầu mới khách hàng: +10 story)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -36,6 +36,7 @@ development_status:
   1-9-app-shell-web-sidebar-web-frame: done
   1-10-primitive-gating-theo-quyen-accessibility-floor-parity: done
   1-11-man-dang-nhap-dung-that-demo-design-system: done
+  1-12-chip-trang-thai-da-giao-parity-web-mobile: backlog
   epic-1-retrospective: done
   epic-2: in-progress
   2-1-skeleton-backend-prisma-openapi-sinh-tu-code: done
@@ -46,12 +47,16 @@ development_status:
   2-6-noi-ui-gating-vao-me-tren-hai-nen-tang: done
   2-7-domain-event-port-eventbus-notificationdispatcher-no-op-audit-subscriber: done
   2-8-quen-mat-khau-ho-so-doi-mat-khau: done
+  2-9-ba-quyen-moi-settings-manage-feature-flags-costs-view: backlog
+  2-10-luat-khong-leo-thang-quyen-source-guard-require-permissions: backlog
   epic-2-retrospective: done
   epic-3: backlog
   3-1-crud-san-pham-gia: backlog
   3-2-gia-phan-tang-sau-co: backlog
   3-3-crud-khach-hang-sdt-e-164-khoa-chinh-chan-trung: backlog
   3-4-tra-sdt-chon-tao-khach-inline-man-danh-sach-chi-tiet-khach: backlog
+  3-5-danh-muc-nguon-khach-man-cau-hinh: backlog
+  3-6-goi-vat-tu-checklist-product-group: backlog
   epic-3-retrospective: optional
   epic-4: backlog
   4-1-tao-don-dung-gio-hang-order-orderversion-orderlineitem: backlog
@@ -62,6 +67,7 @@ development_status:
   4-6-sua-don-da-chot-ban-update-moi-lich-su: backlog
   4-7-ap-chiet-khau-duyet-chiet-khau: backlog
   4-8-xuat-chia-se-bao-gia-pdf-anh: backlog
+  4-9-bao-hanh-theo-dong-vat-tu: backlog
   epic-4-retrospective: optional
   epic-5: backlog
   5-1-engine-applytransition-enum-bang-transition-guard-audit: backlog
@@ -71,7 +77,8 @@ development_status:
   5-5-chuyen-trang-thai-thu-cong-dinh-kem-anh-optional: backlog
   5-6-dinh-kem-anh-bo-sung-trong-chi-tiet-don: backlog
   5-7-huy-don-kem-ly-do: backlog
-  5-8-nhanh-thi-cong-len-lich-dang-thi-cong-nghiem-thu: backlog
+  5-8-nhanh-thi-cong-dang-thi-cong-nghiem-thu: backlog
+  5-9-tra-cuu-bao-hanh-theo-sdt: backlog
   epic-5-retrospective: optional
   epic-6: backlog
   6-1-nhanh-giao-hang-dang-giao-da-giao: backlog
@@ -79,6 +86,8 @@ development_status:
   6-3-phieu-nhap-xuat-kho: backlog
   6-4-xuat-kho-gan-don: backlog
   6-5-chan-khi-thieu-ton: backlog
+  6-6-giu-cho-ton-khi-chot-don-stock-movement: backlog
+  6-7-phieu-nhap-tra-khi-huy-don-da-xuat: backlog
   epic-6-retrospective: optional
   epic-7: backlog
   7-1-cau-hinh-lich-thanh-toan-nhieu-dot: backlog
@@ -93,6 +102,7 @@ development_status:
   8-3-form-tao-sua-vo-hieu-hoa-account: backlog
   8-4-cau-hinh-ma-tran-quyen-hanh-dong-duyet: backlog
   8-5-man-xem-audit-log-chi-super-admin: backlog
+  8-6-bao-cao-loi-nhuan-gop: backlog
   epic-8-retrospective: optional
   epic-9: backlog
   9-1-thiet-lap-firebase-mobile: backlog

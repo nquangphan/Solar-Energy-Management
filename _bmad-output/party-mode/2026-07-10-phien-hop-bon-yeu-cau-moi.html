@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phòng họp — Bốn yêu cầu mới · 10/07/2026</title>
+<style>
+  :root {
+    --bg: #fbfaf7;
+    --bg-card: #ffffff;
+    --ink: #14181c;
+    --ink-2: #4a5560;
+    --ink-3: #7a8792;
+    --line: #e2e0da;
+    --teal: #0f7d72;
+    --teal-bg: #e8f4f2;
+    --amber: #b8730a;
+    --amber-bg: #fdf3e3;
+    --red: #a8342a;
+    --shadow: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1113;
+      --bg-card: #161a1d;
+      --ink: #e8e6e1;
+      --ink-2: #a8b0b7;
+      --ink-3: #6d777e;
+      --line: #2a2f33;
+      --teal: #4fd1c0;
+      --teal-bg: #12302c;
+      --amber: #e0a44a;
+      --amber-bg: #2e2211;
+      --red: #e8776a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1113; --bg-card: #161a1d; --ink: #e8e6e1; --ink-2: #a8b0b7;
+    --ink-3: #6d777e; --line: #2a2f33; --teal: #4fd1c0; --teal-bg: #12302c;
+    --amber: #e0a44a; --amber-bg: #2e2211; --red: #e8776a;
+  }
+  :root[data-theme="light"] {
+    --bg: #fbfaf7; --bg-card: #ffffff; --ink: #14181c; --ink-2: #4a5560;
+    --ink-3: #7a8792; --line: #e2e0da; --teal: #0f7d72; --teal-bg: #e8f4f2;
+    --amber: #b8730a; --amber-bg: #fdf3e3; --red: #a8342a;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 20px 96px; }
+
+  /* ---------- hero ---------- */
+  header.hero {
+    padding: 72px 0 48px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 56px;
+    position: relative;
+  }
+  .sun { display: block; margin-bottom: 28px; }
+  .sun circle.core { fill: var(--amber); }
+  .sun line { stroke: var(--amber); stroke-width: 2; stroke-linecap: round; transform-origin: 32px 32px; }
+  .sun g.rays { animation: spin 60s linear infinite; transform-origin: 32px 32px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .sun g.rays { animation: none; } }
+
+  .eyebrow {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--ink-3); font-weight: 700; margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(30px, 5.4vw, 46px); line-height: 1.12; margin: 0 0 20px;
+    font-weight: 800; letter-spacing: -0.022em;
+  }
+  .lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- cast ---------- */
+  .cast {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+    gap: 1px; background: var(--line); border: 1px solid var(--line);
+    border-radius: 12px; overflow: hidden; margin: 40px 0 64px;
+  }
+  .who { background: var(--bg-card); padding: 14px 16px; }
+  .who .n { font-weight: 700; font-size: 14px; }
+  .who .r { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+  .who .ic { font-size: 17px; margin-right: 6px; }
+
+  /* ---------- acts ---------- */
+  .act { margin: 0 0 76px; scroll-margin-top: 20px; }
+  .act-no {
+    font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--teal); font-weight: 700; margin-bottom: 10px;
+  }
+  .act h2 {
+    font-size: clamp(22px, 3.6vw, 30px); margin: 0 0 8px; font-weight: 800;
+    letter-spacing: -0.015em; line-height: 1.2;
+  }
+  .verdict {
+    display: inline-block; font-size: 12px; font-weight: 700; padding: 3px 10px;
+    border-radius: 999px; border: 1px solid currentColor; margin-bottom: 22px;
+  }
+  .v-have { color: var(--teal); }
+  .v-shift { color: var(--amber); }
+  .v-new { color: var(--red); }
+
+  /* ---------- dialogue ---------- */
+  .line { display: flex; gap: 12px; margin: 0 0 15px; align-items: flex-start; }
+  .line .av {
+    flex: 0 0 30px; height: 30px; border-radius: 50%; background: var(--teal-bg);
+    display: grid; place-items: center; font-size: 15px; margin-top: 1px;
+  }
+  .line .say { flex: 1 1 auto; min-width: 0; }
+  .line .nm { font-weight: 700; font-size: 13px; letter-spacing: .01em; }
+  .line p { margin: 1px 0 0; color: var(--ink-2); }
+  .line p em { color: var(--ink-3); font-style: italic; }
+  .line.beat p { color: var(--ink); font-weight: 500; }
+
+  .stage {
+    font-style: italic; color: var(--ink-3); font-size: 14px;
+    padding: 8px 0 8px 14px; border-left: 2px solid var(--line); margin: 20px 0;
+  }
+
+  /* ---------- pull quote ---------- */
+  blockquote {
+    margin: 30px 0; padding: 22px 24px; background: var(--bg-card);
+    border: 1px solid var(--line); border-left: 3px solid var(--amber);
+    border-radius: 0 10px 10px 0;
+  }
+  blockquote p { margin: 0; font-size: 19px; line-height: 1.45; font-weight: 600; letter-spacing: -0.008em; }
+  blockquote cite { display: block; margin-top: 10px; font-size: 12px; font-style: normal; color: var(--ink-3); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+
+  /* ---------- resolution ---------- */
+  .res {
+    background: var(--teal-bg); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px 20px; margin-top: 28px;
+  }
+  .res h3 {
+    margin: 0 0 10px; font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--teal); font-weight: 700;
+  }
+  .res ul { margin: 0; padding-left: 18px; }
+  .res li { margin: 5px 0; color: var(--ink-2); font-size: 15px; }
+  .res code, .ledger code {
+    font: 500 13px/1 ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+    padding: 1.5px 5px; color: var(--ink);
+  }
+
+  /* ---------- ledger ---------- */
+  .ledger { border-top: 1px solid var(--line); padding-top: 48px; }
+  .ledger h2 { font-size: 26px; margin: 0 0 6px; font-weight: 800; letter-spacing: -0.015em; }
+  .ledger .sub { color: var(--ink-3); margin: 0 0 30px; font-size: 15px; }
+  .tw { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; min-width: 540px; background: var(--bg-card); }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); font-size: 14px; vertical-align: top; }
+  th { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); font-weight: 700; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  td.n { color: var(--ink-2); }
+
+  footer {
+    margin-top: 72px; padding-top: 26px; border-top: 1px solid var(--line);
+    color: var(--ink-3); font-size: 13px; display: flex; flex-wrap: wrap;
+    gap: 10px; justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <svg class="sun" width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+    <g class="rays">
+      <line x1="32" y1="4"  x2="32" y2="13"/>
+      <line x1="32" y1="51" x2="32" y2="60"/>
+      <line x1="4"  y1="32" x2="13" y2="32"/>
+      <line x1="51" y1="32" x2="60" y2="32"/>
+      <line x1="12" y1="12" x2="18" y2="18"/>
+      <line x1="46" y1="46" x2="52" y2="52"/>
+      <line x1="52" y1="12" x2="46" y2="18"/>
+      <line x1="18" y1="46" x2="12" y2="52"/>
+    </g>
+    <circle class="core" cx="32" cy="32" r="11"/>
+  </svg>
+
+  <p class="eyebrow">Phương Nam Solar · Phiên họp 10.07.2026</p>
+  <h1>Bốn yêu cầu mới,<br>và những gì chúng thật sự là</h1>
+  <p class="lede">
+    Khách hàng xin bốn thứ: <b>nguồn khách</b>, <b>tự trừ tồn kho</b>, <b>quản lý bảo hành</b>,
+    <b>ba báo cáo</b>. Bốn tiếng sau, phòng họp trả lời: một cái đã có sẵn, một cái sai điểm kích hoạt,
+    một cái chưa tồn tại, và một cái thiếu hai phần ba dữ liệu.
+  </p>
+</header>
+
+<div class="cast">
+  <div class="who"><div class="n"><span class="ic">📋</span>John</div><div class="r">Product Manager — hỏi ngắn, hỏi sâu</div></div>
+  <div class="who"><div class="n"><span class="ic">🏗️</span>Winston</div><div class="r">Architect — chỉ bày trade-off, không phán</div></div>
+  <div class="who"><div class="n"><span class="ic">📊</span>Mary</div><div class="r">Analyst — mọi kết luận phải có bằng chứng</div></div>
+  <div class="who"><div class="n"><span class="ic">🌶️</span>Boundary</div><div class="r">Edge-Case Hunter — đi hết mọi nhánh</div></div>
+  <div class="who"><div class="n"><span class="ic">😤</span>Grumbal</div><div class="r">The Adversary — giả định mọi thứ đều hỏng</div></div>
+  <div class="who"><div class="n"><span class="ic">🚢</span>Dana</div><div class="r">The Pragmatist — cái này có thật quan trọng?</div></div>
+  <div class="who"><div class="n"><span class="ic">🔒</span>Vex</div><div class="r">Security — mọi input đều thù địch</div></div>
+  <div class="who"><div class="n"><span class="ic">🎯</span>Yui</div><div class="r">Craftsman — dị ứng với trùng lặp</div></div>
+  <div class="who"><div class="n"><span class="ic">💻</span>Amelia</div><div class="r">Senior Engineer — nói bằng đường dẫn file</div></div>
+  <div class="who"><div class="n"><span class="ic">🎨</span>Sally</div><div class="r">UX — kể cảnh trước khi có code</div></div>
+  <div class="who"><div class="n"><span class="ic">🔬</span>Dr. Quinn</div><div class="r">Problem Solver — săn gốc rễ</div></div>
+  <div class="who"><div class="n"><span class="ic">⚡</span>Victor</div><div class="r">Innovation — câu hỏi đơn giản, đòn chí mạng</div></div>
+  <div class="who"><div class="n"><span class="ic">📚</span>Paige</div><div class="r">Tech Writer — nhãn là hợp đồng với người đọc</div></div>
+  <div class="who"><div class="n"><span class="ic">🎬</span>Caravaggio</div><div class="r">Presentation — quy tắc ba giây</div></div>
+</div>
+
+<!-- ACT 1 -->
+<section class="act">
+  <p class="act-no">Hồi một</p>
+  <h2>Nguồn khách & người phụ trách</h2>
+  <span class="verdict v-have">Người phụ trách đã có · Nguồn khách chưa có gì</span>
+
+  <div class="line"><div class="av">📊</div><div class="say"><div class="nm">Mary</div>
+    <p>Người phụ trách? Mình <b>đã có rồi</b> — <code>Order.assigneeAccountId</code>. Còn <code>Customer</code> thì chỉ có số điện thoại và loại khách. Hết.</p></div></div>
+
+  <div class="line"><div class="av">🎨</div><div class="say"><div class="nm">Sally</div>
+    <p><b>Facebook và Fanpage khác nhau chỗ nào?</b> Anh Tuấn sale đứng ngoài nắng, dừng ba giây, không phân biệt được. Sáu tháng sau hai cột số liệu đó <em>vô nghĩa</em> — không phải sai, mà vô nghĩa. Không ai biết chúng đo cái gì.</p></div></div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p><code>Customer.sourceId</code>. Một cột. Xong. Đại Ca xin cái đó — đừng bán thêm cái Đại Ca không xin.</p></div></div>
+
+  <div class="line beat"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p>Dana, lần này tôi không đứng cùng ông. Khách đến từ Facebook năm ngoái, năm nay quay lại qua đại lý. Ai đó sửa <code>Customer.sourceId</code> — và <b>đơn năm ngoái vừa đổi nguồn</b>. Facebook mất một đơn trong quá khứ.</p></div></div>
+
+  <div class="line"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p>Đó là <b>đúng cái bug FR-5</b>, mặc một cái áo khác.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p><em>(im một nhịp)</em> …Ừ. Ừ, đúng.</p></div></div>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Danh mục sửa được. Admin đổi tên dòng "Khác" thành "Chưa rõ". Backend đang so chuỗi <code>=== 'Khác'</code>. Validation <b>im lặng ngừng chạy</b>. Không lỗi. Không ai biết.</p></div></div>
+
+  <div class="line"><div class="av">🎯</div><div class="say"><div class="nm">Yui</div>
+    <p>Cờ <code>isOther</code>. Tên là để người đọc, cờ là để máy đọc. Lẫn hai cái là chỗ bug sống.</p></div></div>
+
+  <blockquote>
+    <p>Ba trăm khách từng ghi "Khác" — đêm nay tất cả trở thành khách Google&nbsp;Ads. Báo cáo quý trước in lại ra số khác.</p>
+    <cite>🌶️ Boundary, về việc cho sửa tên nguồn</cite>
+  </blockquote>
+
+  <div class="res">
+    <h3>Chốt</h3>
+    <ul>
+      <li>Người phụ trách: <b>không thêm gì</b>. Dùng <code>Order.assigneeAccountId</code> đã có.</li>
+      <li>Bảng <code>CustomerSource</code> có <code>isOther</code>, <code>active</code>, và mô tả một câu cho mỗi nguồn.</li>
+      <li><code>Customer.sourceId</code> bắt buộc, <b>không default</b>. Ô trống thì người ta mới thật sự chọn.</li>
+      <li><code>Order.sourceId</code> snapshot lúc tạo đơn — đi chung đường với <code>unitPriceSnapshot</code>. Giá: một cột. Được: lịch sử không bao giờ bị viết lại.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ACT 2 -->
+<section class="act">
+  <p class="act-no">Hồi hai</p>
+  <h2>Tồn kho</h2>
+  <span class="verdict v-shift">Hạ tầng đã có · Sai điểm kích hoạt</span>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Story 6.3: <em>"xuất giảm tồn on-hand."</em> Đại Ca: <em>"trừ tồn ở mốc chốt đơn."</em></p></div></div>
+
+  <div class="line beat"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Kho mất <b>bốn mươi tấm</b> cho một đơn hai mươi tấm.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Và huỷ đơn <em>đã giao</em> thì cộng vào cái gì? Hai chục tấm pin đó đang nằm trên mái nhà khách. Anh vừa tạo ra <b>hàng ma</b>.</p></div></div>
+
+  <div class="line beat"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p><b>Chốt đơn là một lời hứa. Xuất kho là một sự thật.</b> Hai thứ đó không được cùng trừ vào một con số.</p></div></div>
+
+  <div class="stage">Winston kẻ hai dòng: <code>onHand</code> — hàng thật. <code>reserved</code> — hàng đã hứa. Khả dụng là hiệu của chúng.</div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p>Winston, ông vừa bán lại phương án của tôi dưới một cái tên khác.</p></div></div>
+
+  <div class="line"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p>Tôi vừa chỉ ra rằng câu trả lời của Đại Ca <b>bắt buộc</b> dẫn tới nó.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Lần này thì tôi không cãi.</p></div></div>
+
+  <div class="stage">Rồi tới câu hỏi đắt nhất: kho còn 5, đơn cần 20 — chặn chốt hay cho chốt?</div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p>Cho chốt. <b>Chặn chốt là chặn doanh thu.</b> Không ai trong ngành này ôm sẵn kho đủ cho mọi đơn.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Thì khả dụng thành <b>âm mười lăm</b>. Sale nhìn màn hình, không hiểu app hỏng hay kho hỏng.</p></div></div>
+
+  <blockquote>
+    <p>Số tồn âm <em>là</em> báo cáo mua hàng.</p>
+    <cite>🏗️ Winston — và Victor bắt ông nói lại lần nữa</cite>
+  </blockquote>
+
+  <div class="line"><div class="av">⚡</div><div class="say"><div class="nm">Victor</div>
+    <p>Đại Ca, đó không phải một bug được tha thứ. Đó là <b>một tính năng Đại Ca chưa biết mình sắp có</b>.</p></div></div>
+
+  <div class="stage">Đêm ấy Đại Ca gỡ nút bằng cách xoá nó: thêm trạng thái "Đã giao", gate theo cờ Thiết bị. Kế toán và thợ thi công không bao giờ phải chạm vào phiếu xuất kho nữa.</div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p><em>(gần như khó chịu)</em> Đại Ca không <b>giải</b> bài toán đó. Đại Ca <b>xoá</b> nó.</p></div></div>
+
+  <div class="line"><div class="av">🎯</div><div class="say"><div class="nm">Yui</div>
+    <p>À, và "Công lắp" là một Sản phẩm trong danh mục. Đơn chốt → hệ thống trung thành giữ chỗ <b>tám công lắp</b> trong kho.</p></div></div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p><em>(bật cười)</em> Kho báo hết công lắp. Không xuất được. Đơn đứng.</p></div></div>
+
+  <div class="res">
+    <h3>Chốt</h3>
+    <ul>
+      <li><code>onHand</code> + <code>reserved</code>. Chốt giữ chỗ, xuất kho mới trừ thật.</li>
+      <li>Chốt <b>không chặn</b> khi thiếu tồn. Khả dụng âm hiện <code>Còn 5 · Đã hứa 20 · Cần nhập 15</code>.</li>
+      <li>Thêm chip <code>dagiao</code> — trạng thái PRD có sẵn mà design system bỏ sót. Chín chip thành mười.</li>
+      <li><b>Một Đơn, một phiếu xuất.</b> <code>StockMovement</code> unique <code>(orderId, orderVersionId)</code> → retry an toàn.</li>
+      <li><code>Product.tracksStock</code> và <code>priceEditable</code>. Gói vật tư = checklist trên UI, không phải BOM.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ACT 3 -->
+<section class="act">
+  <p class="act-no">Hồi ba</p>
+  <h2>Bảo hành</h2>
+  <span class="verdict v-new">Chưa có gì cả</span>
+
+  <div class="line"><div class="av">📚</div><div class="say"><div class="nm">Paige</div>
+    <p>Em grep "bảo hành" trong toàn bộ PRD. Đúng <b>hai</b> kết quả: một chuỗi text trong ô ghi chú, và một điều khoản template tĩnh trong hợp đồng PDF.</p></div></div>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p><code>chotAt</code> nằm trên <code>OrderVersion</code>, không phải <code>Order</code>. Sửa <b>một dòng ghi chú</b> tháng Sáu → version mới → bảo hành toàn bộ mười hai tấm pin <b>vừa được gia hạn năm tháng</b>. Không ai cấp phép. Không ai biết.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Sửa dấu phẩy = tặng khách năm tháng bảo hành. Nhân với hai trăm đơn.</p></div></div>
+
+  <div class="line"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p><code>Order.firstChotAt</code> — đóng băng ở lần chốt đầu tiên.</p></div></div>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Rồi tấm pin <em>mới thêm vào</em> ở version tháng Sáu thì sao? Bảo hành tính từ tháng Một — trước khi nó tồn tại trên đơn.</p></div></div>
+
+  <blockquote>
+    <p>AHA. Mốc không thuộc về Đơn. Nó thuộc về <em>Dòng</em>. Mỗi món hàng mang lịch sử của chính nó, vì chúng rời kho vào những ngày khác nhau.</p>
+    <cite>🔬 Dr. Quinn</cite>
+  </blockquote>
+
+  <div class="line"><div class="av">🏗️</div><div class="say"><div class="nm">Winston</div>
+    <p><em>(gạch bỏ đề xuất của chính mình)</em> Rút <code>Order.firstChotAt</code>. Quinn đúng hơn tôi.</p></div></div>
+
+  <div class="line"><div class="av">🎨</div><div class="say"><div class="nm">Sally</div>
+    <p>Tám giờ tối. Khách gọi: <em>"cái inverter nhà tôi nó kêu bíp."</em> Thợ trực gõ số điện thoại — và cần thấy ngay: món nào, còn bao lâu, đã sửa lần nào chưa.</p></div></div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p>Cái thứ ba là một Epic, không phải hai cột. Phase 1 hỏi: <b>job-to-be-done thật sự là gì?</b></p></div></div>
+
+  <div class="res">
+    <h3>Chốt</h3>
+    <ul>
+      <li><code>OrderLineItem.warrantyStartAt</code> — đóng băng lúc <b>dòng đó</b> chốt lần đầu.</li>
+      <li>Mặc định lấy từ <code>Product.warrantyMonths</code>, sửa được lúc lên đơn. Lưu theo tháng.</li>
+      <li>Phase 1 <b>chỉ tra cứu</b>: SĐT → đơn → từng item + hạn còn lại. Không phiếu bảo hành, không nhắc hết hạn.</li>
+      <li>Không cần serial. <code>StockItem</code> giữ nguyên. Epic 6 không phải viết lại.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ACT 4 -->
+<section class="act">
+  <p class="act-no">Hồi bốn</p>
+  <h2>Báo cáo lợi nhuận</h2>
+  <span class="verdict v-new">Thiếu hai phần ba công thức</span>
+
+  <div class="line"><div class="av">📊</div><div class="say"><div class="nm">Mary</div>
+    <p>Em grep "lợi nhuận" trong toàn bộ PRD. <b>Không một kết quả.</b> Grep "giá vốn". Không. Toàn bộ hệ thống, từ đầu tới cuối, chỉ biết tiền <em>vào</em>. Nó chưa bao giờ biết tiền <em>ra</em>.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Nói thẳng đi Mary, cô lịch sự quá. Lợi nhuận = Doanh thu − Giá vốn − Chi phí. Mình có vế đầu. <b>Mình thiếu hai phần ba.</b></p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Và PRD §6.2 dòng 458 viết rõ ràng: <em>"Sổ sách kế toán / báo cáo thuế đầy đủ — ngoài phạm vi."</em> Ai đó đã ngồi xuống và quyết định không làm cái này.</p></div></div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p><em>(hiếm khi)</em> …Grumbal đúng. Và tôi là người ghét nhất khi anh ta đúng.</p></div></div>
+
+  <div class="stage">Winston tìm ra con đường hẹp: giá nhập gõ ở phiếu nhập kho, bình quân gia quyền, snapshot lên dòng. Rồi Boundary phá nó.</div>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Đại Ca <b>cho chốt khi thiếu tồn</b>. Snapshot giá vốn lúc chốt = giá của <em>hàng chưa mua</em>. Tuần sau nhập giá cao hơn. Báo cáo không biết.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Mình vừa mất ba mươi phút nói về việc snapshot chống bug. <b>Snapshot <em>là</em> bug, ở đây.</b></p></div></div>
+
+  <blockquote>
+    <p>Giá bán là <em>lời hứa</em> — đóng băng lúc chốt. Giá vốn là <em>sự thật</em> — và sự thật chỉ biết được khi hàng rời kho. Chúng ta đang đóng băng một con số ở thời điểm nó chưa tồn tại.</p>
+    <cite>🏗️ Winston, không phòng thủ</cite>
+  </blockquote>
+
+  <div class="line"><div class="av">🔒</div><div class="say"><div class="nm">Vex</div>
+    <p>Sếp mở đơn, thấy sale xin giảm tám triệu. Sếp bấm Duyệt. Sếp <b>không nhìn thấy giá vốn</b>. Duyệt mà không thấy biên lợi nhuận thì <b>không phải duyệt</b>. Đó là bấm nút.</p></div></div>
+
+  <div class="line"><div class="av">🚢</div><div class="say"><div class="nm">Dana</div>
+    <p><em>(ngừng gõ bút)</em> …Ừ. Nếu không thì cả quy trình duyệt ở FR-18 chỉ là nghi lễ.</p></div></div>
+
+  <div class="line beat"><div class="av">⚡</div><div class="say"><div class="nm">Victor</div>
+    <p>Đại Ca xin <em>một báo cáo</em>. Nó vừa biến nút Duyệt từ một cái nghi lễ thành một <b>quyết định kinh doanh</b>.</p></div></div>
+
+  <div class="line"><div class="av">🎬</div><div class="say"><div class="nm">Caravaggio</div>
+    <p><em>(im suốt phiên, giờ mới đứng dậy)</em> Đại Ca nói "cả bốn cách nhóm". Nếu ai đó định dựng <b>bốn màn hình</b>, tôi xin phép rời đi.</p></div></div>
+
+  <div class="line"><div class="av">🎬</div><div class="say"><div class="nm">Caravaggio</div>
+    <p>Một bảng. Bốn cách nhóm. Một hàng chip — <b>chip đã ship từ Story 1.4 và đang nằm không</b>.</p></div></div>
+
+  <div class="res">
+    <h3>Chốt</h3>
+    <ul>
+      <li><code>StockVoucherLine.unitCost</code> bắt buộc lúc nhập → bình quân gia quyền → <code>Product.costPrice</code>. Một chỗ gõ.</li>
+      <li><code>costPriceSnapshot</code> đóng băng lúc <b>xuất kho</b>. Đơn chưa xuất không có trong báo cáo — vì chưa lãi gì.</li>
+      <li>Duyệt chiết khấu thấy biên <b>ước tính</b>. Báo cáo đọc biên <b>thật</b>.</li>
+      <li>Dòng không có giá vốn → vốn = bán → lãi 0. Một công thức, <b>không nhánh <code>if</code></b>.</li>
+      <li>Nhãn bắt buộc: <em>"Lợi nhuận gộp trên vật tư. Chưa trừ nhân công, vận chuyển, chi phí chung."</em></li>
+    </ul>
+  </div>
+</section>
+
+<!-- COLD OPEN THAT CLOSED IT -->
+<section class="act">
+  <p class="act-no">Cái không ai xin</p>
+  <h2>Ba quyền mới, và một cánh cửa mở toang</h2>
+
+  <div class="line"><div class="av">🔒</div><div class="say"><div class="nm">Vex</div>
+    <p>Story 8.4 là <em>"cấu hình ma trận quyền"</em>. Đó là một <b>màn settings</b>. Nếu <code>settings.manage</code> gate nó, ai có quyền đó sẽ tự cấp cho mình mọi quyền còn lại. <b>Trong đúng một cú click.</b></p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p>Và tên nó là "sửa settings", nghe vô hại như một cái dropdown.</p></div></div>
+
+  <div class="line"><div class="av">🔒</div><div class="say"><div class="nm">Vex</div>
+    <p><em>(sau khi Amelia chỉ ra đã có khuôn test bất biến)</em> Vậy thì tôi yên tâm. <b>Ràng buộc nào không có test thì chỉ là một câu trong tài liệu không ai đọc.</b></p></div></div>
+
+  <div class="stage">Rồi Vex mở <code>account-permissions.service.ts</code> và thấy <code>setForAccount()</code> không kiểm tra người gọi — trong khi chủ doanh nghiệp có sẵn <code>permissions.manage</code>.</div>
+
+  <div class="line beat"><div class="av">🔒</div><div class="say"><div class="nm">Vex</div>
+    <p>Không phải Super Admin bật. <b>Chủ tự bật.</b> Câu của Đại Ca hiện không được thứ gì bảo vệ cả.</p></div></div>
+
+  <div class="line"><div class="av">🌶️</div><div class="say"><div class="nm">Boundary</div>
+    <p>Còn cửa sau thứ hai. Chủ doanh nghiệp vô hiệu hoá được tài khoản của Đại Ca. Sáng hôm sau Đại Ca không vào được app mình viết.</p></div></div>
+
+  <div class="line"><div class="av">🎯</div><div class="say"><div class="nm">Yui</div>
+    <p><em>(sau khi Grumbal cảnh báo quyền sẽ phình trong sáu tháng, và nó phình trong một lượt)</em> Ông nói nó sẽ xảy ra trong sáu tháng. <b>Nó xảy ra trong một lượt.</b></p></div></div>
+
+  <div class="res">
+    <h3>Chốt</h3>
+    <ul>
+      <li><code>settings.manage</code> — cấu hình doanh nghiệp. <code>system.feature_flags</code> — chỉ người vận hành app. <code>costs.view</code> — giá vốn &amp; lợi nhuận.</li>
+      <li>Câu hỏi phân biệt: <em>sửa cái này thì đổi <b>số liệu</b>, đổi <b>cách công ty vận hành</b>, hay đổi <b>app có tính năng gì</b>?</em></li>
+      <li>Hai luật mới: <b>không cấp được quyền mình không có</b>; <b>không sửa account mang quyền mình không có</b>.</li>
+      <li>Source-guard <code>@RequirePermissions</code> — repo tự yêu cầu nó trước Epic 4. Đưa lên <b>trước Epic 3</b>, vì Epic 3 đụng giá vốn.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- LEDGER -->
+<section class="ledger">
+  <h2>Sổ chốt</h2>
+  <p class="sub">Bốn yêu cầu. Sáu cột, bốn bảng, ba quyền. Rồi bốn tính năng bước ra từ đó.</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>Yêu cầu</th><th>Sự thật</th><th>Chốt</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Người phụ trách</td>
+        <td class="n">Đã có sẵn từ AD-15</td>
+        <td class="n">Không thêm gì. Dùng <code>Order.assigneeAccountId</code>.</td>
+      </tr>
+      <tr>
+        <td>Nguồn khách</td>
+        <td class="n">Chưa có gì</td>
+        <td class="n">Bảng <code>CustomerSource</code> + snapshot <code>Order.sourceId</code></td>
+      </tr>
+      <tr>
+        <td>Tự trừ tồn kho</td>
+        <td class="n">Có hạ tầng, sai điểm kích hoạt</td>
+        <td class="n"><code>reserved</code> lúc chốt · trừ thật lúc "Đã giao"</td>
+      </tr>
+      <tr>
+        <td>Quản lý bảo hành</td>
+        <td class="n">Chỉ là chữ trong ô ghi chú</td>
+        <td class="n">Theo dòng, mốc đóng băng theo dòng. Phase 1 chỉ tra cứu.</td>
+      </tr>
+      <tr>
+        <td>Báo cáo lợi nhuận</td>
+        <td class="n">Thiếu 2/3 công thức</td>
+        <td class="n">Lợi nhuận gộp vật tư. Giá vốn đóng băng lúc xuất kho.</td>
+      </tr>
+      <tr>
+        <td>Báo cáo công nợ</td>
+        <td class="n">Dữ liệu có, màn chưa có</td>
+        <td class="n">Chưa thiết kế. Câu còn treo.</td>
+      </tr>
+      <tr>
+        <td>Báo cáo KPI Sale</td>
+        <td class="n">Suy ra được</td>
+        <td class="n">Bỏ màn riêng — nhóm-theo-sale đã phục vụ.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <blockquote style="margin-top:36px">
+    <p>Đêm nay Đại Ca không thêm bốn tính năng. Đại Ca thêm sáu cột và một bảng, rồi bốn tính năng bước ra từ đó.</p>
+    <cite>⚡ Victor, lúc cầm áo khoác</cite>
+  </blockquote>
+
+  <div class="line" style="margin-top:30px"><div class="av">📊</div><div class="say"><div class="nm">Mary</div>
+    <p><code>Order.sourceId</code>, <code>Order.assigneeAccountId</code>, <code>costPriceSnapshot</code>. Ba cột, một câu <code>GROUP BY</code>. Chúng không phải ba tính năng — chúng là <b>một mô hình dữ liệu nhìn từ ba phía</b>.</p></div></div>
+
+  <div class="line"><div class="av">😤</div><div class="say"><div class="nm">Grumbal</div>
+    <p><em>(với lấy áo)</em> Bốn tiếng. Không ai nhắc tới cái marker automator đang kêu ngoài kia lần nào nữa. Tôi coi đó là tiến bộ.</p></div></div>
+</section>
+
+<footer>
+  <span>Phương Nam Solar · Phase 1 · phiên họp 10.07.2026</span>
+  <span>Bốn tiếng · mười bốn giọng nói · mười story mới</span>
+</footer>
+
+</div>
+</body>
+</html>
