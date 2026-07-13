@@ -145,7 +145,7 @@ components:
     usage: '<use href="#ic-*">'
 ---
 
-Nguồn thị giác duy nhất: [`./mockups/all-screens.html`](./mockups/all-screens.html) — 25 màn, mỗi màn có cả bản Web lẫn Mobile, một khối `<style>` chung. Mọi token, hex, spacing, radius và style component bên dưới được rút trực tiếp từ khối `:root` và các class trong file đó. Khi có xung đột, mockup thắng.
+Nguồn thị giác duy nhất: [`./mockups/all-screens.html`](./mockups/all-screens.html) — 30 màn, mỗi màn có cả bản Web lẫn Mobile (riêng Cấu hình nguồn khách chỉ có Web), một khối `<style>` chung. Mọi token, hex, spacing, radius và style component bên dưới được rút trực tiếp từ khối `:root` và các class trong file đó. Khi có xung đột, mockup thắng.
 
 ## Brand & Style
 

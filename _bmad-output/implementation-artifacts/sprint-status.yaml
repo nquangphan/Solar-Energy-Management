@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-10 (yêu cầu mới khách hàng: +10 story)
+last_updated: 2026-07-13 (story 2.9 review)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -47,7 +47,7 @@ development_status:
   2-6-noi-ui-gating-vao-me-tren-hai-nen-tang: done
   2-7-domain-event-port-eventbus-notificationdispatcher-no-op-audit-subscriber: done
   2-8-quen-mat-khau-ho-so-doi-mat-khau: done
-  2-9-ba-quyen-moi-settings-manage-feature-flags-costs-view: backlog
+  2-9-ba-quyen-moi-settings-manage-feature-flags-costs-view: done
   2-10-luat-khong-leo-thang-quyen-source-guard-require-permissions: backlog
   epic-2-retrospective: done
   epic-3: backlog

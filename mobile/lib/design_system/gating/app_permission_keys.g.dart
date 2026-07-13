@@ -24,4 +24,7 @@ class AppPermissionKeys {
   static const String customersManage = 'customers.manage';
   static const String inventoryManage = 'inventory.manage';
   static const String invoicesManage = 'invoices.manage';
+  static const String settingsManage = 'settings.manage';
+  static const String systemFeatureFlags = 'system.feature_flags';
+  static const String costsView = 'costs.view';
 }

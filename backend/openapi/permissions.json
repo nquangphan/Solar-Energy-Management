@@ -83,5 +83,20 @@
     "key": "invoices.manage",
     "label": "Tạo/xuất hoá đơn",
     "group": "invoices"
+  },
+  {
+    "key": "settings.manage",
+    "label": "Cấu hình hệ thống",
+    "group": "settings"
+  },
+  {
+    "key": "system.feature_flags",
+    "label": "Cờ tính năng (vận hành app)",
+    "group": "system"
+  },
+  {
+    "key": "costs.view",
+    "label": "Xem giá vốn & lợi nhuận",
+    "group": "costs"
   }
 ]

@@ -66,7 +66,71 @@ describe('permission-registry (AC-1, AC-2)', () => {
     expect(isPermissionKey('/auth/login')).toBe(false);
   });
 
-  it('khai đúng 17 key chính tắc từ ma trận PRD FR-18', () => {
-    expect(PERMISSION_KEYS.length).toBe(17);
+  it('khai đúng 20 key chính tắc (17 ma trận FR-18 §4.6 + 3 key PRD §5)', () => {
+    expect(PERMISSION_KEYS.length).toBe(20);
+  });
+
+  it('3 key PRD §5 khớp byte-for-byte (chống typo literal)', () => {
+    expect(PERM.settingsManage).toBe('settings.manage');
+    expect(PERM.systemFeatureFlags).toBe('system.feature_flags');
+    expect(PERM.costsView).toBe('costs.view');
+  });
+
+  it('3 key mới append CUỐI, 17 key cũ giữ nguyên thứ tự (artifact deterministic)', () => {
+    expect(PERMISSION_KEYS.slice(-3)).toEqual([
+      PERM.settingsManage,
+      PERM.systemFeatureFlags,
+      PERM.costsView,
+    ]);
+    // Khoá TRỌN thứ tự 17 key cũ, không chỉ hai đầu mút: thứ tự registry QUYẾT ĐỊNH thứ
+    // tự artifact (FE gen key từ đó) → đảo bất kỳ vị trí nào ở giữa cũng phải đỏ.
+    expect(PERMISSION_KEYS.slice(0, 17)).toEqual([
+      PERM.ordersViewAll,
+      PERM.ordersViewOwn,
+      PERM.auditRead,
+      PERM.permissionsManage,
+      PERM.quotesCreateEdit,
+      PERM.ordersConfirm,
+      PERM.discountsApply,
+      PERM.discountsApprove,
+      PERM.constructionTransition,
+      PERM.deliveryConfirm,
+      PERM.paymentsRecord,
+      PERM.catalogManage,
+      PERM.contractsGenerate,
+      PERM.dashboardFinanceView,
+      PERM.customersManage,
+      PERM.inventoryManage,
+      PERM.invoicesManage,
+    ]);
+  });
+
+  it('3 entry mới có label + group đúng (hợp đồng artifact cho FE — Story 2.6)', () => {
+    const byKey = new Map(PERMISSIONS.map((entry) => [entry.key, entry]));
+    expect(byKey.get(PERM.settingsManage)).toEqual({
+      key: 'settings.manage',
+      label: 'Cấu hình hệ thống',
+      group: 'settings',
+    });
+    expect(byKey.get(PERM.systemFeatureFlags)).toEqual({
+      key: 'system.feature_flags',
+      label: 'Cờ tính năng (vận hành app)',
+      group: 'system',
+    });
+    expect(byKey.get(PERM.costsView)).toEqual({
+      key: 'costs.view',
+      label: 'Xem giá vốn & lợi nhuận',
+      group: 'costs',
+    });
+  });
+
+  it('group suy từ domain prefix của key (ngoại lệ DUY NHẤT: permissions.manage → accounts)', () => {
+    for (const entry of PERMISSIONS) {
+      if (entry.key === PERM.permissionsManage) {
+        expect(entry.group).toBe('accounts');
+        continue;
+      }
+      expect(entry.group).toBe(entry.key.split('.')[0]);
+    }
   });
 });

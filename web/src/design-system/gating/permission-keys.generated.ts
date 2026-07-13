@@ -24,6 +24,9 @@ export const PERMISSION_KEYS = {
   customersManage: 'customers.manage',
   inventoryManage: 'inventory.manage',
   invoicesManage: 'invoices.manage',
+  settingsManage: 'settings.manage',
+  systemFeatureFlags: 'system.feature_flags',
+  costsView: 'costs.view',
 } as const;
 
 /** camelCase key name (e.g. `ordersViewAll`). */

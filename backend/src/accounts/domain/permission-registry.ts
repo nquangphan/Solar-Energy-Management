@@ -13,7 +13,9 @@
  * Naming key: `domain.action` snake_case (xem CONVENTIONS.md#Permission registry). 4 key
  * ✱ giữ NGUYÊN VĂN literal FE stub Story 1.10 (`web/…/permissions.ts` +
  * `mobile/…/app_permissions.dart`) để Story 2.6 chỉ đổi *nguồn* (stub → artifact), KHÔNG
- * đổi *chuỗi* — action item Epic 1 retro. Bộ key đầy đủ ánh xạ ma trận PRD FR-18 §4.6.
+ * đổi *chuỗi* — action item Epic 1 retro. Bộ key đầy đủ ánh xạ ma trận PRD FR-18 §4.6,
+ * cộng 3 key nhóm tính năng mới từ PRD §5 (`settings.manage`, `system.feature_flags`,
+ * `costs.view`) → tổng 20 key.
  */
 
 /**
@@ -55,6 +57,12 @@ export const PERM = {
   inventoryManage: 'inventory.manage',
   /** Tạo/xuất hoá đơn. */
   invoicesManage: 'invoices.manage',
+  /** Cấu hình hệ thống (danh mục nguồn khách, thuế suất VAT) — Story 3.5, E8. */
+  settingsManage: 'settings.manage',
+  /** Cờ tính năng cấp nghiệp vụ (cờ giá phân tầng FR-15) — CHỈ người vận hành app. */
+  systemFeatureFlags: 'system.feature_flags',
+  /** Xem giá vốn & lợi nhuận (`Product.costPrice`, báo cáo lợi nhuận gộp). */
+  costsView: 'costs.view',
 } as const;
 
 /** Union mọi key hợp lệ (`'orders.view_all' | 'orders.view_own' | …`). */
@@ -105,6 +113,13 @@ export const PERMISSIONS: readonly PermissionEntry[] = [
   },
   { key: PERM.inventoryManage, label: 'Nhập/Xuất kho', group: 'inventory' },
   { key: PERM.invoicesManage, label: 'Tạo/xuất hoá đơn', group: 'invoices' },
+  { key: PERM.settingsManage, label: 'Cấu hình hệ thống', group: 'settings' },
+  {
+    key: PERM.systemFeatureFlags,
+    label: 'Cờ tính năng (vận hành app)',
+    group: 'system',
+  },
+  { key: PERM.costsView, label: 'Xem giá vốn & lợi nhuận', group: 'costs' },
 ];
 
 /** Mọi key chính tắc theo thứ tự registry (nguồn cho source-guard + validate). */

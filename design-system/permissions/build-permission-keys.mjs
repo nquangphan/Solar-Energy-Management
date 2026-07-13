@@ -1,7 +1,7 @@
 // Generator for the FE permission-key layer (Story 2.6, AC-4 — AD-17).
 //
-// backend/openapi/permissions.json is the canonical registry (17 keys, owned by
-// the backend `accounts/domain`). This script derives the FE key constants from
+// backend/openapi/permissions.json is the canonical registry (owned by the
+// backend `accounts/domain`). This script derives the FE key constants from
 // it so a permission literal can never drift between the registry, web and
 // mobile — the exact same discipline as build-tokens.mjs:
 //   web    -> web/src/design-system/gating/permission-keys.generated.ts
