@@ -33,6 +33,27 @@ import { UpdateProductRequestDto } from './dto/update-product-request.dto';
 /** Sản phẩm nhìn từ người KHÔNG có `costs.view` — đúng shape mà `stripCostPrice` trả về. */
 export type VisibleProduct = Product | Omit<Product, 'costPrice'>;
 
+/**
+ * Đính bậc thang giá vào truy vấn CHỈ khi cờ `catalog.tiered_pricing` BẬT.
+ *
+ * Cờ TẮT ⇒ KHÔNG `include` ⇒ payload KHÔNG CÓ KEY `prices` (cùng khuôn `stripCostPrice`: loại
+ * hẳn key, không trả `[]`). Đây là chỗ bất biến "cờ TẮT ⇒ mỗi sản phẩm MỘT giá duy nhất" được
+ * enforce ở SERVER (AD-4) — không phải "để FE tự ẩn". Dòng `ProductPrice` cũ vẫn nằm trong DB
+ * (tắt cờ không xoá dữ liệu), chúng chỉ vô hình.
+ *
+ * Cờ là THAM SỐ truyền vào, KHÔNG phải service inject: `ProductsService` giữ đúng hai dependency
+ * (`PrismaService` + `EventBus`), y hệt cách `canViewCosts` được resolve ở controller rồi truyền
+ * xuống. Service thuần prisma+eventbus thì test dựng nó bằng `new ProductsService(prisma, eventBus)`
+ * vẫn chạy, và bất biến "service chỉ chạm model `product`" vẫn kiểm được.
+ */
+function tieredPriceInclude(tieredPricingEnabled: boolean) {
+  // `undefined` (KHÔNG `{}`) khi cờ TẮT: Prisma coi `include: undefined` là "không include",
+  // nên bản ghi trả về không có key `prices`.
+  return tieredPricingEnabled
+    ? { prices: { orderBy: { minQty: 'asc' as const } } }
+    : undefined;
+}
+
 /** Ảnh chụp cho event/audit — luôn ĐỦ `costPrice` (audit ghi sự thật, không lọc theo quyền). */
 function snapshot(product: Product): ProductSnapshot {
   return {
@@ -204,16 +225,32 @@ export class ProductsService {
   async findAll(
     includeInactive: boolean,
     canViewCosts: boolean,
+    tieredPricingEnabled: boolean,
   ): Promise<VisibleProduct[]> {
     const products = await this.prisma.product.findMany({
       where: includeInactive ? {} : { isActive: true },
       orderBy: { createdAt: 'desc' },
+      include: tieredPriceInclude(tieredPricingEnabled),
     });
     return products.map((product) => stripCostPrice(product, canViewCosts));
   }
 
-  async findOne(id: string, canViewCosts: boolean): Promise<VisibleProduct> {
-    const product = await this.findOrThrow(id);
+  async findOne(
+    id: string,
+    canViewCosts: boolean,
+    tieredPricingEnabled: boolean,
+  ): Promise<VisibleProduct> {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: tieredPriceInclude(tieredPricingEnabled),
+    });
+    if (product === null) {
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        `Không tìm thấy sản phẩm: ${id}`,
+      );
+    }
     return stripCostPrice(product, canViewCosts);
   }
 

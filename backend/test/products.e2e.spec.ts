@@ -66,7 +66,17 @@ describe('/products (e2e)', () => {
   // publish — không mock nó thì subscriber ném (bus cô lập lỗi nên test vẫn xanh, chỉ ồn
   // log). Có nó, ta khẳng định luôn: event ĐI TỚI được audit.
   const auditRepo = { create: jest.fn().mockResolvedValue({}) };
-  const prismaMock = { product: productRepo, auditLog: auditRepo };
+  // `featureFlag` (Story 3.2): `ProductsController` resolve cờ giá phân tầng trên MỌI request
+  // đọc product. Thiếu mock này ⇒ `undefined.findUnique` ⇒ 500 trên toàn bộ suite.
+  //
+  // `null` = vắng dòng = cờ TẮT (fail-closed) ⇒ hành vi của story 3.1 giữ nguyên Y HỆT: không
+  // include `prices`, payload không đổi. Đó là lý do mọi assertion 3.1 dưới đây vẫn đúng.
+  const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
+  const prismaMock = {
+    product: productRepo,
+    auditLog: auditRepo,
+    featureFlag: featureFlagRepo,
+  };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),
   };
@@ -111,6 +121,8 @@ describe('/products (e2e)', () => {
     productRepo.update.mockResolvedValue(PRODUCT);
     productRepo.findUnique.mockResolvedValue(PRODUCT);
     productRepo.findMany.mockResolvedValue([PRODUCT]);
+    // Cờ TẮT — trạng thái mặc định của hệ thống, và là bối cảnh của mọi test 3.1 dưới đây.
+    featureFlagRepo.findUnique.mockResolvedValue(null);
   });
 
   describe('AC-3 — thiếu catalog.manage ⇒ 403 trên CẢ 5 route', () => {

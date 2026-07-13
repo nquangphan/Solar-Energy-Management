@@ -268,6 +268,110 @@
         ]
       }
     },
+    "/feature-flags": {
+      "get": {
+        "operationId": "FeatureFlagsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "MỌI cờ trong registry kèm trạng thái — cờ chưa từng bấm vẫn hiện ra với enabled=false.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FeatureFlagResponseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "feature-flags"
+        ]
+      }
+    },
+    "/feature-flags/{key}": {
+      "patch": {
+        "operationId": "FeatureFlagsController_toggle",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleFeatureFlagRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Trạng thái cờ sau khi bấm.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureFlagResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body không hợp lệ (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu system.feature_flags (FORBIDDEN). catalog.manage KHÔNG thay thế được.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Tên cờ không có trong registry (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "feature-flags"
+        ]
+      }
+    },
     "/products": {
       "post": {
         "operationId": "ProductsController_create",
@@ -526,6 +630,150 @@
           },
           "404": {
             "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/products/{productId}/prices": {
+      "get": {
+        "operationId": "ProductPricesController_findByProduct",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bậc thang hiện tại, sắp xếp minQty tăng dần.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductPriceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "put": {
+        "operationId": "ProductPricesController_replace",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceProductPricesRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bậc thang SAU khi thay thế. Mảng rỗng = đã xoá hết, sản phẩm quay về một giá.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductPriceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "minQty < 2, tiền không phải số nguyên, hoặc trùng minQty trong payload (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Cờ catalog.tiered_pricing đang TẮT (CONFLICT) — bật cờ trước khi cấu hình bậc thang.",
             "content": {
               "application/json": {
                 "schema": {
@@ -822,6 +1070,40 @@
           "permissions"
         ]
       },
+      "FeatureFlagResponseDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Tên cờ chính tắc (khoá chính). Chỉ những cờ trong registry mới tồn tại."
+          },
+          "label": {
+            "type": "string",
+            "description": "Nhãn tiếng Việt để hiển thị."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Cờ chưa từng được bấm ⇒ false (mặc định TẮT, fail-closed)."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "enabled"
+        ]
+      },
+      "ToggleFeatureFlagRequestDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "true = bật cờ, false = tắt cờ."
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
       "CreateProductRequestDto": {
         "type": "object",
         "properties": {
@@ -873,6 +1155,27 @@
           "price"
         ]
       },
+      "ProductPriceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "minQty": {
+            "type": "number",
+            "description": "Mua TỪ số lượng này trở lên thì ăn mức giá này."
+          },
+          "price": {
+            "type": "number",
+            "description": "Đơn giá ở mức này — số nguyên ĐỒNG."
+          }
+        },
+        "required": [
+          "id",
+          "minQty",
+          "price"
+        ]
+      },
       "ProductResponseDto": {
         "type": "object",
         "properties": {
@@ -910,6 +1213,13 @@
           "isActive": {
             "type": "boolean",
             "description": "false = đã ẩn khỏi danh mục (soft-delete)."
+          },
+          "prices": {
+            "description": "Bậc thang giá theo số lượng, sắp xếp minQty tăng dần. CHỈ có mặt khi cờ catalog.tiered_pricing BẬT; cờ TẮT ⇒ field bị loại khỏi payload (không phải mảng rỗng). Rỗng = cờ bật nhưng sản phẩm chưa cấu hình mức nào.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductPriceResponseDto"
+            }
           },
           "createdAt": {
             "format": "date-time",
@@ -975,6 +1285,41 @@
             "example": 144
           }
         }
+      },
+      "ProductPriceDto": {
+        "type": "object",
+        "properties": {
+          "minQty": {
+            "type": "number",
+            "minimum": 2,
+            "maximum": 2147483647,
+            "description": "Mua TỪ số lượng này trở lên thì ăn mức giá này. Tối thiểu 2 — mức 1 chính là giá gốc của sản phẩm."
+          },
+          "price": {
+            "type": "number",
+            "maximum": 2147483647,
+            "description": "Đơn giá ở mức này — số nguyên ĐỒNG."
+          }
+        },
+        "required": [
+          "minQty",
+          "price"
+        ]
+      },
+      "ReplaceProductPricesRequestDto": {
+        "type": "object",
+        "properties": {
+          "prices": {
+            "description": "Bậc thang MỚI, thay thế toàn bộ bậc thang cũ. Mảng rỗng = xoá hết, quay về một giá.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductPriceDto"
+            }
+          }
+        },
+        "required": [
+          "prices"
+        ]
       }
     }
   }

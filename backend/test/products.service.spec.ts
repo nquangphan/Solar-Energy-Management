@@ -47,6 +47,9 @@ const PRODUCT = {
 const ACTOR_ID = 'actor-1';
 const CAN_VIEW_COSTS = true;
 const NO_COSTS = false;
+/** Cờ `catalog.tiered_pricing` — resolve ở controller, truyền xuống service như một boolean. */
+const TIERED_ON = true;
+const TIERED_OFF = false;
 
 async function catchAppException(p: Promise<unknown>): Promise<AppException> {
   try {
@@ -346,13 +349,13 @@ describe('ProductsService (unit, hermetic)', () => {
 
   describe('đọc', () => {
     it('findAll mặc định CHỈ sản phẩm còn hiệu lực', async () => {
-      await service.findAll(false, CAN_VIEW_COSTS);
+      await service.findAll(false, CAN_VIEW_COSTS, TIERED_OFF);
 
       expect(repo.findMany.mock.calls[0][0].where).toEqual({ isActive: true });
     });
 
     it('findAll(includeInactive) trả cả sản phẩm đã ẩn', async () => {
-      await service.findAll(true, CAN_VIEW_COSTS);
+      await service.findAll(true, CAN_VIEW_COSTS, TIERED_OFF);
 
       expect(repo.findMany.mock.calls[0][0].where).toEqual({});
     });
@@ -360,7 +363,7 @@ describe('ProductsService (unit, hermetic)', () => {
     it('findAll thiếu costs.view ⇒ MỌI phần tử bị loại key costPrice', async () => {
       repo.findMany.mockResolvedValue([PRODUCT, { ...PRODUCT, id: 'prod-2' }]);
 
-      const result = await service.findAll(false, NO_COSTS);
+      const result = await service.findAll(false, NO_COSTS, TIERED_OFF);
 
       expect(result).toHaveLength(2);
       for (const product of result) {
@@ -369,13 +372,17 @@ describe('ProductsService (unit, hermetic)', () => {
     });
 
     it('findOne có costs.view ⇒ costPrice có mặt', async () => {
-      const result = await service.findOne(PRODUCT.id, CAN_VIEW_COSTS);
+      const result = await service.findOne(
+        PRODUCT.id,
+        CAN_VIEW_COSTS,
+        TIERED_OFF,
+      );
 
       expect(result).toHaveProperty('costPrice', PRODUCT.costPrice);
     });
 
     it('findOne thiếu costs.view ⇒ costPrice bị loại khỏi payload', async () => {
-      const result = await service.findOne(PRODUCT.id, NO_COSTS);
+      const result = await service.findOne(PRODUCT.id, NO_COSTS, TIERED_OFF);
 
       expect(result).not.toHaveProperty('costPrice');
     });
@@ -384,10 +391,53 @@ describe('ProductsService (unit, hermetic)', () => {
       repo.findUnique.mockResolvedValue(null);
 
       const err = await catchAppException(
-        service.findOne('không-có', CAN_VIEW_COSTS),
+        service.findOne('không-có', CAN_VIEW_COSTS, TIERED_OFF),
       );
 
       expect(err.getStatus()).toBe(404);
+    });
+  });
+
+  describe('cờ giá phân tầng (Story 3.2)', () => {
+    it('cờ TẮT ⇒ KHÔNG include prices (payload không có key `prices`)', async () => {
+      await service.findOne(PRODUCT.id, CAN_VIEW_COSTS, TIERED_OFF);
+
+      // `include: undefined` ⇒ Prisma không nối bảng ⇒ bản ghi trả về không có key `prices`.
+      // Đây là chỗ bất biến "cờ TẮT ⇒ mỗi sản phẩm MỘT giá duy nhất" được enforce ở SERVER.
+      expect(repo.findUnique.mock.calls[0][0].include).toBeUndefined();
+    });
+
+    it('cờ BẬT ⇒ include prices, sắp xếp minQty tăng dần', async () => {
+      await service.findOne(PRODUCT.id, CAN_VIEW_COSTS, TIERED_ON);
+
+      expect(repo.findUnique.mock.calls[0][0].include).toEqual({
+        prices: { orderBy: { minQty: 'asc' } },
+      });
+    });
+
+    it('findAll cờ TẮT ⇒ không include; cờ BẬT ⇒ có include', async () => {
+      await service.findAll(false, CAN_VIEW_COSTS, TIERED_OFF);
+      expect(repo.findMany.mock.calls[0][0].include).toBeUndefined();
+
+      await service.findAll(false, CAN_VIEW_COSTS, TIERED_ON);
+      expect(repo.findMany.mock.calls[1][0].include).toEqual({
+        prices: { orderBy: { minQty: 'asc' } },
+      });
+    });
+
+    it('cờ BẬT + thiếu costs.view ⇒ vẫn có prices, vẫn KHÔNG có costPrice (hai gate độc lập)', async () => {
+      // Hồi quy 3.1: thêm `prices` không được làm hỏng việc che giá vốn. Bậc thang KHÔNG mang
+      // giá vốn, nên không cần strip gì bên trong nó.
+      const withPrices = {
+        ...PRODUCT,
+        prices: [{ id: 'pp-1', minQty: 10, price: 2_300_000 }],
+      };
+      repo.findUnique.mockResolvedValue(withPrices);
+
+      const result = await service.findOne(PRODUCT.id, NO_COSTS, TIERED_ON);
+
+      expect(result).not.toHaveProperty('costPrice');
+      expect(result).toHaveProperty('prices');
     });
   });
 });

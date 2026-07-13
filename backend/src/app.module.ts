@@ -7,6 +7,7 @@ import { EventsModule } from './events/events.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 
 /**
  * Root module.
@@ -25,6 +26,9 @@ import { CatalogModule } from './catalog/catalog.module';
  *
  * Story 3.1 — `CatalogModule`: danh mục vật tư & giá (FR-14), module domain đầu tiên có
  * route nghiệp vụ thật. Nó tự import `AccountsModule` (resolve `costs.view` để che giá vốn).
+ *
+ * Story 3.2 — `FeatureFlagsModule`: cờ nghiệp vụ sống trên DB (AD-14), KHÔNG Remote Config.
+ * `CatalogModule` import nó để gate giá phân tầng (FR-15).
  */
 @Module({
   imports: [
@@ -35,6 +39,7 @@ import { CatalogModule } from './catalog/catalog.module';
     EventsModule,
     AuditModule,
     NotificationsModule,
+    FeatureFlagsModule,
     CatalogModule,
   ],
 })

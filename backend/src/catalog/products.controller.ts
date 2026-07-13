@@ -29,6 +29,8 @@ import {
 } from '../auth/current-account.decorator';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
+import { FLAG } from '../feature-flags/domain/feature-flag-registry';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { CreateProductRequestDto } from './dto/create-product-request.dto';
 import { ProductResponseDto } from './dto/product-response.dto';
 import { UpdateProductRequestDto } from './dto/update-product-request.dto';
@@ -55,11 +57,24 @@ export class ProductsController {
   constructor(
     private readonly products: ProductsService,
     private readonly accountPermissions: AccountPermissionsService,
+    private readonly featureFlags: FeatureFlagsService,
   ) {}
 
   private async canViewCosts(accountId: string): Promise<boolean> {
     const permissions = await this.accountPermissions.listForAccount(accountId);
     return permissions.has(PERM.costsView);
+  }
+
+  /**
+   * Cờ giá phân tầng, resolve TƯƠI mỗi request từ DB (AD-14) — CÙNG MỘT KHUÔN với
+   * `canViewCosts`: controller resolve, service nhận `boolean`. `ProductsService` KHÔNG inject
+   * `FeatureFlagsService` (giữ nó thuần prisma+eventbus).
+   *
+   * Cờ TẮT ⇒ service không `include` bậc thang ⇒ payload không có key `prices` (AD-4: server
+   * enforce, không phải "để FE tự ẩn").
+   */
+  private async tieredPricingEnabled(): Promise<boolean> {
+    return await this.featureFlags.isEnabled(FLAG.catalogTieredPricing);
   }
 
   @Post()
@@ -108,10 +123,16 @@ export class ProductsController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Query('includeInactive') includeInactive?: string,
   ): Promise<ProductResponseDto[]> {
-    const canViewCosts = await this.canViewCosts(account.id);
+    // Hai truy vấn ĐỘC LẬP (quyền của account, cờ hệ thống) ⇒ chạy song song. Nối tiếp chúng
+    // cộng trọn một round-trip DB vào đường đọc danh mục nóng nhất mà không đổi lấy được gì.
+    const [canViewCosts, tieredPricingEnabled] = await Promise.all([
+      this.canViewCosts(account.id),
+      this.tieredPricingEnabled(),
+    ]);
     return (await this.products.findAll(
       includeInactive === 'true',
       canViewCosts,
+      tieredPricingEnabled,
     )) as ProductResponseDto[];
   }
 
@@ -130,10 +151,14 @@ export class ProductsController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<ProductResponseDto> {
-    const canViewCosts = await this.canViewCosts(account.id);
+    const [canViewCosts, tieredPricingEnabled] = await Promise.all([
+      this.canViewCosts(account.id),
+      this.tieredPricingEnabled(),
+    ]);
     return (await this.products.findOne(
       id,
       canViewCosts,
+      tieredPricingEnabled,
     )) as ProductResponseDto;
   }
 

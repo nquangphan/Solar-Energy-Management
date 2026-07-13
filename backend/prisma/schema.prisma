@@ -117,20 +117,65 @@ model PasswordResetCode {
 /// mặc định an toàn, vì sửa giá là cửa sau né duyệt chiết khấu).
 /// `warrantyMonths` nullable CÓ CHỦ ĐÍCH (công lắp không có bảo hành) — KHÔNG validate chặn null.
 model Product {
-  id             String   @id @default(uuid())
+  id             String         @id @default(uuid())
   name           String
-  sku            String   @unique
+  sku            String         @unique
   unit           String
   price          Int
-  costPrice      Int      @map("cost_price")
-  tracksStock    Boolean  @default(true) @map("tracks_stock")
-  priceEditable  Boolean  @default(false) @map("price_editable")
-  warrantyMonths Int?     @map("warranty_months")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  costPrice      Int            @map("cost_price")
+  tracksStock    Boolean        @default(true) @map("tracks_stock")
+  priceEditable  Boolean        @default(false) @map("price_editable")
+  warrantyMonths Int?           @map("warranty_months")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  prices         ProductPrice[]
 
   @@map("products")
+}
+
+/// Bậc thang giá theo SỐ LƯỢNG (FR-15). `minQty` = mua TỪ bao nhiêu trở lên thì ăn mức này;
+/// `price` là **Int đồng** (AD-10), như `Product.price`.
+///
+/// Bất biến `minQty >= 2` (ràng ở tầng app, DTO): giá gốc `Product.price` CHÍNH LÀ mức
+/// `minQty = 1` ngầm định. Cho phép một dòng `minQty = 1` ở đây sẽ tạo HAI nguồn chân lý cho
+/// giá gốc — và bất biến "cờ TẮT ⇒ mỗi sản phẩm một giá duy nhất" vỡ ngay.
+///
+/// KHÔNG có cột giá vốn: giá vốn là MỘT con số duy nhất trên `Product` (Story 6.3 ghi đè bằng
+/// bình quân gia quyền lúc nhập kho). Bậc thang không nhân giá vốn lên (AD-20).
+///
+/// Hard-delete an toàn (khác `Product` soft-delete): báo cáo lợi nhuận chỉ đọc snapshot đã
+/// đóng băng trên dòng đơn (`unitPriceSnapshot`/`costPriceSnapshot`), KHÔNG bao giờ join ngược
+/// về đây. Bậc thang là nguồn PHÂN GIẢI LÚC ĐỌC, không phải dữ liệu lịch sử ⇒ `onDelete: Cascade`.
+model ProductPrice {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  minQty    Int      @map("min_qty")
+  price     Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([productId, minQty])
+  @@index([productId])
+  @@map("product_prices")
+}
+
+/// Cờ tính năng cấp NGHIỆP VỤ, sống trên DB — KHÔNG Firebase Remote Config (AD-14: Remote
+/// Config chỉ dành cho config cấp app của mobile; cờ nghiệp vụ là nguồn chân lý của backend).
+///
+/// Tên cờ CHÍNH LÀ khoá chính — không có cột `id` uuid riêng: một cờ là một cái tên, và
+/// registry `feature-flags/domain/feature-flag-registry.ts` là nơi duy nhất khai tên đó.
+///
+/// VẮNG DÒNG = TẮT (fail-closed). Mặc định tắt là hệ quả của việc KHÔNG có dòng, không phải
+/// một dòng seed phải nhớ tạo — bật cờ = `upsert`. Vì vậy bảng này rỗng lúc khởi tạo hệ thống
+/// và điều đó là ĐÚNG, không phải thiếu seed.
+model FeatureFlag {
+  key       String   @id
+  enabled   Boolean  @default(false)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH
