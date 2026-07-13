@@ -16,7 +16,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\"",
     "test": "jest",
-    "test:db": "node -r dotenv/config node_modules/.bin/jest --runInBand --testPathIgnorePatterns=/node_modules/ --runTestsByPath test/customers.db.integration.spec.ts",
+    "test:db": "node -r dotenv/config node_modules/.bin/jest --runInBand --testPathIgnorePatterns=/node_modules/ --testRegex \"\\.db\\.integration\\.spec\\.ts$\"",
     "openapi:gen": "ts-node scripts/generate-openapi.ts",
     "permissions:gen": "ts-node scripts/generate-permissions.ts",
     "prisma:generate": "prisma generate",

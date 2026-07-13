@@ -61,6 +61,10 @@ export const SIDEBAR_NAV: NavSection[] = [
   {
     title: 'Quản trị',
     links: [
+      // `ic-catalog` is reused deliberately: the icon SSOT has no gear, and adding one
+      // would mean touching icons.json + the generator + its drift-guard — a different
+      // story's work. The mockup itself reuses this icon here.
+      { key: 'settings', icon: 'ic-catalog', label: 'Cấu hình', requires: PERM.settingsManage },
       { key: 'permissions', icon: 'ic-permissions', label: 'Phân quyền', requires: PERM.permissionsManage },
       { key: 'audit', icon: 'ic-audit', label: 'Audit', requires: PERM.auditRead },
       { key: 'profile', icon: 'ic-user', label: 'Hồ sơ' },

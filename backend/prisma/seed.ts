@@ -68,17 +68,42 @@ const CUSTOMER_SOURCES: readonly {
   },
 ];
 
-/** Idempotent: `upsert` theo `name` ⇒ chạy lại KHÔNG nhân đôi danh mục. */
-async function seedCustomerSources(prisma: PrismaClient): Promise<void> {
+/**
+ * Idempotent: chạy lại KHÔNG nhân đôi danh mục.
+ *
+ * Dòng `isOther` tìm theo CỜ, KHÔNG theo `name` — và đó là toàn bộ vấn đề. Story 3.5 cho phép
+ * ĐỔI TÊN dòng "Khác" ở màn cấu hình (có chủ đích: luật `sourceNote` đọc cờ, không so chuỗi).
+ * Nếu seed vẫn tìm nó bằng `where: { name: 'Khác' }`, thì sau một lần admin đổi tên thành
+ * "Nguồn khác", lần seed kế tiếp KHÔNG thấy dòng nào tên "Khác" ⇒ nhánh `create` chạy ⇒ sinh ra
+ * dòng `isOther` THỨ HAI. Bất biến "đúng một dòng mang cờ" gãy, và dropdown nguồn có hai mục
+ * "Khác". Tìm theo cờ thì đổi tên bao nhiêu lần cũng không đẻ thêm dòng.
+ *
+ * Đã tồn tại ⇒ GIỮ NGUYÊN `name`: cái tên đó có thể là admin vừa đặt, seed không có quyền đạp lại.
+ *
+ * ⚠️ Bốn dòng còn lại vẫn khoá theo `name` vì bảng KHÔNG có cột khoá bền nào khác (`id` là uuid
+ * sinh lúc chạy). Đổi tên "Facebook" rồi seed lại ⇒ dòng "Facebook" cũ mọc lại như một mục trùng
+ * — phiền, nhưng KHÔNG gãy bất biến nào, và bịt nó cần thêm cột `code` (đổi schema).
+ */
+export async function seedCustomerSources(prisma: PrismaClient): Promise<void> {
   for (const source of CUSTOMER_SOURCES) {
-    await prisma.customerSource.upsert({
-      where: { name: source.name },
-      update: {
+    const existing = source.isOther
+      ? await prisma.customerSource.findFirst({ where: { isOther: true } })
+      : await prisma.customerSource.findUnique({
+          where: { name: source.name },
+        });
+
+    if (existing === null) {
+      await prisma.customerSource.create({ data: source });
+      continue;
+    }
+
+    await prisma.customerSource.update({
+      where: { id: existing.id },
+      data: {
         description: source.description,
         sortOrder: source.sortOrder,
         isOther: source.isOther,
       },
-      create: source,
     });
   }
   console.log(`Đã seed ${CUSTOMER_SOURCES.length} Nguồn khách (idempotent).`);
@@ -148,7 +173,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error('Seed thất bại:', error);
-  process.exit(1);
-});
+// CHỈ tự chạy khi được gọi như một script CLI (`prisma db seed`). Không có rào này thì bất kỳ ai
+// `import` file để dùng lại `seedCustomerSources()` — lane tích hợp DB làm đúng thế — sẽ vô tình
+// kích hoạt seed admin và `process.exit(1)` ngay giữa một lần chạy jest.
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Seed thất bại:', error);
+    process.exit(1);
+  });
+}

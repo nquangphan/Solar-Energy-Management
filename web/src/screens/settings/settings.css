@@ -1,0 +1,51 @@
+/* hand-authored — Story 3.5 Cấu hình nguồn khách layout wrappers. Composition-level
+   styling only: the table, fields, buttons, dialogs, banners, frames and list-states
+   are all shipped design-system components. Token vars for every colour and radius;
+   flat borders, no elevation effects (Viền nét, UX-DR-4). Load AFTER tokens.css /
+   components.css / shell.css. */
+
+.set-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+/* The order column is a number to be compared down the column, not prose: tabular
+   figures keep the digits aligned. Right-alignment comes from the shipped `.num`. */
+.set-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.set-flag {
+  margin-left: var(--space-8);
+}
+
+.set-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 360px;
+}
+
+/* Field-level backend error, pinned under the input it belongs to (AD-5). The words
+   are the server's; this rule only places them. */
+.set-field-error {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.set-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-22);
+}
+
+.set-state-msg {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}

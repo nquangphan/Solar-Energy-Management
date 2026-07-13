@@ -87,6 +87,8 @@ export const PERM = {
   dashboardFinanceView: 'dashboard.finance_view',
   /** May manage customers — gates the Khách hàng nav item + all customer screens (FR-29). */
   customersManage: 'customers.manage',
+  /** May configure the system — gates the Cấu hình nav item + the customer-source catalogue writes (FR-35). */
+  settingsManage: 'settings.manage',
 } as const;
 
 /**

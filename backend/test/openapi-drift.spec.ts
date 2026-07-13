@@ -170,6 +170,48 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     ]);
   });
 
+  it('spec chứa 4 route GHI nguồn khách + 2 DTO ghi (Story 3.5 — màn cấu hình gen được từ đây)', () => {
+    // Drift-guard byte-for-byte chỉ chứng minh spec KHỚP code; nó xanh y hệt nếu code quên hẳn
+    // một route. Hợp đồng CÓ MẶT là khẳng định khác — bài học lặp lại từ 3.2/3.3/3.4.
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/customer-sources'].post).toBeDefined();
+    expect(document.paths['/customer-sources/{id}'].patch).toBeDefined();
+    expect(document.paths['/customer-sources/{id}'].delete).toBeDefined();
+    expect(
+      document.paths['/customer-sources/{id}/reactivate'].post,
+    ).toBeDefined();
+
+    const schemas = document.components?.schemas ?? {};
+    expect(schemas.CreateCustomerSourceRequestDto).toBeDefined();
+    expect(schemas.UpdateCustomerSourceRequestDto).toBeDefined();
+  });
+
+  it('🔴 DTO ghi nguồn khách KHÔNG phơi `isOther` / `active` — cờ "Khác" không có đường vào qua API', () => {
+    // Bất biến "đúng một dòng isOther" không có index DB nào đứng sau: nó đứng được vì cờ KHÔNG
+    // TỒN TẠI trong DTO ghi. Nếu ai đó thêm field ấy vào, chỗ này là nơi nó lộ ra — và cùng lúc
+    // hợp đồng công khai sẽ nói với FE rằng cờ set được, điều không đúng.
+    const document = buildOpenApiDocument(app);
+    const schemas = document.components?.schemas ?? {};
+
+    for (const name of [
+      'CreateCustomerSourceRequestDto',
+      'UpdateCustomerSourceRequestDto',
+    ]) {
+      const props = Object.keys(
+        (schemas[name] as { properties?: Record<string, unknown> })
+          .properties ?? {},
+      );
+      expect(props).not.toContain('isOther');
+      expect(props).not.toContain('active');
+    }
+
+    // `name` bắt buộc lúc TẠO; lúc PATCH thì không (sửa mỗi mô tả là hợp lệ).
+    const tao = schemas.CreateCustomerSourceRequestDto as {
+      required?: string[];
+    };
+    expect(tao.required).toEqual(['name']);
+  });
+
   it('MỌI route khách hàng đòi bearer — không route nào công khai (AD-4)', () => {
     // Đây là danh bạ khách: SĐT, CCCD, MST, tài khoản ngân hàng. Một route quên guard là đường
     // cho mọi người đã đăng nhập đọc trọn danh bạ. Spec là nơi cái quên đó lộ ra.
@@ -181,6 +223,10 @@ describe('OpenAPI drift-guard (AD-12)', () => {
       document.paths['/customers/{sdt}'].get,
       document.paths['/customers/{sdt}'].patch,
       document.paths['/customer-sources'].get,
+      document.paths['/customer-sources'].post,
+      document.paths['/customer-sources/{id}'].patch,
+      document.paths['/customer-sources/{id}'].delete,
+      document.paths['/customer-sources/{id}/reactivate'].post,
     ];
 
     for (const operation of operations) {

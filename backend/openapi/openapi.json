@@ -1195,6 +1195,269 @@
         "tags": [
           "customers"
         ]
+      },
+      "post": {
+        "operationId": "CustomerSourcesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerSourceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Nguồn mới — luôn `active: true` và `isOther: false` (cờ \"Khác\" chỉ do seed đặt).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSourceResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thiếu/sai `name`, `sortOrder` âm… (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Tên nguồn đã có trong danh mục (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customer-sources/{id}": {
+      "patch": {
+        "operationId": "CustomerSourcesController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id nguồn khách.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerSourceRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nguồn sau khi sửa. Dòng mang cờ \"Khác\" ĐỔI TÊN ĐƯỢC — luật nghiệp vụ đọc cờ, không đọc tên.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSourceResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`name`/`sortOrder` là `null` hoặc sai kiểu (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có nguồn nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Tên mới trùng một nguồn khác (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      },
+      "delete": {
+        "operationId": "CustomerSourcesController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id nguồn khách.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Nguồn đã TẮT (`active: false`) — KHÔNG xoá cứng: khách cũ vẫn giữ nguồn này."
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có nguồn nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Dòng mang cờ \"Khác\" KHÔNG tắt được — luật bắt buộc ghi rõ nguồn phụ thuộc vào nó (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customer-sources/{id}/reactivate": {
+      "post": {
+        "operationId": "CustomerSourcesController_reactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id nguồn khách.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nguồn đã bật lại (`active: true`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerSourceResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có nguồn nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
       }
     }
   },
@@ -1988,6 +2251,54 @@
           "sortOrder",
           "isOther"
         ]
+      },
+      "CreateCustomerSourceRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên nguồn — DUY NHẤT trong danh mục (trùng ⇒ 409).",
+            "example": "TikTok"
+          },
+          "description": {
+            "type": "object",
+            "description": "Một câu để sale phân biệt lúc nhập (\"Fanpage\" và \"Facebook\" nghe giống nhau).",
+            "example": "Khách nhắn tin từ video TikTok của công ty."
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Thứ tự hiện trên form tạo khách. Vắng ⇒ backend xếp xuống cuối (max + 1).",
+            "example": 5,
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateCustomerSourceRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên nguồn mới — vẫn phải DUY NHẤT (trùng dòng khác ⇒ 409).",
+            "example": "Cộng tác viên"
+          },
+          "description": {
+            "type": "object",
+            "description": "Mô tả cho người nhập. Gửi `null` để XOÁ mô tả (cột nullable).",
+            "example": "Khách do cộng tác viên giới thiệu về.",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Thứ tự hiện trên form tạo khách.",
+            "example": 4,
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        }
       }
     }
   }

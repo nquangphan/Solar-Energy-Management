@@ -103,6 +103,12 @@ class AppPerm {
 
   /// May manage customers — gates the Khách hàng surfaces + all customer screens (FR-29).
   static const PermissionKey customersManage = 'customers.manage';
+
+  /// May configure the system (FR-35). Declared here for KEY parity even though the
+  /// Cấu hình nguồn khách screen is web-only (DESIGN.md): the drift-guard deepEquals
+  /// the web PERM and this AppPerm key lists IN ORDER, so a key added on one side
+  /// only turns the guard red. Parity of KEYS is not parity of SCREENS.
+  static const PermissionKey settingsManage = 'settings.manage';
 }
 
 /// STUB effective permission set — Epic 1 PLACEHOLDER ONLY (see [AppPerm]).

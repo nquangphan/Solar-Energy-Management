@@ -17,6 +17,15 @@ export type {
   CustomerListQuery,
   CreateCustomerInput,
 } from './customers-port';
+// WEB-ONLY on purpose (Story 3.5): Cấu hình nguồn khách is the one screen DESIGN.md
+// ships without a mobile twin, so this port has no Dart mirror. See the file header.
+export type {
+  CustomerSourcesPort,
+  CustomerSourceRow,
+  CreateCustomerSourceInput,
+  UpdateCustomerSourceInput,
+  CustomerSourcePortError,
+} from './customer-sources-port';
 export { toPermissionSet } from './session';
 export type { SessionStatus } from './session';
 export { PermissionsProvider, usePermissionsContext } from './PermissionsProvider';
@@ -34,3 +43,7 @@ export {
   DEMO_CUSTOMERS,
   DEMO_CUSTOMER_SOURCES,
 } from './fake-customers-port';
+export {
+  FakeCustomerSourcesPort,
+  DEMO_CUSTOMER_SOURCE_ROWS,
+} from './fake-customer-sources-port';

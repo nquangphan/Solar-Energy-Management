@@ -83,6 +83,54 @@ test('the customers port exposes the SAME five methods on both platforms (Story 
   }
 });
 
+// The parity map above is a HARDCODED list of twin files, so a new port is INVISIBLE
+// to it — it neither demands a Dart twin nor forbids one. Story 3.5 adds a port that is
+// deliberately web-only, and nothing in this file would have noticed either way. These
+// two tests are that exception, written down BY MACHINE, so the next story reads it as
+// a decision instead of as an oversight to "fix".
+test('the customer-sources port is a DELIBERATE web-only exception (Story 3.5)', () => {
+  // Cấu hình nguồn khách is the single screen DESIGN.md ships without a mobile twin
+  // (configuring a catalogue is desk work). A Dart twin here would be code no screen
+  // calls — so its absence is asserted, not merely tolerated.
+  assert.ok(existsSync(resolve(webDir, 'customer-sources-port.ts')), 'web customer-sources port missing');
+  assert.ok(existsSync(resolve(webDir, 'fake-customer-sources-port.ts')), 'web fake customer-sources port missing');
+  for (const dart of ['customer_sources_port.dart', 'fake_customer_sources_port.dart']) {
+    assert.ok(
+      !existsSync(resolve(mobDir, dart)),
+      `mobile/${dart} must NOT exist — Cấu hình nguồn khách is web-only by name (DESIGN.md). If a mobile config screen is ever commissioned, add the twin AND delete this assert deliberately.`,
+    );
+  }
+  // The web-only port must also stay honest about what it cannot do: `isOther` is
+  // readable but settable through NO write input, because the backend accepts it in no
+  // write DTO. A create/update input carrying the flag would be a lie in the type system.
+  const webPort = readFileSync(resolve(webDir, 'customer-sources-port.ts'), 'utf8');
+  const inputs = webPort.match(/interface (?:Create|Update)CustomerSourceInput \{[^}]*\}/g) ?? [];
+  assert.equal(inputs.length, 2, 'both write inputs must be declared');
+  for (const input of inputs) {
+    assert.ok(!/isOther/.test(input), 'no write input may carry isOther — the flag belongs to the seed');
+    assert.ok(!/active/.test(input), 'no write input may carry active — switching off goes through deactivate/reactivate');
+  }
+});
+
+test('the customers port did NOT grow customer-source write methods (Story 3.5)', () => {
+  // The tempting shortcut is to bolt create/update/deactivate/reactivate onto
+  // CustomersPort, which already has `listSources`. That port IS a web↔Dart twin pair:
+  // a web-only method on it either breaks parity or forces a dead Dart method into
+  // existence. The check on line 66 only asserts five method names are PRESENT — it
+  // compares no sets, so an extra method there would sail through it. This is the assert
+  // that does not.
+  const webPort = readFileSync(resolve(webDir, 'customers-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'customers_port.dart'), 'utf8');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    for (const method of ['createSource', 'updateSource', 'deactivateSource', 'reactivateSource']) {
+      assert.ok(
+        !src.includes(method),
+        `${name} CustomersPort must not carry "${method}" — customer-source writes live on the web-only CustomerSourcesPort`,
+      );
+    }
+  }
+});
+
 test('the session provider exposes the /me identity on both platforms (Story 2.8)', () => {
   // The Hồ sơ screen needs displayName/email. The provider ALREADY fetched /me —
   // it must expose the payload, not force a second call.
