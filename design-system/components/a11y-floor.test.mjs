@@ -79,6 +79,68 @@ test('every icon-only mobile control carries a Semantics(button, label)', () => 
   assert.match(upload, /Semantics\(\s*button:\s*true,\s*label:\s*'Xoá ảnh'/, 'remove control must be a labelled Semantics button');
 });
 
+// Status chips must clear the WCAG AA text floor (UX-DR-26): every `.chip--*`
+// rule's foreground on its own background is ≥ 4.5:1. This was previously
+// verified once by hand, in prose — nothing enforced it, so any future re-tint
+// of a canonical hex could drop a chip below AA with the suite fully green.
+//
+// The triplets are parsed out of the SHIPPED stylesheet rather than hardcoded, so
+// the guard cannot disagree with what actually ships. The rule count is pinned:
+// a regex that matched nothing would pass the loop vacuously, and a new chip must
+// be contrast-checked deliberately rather than slipped in under an unbounded
+// loop. Adding chip #11 means bumping this number. 4.5 is the threshold AC-5
+// states — it is not tightened here. `dacoc` clears it by 0.009 (4.509), so a
+// stricter floor would fail colours that UX has already ratified.
+const relativeLuminance = (hex) => {
+  const channel = (v) => {
+    const c = parseInt(v, 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = [hex.slice(1, 3), hex.slice(3, 5), hex.slice(5, 7)].map(channel);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+const contrastRatio = (fg, bg) => {
+  const [a, b] = [relativeLuminance(fg), relativeLuminance(bg)];
+  const [hi, lo] = a > b ? [a, b] : [b, a];
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test('every status chip clears the WCAG AA 4.5:1 text floor (UX-DR-26)', () => {
+  const componentsCss = readFileSync(
+    resolve(repoRoot, 'web/src/design-system/components/components.css'),
+    'utf8',
+  );
+  const rules = [
+    ...componentsCss.matchAll(
+      /\.chip--(\w+)\s*\{background:(#[0-9A-Fa-f]{6});color:(#[0-9A-Fa-f]{6});/g,
+    ),
+  ];
+  // Guard the parse against BOTH failure modes. A regex that matched nothing
+  // would pass the loop vacuously — but pinning only a hardcoded count is just as
+  // blind: a rule written in ordinary spaced CSS (`{background: #FFF; color: …}`)
+  // matches neither this regex nor the selector count's expectation, so an
+  // unparseable 11th chip would slip in contrast-unchecked while the count still
+  // read 10. Deriving the denominator from the file forces every declared
+  // `.chip--*` to be parseable, and the literal pins the roster at 10.
+  const declared = componentsCss.match(/\.chip--[\w-]+/g) ?? [];
+  assert.equal(
+    rules.length,
+    declared.length,
+    'every declared .chip--* rule must be parseable by the triplet regex (a rule the ' +
+      'regex cannot read is a rule this contrast floor never checks)',
+  );
+  assert.equal(rules.length, 10, 'must find all 10 .chip--* rules in components.css');
+
+  for (const [, key, bg, fg] of rules) {
+    const ratio = contrastRatio(fg, bg);
+    assert.ok(
+      ratio >= 4.5,
+      `.chip--${key} contrast ${ratio.toFixed(3)}:1 (${fg} on ${bg}) is below the WCAG AA 4.5:1 floor`,
+    );
+  }
+});
+
 // Money / VAT must never be clipped at large text sizes (UX-DR-26): the money
 // utility `.mono` and the table number cell `.table .num` must NOT carry
 // overflow:hidden or text-overflow:ellipsis — a long "1.234.567.890 đ" has to

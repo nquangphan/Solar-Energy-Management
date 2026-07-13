@@ -22,8 +22,30 @@ const webCss = readFileSync(
 const mobileDir = resolve(repoRoot, 'mobile/lib/design_system/components');
 const statusDart = readFileSync(resolve(mobileDir, 'status_chip.dart'), 'utf8');
 const bannerDart = readFileSync(resolve(mobileDir, 'banner.dart'), 'utf8');
+const chipDart = readFileSync(resolve(mobileDir, 'chip.dart'), 'utf8');
+const statusChipTsx = readFileSync(
+  resolve(repoRoot, 'web/src/design-system/components/StatusChip.tsx'),
+  'utf8',
+);
 
-// The 9 canonical status triplets, verbatim from AC / DESIGN.md. This list is
+// Strip Dart comments so source-guards inspect real code only — the widgets'
+// own docstrings describe the forbidden constructs while explaining that they
+// are forbidden, which must not trip the guard. `//` runs to end-of-line, which
+// also covers `///` docstrings. Safe here because no guarded file contains `//`
+// inside a string literal (a `://` URL would be truncated, not just uncommented).
+//
+// Line comments are stripped FIRST: a `/*` sitting inside a `//` comment is not
+// a real block-comment opener, but a block-first pass would treat it as one and
+// swallow every line up to the next `*/` — silently deleting real code from the
+// scanned string, which is where banned tokens would then hide.
+const stripDart = (src) =>
+  src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+
+// Interpolating a label straight into a RegExp makes any future label carrying
+// `(`, `+`, `?` or `.` a syntax error rather than a clean failure.
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// The 10 canonical status triplets, verbatim from AC / DESIGN.md. This list is
 // the shared contract both platforms must satisfy.
 const STATUS_TRIPLETS = {
   baogia: ['#EAF3F1', '#3A5450', '#CFE5E0'],
@@ -33,6 +55,7 @@ const STATUS_TRIPLETS = {
   thicong: ['#FCEAD4', '#985B08', '#F2D3A6'],
   nghiemthu: ['#E4EEFA', '#345C9C', '#C4D8F0'],
   danggiao: ['#DEF1F6', '#0C6B84', '#B7E0EB'],
+  dagiao: ['#DDF3EA', '#0F7657', '#B7E5D4'],
   hoanthanh: ['#DEF3E6', '#137A4C', '#B7E5CA'],
   huy: ['#FAE6E6', '#B22C2C', '#F0C7C7'],
 };
@@ -47,7 +70,7 @@ const BANNER_TONES = {
 // Hex in CSS is `#RRGGBB`; in Dart it is `Color(0xFFRRGGBB)`.
 const dartHex = (hex) => `0xFF${hex.slice(1).toUpperCase()}`;
 
-test('9 status triplets are byte-identical on web (CSS) and mobile (Dart)', () => {
+test('10 status triplets are byte-identical on web (CSS) and mobile (Dart)', () => {
   for (const [key, triplet] of Object.entries(STATUS_TRIPLETS)) {
     for (const hex of triplet) {
       assert.ok(
@@ -59,6 +82,30 @@ test('9 status triplets are byte-identical on web (CSS) and mobile (Dart)', () =
         `status_chip.dart missing ${key} hex ${hex} (${dartHex(hex)})`,
       );
     }
+  }
+});
+
+// Presence alone (above) cannot see a SWAP: if two states trade colour entries,
+// every hex still appears somewhere in the file and `includes` stays green. The
+// web side is already swap-proof — components.test.mjs binds each triplet to ITS
+// OWN `.chip--key` rule. This is the mobile mirror of that binding: each hex
+// triplet must sit on ITS OWN `StatusKey.<key>` entry. `\s*` absorbs the
+// dart-format 80-col line wrap between the key and StatusChipColors(...).
+test('each status triplet is bound to ITS OWN StatusKey entry in Dart (no swap)', () => {
+  for (const [key, [bg, fg, border]] of Object.entries(STATUS_TRIPLETS)) {
+    const entry = new RegExp(
+      `StatusKey\\.${key}:\\s*StatusChipColors\\(\\s*` +
+        `Color\\(${dartHex(bg)}\\),\\s*` +
+        `Color\\(${dartHex(fg)}\\),\\s*` +
+        `Color\\(${dartHex(border)}\\),?\\s*\\)`,
+    );
+    assert.match(
+      statusDart,
+      entry,
+      `kStatusColors[StatusKey.${key}] must be exactly ` +
+        `StatusChipColors(${dartHex(bg)}, ${dartHex(fg)}, ${dartHex(border)}) — ` +
+        `a colour swapped onto another state is still a drift (UX-DR-27)`,
+    );
   }
 });
 
@@ -77,11 +124,70 @@ test('3 banner tone hex pairs are byte-identical on web and mobile', () => {
   }
 });
 
-test('status labels are byte-identical Vietnamese on both platforms', () => {
-  // Sample the label whose casing/diacritics are easiest to drift.
-  const labels = ['Báo giá', 'Chờ duyệt', 'Đã chốt', 'Đang thi công', 'Huỷ'];
-  for (const label of labels) {
-    assert.ok(statusDart.includes(label), `status_chip.dart missing label "${label}"`);
+// Every label, bound to its key — not a sample, and not a third hardcoded copy.
+// The web STATUS_LABELS is the source of truth; mobile must mirror it exactly.
+//
+// A bare `statusDart.includes(label)` cannot catch the `dagiao`/`danggiao`
+// twin-name bug ("Đã giao" vs "Đang giao" differ by one `g`): mislabel one state
+// with the other's text and both strings still appear in the file. The Flutter
+// render test cannot catch it either — it asserts find.text(kStatusLabels[s]!),
+// reading the label from the very map under test. So the key↔label binding is
+// asserted here, and only here.
+const WEB_STATUS_LABELS = (() => {
+  const block = statusChipTsx.match(/export const STATUS_LABELS[^{]*\{([\s\S]*?)\};/);
+  assert.ok(block, 'StatusChip.tsx must declare and export STATUS_LABELS');
+  return [...block[1].matchAll(/(\w+)\s*:\s*'([^']+)'/g)].map((m) => [m[1], m[2]]);
+})();
+
+test('every status label is byte-identical Vietnamese on both platforms', () => {
+  // Guard the parse itself: an empty/short match would make the loop below pass
+  // vacuously, which is exactly the silent-green failure this file exists to stop.
+  assert.equal(
+    WEB_STATUS_LABELS.length,
+    Object.keys(STATUS_TRIPLETS).length,
+    'parsed web STATUS_LABELS must cover all 10 canonical states',
+  );
+  for (const [key, label] of WEB_STATUS_LABELS) {
+    assert.ok(
+      Object.hasOwn(STATUS_TRIPLETS, key),
+      `web declares status "${key}" with no canonical triplet — states drifted`,
+    );
+    const entry = new RegExp(`StatusKey\\.${key}\\b:\\s*'${escapeRe(label)}'`);
+    assert.match(
+      statusDart,
+      entry,
+      `kStatusLabels[StatusKey.${key}] must be '${label}' verbatim, as on web`,
+    );
+  }
+});
+
+// AC-5 / UX-DR-23 parity: the web chips are guarded read-only by
+// chip-components.test.mjs (no onClick/<button>/role/tabindex). Nothing guarded
+// the Flutter side, so a tap handler could be added to the chip widgets on
+// mobile only and every suite would stay green. A chip displays status; it never
+// changes it (status moves only through applyTransition, AD-11).
+// Patterns, not a widget blacklist. An enumerated list of names only blocks the
+// handlers someone thought to enumerate: `Listener(onPointerDown: …)`,
+// `onLongPress`, `Dismissible` and `Draggable` all sail past a 7-item blacklist
+// while turning the chip into a status-mutating control with every suite green.
+// The web guard (chip-components.test.mjs test (1)) already matches ANY `on[A-Z]`
+// handler; this is the Dart mirror of that pattern, so both platforms are held to
+// the same rule rather than to two lists that drift apart.
+test('mobile chip widgets stay read-only — never a control (AC-5, UX-DR-23)', () => {
+  const banned = [
+    /\bon[A-Z]\w*\s*:/, // ANY handler argument: onTap, onPressed, onPointerDown, onLongPress, …
+    /\b(?:GestureDetector|InkWell|Listener|Dismissible|Draggable|InkResponse)\b/,
+    /\b\w*Button\s*\(/, // IconButton, TextButton, ElevatedButton, any *Button constructor
+    /\bSemantics\([^)]*button:\s*true/, // a chip must never announce itself as a button
+  ];
+  for (const [name, src] of [['status_chip.dart', statusDart], ['chip.dart', chipDart]]) {
+    const code = stripDart(src);
+    for (const pattern of banned) {
+      assert.ok(
+        !pattern.test(code),
+        `${name} must not match ${pattern} — a chip is read-only, never a control (UX-DR-23)`,
+      );
+    }
   }
 });
 
@@ -166,7 +272,6 @@ test('mobile bottom-nav stays hard-locked — gating is NOT injected into its 5 
   // 5-tab bottom nav, which is locked to an internal constant (gotcha #6). This
   // guards against a future dev wiring filterNav/perms/AppGate into the tabs.
   const botnav = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/shell/app_bottom_nav.dart'), 'utf8');
-  const stripDart = (s) => s.replace(/\/\/\/.*$/gm, '').replace(/\/\/.*$/gm, '');
   const code = stripDart(botnav);
   for (const token of ['filterNav', 'AppGate', 'requires', 'PermissionKey', 'demoPermissions']) {
     assert.ok(!code.includes(token), `app_bottom_nav.dart must stay ungated — found "${token}" (bottom-nav is locked, UX-DR-15)`);

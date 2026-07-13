@@ -131,20 +131,20 @@ test('every var() referenced in components.css is defined in tokens.css', () => 
 });
 
 // ---------- Chip layer drift-guard (Story 1.4) ----------
-// The 9 canonical status colors + chip/ktype/scope-flag rules are hand-authored
+// The 10 canonical status colors + chip/ktype/scope-flag rules are hand-authored
 // verbatim from the mockup (lines 90-109). These assertions fail if a chip rule
 // is dropped, a canonical hex is drifted/invented, or the pill radius remap is
 // forgotten. (AC-4 flatness + cross-file token integrity are already covered by
 // tests 3 and 8 above, which scan the whole file including the chip block.)
 
 // (9) Every chip selector + the 2 flag variants must be present. Missing one of
-// the 9 states = fail (AC-1/2).
+// the 10 states = fail (AC-1/2).
 test('all chip selectors and variants exist (AC-1/2)', () => {
   const required = [
     '.chip', '.chip .dot',
     '.chip--baogia', '.chip--choduyet', '.chip--dachot', '.chip--dacoc',
-    '.chip--thicong', '.chip--nghiemthu', '.chip--danggiao', '.chip--hoanthanh',
-    '.chip--huy',
+    '.chip--thicong', '.chip--nghiemthu', '.chip--danggiao', '.chip--dagiao',
+    '.chip--hoanthanh', '.chip--huy',
     '.ktype', '.scope-flag', '.scope-flag.on', '.scope-flag.off',
   ];
   for (const sel of required) {
@@ -152,9 +152,9 @@ test('all chip selectors and variants exist (AC-1/2)', () => {
   }
 });
 
-// (10) Each of the 9 states carries its exact canonical bg/fg/border triplet
+// (10) Each of the 10 states carries its exact canonical bg/fg/border triplet
 // (AC-2). Drift-guard against changing or inventing a status color.
-test('9 status chips keep their verbatim hex triplets (AC-2)', () => {
+test('10 status chips keep their verbatim hex triplets (AC-2)', () => {
   const triplets = [
     ['baogia', '#EAF3F1', '#3A5450', '#CFE5E0'],
     ['choduyet', '#FBF0DA', '#8A5C08', '#EFD9A8'],
@@ -163,6 +163,7 @@ test('9 status chips keep their verbatim hex triplets (AC-2)', () => {
     ['thicong', '#FCEAD4', '#985B08', '#F2D3A6'],
     ['nghiemthu', '#E4EEFA', '#345C9C', '#C4D8F0'],
     ['danggiao', '#DEF1F6', '#0C6B84', '#B7E0EB'],
+    ['dagiao', '#DDF3EA', '#0F7657', '#B7E5D4'],
     ['hoanthanh', '#DEF3E6', '#137A4C', '#B7E5CA'],
     ['huy', '#FAE6E6', '#B22C2C', '#F0C7C7'],
   ];
@@ -176,6 +177,43 @@ test('9 status chips keep their verbatim hex triplets (AC-2)', () => {
       rule.test(css),
       `.chip--${key} must be {background:${bg};color:${fg};border-color:${border}} on its own rule (canonical, AC-2)`,
     );
+  }
+});
+
+// (10b) No two states may share a triplet. Test (10) pins each state to its own
+// canonical colours, but nothing stopped the canonical set itself from carrying
+// a duplicate — the exact failure mode behind "đừng copy dòng danggiao rồi xoá
+// ng": two states rendering identically, indistinguishable to the user.
+//
+// This asserts EXACT duplication only, not a perceptual-distance floor. The
+// teal-green band is genuinely crowded (dagiao's background sits 4/255 from
+// hoanthanh's), and that crowding is a ratified UX trade-off, not a defect — the
+// chips stay distinguishable by their always-present text label (WCAG 1.4.1).
+test('no two status chips share the same colours (AC-2)', () => {
+  const rules = [
+    ...css.matchAll(
+      /\.chip--(\w+)\s*\{background:(#[0-9A-Fa-f]{6});color:(#[0-9A-Fa-f]{6});border-color:(#[0-9A-Fa-f]{6})\}/g,
+    ),
+  ];
+  // Derive the denominator from the file, not from a literal: a chip rule the
+  // regex cannot parse is a chip rule this duplicate check never sees, and a
+  // hardcoded count alone would still read 10 while an 11th slipped past.
+  const declared = css.match(/\.chip--[\w-]+/g) ?? [];
+  assert.equal(
+    rules.length,
+    declared.length,
+    'every declared .chip--* rule must be parseable by the triplet regex',
+  );
+  assert.equal(rules.length, 10, 'must find all 10 .chip--* rules in components.css');
+
+  const seen = new Map();
+  for (const [, key, bg, fg, border] of rules) {
+    const triplet = `${bg}/${fg}/${border}`.toUpperCase();
+    assert.ok(
+      !seen.has(triplet),
+      `.chip--${key} reuses the colours of .chip--${seen.get(triplet)} (${triplet}) — two states must never render identically`,
+    );
+    seen.set(triplet, key);
   }
 });
 

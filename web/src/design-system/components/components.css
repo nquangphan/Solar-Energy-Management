@@ -38,11 +38,11 @@
 .flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
 .fgroup{margin-bottom:13px}
 
-/* ---------- Status chips (9 order states) — Story 1.4 ----------
-   Appended verbatim from mockups/all-screens.html lines 90-109. ONLY change vs.
+/* ---------- Status chips (10 order states) — Story 1.4 ----------
+   Appended verbatim from mockups/all-screens.html lines 91-110. ONLY change vs.
    the mockup: the pill radius 999px -> var(--radius-full) at .chip/.ktype/
    .scope-flag (3 places) to consume the shipped pill token (tokens.css,
-   --radius-full 9999px; DESIGN.md UX-DR-2 "full only for chip/pill"). The 9
+   --radius-full 9999px; DESIGN.md UX-DR-2 "full only for chip/pill"). The 10
    status hex triplets are canonical constants left as literals ON PURPOSE (not
    tokens). .chip .dot{border-radius:50%} is a circle, NOT the pill token. */
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
@@ -55,6 +55,7 @@
 .chip--thicong   {background:#FCEAD4;color:#985B08;border-color:#F2D3A6}
 .chip--nghiemthu {background:#E4EEFA;color:#345C9C;border-color:#C4D8F0}
 .chip--danggiao  {background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB}
+.chip--dagiao    {background:#DDF3EA;color:#0F7657;border-color:#B7E5D4}
 .chip--hoanthanh {background:#DEF3E6;color:#137A4C;border-color:#B7E5CA}
 .chip--huy       {background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7}
 

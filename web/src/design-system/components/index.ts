@@ -21,7 +21,7 @@ export type { FrameProps } from './Frame';
 export { Field } from './Field';
 export type { FieldProps, FieldSize } from './Field';
 
-// Chip layer (Story 1.4): 9-state read-only status chip + customer-type/scope flags.
+// Chip layer (Story 1.4): 10-state read-only status chip + customer-type/scope flags.
 export { StatusChip, STATUS_LABELS } from './StatusChip';
 export type { StatusChipProps, StatusKey } from './StatusChip';
 

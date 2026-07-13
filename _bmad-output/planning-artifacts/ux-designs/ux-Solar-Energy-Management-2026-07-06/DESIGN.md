@@ -165,9 +165,9 @@ Bảng màu "Năng Lượng Sạch" xoay quanh cặp teal + lime, đặt trên n
 - **Bề mặt**: `bg #F4FAF8` (nền trang, hơi teal), `surface #FFFFFF` (thẻ/card), `surface-2 #ECF6F3` (header bảng, sidebar, thumbnail).
 - **Semantic**: `ok #159A6B`, `warn #D98A0B`, `danger #E14B4B`, `info #0E8FA8` — chỉ dùng cho phản hồi trạng thái (banner, KPI delta, nút danger), không trang trí.
 
-### Status chip — 9 trạng thái đơn hàng
+### Status chip — 10 trạng thái đơn hàng
 
-Vòng đời đơn hàng có 9 trạng thái, mỗi trạng thái một bộ 3 hex (nền/chữ/viền) hài hòa, dịu, đủ tương phản để đọc. Đây là mã màu canonical, không được đổi:
+Vòng đời đơn hàng có 10 trạng thái, mỗi trạng thái một bộ 3 hex (nền/chữ/viền) hài hòa, dịu, đủ tương phản để đọc. Đây là mã màu canonical, không được đổi:
 
 | Trạng thái | class | bg | fg | border |
 |---|---|---|---|---|
@@ -178,6 +178,7 @@ Vòng đời đơn hàng có 9 trạng thái, mỗi trạng thái một bộ 3 h
 | Đang thi công | `.chip--thicong` | `#FCEAD4` | `#985B08` | `#F2D3A6` |
 | Nghiệm thu | `.chip--nghiemthu` | `#E4EEFA` | `#345C9C` | `#C4D8F0` |
 | Đang giao | `.chip--danggiao` | `#DEF1F6` | `#0C6B84` | `#B7E0EB` |
+| Đã giao | `.chip--dagiao` | `#DDF3EA` | `#0F7657` | `#B7E5D4` |
 | Hoàn thành | `.chip--hoanthanh` | `#DEF3E6` | `#137A4C` | `#B7E5CA` |
 | Huỷ | `.chip--huy` | `#FAE6E6` | `#B22C2C` | `#F0C7C7` |
 
@@ -260,7 +261,7 @@ Bộ icon **inline SVG sprite** kiểu Lucide (thin-line), self-contained, 0 ext
 | Phân cấp bằng viền 1.5px và tông nền | Dùng drop-shadow / gradient để tạo độ sâu |
 | Teal làm mực chủ đạo (viền, icon, primary) | Dùng lime tràn lan — chỉ điểm nhấn |
 | Nhãn micro chữ hoa mực teal cho label/eyebrow/header | Nhãn thường lệ thường cho vai trò micro |
-| Dùng đúng 9 hex chip trạng thái canonical | Tự chế màu trạng thái mới hoặc đổi hex |
+| Dùng đúng 10 hex chip trạng thái canonical | Tự chế màu trạng thái mới hoặc đổi hex |
 | Icon SVG `<use href="#ic-*">`, stroke currentColor | Nhét emoji/glyph unicode hoặc icon raster |
 | Số tiền/số lượng dùng `.mono` canh phải | Số canh trái, font tỷ lệ lệch cột |
 | FAB teal on-brand, tách khỏi thanh nav | FAB cục lime hay dấu cộng đậm |

@@ -1,6 +1,6 @@
 // hand-authored — web-only design-system component (Story 1.4).
 
-// Union of the 9 canonical order states (= .chip--* class suffix). The union
+// Union of the 10 canonical order states (= .chip--* class suffix). The union
 // blocks ad-hoc/invented statuses at the type level (AC-2). Key ↔ backend
 // Order.status enum is deferred to Epic 4/5 — here the key is just the class
 // suffix, not a guessed backend enum.
@@ -12,6 +12,7 @@ export type StatusKey =
   | 'thicong'
   | 'nghiemthu'
   | 'danggiao'
+  | 'dagiao'
   | 'hoanthanh'
   | 'huy';
 
@@ -26,6 +27,7 @@ export const STATUS_LABELS: Record<StatusKey, string> = {
   thicong: 'Đang thi công',
   nghiemthu: 'Nghiệm thu',
   danggiao: 'Đang giao',
+  dagiao: 'Đã giao',
   hoanthanh: 'Hoàn thành',
   huy: 'Huỷ',
 };

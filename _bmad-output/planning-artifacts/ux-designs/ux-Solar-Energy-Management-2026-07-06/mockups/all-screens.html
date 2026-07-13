@@ -18,7 +18,7 @@
      ink            #0C1F1C   ink-2   #334E49      muted   #4E6B66
      line           #DBEBE7   bg      #F4FAF8      surface #FFFFFF   surface-2 #ECF6F3
      ok #159A6B  warn #D98A0B  danger #E14B4B  info #0E8FA8
-   STATUS CHIP (9 states) — class .chip--*  (canonical status chips):
+   STATUS CHIP (10 states) — class .chip--*  (canonical status chips):
      Báo giá     .chip--baogia     bg#EAF3F1 fg#3A5450 bd#CFE5E0
      Chờ duyệt   .chip--choduyet   bg#FBF0DA fg#8A5C08 bd#EFD9A8
      Đã chốt     .chip--dachot     bg#DCF3EF fg#0B7264 bd#B7E5DD
@@ -26,6 +26,7 @@
      Đang thi công .chip--thicong  bg#FCEAD4 fg#985B08 bd#F2D3A6
      Nghiệm thu  .chip--nghiemthu  bg#E4EEFA fg#345C9C bd#C4D8F0
      Đang giao   .chip--danggiao   bg#DEF1F6 fg#0C6B84 bd#B7E0EB
+     Đã giao     .chip--dagiao     bg#DDF3EA fg#0F7657 bd#B7E5D4
      Hoàn thành  .chip--hoanthanh  bg#DEF3E6 fg#137A4C bd#B7E5CA
      Huỷ         .chip--huy        bg#FAE6E6 fg#B22C2C bd#F0C7C7
    ===================================================================== */
@@ -87,7 +88,7 @@ a{color:inherit;text-decoration:none}
 .flabel{display:block;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
 .fgroup{margin-bottom:13px}
 
-/* ---------- Status chips (9 order states) ---------- */
+/* ---------- Status chips (10 order states) ---------- */
 .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
   padding:3px 9px;border-radius:999px;border:1.5px solid transparent;white-space:nowrap}
 .chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
@@ -98,6 +99,7 @@ a{color:inherit;text-decoration:none}
 .chip--thicong   {background:#FCEAD4;color:#985B08;border-color:#F2D3A6}
 .chip--nghiemthu {background:#E4EEFA;color:#345C9C;border-color:#C4D8F0}
 .chip--danggiao  {background:#DEF1F6;color:#0C6B84;border-color:#B7E0EB}
+.chip--dagiao    {background:#DDF3EA;color:#0F7657;border-color:#B7E5D4}
 .chip--hoanthanh {background:#DEF3E6;color:#137A4C;border-color:#B7E5CA}
 .chip--huy       {background:#FAE6E6;color:#B22C2C;border-color:#F0C7C7}
 
@@ -342,7 +344,7 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
       <div class="logo"><svg class="icn"><use href="#ic-sun"/></svg></div>
       <div>
         <div class="bname">Phương Nam Solar</div>
-        <div class="bsub">Design Source of Truth · 25 màn hình · Viền nét / blueprint</div>
+        <div class="bsub">Design Source of Truth · 30 màn hình · Viền nét / blueprint</div>
       </div>
     </div>
     <div class="indexnav">
@@ -375,8 +377,15 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
       <a href="#s-product-detail">Chi tiết sản phẩm</a>
       <a href="#s-inventory">Tồn kho</a>
       <a href="#s-stock-vouchers">Phiếu kho</a>
+      <a href="#s-return-voucher">Phiếu nhập trả</a>
+
+      <span class="navgroup">Báo cáo &amp; Bảo hành</span>
+      <a href="#s-profit-report">Báo cáo lợi nhuận</a>
+      <a href="#s-debt-report">Báo cáo công nợ</a>
+      <a href="#s-warranty-lookup">Tra cứu bảo hành</a>
 
       <span class="navgroup">Quản trị</span>
+      <a href="#s-source-config">Cấu hình nguồn khách</a>
       <a href="#s-permissions">Phân quyền</a>
       <a href="#s-account-form">Tạo tài khoản</a>
       <a href="#s-audit">Audit log</a>
@@ -388,7 +397,7 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
 
   <div class="intro">
     <h1>Design Source of Truth — Phương Nam Solar</h1>
-    <p>Khung nền (shell) cho toàn bộ 25 màn hình app nội bộ, một ngôn ngữ thị giác <strong>“Viền nét / blueprint”</strong>: phẳng, không đổ bóng, viền 1.5px teal, nhãn micro chữ hoa, teal làm mực — trên bảng màu <strong>“Năng Lượng Sạch”</strong> (teal #0E9F8E + lime #A3E635). Màn hiện trường dựng trong khung điện thoại (Flutter), màn văn phòng dựng trong khung trình duyệt (React). Các component <code>.topbar</code>, <code>.botnav</code>, <code>.phone</code>, <code>.web</code>, <code>.sidebar</code> đã khoá — chép nguyên văn từ khối “COMPONENT REFERENCE” ở đầu file. Điều hướng bằng liên kết neo, không JavaScript.</p>
+    <p>Khung nền (shell) cho toàn bộ 30 màn hình app nội bộ, một ngôn ngữ thị giác <strong>“Viền nét / blueprint”</strong>: phẳng, không đổ bóng, viền 1.5px teal, nhãn micro chữ hoa, teal làm mực — trên bảng màu <strong>“Năng Lượng Sạch”</strong> (teal #0E9F8E + lime #A3E635). Màn hiện trường dựng trong khung điện thoại (Flutter), màn văn phòng dựng trong khung trình duyệt (React). Các component <code>.topbar</code>, <code>.botnav</code>, <code>.phone</code>, <code>.web</code>, <code>.sidebar</code> đã khoá — chép nguyên văn từ khối “COMPONENT REFERENCE” ở đầu file. Điều hướng bằng liên kết neo, không JavaScript.</p>
     <div class="legend">
       <span class="chip chip--baogia"><span class="dot"></span>Báo giá</span>
       <span class="chip chip--choduyet"><span class="dot"></span>Chờ duyệt CK</span>
@@ -397,6 +406,7 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
       <span class="chip chip--thicong"><span class="dot"></span>Đang thi công</span>
       <span class="chip chip--nghiemthu"><span class="dot"></span>Nghiệm thu</span>
       <span class="chip chip--danggiao"><span class="dot"></span>Đang giao</span>
+      <span class="chip chip--dagiao"><span class="dot"></span>Đã giao</span>
       <span class="chip chip--hoanthanh"><span class="dot"></span>Hoàn thành</span>
       <span class="chip chip--huy"><span class="dot"></span>Huỷ</span>
     </div>
@@ -1349,12 +1359,20 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
             </div>
           </div>
 
+          <!-- cảnh báo tồn kho sớm: hiện ngay lúc thêm dòng, KHÔNG chặn chốt -->
+          <div class="banner fgroup">
+            <span><svg class="icn"><use href="#ic-alert"/></svg></span>
+            <div><b>Inverter Solplanet ASW8000-S — khả dụng đã hết.</b> Còn 3 · Đã hứa 3 · <b>Cần nhập 1</b>. Vẫn chốt đơn được; chặn nằm ở khâu xuất kho.</div>
+          </div>
+
           <!-- line items -->
           <table class="table">
             <thead>
               <tr>
                 <th>Món / SKU</th>
                 <th class="num">SL</th>
+                <th>Kho</th>
+                <th>Bảo hành</th>
                 <th class="num">Đơn giá</th>
                 <th class="num">Thành tiền</th>
               </tr>
@@ -1363,30 +1381,56 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
               <tr>
                 <td><span class="strong">Tấm pin AE 630W</span><br><span class="micro muted">SKU · PANEL-AE-630</span></td>
                 <td class="num mono">14</td>
+                <td><span class="pill ok">Còn 42</span></td>
+                <td class="mono">12 năm</td>
                 <td class="num mono">2.583.000</td>
                 <td class="num strong mono">36.162.000</td>
               </tr>
               <tr class="zebra">
                 <td><span class="strong">Inverter Solplanet ASW8000-S</span><br><span class="micro muted">SKU · INV-ASW8000S</span></td>
                 <td class="num mono">1</td>
+                <td><span class="pill" style="border-color:var(--danger);color:#B22C2C;background:#FAE6E6">Cần nhập 1</span></td>
+                <td class="mono">10 năm</td>
                 <td class="num mono">23.000.000</td>
                 <td class="num strong mono">23.000.000</td>
               </tr>
               <tr>
-                <td><span class="strong">Vật tư (gói)</span><br><span class="micro muted">Gói · dây, tủ điện, phụ kiện</span></td>
-                <td class="num mono">1</td>
-                <td class="num mono">9.500.000</td>
-                <td class="num strong mono">9.500.000</td>
+                <td><span class="strong">Dây DC 4mm² (cuộn 100m)</span><br><span class="micro muted">SKU · CAB-DC-4 · từ gói Hybrid 8kW</span></td>
+                <td class="num mono">2</td>
+                <td><span class="pill ok">Còn 11</span></td>
+                <td class="mono">2 năm</td>
+                <td class="num mono">1.850.000</td>
+                <td class="num strong mono">3.700.000</td>
               </tr>
               <tr class="zebra">
-                <td><span class="strong">Công lắp đặt</span><br><span class="micro muted">Dịch vụ · nhân công thi công</span></td>
+                <td><span class="strong">Tủ điện DC/AC + CB</span><br><span class="micro muted">SKU · PNL-DCAC · từ gói Hybrid 8kW</span></td>
                 <td class="num mono">1</td>
-                <td class="num mono">8.200.000</td>
+                <td><span class="pill ok">Còn 6</span></td>
+                <td class="mono">2 năm</td>
+                <td class="num mono">3.210.000</td>
+                <td class="num strong mono">3.210.000</td>
+              </tr>
+              <tr>
+                <td><span class="strong">Khung nhôm + phụ kiện mái tôn</span><br><span class="micro muted">SKU · MNT-ALU · từ gói Hybrid 8kW</span></td>
+                <td class="num mono">14</td>
+                <td><span class="pill ok">Còn 60</span></td>
+                <td class="mono">2 năm</td>
+                <td class="num mono">185.000</td>
+                <td class="num strong mono">2.590.000</td>
+              </tr>
+              <tr class="zebra">
+                <td><span class="strong">Công lắp đặt</span><br><span class="micro muted">Dịch vụ · sửa được giá theo hiện trạng nhà</span></td>
+                <td class="num mono">1</td>
+                <td><span class="micro muted">Không theo kho</span></td>
+                <td class="micro muted">Không có</td>
+                <td class="num mono">8.200.000 <svg class="icn icn-xs" style="color:var(--teal)"><use href="#ic-edit"/></svg></td>
                 <td class="num strong mono">8.200.000</td>
               </tr>
               <tr>
-                <td><span class="strong">Dòng tự do</span><br><span class="micro muted">Diễn giải: vệ sinh mái trước lắp — miễn phí</span></td>
+                <td><span class="strong">Dòng tự do</span><br><span class="micro muted">Mô tả tay: vệ sinh mái trước lắp — miễn phí</span></td>
                 <td class="num mono">1</td>
+                <td><span class="micro muted">—</span></td>
+                <td><a class="micro" href="#s-quote">+ Thêm bảo hành</a></td>
                 <td class="num mono">0</td>
                 <td class="num strong mono">0</td>
               </tr>
@@ -1395,7 +1439,30 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
 
           <div class="toolbar" style="margin-top:12px">
             <a class="btn btn--accent btn--sm" href="#s-catalog"><svg class="icn"><use href="#ic-plus"/></svg> Thêm món</a>
+            <a class="btn btn--ghost btn--sm" href="#s-quote"><svg class="icn"><use href="#ic-catalog"/></svg> Gói vật tư</a>
             <a class="btn btn--ghost btn--sm" href="#s-quote"><svg class="icn"><use href="#ic-plus"/></svg> Dòng tự do</a>
+          </div>
+
+          <!-- gói vật tư: checklist, KHÔNG phải sản phẩm — mỗi item tick đẻ ra một dòng thật -->
+          <div class="frame on-bg" style="padding:18px 16px 16px;margin-top:16px">
+            <span class="frame-label">Biến thể · Chọn gói vật tư</span>
+            <p class="micro muted" style="margin:0 0 10px">Gói là <b>checklist</b>, không phải một dòng trọn gói. Tick món nào, món đó thành một dòng báo giá bình thường trỏ về sản phẩm thật — số lượng tự nhập, giá = giá item × SL.</p>
+            <div class="row" style="gap:8px;margin-bottom:10px">
+              <span class="seg"><a class="active" href="#s-quote">Gói Hybrid 8kW</a><a href="#s-quote">Gói Bám tải 5kW</a></span>
+            </div>
+            <table class="table">
+              <thead><tr><th style="width:34px"></th><th>Sản phẩm trong gói</th><th class="num">SL</th><th class="num">Đơn giá</th></tr></thead>
+              <tbody>
+                <tr><td><span class="tick"><svg class="icn"><use href="#ic-check"/></svg></span></td><td>Dây DC 4mm² (cuộn 100m)</td><td class="num mono">2</td><td class="num mono">1.850.000</td></tr>
+                <tr class="zebra"><td><span class="tick"><svg class="icn"><use href="#ic-check"/></svg></span></td><td>Tủ điện DC/AC + CB</td><td class="num mono">1</td><td class="num mono">3.210.000</td></tr>
+                <tr><td><span class="cross"><svg class="icn"><use href="#ic-close"/></svg></span></td><td style="color:var(--muted)">Chống sét lan truyền SPD</td><td class="num mono" style="color:var(--muted)">—</td><td class="num mono" style="color:var(--muted)">1.400.000</td></tr>
+                <tr class="zebra"><td><span class="tick"><svg class="icn"><use href="#ic-check"/></svg></span></td><td>Khung nhôm + phụ kiện mái tôn</td><td class="num mono">14</td><td class="num mono">185.000</td></tr>
+              </tbody>
+            </table>
+            <div class="row" style="gap:8px;margin-top:12px">
+              <a class="btn btn--primary btn--sm" href="#s-quote"><svg class="icn"><use href="#ic-plus"/></svg> Thêm 3 món đã tick vào báo giá</a>
+              <a class="btn btn--ghost btn--sm" href="#s-quote">Đóng</a>
+            </div>
           </div>
 
           <!-- sticky totals -->
@@ -1460,23 +1527,36 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
               </div>
             </div>
 
+            <div class="banner" style="margin-bottom:10px"><span><svg class="icn"><use href="#ic-alert"/></svg></span><div><b>Inverter ASW8000-S</b> — Còn 3 · Đã hứa 3 · <b>Cần nhập 1</b>. Vẫn chốt được.</div></div>
+
             <div class="list-row" style="align-items:flex-start">
-              <div style="flex:1"><div class="strong" style="font-size:13px">Tấm pin AE 630W</div><div class="micro muted" style="margin-top:2px">14 × 2.583.000</div></div>
+              <div style="flex:1"><div class="strong" style="font-size:13px">Tấm pin AE 630W</div><div class="micro muted" style="margin-top:2px">14 × 2.583.000 · BH 12 năm · <span style="color:var(--ok)">Còn 42</span></div></div>
               <div class="mono strong">36.162.000</div>
             </div>
-            <div class="list-row" style="align-items:flex-start">
-              <div style="flex:1"><div class="strong" style="font-size:13px">Inverter Solplanet ASW8000-S</div><div class="micro muted" style="margin-top:2px">1 × 23.000.000</div></div>
+            <div class="list-row" style="align-items:flex-start;border-color:var(--danger)">
+              <div style="flex:1"><div class="strong" style="font-size:13px">Inverter Solplanet ASW8000-S</div><div class="micro muted" style="margin-top:2px">1 × 23.000.000 · BH 10 năm · <span style="color:var(--danger)">Cần nhập 1</span></div></div>
               <div class="mono strong">23.000.000</div>
             </div>
             <div class="list-row" style="align-items:flex-start">
-              <div style="flex:1"><div class="strong" style="font-size:13px">Vật tư (gói)</div><div class="micro muted" style="margin-top:2px">1 × 9.500.000</div></div>
-              <div class="mono strong">9.500.000</div>
+              <div style="flex:1"><div class="strong" style="font-size:13px">Dây DC 4mm² (cuộn 100m)</div><div class="micro muted" style="margin-top:2px">2 × 1.850.000 · BH 2 năm · gói Hybrid 8kW</div></div>
+              <div class="mono strong">3.700.000</div>
             </div>
             <div class="list-row" style="align-items:flex-start">
-              <div style="flex:1"><div class="strong" style="font-size:13px">Công lắp đặt</div><div class="micro muted" style="margin-top:2px">1 × 8.200.000</div></div>
+              <div style="flex:1"><div class="strong" style="font-size:13px">Tủ điện DC/AC + CB</div><div class="micro muted" style="margin-top:2px">1 × 3.210.000 · BH 2 năm · gói Hybrid 8kW</div></div>
+              <div class="mono strong">3.210.000</div>
+            </div>
+            <div class="list-row" style="align-items:flex-start">
+              <div style="flex:1"><div class="strong" style="font-size:13px">Khung nhôm + phụ kiện</div><div class="micro muted" style="margin-top:2px">14 × 185.000 · BH 2 năm · gói Hybrid 8kW</div></div>
+              <div class="mono strong">2.590.000</div>
+            </div>
+            <div class="list-row" style="align-items:flex-start">
+              <div style="flex:1"><div class="strong" style="font-size:13px">Công lắp đặt</div><div class="micro muted" style="margin-top:2px">1 × 8.200.000 · sửa được giá · không bảo hành</div></div>
               <div class="mono strong">8.200.000</div>
             </div>
-            <a class="btn btn--accent btn--wide btn--sm" href="#s-catalog" style="margin-top:4px"><svg class="icn"><use href="#ic-plus"/></svg> Thêm món</a>
+            <div class="row" style="gap:6px;margin-top:4px">
+              <a class="btn btn--accent btn--sm" href="#s-catalog" style="flex:1"><svg class="icn"><use href="#ic-plus"/></svg> Thêm món</a>
+              <a class="btn btn--ghost btn--sm" href="#s-quote" style="flex:1"><svg class="icn"><use href="#ic-catalog"/></svg> Gói vật tư</a>
+            </div>
           </div>
 
           <!-- sticky totals above botnav -->
@@ -1562,10 +1642,13 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
                   <dt>MST</dt><dd class="mono">0301234567</dd>
                   <dt>Địa chỉ</dt><dd>212 Nguyễn Văn Nghi, Gò Vấp, TP.HCM</dd>
                   <dt>TK ngân hàng</dt><dd class="mono">Vietcombank · 0071000123456</dd>
+                  <dt>Nguồn khách</dt><dd>Fanpage</dd>
                   <dt>Đơn gần nhất</dt><dd class="mono">DH-1990 · 2026-05-14</dd>
                 </dl>
                 <a class="btn btn--primary btn--wide" href="#s-quote" style="margin-top:12px"><svg class="icn"><use href="#ic-check"/></svg> Dùng khách này</a>
               </div>
+
+              <div class="notecard" style="margin-top:12px">Nguồn khách được <b>chụp lại lên đơn</b> lúc tạo đơn. Khách quay lại qua kênh khác thì đơn cũ vẫn giữ đúng kênh đã mang nó về.</div>
 
               <div class="notecard" style="margin-top:12px">Không phải khách này? <a class="tick" href="#s-customer-pick">Tạo khách hàng mới →</a></div>
             </div>
@@ -1598,8 +1681,25 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
                   <label class="flabel">Tài khoản ngân hàng</label>
                   <input class="field mono" placeholder="Ngân hàng · số tài khoản">
                 </div>
+
+                <div class="fgroup">
+                  <label class="flabel">Nguồn khách <span style="color:var(--danger)">*</span> — bắt buộc, không có mặc định</label>
+                  <select class="field">
+                    <option selected disabled>— Chọn nguồn —</option>
+                    <option>Facebook — khách nhắn qua tài khoản cá nhân</option>
+                    <option>Zalo — khách nhắn qua Zalo</option>
+                    <option>Fanpage — khách inbox trang công ty</option>
+                    <option>Đại lý — do đại lý giới thiệu</option>
+                    <option>Khác — ghi rõ bên dưới</option>
+                  </select>
+                </div>
+                <div class="fgroup">
+                  <label class="flabel">Ghi rõ nguồn <span style="color:var(--danger)">*</span> — chỉ hiện khi chọn "Khác"</label>
+                  <input class="field" placeholder="VD: khách cũ giới thiệu, hội chợ Vietbuild…">
+                </div>
+
                 <a class="btn btn--primary btn--wide" href="#s-quote">Lưu &amp; dùng khách</a>
-                <p class="micro muted" style="margin-top:10px">Cá nhân dùng: Họ tên · CCCD · Địa chỉ · SĐT (không có MST/TK NH).</p>
+                <p class="micro muted" style="margin-top:10px">Cá nhân dùng: Họ tên · CCCD · Địa chỉ · SĐT (không có MST/TK NH). Danh mục nguồn sửa ở <a class="tick" href="#s-source-config">Cấu hình nguồn khách</a>.</p>
               </div>
             </div>
           </div>
@@ -1654,6 +1754,14 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
               <div class="fgroup"><label class="flabel">CCCD</label><input class="field mono" placeholder="079xxxxxxxxx"></div>
               <div class="fgroup"><label class="flabel">Địa chỉ</label><input class="field" placeholder="Số nhà, đường, phường…"></div>
               <div class="fgroup"><label class="flabel">Số điện thoại</label><input class="field mono" placeholder="09xxxxxxxx"></div>
+              <div class="fgroup">
+                <label class="flabel">Nguồn khách <span style="color:var(--danger)">*</span></label>
+                <select class="field">
+                  <option selected disabled>— Chọn nguồn —</option>
+                  <option>Facebook</option><option>Zalo</option><option>Fanpage</option><option>Đại lý</option><option>Khác</option>
+                </select>
+                <p class="micro muted" style="margin-top:5px">Không có mặc định — sale phải chọn. Chọn "Khác" thì phải ghi rõ.</p>
+              </div>
               <a class="btn btn--primary btn--wide" href="#s-quote">Lưu &amp; dùng khách</a>
             </div>
           </div>
@@ -1727,14 +1835,13 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
               <div class="step done"><div class="node"><div class="bul"><svg class="icn"><use href="#ic-check"/></svg></div><div class="st-label">Báo giá</div></div><div class="bar"></div></div>
               <div class="step current"><div class="node"><div class="bul">3</div><div class="st-label">Đã chốt</div></div><div class="bar"></div></div>
               <div class="step"><div class="node"><div class="bul">4</div><div class="st-label">Đã cọc</div></div><div class="bar"></div></div>
-              <div class="step gate"><div class="node"><div class="bul">5</div><div class="st-label">Lên lịch TC</div></div><div class="bar"></div></div>
-              <div class="step gate"><div class="node"><div class="bul">6</div><div class="st-label">Đang thi công</div></div><div class="bar"></div></div>
-              <div class="step gate"><div class="node"><div class="bul">7</div><div class="st-label">Nghiệm thu</div></div><div class="bar"></div></div>
-              <div class="step gate"><div class="node"><div class="bul">8</div><div class="st-label">Đang giao</div></div><div class="bar"></div></div>
-              <div class="step gate"><div class="node"><div class="bul">9</div><div class="st-label">Đã giao</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">5</div><div class="st-label">Đang thi công</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">6</div><div class="st-label">Nghiệm thu</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">7</div><div class="st-label">Đang giao</div></div><div class="bar"></div></div>
+              <div class="step gate"><div class="node"><div class="bul">8</div><div class="st-label">Đã giao</div></div><div class="bar"></div></div>
               <div class="step gate"><div class="node"><div class="bul"><svg class="icn"><use href="#ic-check"/></svg></div><div class="st-label">Hoàn thành</div></div></div>
             </div>
-            <p class="micro muted" style="margin-top:14px">Nhánh Thi công &amp; Giao hàng mở theo cờ phạm vi của đơn. Đơn chỉ-thiết-bị sẽ bỏ qua các bước Thi công.</p>
+            <p class="micro muted" style="margin-top:14px">Nhánh Thi công mở theo cờ <b>Thi công</b>. Bước <b>Đã giao</b> mở theo cờ <b>Thiết bị</b> — không phải cờ Vận chuyển: cờ Vận chuyển TẮT thì khách tự tới lấy, đơn vẫn đi thẳng sang Đã giao. Cờ Thiết bị TẮT (đơn chỉ có công lắp) thì không có bước giao nào.</p>
           </div>
 
           <!-- tabs -->
@@ -1751,20 +1858,26 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
               <dt>Mã đơn</dt><dd class="mono strong">DH-2048</dd>
               <dt>Khách hàng</dt><dd>VP Công Chứng Lê Đình Thao</dd>
               <dt>SĐT</dt><dd class="mono">0903176968</dd>
+              <dt>Nguồn khách</dt><dd>Fanpage <span class="micro muted">· chụp lúc tạo đơn</span></dd>
               <dt>Công suất</dt><dd>8,82 kWp</dd>
               <dt>Ngày chốt</dt><dd class="mono">2026-07-06</dd>
+              <dt>Sale phụ trách</dt><dd>Trần Thị Mai</dd>
               <dt>Thợ khảo sát</dt><dd>Nguyễn Văn Hùng</dd>
             </dl>
             <table class="table" style="flex:1 1 300px">
-              <thead><tr><th>Món</th><th class="num">SL</th><th class="num">Thành tiền</th></tr></thead>
+              <thead><tr><th>Món</th><th class="num">SL</th><th>Bảo hành</th><th class="num">Thành tiền</th></tr></thead>
               <tbody>
-                <tr><td>Tấm pin AE 630W</td><td class="num mono">14</td><td class="num mono strong">36.162.000</td></tr>
-                <tr class="zebra"><td>Inverter Solplanet ASW8000-S</td><td class="num mono">1</td><td class="num mono strong">23.000.000</td></tr>
-                <tr><td>Vật tư (gói)</td><td class="num mono">1</td><td class="num mono strong">9.500.000</td></tr>
-                <tr class="zebra"><td>Công lắp đặt</td><td class="num mono">1</td><td class="num mono strong">8.200.000</td></tr>
+                <tr><td>Tấm pin AE 630W</td><td class="num mono">14</td><td class="mono">12 năm <span class="micro muted">→ 07/2038</span></td><td class="num mono strong">36.162.000</td></tr>
+                <tr class="zebra"><td>Inverter Solplanet ASW8000-S</td><td class="num mono">1</td><td class="mono">10 năm <span class="micro muted">→ 07/2036</span></td><td class="num mono strong">23.000.000</td></tr>
+                <tr><td>Dây DC 4mm² (cuộn 100m)</td><td class="num mono">2</td><td class="mono">2 năm <span class="micro muted">→ 07/2028</span></td><td class="num mono strong">3.700.000</td></tr>
+                <tr class="zebra"><td>Tủ điện DC/AC + CB</td><td class="num mono">1</td><td class="mono">2 năm <span class="micro muted">→ 07/2028</span></td><td class="num mono strong">3.210.000</td></tr>
+                <tr><td>Khung nhôm + phụ kiện mái tôn</td><td class="num mono">14</td><td class="mono">2 năm <span class="micro muted">→ 07/2028</span></td><td class="num mono strong">2.590.000</td></tr>
+                <tr class="zebra"><td>Công lắp đặt</td><td class="num mono">1</td><td class="micro muted">Không có</td><td class="num mono strong">8.200.000</td></tr>
               </tbody>
             </table>
           </div>
+
+          <div class="notecard" style="margin-top:12px">Bảo hành tính từ ngày <b>dòng đó chốt lần đầu</b>, không phải ngày nghiệm thu. Sửa một dòng ghi chú không gia hạn bảo hành cho cả đơn.</div>
 
           <div class="row" style="gap:8px;margin-top:16px">
             <a class="btn btn--primary" href="#s-status-change"><svg class="icn"><use href="#ic-sort"/></svg> Chuyển trạng thái</a>
@@ -1822,12 +1935,14 @@ svg.icn{width:18px;height:18px;stroke-width:2;flex:none;vertical-align:middle;fi
             <dl class="kv">
               <dt>Khách</dt><dd>VP Công Chứng Lê Đình Thao</dd>
               <dt>SĐT</dt><dd class="mono">0903176968</dd>
+              <dt>Nguồn</dt><dd>Fanpage</dd>
               <dt>Công suất</dt><dd>8,82 kWp</dd>
               <dt>Ngày chốt</dt><dd class="mono">2026-07-06</dd>
+              <dt>Sale</dt><dd>Trần Thị Mai</dd>
               <dt>Thợ KS</dt><dd>Nguyễn Văn Hùng</dd>
             </dl>
 
-            <div class="notecard" style="margin-top:12px">4 món · Tổng sau VAT <b class="mono">83.010.960 đ</b></div>
+            <div class="notecard" style="margin-top:12px">6 món · Tổng sau VAT <b class="mono">83.010.960 đ</b><br><span class="micro muted">Bảo hành dài nhất: Tấm pin — 12 năm (đến 07/2038)</span></div>
 
             <a class="btn btn--primary btn--wide" href="#s-status-change" style="margin-top:12px"><svg class="icn"><use href="#ic-sort"/></svg> Chuyển trạng thái</a>
             <a class="btn btn--danger btn--wide btn--sm" href="#s-order-cancel" style="margin-top:8px">Huỷ đơn</a>

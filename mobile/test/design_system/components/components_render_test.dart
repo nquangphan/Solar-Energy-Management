@@ -93,11 +93,30 @@ void main() {
   });
 
   group('AppStatusChip (mirror .chip--*)', () {
-    testWidgets('renders all 9 states with the canonical Vietnamese label',
+    // Expected labels are spelled out here rather than read from kStatusLabels:
+    // asserting find.text(kStatusLabels[status]!) reads the label from the very
+    // map under test, so it passes no matter what that map contains. "Đã giao"
+    // and "Đang giao" differ by one letter, which is exactly the drift a
+    // self-referential assertion cannot see.
+    const expectedLabels = <StatusKey, String>{
+      StatusKey.baogia: 'Báo giá',
+      StatusKey.choduyet: 'Chờ duyệt',
+      StatusKey.dachot: 'Đã chốt',
+      StatusKey.dacoc: 'Đã cọc',
+      StatusKey.thicong: 'Đang thi công',
+      StatusKey.nghiemthu: 'Nghiệm thu',
+      StatusKey.danggiao: 'Đang giao',
+      StatusKey.dagiao: 'Đã giao',
+      StatusKey.hoanthanh: 'Hoàn thành',
+      StatusKey.huy: 'Huỷ',
+    };
+
+    testWidgets('renders all 10 states with the canonical Vietnamese label',
         (tester) async {
+      expect(expectedLabels.length, StatusKey.values.length);
       for (final status in StatusKey.values) {
         await tester.pumpWidget(_host(AppStatusChip(status: status)));
-        expect(find.text(kStatusLabels[status]!), findsOneWidget);
+        expect(find.text(expectedLabels[status]!), findsOneWidget);
       }
     });
 
@@ -107,6 +126,23 @@ void main() {
       ));
       expect(_hasFill(tester, const Color(0xFFEAF3F1)), isTrue);
       expect(_hasBorder(tester, const Color(0xFFCFE5E0)), isTrue);
+    });
+
+    // The 10th chip, render-verified end to end: the key really paints its own
+    // triplet. parity.test.mjs proves the hex appears in the Dart SOURCE; this
+    // proves StatusKey.dagiao actually resolves to it at runtime, and that it is
+    // not wearing danggiao's cyan or hoanthanh's green.
+    testWidgets('dagiao carries its exact triplet and label', (tester) async {
+      await tester.pumpWidget(_host(
+        const AppStatusChip(status: StatusKey.dagiao),
+      ));
+      expect(find.text('Đã giao'), findsOneWidget);
+      expect(find.text('Đang giao'), findsNothing);
+      expect(_hasFill(tester, const Color(0xFFDDF3EA)), isTrue);
+      expect(_hasBorder(tester, const Color(0xFFB7E5D4)), isTrue);
+      // Not the neighbouring states' fills.
+      expect(_hasFill(tester, const Color(0xFFDEF1F6)), isFalse);
+      expect(_hasFill(tester, const Color(0xFFDEF3E6)), isFalse);
     });
   });
 

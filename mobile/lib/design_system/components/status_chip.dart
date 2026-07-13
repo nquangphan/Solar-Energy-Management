@@ -1,7 +1,7 @@
 // hand-authored — Flutter design-system component (Story 1.7, mirror Story 1.4
-// StatusChip.tsx — `.chip--*` in components.css lines 51-59).
+// StatusChip.tsx — `.chip--*` in components.css lines 51-60).
 //
-// The 9 hex triplets below are CANONICAL COMPONENT CONSTANTS copied verbatim
+// The 10 hex triplets below are CANONICAL COMPONENT CONSTANTS copied verbatim
 // from the web CSS ON PURPOSE — NOT tokens (adding them to AppTokens would be
 // Story 1.1 scope-creep). design-system/components/parity.test.mjs asserts each
 // triplet is byte-identical on web (CSS) and mobile (this file) so a colour
@@ -11,7 +11,7 @@ import 'package:flutter/widgets.dart';
 
 import 'chip.dart';
 
-/// The 9 canonical order states (= `.chip--*` suffix). The enum blocks ad-hoc
+/// The 10 canonical order states (= `.chip--*` suffix). The enum blocks ad-hoc
 /// statuses at the type level. Key ↔ backend Order.status enum is deferred to
 /// Epic 4/5 — here the key is only the class suffix, not a guessed enum.
 enum StatusKey {
@@ -22,6 +22,7 @@ enum StatusKey {
   thicong,
   nghiemthu,
   danggiao,
+  dagiao,
   hoanthanh,
   huy,
 }
@@ -35,6 +36,7 @@ const Map<StatusKey, String> kStatusLabels = {
   StatusKey.thicong: 'Đang thi công',
   StatusKey.nghiemthu: 'Nghiệm thu',
   StatusKey.danggiao: 'Đang giao',
+  StatusKey.dagiao: 'Đã giao',
   StatusKey.hoanthanh: 'Hoàn thành',
   StatusKey.huy: 'Huỷ',
 };
@@ -56,6 +58,8 @@ const Map<StatusKey, StatusChipColors> kStatusColors = {
       StatusChipColors(Color(0xFFE4EEFA), Color(0xFF345C9C), Color(0xFFC4D8F0)),
   StatusKey.danggiao:
       StatusChipColors(Color(0xFFDEF1F6), Color(0xFF0C6B84), Color(0xFFB7E0EB)),
+  StatusKey.dagiao:
+      StatusChipColors(Color(0xFFDDF3EA), Color(0xFF0F7657), Color(0xFFB7E5D4)),
   StatusKey.hoanthanh:
       StatusChipColors(Color(0xFFDEF3E6), Color(0xFF137A4C), Color(0xFFB7E5CA)),
   StatusKey.huy:

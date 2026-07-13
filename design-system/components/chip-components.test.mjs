@@ -41,7 +41,7 @@ const CHIP_SOURCES = [
 // Comment-free code bodies for the read-only guard (see stripComments above).
 const CHIP_CODE = CHIP_SOURCES.map(([name, src]) => [name, stripComments(src)]);
 
-// The 9 canonical states + their verbatim labels (AC-2 / DESIGN.md#Status-chip).
+// The 10 canonical states + their verbatim labels (AC-2 / DESIGN.md#Status-chip).
 const STATUS_LABELS = [
   ['baogia', 'Báo giá'],
   ['choduyet', 'Chờ duyệt'],
@@ -50,6 +50,7 @@ const STATUS_LABELS = [
   ['thicong', 'Đang thi công'],
   ['nghiemthu', 'Nghiệm thu'],
   ['danggiao', 'Đang giao'],
+  ['dagiao', 'Đã giao'],
   ['hoanthanh', 'Hoàn thành'],
   ['huy', 'Huỷ'],
 ];
@@ -83,25 +84,31 @@ test('every chip component renders a <span> element', () => {
   }
 });
 
-// (3) StatusKey union declares exactly the 9 canonical states — no more, no less.
+// (3) StatusKey union declares exactly the 10 canonical states — no more, no less.
 // The union is what blocks ad-hoc/invented statuses at the type level (AC-2).
-test('StatusKey union declares exactly the 9 canonical states (AC-2)', () => {
+test('StatusKey union declares exactly the 10 canonical states (AC-2)', () => {
   const unionBody = statusChip.match(/export type StatusKey\s*=([\s\S]*?);/);
   assert.ok(unionBody, 'StatusKey union type must be declared and exported');
   const members = [...unionBody[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]);
   assert.deepEqual(
     [...members].sort(),
     STATUS_LABELS.map(([k]) => k).sort(),
-    'StatusKey must be exactly the 9 canonical keys (no invented/missing state)',
+    'StatusKey must be exactly the 10 canonical keys (no invented/missing state)',
   );
 });
 
 // (4) STATUS_LABELS maps every state to its verbatim canonical label (AC-2).
 // Drift-guard against a screen-specific label ("Chờ duyệt CK") leaking in as the
 // default, or a label being dropped/renamed.
-test('STATUS_LABELS carries the verbatim canonical label for all 9 states (AC-2)', () => {
+test('STATUS_LABELS carries the verbatim canonical label for all 10 states (AC-2)', () => {
+  // `\b` anchors the key: unanchored, a short future key ("giao") would match
+  // INSIDE a longer sibling's line (`danggiao: 'Đang giao'`) and pass on the
+  // wrong state. The dagiao/danggiao family makes that a live hazard, not a
+  // hypothetical. The label is escaped so a metacharacter in a future label
+  // ("Đã giao (1 phần)") fails the assertion instead of throwing.
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const [key, label] of STATUS_LABELS) {
-    const re = new RegExp(`${key}\\s*:\\s*'${label}'`);
+    const re = new RegExp(`\\b${key}\\s*:\\s*'${escapeRe(label)}'`);
     assert.ok(re.test(statusChip), `STATUS_LABELS.${key} must be '${label}' (canonical, verbatim)`);
   }
 });
