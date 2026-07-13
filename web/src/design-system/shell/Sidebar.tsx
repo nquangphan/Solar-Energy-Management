@@ -53,7 +53,7 @@ export const SIDEBAR_NAV: NavSection[] = [
     links: [
       { key: 'home', icon: 'ic-home', label: 'Trang chủ' },
       { key: 'orders', icon: 'ic-orders', label: 'Đơn hàng' },
-      { key: 'customers', icon: 'ic-customer', label: 'Khách hàng' },
+      { key: 'customers', icon: 'ic-customer', label: 'Khách hàng', requires: PERM.customersManage },
       { key: 'catalog', icon: 'ic-catalog', label: 'Danh mục' },
       { key: 'inventory', icon: 'ic-warehouse', label: 'Kho' },
     ],

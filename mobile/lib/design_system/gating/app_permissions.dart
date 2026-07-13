@@ -100,6 +100,9 @@ class AppPerm {
 
   /// May view the finance dashboard numbers (FR-19, Epic 8).
   static const PermissionKey dashboardFinanceView = 'dashboard.finance_view';
+
+  /// May manage customers — gates the Khách hàng surfaces + all customer screens (FR-29).
+  static const PermissionKey customersManage = 'customers.manage';
 }
 
 /// STUB effective permission set — Epic 1 PLACEHOLDER ONLY (see [AppPerm]).

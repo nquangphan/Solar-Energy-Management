@@ -8,6 +8,15 @@
 
 export type { MePort, MeResponse } from './me-port';
 export type { PasswordPort } from './password-port';
+export type {
+  CustomersPort,
+  Customer,
+  CustomerSource,
+  CustomerLookup,
+  CustomerPage,
+  CustomerListQuery,
+  CreateCustomerInput,
+} from './customers-port';
 export { toPermissionSet } from './session';
 export type { SessionStatus } from './session';
 export { PermissionsProvider, usePermissionsContext } from './PermissionsProvider';
@@ -20,3 +29,8 @@ export { SessionGatingExample } from './SessionGatingExample';
 // fake-password-port.ts). They enforce no security rule; the backend owns all of them.
 export { FakeMePort, DEMO_ME } from './fake-me-port';
 export { FakePasswordPort, DEMO_EXPIRES_IN_SECONDS } from './fake-password-port';
+export {
+  FakeCustomersPort,
+  DEMO_CUSTOMERS,
+  DEMO_CUSTOMER_SOURCES,
+} from './fake-customers-port';

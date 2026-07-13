@@ -1,0 +1,137 @@
+/* hand-authored — Story 3.4 customer-screen layout wrappers (list / pick /
+   detail). Composition-level styling only: the table, fields, buttons, chips,
+   cards, frames, banners and list-states are all shipped design-system
+   components. Token vars for every colour and radius; flat borders, no elevation
+   effects (Viền nét, UX-DR-4). Load AFTER tokens.css / components.css /
+   shell.css. */
+
+.cust-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+/* The phone key is data to be read digit by digit, not prose: tabular figures make
+   the digits line up down the column, so a mistyped number is visible at a glance.
+   Deliberately NOT the shipped `.mono` utility — that one also right-aligns, which
+   is right for money and wrong for a left-aligned identity column. */
+.cust-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.cust-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Definition list = the mockup's `kv` rows, composed rather than componentised. */
+.cust-kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  row-gap: var(--space-8);
+  margin: 0 0 var(--space-16);
+}
+
+.cust-kv dt {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.cust-kv dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.cust-hit {
+  padding: var(--space-22);
+}
+
+.cust-hit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  margin-bottom: var(--space-16);
+}
+
+.cust-hit-title {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.cust-miss {
+  padding: var(--space-22);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  align-items: stretch;
+}
+
+.cust-miss-msg {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cust-create {
+  max-width: 560px;
+}
+
+.cust-typerow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+}
+
+.cust-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin-bottom: var(--space-12);
+}
+
+.cust-select select {
+  height: 44px;
+  padding: 0 var(--space-12);
+  border: var(--border-width) solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cust-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin-top: var(--space-16);
+}
+
+.cust-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-22);
+}
+
+.cust-state-msg {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}

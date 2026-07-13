@@ -1,7 +1,10 @@
 import { execFileSync } from 'node:child_process';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { CustomersService } from '../src/customers/customers.service';
 import { CUST_TYPE } from '../src/customers/domain/customer-type';
+import type { EventBus } from '../src/events/event-bus';
+import type { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Lane TÍCH HỢP trên Postgres THẬT — trả món nợ mà project-context ghi là "đến hạn ở Story 3.3".
@@ -184,6 +187,149 @@ moTa('Ràng buộc tầng DB của customers (Postgres THẬT)', () => {
 
       const found = await prisma.customer.findUnique({ where: { sdt: SDT } });
       expect(found).toBeNull();
+    });
+  });
+
+  /**
+   * Story 3.4 — tìm kiếm/lọc/phân trang chạy qua CHÍNH `CustomersService`, trên Postgres THẬT.
+   *
+   * Mock Prisma chỉ chứng minh service DỰNG `where` như ta nghĩ. Nó KHÔNG chứng minh Postgres
+   * TRẢ VỀ đúng dòng: `mode: 'insensitive'` có thật sự bỏ qua hoa/thường trên tiếng Việt có dấu
+   * không, và `contains` needle có thật sự khớp được PK `+84903…` không. Hai câu đó chỉ trả lời
+   * được ở đây.
+   */
+  describe('Story 3.4 — search/filter/paging trên Postgres THẬT', () => {
+    const SDT_TIM = '+84903176968'; // gõ là "0903176968" — needle "903176968"
+    const SDT_HOA = '+84912000003';
+    const SDT_CTY = '+84987000004';
+    const SDT_SEARCH = [SDT_TIM, SDT_HOA, SDT_CTY];
+
+    let service: CustomersService;
+
+    async function donDepSearch(): Promise<void> {
+      await prisma.customer.deleteMany({ where: { sdt: { in: SDT_SEARCH } } });
+    }
+
+    beforeAll(async () => {
+      // EventBus giả: story này chỉ ĐỌC, không phát event nào — nhưng service đòi cái port.
+      service = new CustomersService(
+        prisma as unknown as PrismaService,
+        { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+      );
+      await donDepSearch();
+
+      // Ba khách, tạo TUẦN TỰ để `createdAt` khác nhau ⇒ thứ tự "mới nhất trước" xác định được.
+      await prisma.customer.create({
+        data: {
+          sdt: SDT_TIM,
+          custType: CUST_TYPE.caNhan,
+          name: 'Trần Văn Tìm',
+          sourceId,
+        },
+      });
+      await prisma.customer.create({
+        data: {
+          sdt: SDT_HOA,
+          custType: CUST_TYPE.caNhan,
+          name: 'Nguyễn Thị Hoà',
+          sourceId,
+        },
+      });
+      await prisma.customer.create({
+        data: {
+          sdt: SDT_CTY,
+          custType: CUST_TYPE.thuongMai,
+          name: 'Công ty TNHH Hoà Phát',
+          taxCode: '0312345678',
+          sourceId,
+        },
+      });
+    });
+
+    afterAll(async () => {
+      await donDepSearch();
+    });
+
+    it('🔴 gõ "0903" ⇒ TÌM RA khách có PK "+84903176968" (cái mà `contains` thô làm trượt)', async () => {
+      const trang = await service.list({ q: '0903' });
+
+      const sdts = trang.items.map((khach) => khach.sdt);
+      expect(sdts).toContain(SDT_TIM);
+    });
+
+    it('gõ TRỌN số nội địa "0903176968" ⇒ vẫn ra đúng khách đó', async () => {
+      const trang = await service.list({ q: '0903176968' });
+
+      expect(trang.items.map((khach) => khach.sdt)).toContain(SDT_TIM);
+    });
+
+    it('mode insensitive là THẬT với tiếng Việt có dấu ("hoà" ⇒ ra "Nguyễn Thị Hoà")', async () => {
+      const trang = await service.list({ q: 'hoà' });
+
+      const names = trang.items.map((khach) => khach.name);
+      expect(names).toContain('Nguyễn Thị Hoà');
+      expect(names).toContain('Công ty TNHH Hoà Phát');
+    });
+
+    it('q chỉ CHỮ không biến thành contains rỗng (không kéo về cả bảng)', async () => {
+      const trang = await service.list({ q: 'Trần Văn Tìm' });
+
+      expect(trang.items.map((khach) => khach.sdt)).toEqual([SDT_TIM]);
+      expect(trang.total).toBe(1);
+    });
+
+    it('q + custType gộp AND đúng trên DB thật', async () => {
+      const trang = await service.list({
+        q: 'hoà',
+        custType: CUST_TYPE.thuongMai,
+      });
+
+      expect(trang.items.map((khach) => khach.name)).toEqual([
+        'Công ty TNHH Hoà Phát',
+      ]);
+    });
+
+    it('total là TỔNG TOÀN BỘ, không phải độ dài trang; page/pageSize cắt đúng', async () => {
+      // Lọc về đúng 3 khách của test này bằng needle chung là không làm được (SĐT khác nhau),
+      // nên lọc bằng loại khách + đọc tổng từ chính DB để so.
+      const tongCaNhan = await prisma.customer.count({
+        where: { custType: CUST_TYPE.caNhan },
+      });
+
+      const trang1 = await service.list({
+        custType: CUST_TYPE.caNhan,
+        page: 1,
+        pageSize: 1,
+      });
+
+      expect(trang1.items).toHaveLength(1);
+      expect(trang1.total).toBe(tongCaNhan);
+      expect(trang1.total).toBeGreaterThan(trang1.items.length);
+
+      const trang2 = await service.list({
+        custType: CUST_TYPE.caNhan,
+        page: 2,
+        pageSize: 1,
+      });
+
+      expect(trang2.items).toHaveLength(1);
+      // Trang 2 phải là bản ghi KHÁC trang 1 — `skip` sai (vd luôn 0) sẽ trả lại đúng bản ghi cũ.
+      expect(trang2.items[0].sdt).not.toBe(trang1.items[0].sdt);
+      expect(trang2.total).toBe(tongCaNhan);
+    });
+
+    it('lookup() tra được khách bằng dạng THÔ trên DB thật (hội tụ E.164)', async () => {
+      const ketQua = await service.lookup('0903 176 968');
+
+      expect(ketQua.found).toBe(true);
+      expect(ketQua.sdt).toBe(SDT_TIM);
+      expect(ketQua.customer?.name).toBe('Trần Văn Tìm');
+    });
+
+    it('lookup() số chưa có ⇒ found:false (200, không phải 404)', async () => {
+      const ketQua = await service.lookup('0999999998');
+
+      expect(ketQua).toMatchObject({ found: false, customer: null });
     });
   });
 

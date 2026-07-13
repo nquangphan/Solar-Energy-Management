@@ -9,6 +9,7 @@
 
 export 'me_port.dart';
 export 'password_port.dart';
+export 'customers_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
@@ -16,3 +17,4 @@ export 'app_session_gating_example.dart';
 // fake_password_port.dart). They enforce no security rule; the backend owns all of them.
 export 'fake_me_port.dart';
 export 'fake_password_port.dart';
+export 'fake_customers_port.dart';

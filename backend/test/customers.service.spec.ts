@@ -56,11 +56,16 @@ describe('CustomersService', () => {
     update: jest.fn(),
     findUnique: jest.fn(),
     findMany: jest.fn(),
+    count: jest.fn(),
   };
   const customerSourceRepo = { findUnique: jest.fn() };
+  // `list()` gói findMany + count vào `$transaction([...])` để tổng và trang được đọc trên CÙNG
+  // một ảnh chụp dữ liệu — thiếu mock này thì mọi request list là 500.
+  const transaction = jest.fn();
   const prisma = {
     customer: customerRepo,
     customerSource: customerSourceRepo,
+    $transaction: transaction,
   } as unknown as PrismaService;
   const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
   const service = new CustomersService(prisma, eventBus as unknown as EventBus);
@@ -435,18 +440,196 @@ describe('CustomersService', () => {
     });
   });
 
-  describe('findAll — danh sách khách hàng', () => {
-    it('sắp MỚI NHẤT TRƯỚC, và KHÔNG lọc mất bản ghi nào', async () => {
-      // Thứ tự là hợp đồng, không phải trang trí: sale mở màn khách để tìm người vừa nhập xong.
-      // Không assert `orderBy` thì ai đổi sang `asc` cũng không có test nào kêu.
-      customerRepo.findMany.mockResolvedValue([KHACH]);
+  describe('lookup — tra SĐT để chọn/tạo khách inline (Story 3.4, AC-1)', () => {
+    it('tra bằng chuỗi ĐÃ CHUẨN HOÁ, không phải chuỗi thô', async () => {
+      // Đây là đột biến (a) của Task 10: đổi `findUnique({ where: { sdt } })` thành `raw` phải
+      // làm test này ĐỎ. Không assert đối số thì tra-bằng-raw vẫn xanh, và lookup sẽ báo "chưa
+      // có khách" cho một khách ĐANG TỒN TẠI — tức đẻ ra bản ghi trùng người ở bước tạo tiếp theo.
+      await service.lookup('0912 345 678');
 
-      const found = await service.findAll();
+      expect(customerRepo.findUnique).toHaveBeenCalledWith({
+        where: { sdt: SDT_E164 },
+      });
+    });
+
+    it('tìm thấy ⇒ found:true + sdt E.164 + customer đầy đủ (đủ để form điền sẵn)', async () => {
+      const ket_qua = await service.lookup('0912345678');
+
+      expect(ket_qua).toEqual({
+        found: true,
+        sdt: SDT_E164,
+        customer: KHACH,
+      });
+    });
+
+    it('KHÔNG tìm thấy ⇒ found:false + customer:null — 200, KHÔNG ném NOT_FOUND', async () => {
+      // "Không thấy" là NỬA KIA của tính năng (nút "Tạo khách hàng mới"), không phải lỗi. Ném
+      // 404 ở đây buộc FE bắt exception cho đường đi THÀNH CÔNG.
+      customerRepo.findUnique.mockResolvedValue(null);
+
+      const ket_qua = await service.lookup('0912345678');
+
+      expect(ket_qua).toEqual({
+        found: false,
+        sdt: SDT_E164,
+        customer: null,
+      });
+    });
+
+    it('mọi dạng thô của CÙNG một số ⇒ CÙNG một kết quả tra (hội tụ)', async () => {
+      for (const raw of [
+        '0912345678',
+        '0912 345 678',
+        '+84912345678',
+        '84912345678',
+      ]) {
+        customerRepo.findUnique.mockClear();
+
+        const ket_qua = await service.lookup(raw);
+
+        expect(ket_qua.sdt).toBe(SDT_E164);
+        expect(customerRepo.findUnique).toHaveBeenCalledWith({
+          where: { sdt: SDT_E164 },
+        });
+      }
+    });
+
+    for (const rac of ['abc', '', '123', '+16505550123']) {
+      it(`SĐT rác "${rac}" ⇒ 400 VALIDATION_ERROR, KHÔNG chạm DB`, async () => {
+        const err = await bat(service.lookup(rac));
+
+        expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(err.getStatus()).toBe(400);
+        expect(err.fieldErrors?.[0].field).toBe('sdt');
+        expect(customerRepo.findUnique).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe('list — search + filter + phân trang (Story 3.4, AC-3)', () => {
+    beforeEach(() => {
+      // `list()` chạy `$transaction([findMany, count])` ⇒ thiếu mock `$transaction` là 500 sạch
+      // trơn. Trả tuple ĐÚNG THỨ TỰ truyền vào (Prisma 7).
+      customerRepo.findMany.mockResolvedValue([KHACH]);
+      customerRepo.count.mockResolvedValue(1);
+      transaction.mockImplementation(async (ops: unknown[]) => [
+        await ops[0],
+        await ops[1],
+      ]);
+    });
+
+    /** `where` thật sự truyền xuống Prisma — thứ duy nhất chứng minh bộ lọc đúng. */
+    function whereDaDung(): unknown {
+      return customerRepo.findMany.mock.calls[0][0].where;
+    }
+
+    it('không tham số ⇒ where RỖNG, trang 1, pageSize 20, mới nhất trước', async () => {
+      const trang = await service.list({});
 
       expect(customerRepo.findMany).toHaveBeenCalledWith({
+        where: {},
         orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 20,
       });
-      expect(found).toEqual([KHACH]);
+      expect(trang).toEqual({
+        items: [KHACH],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+      });
+    });
+
+    it('🔴 q là SỐ NỘI ĐỊA ⇒ nhánh sdt dùng NEEDLE (bỏ 0 đầu), KHÔNG phải chuỗi thô', async () => {
+      // Đột biến (b) của Task 10: dùng `contains: q` thô phải làm test này ĐỎ. PK lưu
+      // `+84912345678` — `contains: '0903'` không bao giờ khớp nó.
+      await service.list({ q: '0903' });
+
+      expect(whereDaDung()).toEqual({
+        OR: [
+          { name: { contains: '0903', mode: 'insensitive' } },
+          { sdt: { contains: '903' } },
+        ],
+      });
+    });
+
+    it('q chỉ CHỮ ⇒ needle rỗng ⇒ CHỈ nhánh name (KHÔNG có contains: "" khớp mọi dòng)', async () => {
+      await service.list({ q: 'Hoà' });
+
+      const where = whereDaDung() as { OR: unknown[] };
+      expect(where).toEqual({
+        OR: [{ name: { contains: 'Hoà', mode: 'insensitive' } }],
+      });
+      // Khẳng định PHỦ ĐỊNH: nhánh `sdt` phải BIẾN MẤT, không phải tồn tại với chuỗi rỗng.
+      expect(JSON.stringify(where)).not.toContain('"sdt"');
+    });
+
+    it('custType ⇒ lọc AND, không đụng tới OR', async () => {
+      await service.list({ custType: CUST_TYPE.thuongMai });
+
+      expect(whereDaDung()).toEqual({ custType: CUST_TYPE.thuongMai });
+    });
+
+    it('q + custType ⇒ AND[custType, OR[name, sdt]] (hai điều kiện gộp đúng)', async () => {
+      await service.list({ q: '0903', custType: CUST_TYPE.caNhan });
+
+      expect(whereDaDung()).toEqual({
+        custType: CUST_TYPE.caNhan,
+        OR: [
+          { name: { contains: '0903', mode: 'insensitive' } },
+          { sdt: { contains: '903' } },
+        ],
+      });
+    });
+
+    it('q rỗng ⇒ KHÔNG lọc gì (chuỗi rỗng không phải một phép tìm)', async () => {
+      await service.list({ q: '' });
+
+      expect(whereDaDung()).toEqual({});
+    });
+
+    it('phân trang: skip/take tính đúng, và total là TỔNG TOÀN BỘ (không phải độ dài trang)', async () => {
+      customerRepo.count.mockResolvedValue(57);
+
+      const trang = await service.list({ page: 3, pageSize: 10 });
+
+      expect(customerRepo.findMany.mock.calls[0][0]).toMatchObject({
+        skip: 20,
+        take: 10,
+      });
+      expect(trang.total).toBe(57);
+      expect(trang.page).toBe(3);
+      expect(trang.pageSize).toBe(10);
+    });
+
+    it('count chạy trên CÙNG where với findMany (total không được đếm cả bảng)', async () => {
+      // Nếu `count` bỏ quên `where`, tổng sẽ là số khách TOÀN HỆ THỐNG trong khi danh sách đã
+      // lọc ⇒ phân trang hiện ra những trang rỗng không tồn tại.
+      await service.list({ q: 'Hoà', custType: CUST_TYPE.caNhan });
+
+      expect(customerRepo.count.mock.calls[0][0].where).toEqual(
+        customerRepo.findMany.mock.calls[0][0].where,
+      );
+    });
+
+    it('q có khoảng trắng thừa ⇒ TRIM trước khi tìm (" 0903 " tra như "0903")', async () => {
+      // Dán một SĐT từ chỗ khác vào ô tìm kiếm là kéo theo khoảng trắng. `contains: ' 0903 '`
+      // khớp 0 dòng, và người dùng kết luận sai rằng khách này chưa có ⇒ bấm "Tạo khách hàng mới"
+      // ⇒ đúng cái bản ghi trùng người mà cả Epic 3 dựng lên để chặn.
+      await service.list({ q: '  0903  ' });
+
+      expect(whereDaDung()).toEqual({
+        OR: [
+          { name: { contains: '0903', mode: 'insensitive' } },
+          { sdt: { contains: '903' } },
+        ],
+      });
+    });
+
+    it('q chỉ có khoảng trắng ⇒ KHÔNG lọc gì (không thành contains: "   ")', async () => {
+      await service.list({ q: '   ' });
+
+      expect(whereDaDung()).toEqual({});
     });
   });
 

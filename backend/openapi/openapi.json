@@ -859,18 +859,129 @@
         ]
       },
       "get": {
-        "operationId": "CustomersController_findAll",
-        "parameters": [],
+        "operationId": "CustomersController_list",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Tìm theo TÊN hoặc SĐT. SĐT gõ ở dạng người dùng quen (`0903`) — backend tự dựng chuỗi tra tương ứng với PK E.164.",
+            "schema": {
+              "example": "0903",
+              "type": "string"
+            }
+          },
+          {
+            "name": "custType",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo loại khách. Bỏ trống ⇒ lấy cả hai loại.",
+            "schema": {
+              "example": "CA_NHAN",
+              "type": "string",
+              "enum": [
+                "CA_NHAN",
+                "THUONG_MAI"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Trang, bắt đầu từ 1.",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Số bản ghi mỗi trang — tối đa 100.",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CustomerResponseDto"
-                  }
+                  "$ref": "#/components/schemas/CustomerListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`custType` không hợp lệ, `page` < 1, hoặc `pageSize` ngoài 1..100 (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customers/lookup": {
+      "get": {
+        "operationId": "CustomersController_lookup",
+        "parameters": [
+          {
+            "name": "sdt",
+            "required": true,
+            "in": "query",
+            "description": "SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.",
+            "schema": {
+              "example": "0903176968",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Luôn 200 — kể cả khi không có khách nào mang SĐT này (`found: false`). Xem DTO.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerLookupResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SĐT không hợp lệ (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
                 }
               }
             }
@@ -1734,6 +1845,68 @@
           "sourceId",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "CustomerListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CustomerResponseDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng số khách khớp bộ lọc (TOÀN BẢNG, không phải số dòng của trang này).",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "Trang hiện tại (bắt đầu từ 1).",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Số bản ghi mỗi trang.",
+            "example": 20
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ]
+      },
+      "CustomerLookupResponseDto": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "Có khách hàng nào mang SĐT này chưa.",
+            "example": true
+          },
+          "sdt": {
+            "type": "string",
+            "description": "SĐT đã chuẩn hoá E.164 — trả về kể cả khi `found: false` (form tạo khách dùng lại chuỗi này).",
+            "example": "+84912345678"
+          },
+          "customer": {
+            "nullable": true,
+            "description": "Khách hàng tìm được; `null` khi `found: false`.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CustomerResponseDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "found",
+          "sdt",
+          "customer"
         ]
       },
       "UpdateCustomerRequestDto": {

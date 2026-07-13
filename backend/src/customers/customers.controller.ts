@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -19,7 +27,11 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { CustomersService } from './customers.service';
 import { CreateCustomerRequestDto } from './dto/create-customer-request.dto';
+import { CustomerListResponseDto } from './dto/customer-list-response.dto';
+import { CustomerLookupResponseDto } from './dto/customer-lookup-response.dto';
 import { CustomerResponseDto } from './dto/customer-response.dto';
+import { ListCustomersQueryDto } from './dto/list-customers-query.dto';
+import { LookupCustomerQueryDto } from './dto/lookup-customer-query.dto';
 import { UpdateCustomerRequestDto } from './dto/update-customer-request.dto';
 
 /**
@@ -70,13 +82,48 @@ export class CustomersController {
 
   @Get()
   @RequirePermissions(PERM.customersManage)
-  @ApiOkResponse({ type: [CustomerResponseDto] })
+  @ApiOkResponse({ type: CustomerListResponseDto })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      '`custType` không hợp lệ, `page` < 1, hoặc `pageSize` ngoài 1..100 (VALIDATION_ERROR).',
+  })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
     description: 'Thiếu customers.manage (FORBIDDEN).',
   })
-  async findAll(): Promise<CustomerResponseDto[]> {
-    return (await this.customers.findAll()) as CustomerResponseDto[];
+  async list(
+    @Query() query: ListCustomersQueryDto,
+  ): Promise<CustomerListResponseDto> {
+    return (await this.customers.list(query)) as CustomerListResponseDto;
+  }
+
+  /**
+   * PHẢI khai TRƯỚC `@Get(':sdt')`. Nest so route THEO THỨ TỰ KHAI: đặt sau, `:sdt` nuốt luôn
+   * chuỗi `"lookup"` và endpoint này trả 404 "không tìm thấy khách hàng `lookup`" — một lỗi trông
+   * như lỗi dữ liệu nhưng thật ra là lỗi thứ tự. Có e2e khẳng định đúng chuyện này.
+   */
+  @Get('lookup')
+  @RequirePermissions(PERM.customersManage)
+  @ApiOkResponse({
+    type: CustomerLookupResponseDto,
+    description:
+      'Luôn 200 — kể cả khi không có khách nào mang SĐT này (`found: false`). Xem DTO.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description: 'SĐT không hợp lệ (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu customers.manage (FORBIDDEN).',
+  })
+  async lookup(
+    @Query() query: LookupCustomerQueryDto,
+  ): Promise<CustomerLookupResponseDto> {
+    return (await this.customers.lookup(
+      query.sdt,
+    )) as CustomerLookupResponseDto;
   }
 
   @Get(':sdt')

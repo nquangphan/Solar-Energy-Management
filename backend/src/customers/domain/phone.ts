@@ -35,3 +35,22 @@ export function normalizeVnPhone(raw: string): string | null {
   }
   return parsed.number;
 }
+
+/**
+ * Chuỗi con dùng để TÌM KIẾM khách theo SĐT — DOMAIN THUẦN, không bao giờ ném.
+ *
+ * Khác `normalizeVnPhone` về mục đích, nên phải là hàm riêng: `normalizeVnPhone` phân giải một số
+ * ĐẦY ĐỦ thành khoá chính và từ chối mọi thứ không hợp lệ; hàm này nhận một TIỀN TỐ dở dang
+ * (`0903`) mà người dùng vừa gõ được một nửa và vẫn phải trả về thứ tra được.
+ *
+ * Bỏ số `0` đứng đầu là toàn bộ lý do hàm tồn tại: PK lưu dạng E.164 (`+84903176968`) — mã quốc
+ * gia rồi tới `903…`, KHÔNG có số `0` nội địa. Giữ `0` thì `'0903'` không phải chuỗi con của
+ * `'+84903176968'` và phép tìm kiếm trượt đúng cái loại số mà mọi người thật sự gõ.
+ *
+ * Trả `''` khi không còn chữ số nào (người dùng đang tìm theo TÊN). Tầng gọi phải BỎ HẲN nhánh
+ * `sdt` khi thấy `''` — `contains: ''` khớp mọi dòng, biến bộ lọc thành no-op.
+ */
+export function phoneSearchNeedle(raw: string): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\D/g, '').replace(/^0+/, '');
+}

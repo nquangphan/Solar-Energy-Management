@@ -80,17 +80,25 @@ describe('/customers (e2e)', () => {
     update: jest.fn(),
     findUnique: jest.fn(),
     findMany: jest.fn(),
+    count: jest.fn(),
   };
   const customerSourceRepo = { findUnique: jest.fn(), findMany: jest.fn() };
   // `auditLog` có mặt vì `AuditSubscriber` THẬT chạy trong `AppModule`; thiếu nó thì subscriber
   // ném (bus cô lập lỗi nên test vẫn xanh, chỉ ồn log) và ta mất luôn bằng chứng event tới đích.
   const auditRepo = { create: jest.fn().mockResolvedValue({}) };
   const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
+  // `list()` gói findMany + count vào `$transaction([...])` — thiếu mock này là 500 trên mọi
+  // request danh sách. Trả tuple ĐÚNG thứ tự truyền vào (Prisma 7).
+  const transaction = jest.fn(async (ops: Promise<unknown>[]) => [
+    await ops[0],
+    await ops[1],
+  ]);
   const prismaMock = {
     customer: customerRepo,
     customerSource: customerSourceRepo,
     auditLog: auditRepo,
     featureFlag: featureFlagRepo,
+    $transaction: transaction,
   };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),
@@ -142,9 +150,14 @@ describe('/customers (e2e)', () => {
     customerRepo.update.mockResolvedValue(KHACH);
     customerRepo.findUnique.mockResolvedValue(KHACH);
     customerRepo.findMany.mockResolvedValue([KHACH]);
+    customerRepo.count.mockResolvedValue(1);
     customerSourceRepo.findUnique.mockResolvedValue(NGUON_FACEBOOK);
     customerSourceRepo.findMany.mockResolvedValue([NGUON_FACEBOOK, NGUON_KHAC]);
     auditRepo.create.mockResolvedValue({});
+    transaction.mockImplementation(async (ops: Promise<unknown>[]) => [
+      await ops[0],
+      await ops[1],
+    ]);
   });
 
   describe('AC-11 — thiếu customers.manage ⇒ 403 trên MỌI route', () => {
@@ -156,6 +169,10 @@ describe('/customers (e2e)', () => {
       {
         name: 'GET /customers',
         call: () => request(server()).get('/customers'),
+      },
+      {
+        name: 'GET /customers/lookup',
+        call: () => request(server()).get('/customers/lookup?sdt=0912345678'),
       },
       {
         name: 'GET /customers/:sdt',
@@ -290,34 +307,313 @@ describe('/customers (e2e)', () => {
     });
   });
 
-  describe('GET /customers — danh sách khách hàng', () => {
-    it('trả danh sách, mới nhất TRƯỚC (sale mở màn khách là thấy khách vừa nhập)', async () => {
+  describe('GET /customers — danh sách có search/filter/phân trang (Story 3.4, AC-3)', () => {
+    it('trả ENVELOPE { items, total, page, pageSize }, mới nhất TRƯỚC', async () => {
       givenPermissions(PERM.customersManage);
       const khachCu = { ...KHACH, sdt: '+84987654321', name: 'Trần Thị B' };
       customerRepo.findMany.mockResolvedValue([KHACH, khachCu]);
+      customerRepo.count.mockResolvedValue(2);
 
       const res = await request(server())
         .get('/customers')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(2);
-      expect(res.body[0].sdt).toBe(SDT_E164);
-      expect(customerRepo.findMany).toHaveBeenCalledWith({
+      expect(res.body.items).toHaveLength(2);
+      expect(res.body.items[0].sdt).toBe(SDT_E164);
+      expect(res.body).toMatchObject({ total: 2, page: 1, pageSize: 20 });
+      expect(customerRepo.findMany.mock.calls[0][0]).toMatchObject({
         orderBy: { createdAt: 'desc' },
+        skip: 0,
+        take: 20,
       });
     });
 
-    it('chưa có khách nào ⇒ 200 mảng rỗng (không phải 404)', async () => {
+    it('chưa có khách nào ⇒ 200 envelope rỗng (không phải 404)', async () => {
       givenPermissions(PERM.customersManage);
       customerRepo.findMany.mockResolvedValue([]);
+      customerRepo.count.mockResolvedValue(0);
 
       const res = await request(server())
         .get('/customers')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 });
+    });
+
+    it('q dạng SỐ NỘI ĐỊA ⇒ nhánh sdt tra bằng needle (bỏ 0 đầu) — đi qua ValidationPipe thật', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers?q=0903')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(customerRepo.findMany.mock.calls[0][0].where).toEqual({
+        OR: [
+          { name: { contains: '0903', mode: 'insensitive' } },
+          { sdt: { contains: '903' } },
+        ],
+      });
+    });
+
+    it('page/pageSize tới dưới dạng CHUỖI vẫn ép được sang số (@Type) và tính đúng skip', async () => {
+      // Query string luôn là chuỗi. Thiếu `@Type(() => Number)` thì hoặc 400 oan, hoặc một chuỗi
+      // lọt xuống `skip`/`take` của Prisma.
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers?page=3&pageSize=10')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(customerRepo.findMany.mock.calls[0][0]).toMatchObject({
+        skip: 20,
+        take: 10,
+      });
+    });
+
+    const queryXau: readonly [string, string][] = [
+      ['custType=XXX', 'custType'],
+      ['pageSize=101', 'pageSize'],
+      ['pageSize=0', 'pageSize'],
+      ['page=0', 'page'],
+      ['page=-1', 'page'],
+    ];
+
+    for (const [query, field] of queryXau) {
+      it(`?${query} ⇒ 400 VALIDATION_ERROR (${field}), KHÔNG chạm DB`, async () => {
+        givenPermissions(PERM.customersManage);
+
+        const res = await request(server())
+          .get(`/customers?${query}`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].field).toBe(field);
+        expect(customerRepo.findMany).not.toHaveBeenCalled();
+      });
+    }
+  });
+
+  describe('GET /customers/lookup — tra SĐT (Story 3.4, AC-1)', () => {
+    it('🔴 KHÔNG bị route `:sdt` nuốt — "lookup" là ROUTE, không phải một SĐT', async () => {
+      // Nest so route theo THỨ TỰ KHAI. Khai `@Get('lookup')` sau `@Get(':sdt')` ⇒ request này
+      // rơi vào findOne với sdt="lookup" ⇒ 400 "SĐT không hợp lệ". Test này là thứ duy nhất
+      // đứng giữa hai cách khai đó.
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup?sdt=0912345678')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('found');
+      expect(res.body).toHaveProperty('customer');
+    });
+
+    it('tìm thấy ⇒ 200 { found: true, sdt E.164, customer } (đủ để form điền sẵn)', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup?sdt=0912345678')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.customer.sdt).toBe(SDT_E164);
+      expect(customerRepo.findUnique).toHaveBeenCalledWith({
+        where: { sdt: SDT_E164 },
+      });
+    });
+
+    it('KHÔNG tìm thấy ⇒ 200 { found: false, customer: null } — KHÔNG phải 404', async () => {
+      givenPermissions(PERM.customersManage);
+      customerRepo.findUnique.mockResolvedValue(null);
+
+      const res = await request(server())
+        .get('/customers/lookup?sdt=0912345678')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        found: false,
+        sdt: SDT_E164,
+        customer: null,
+      });
+    });
+
+    it('mọi dạng THÔ của cùng một số ⇒ CÙNG một kết quả (hội tụ — cái làm "một SĐT = một khách" có nghĩa)', async () => {
+      givenPermissions(PERM.customersManage);
+
+      for (const raw of [
+        '0912345678',
+        '0912 345 678',
+        '+84912345678',
+        '84912345678',
+      ]) {
+        const res = await request(server())
+          .get('/customers/lookup')
+          .query({ sdt: raw })
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.sdt).toBe(SDT_E164);
+        expect(res.body.found).toBe(true);
+      }
+    });
+
+    for (const rac of ['abc', '123', '+16505550123']) {
+      it(`SĐT rác "${rac}" ⇒ 400 VALIDATION_ERROR field sdt, KHÔNG chạm DB`, async () => {
+        givenPermissions(PERM.customersManage);
+
+        const res = await request(server())
+          .get('/customers/lookup')
+          .query({ sdt: rac })
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].field).toBe('sdt');
+        expect(customerRepo.findUnique).not.toHaveBeenCalled();
+      });
+    }
+
+    it('thiếu hẳn `sdt` ⇒ 400 (không tra rỗng hộ người dùng)', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Trần + KIỂU của query — ValidationPipe là thứ DUY NHẤT đứng giữa query string và Prisma', () => {
+    // Query string tới từ URL: mọi giá trị là CHUỖI, và người gửi có thể lặp một key để biến nó
+    // thành MẢNG. Không có test cho các trần/kiểu này thì gỡ một decorator cũng không ai đỏ — cái
+    // trần chỉ còn là bình luận (bài học HIGH của 3.2), và một mảng đi thẳng tới normalizeVnPhone.
+
+    // ⚠️ Hai ca dưới đây phải khẳng định MÃ RÀNG BUỘC, không chỉ status 400. Một chuỗi 33 ký tự
+    // và một mảng đều bị `normalizeVnPhone` từ chối ⇒ 400 `isPhoneNumber` NGAY CẢ KHI gỡ hết
+    // decorator khỏi DTO. Chỉ kiểm status là kiểm nhầm hàng rào: cái trần biến mất mà test vẫn
+    // xanh. Mã lỗi là thứ nói cho ta biết request bị chặn Ở ĐÂU.
+    it('lookup: sdt dài quá trần 32 ký tự ⇒ 400 maxLength (pipe chặn), KHÔNG chạm DB', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup')
+        .query({ sdt: '0'.repeat(33) })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].code).toBe('maxLength');
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('lookup: sdt lặp key (?sdt=a&sdt=b ⇒ MẢNG) ⇒ 400 isString — mảng không tới nổi tầng chuẩn hoá', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup?sdt=0912345678&sdt=0987654321')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      // Một mảng vi phạm NHIỀU ràng buộc cùng lúc (thứ tự không phải hợp đồng) — điều phải
+      // khẳng định là `isString` CÓ MẶT, tức mảng bị chặn vì nó không phải chuỗi.
+      expect(
+        res.body.fieldErrors.map((e: { code: string }) => e.code),
+      ).toContain('isString');
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('list: q vượt trần 200 ký tự ⇒ 400, KHÔNG chạm DB', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers')
+        .query({ q: 'x'.repeat(201) })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors[0].field).toBe('q');
+      expect(customerRepo.findMany).not.toHaveBeenCalled();
+    });
+
+    // `@Type(() => Number)` + `@IsInt()`: thiếu một trong hai thì hoặc 400 oan, hoặc một chuỗi/số
+    // thực lọt xuống `skip`/`take` của Prisma — nơi nó là lỗi tầng DB, không phải lỗi nhập liệu.
+    const soXau: readonly [string, string][] = [
+      ['page=abc', 'page'],
+      ['pageSize=abc', 'pageSize'],
+      ['page=1.5', 'page'],
+      ['pageSize=10.5', 'pageSize'],
+    ];
+
+    for (const [query, field] of soXau) {
+      it(`list: ?${query} không phải số nguyên ⇒ 400 (${field}), KHÔNG chạm DB`, async () => {
+        givenPermissions(PERM.customersManage);
+
+        const res = await request(server())
+          .get(`/customers?${query}`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].field).toBe(field);
+        expect(customerRepo.findMany).not.toHaveBeenCalled();
+      });
+    }
+
+    it('list: pageSize=100 (ĐÚNG trần) ⇒ 200, take=100 — trần không lệch một đơn vị', async () => {
+      // `?pageSize=101 ⇒ 400` một mình KHÔNG chứng minh trần đúng: một `@Max(99)` cũng làm nó
+      // xanh. Ca biên phải được kiểm từ CẢ HAI phía.
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers?pageSize=100')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(customerRepo.findMany.mock.calls[0][0]).toMatchObject({
+        take: 100,
+      });
+    });
+
+    it('list: custType rỗng (?custType=) ⇒ 400 — chuỗi rỗng KHÔNG phải "không lọc"', async () => {
+      // "Vắng mặt" là không lọc; "rỗng" là một giá trị KHÔNG hợp lệ được gửi đi. Gộp hai thứ đó
+      // vào nhau là cách một bộ lọc hỏng trông như một bộ lọc trống.
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers?custType=')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors[0].field).toBe('custType');
+      expect(customerRepo.findMany).not.toHaveBeenCalled();
+    });
+
+    it('list: q toàn khoảng trắng ⇒ 200 và KHÔNG lọc gì (không thành contains: " ")', async () => {
+      // Người dùng gõ nhầm dấu cách rồi xoá chữ. Một `contains: '   '` khớp 0 dòng ⇒ danh bạ
+      // trông như rỗng trong khi nó đầy.
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers')
+        .query({ q: '   ' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(customerRepo.findMany.mock.calls[0][0].where).toEqual({});
     });
   });
 

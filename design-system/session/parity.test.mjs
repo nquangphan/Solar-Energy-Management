@@ -24,6 +24,8 @@ test('the session module ships on BOTH platforms (twin files)', () => {
   const parityFiles = {
     'me-port.ts': 'me_port.dart',
     'password-port.ts': 'password_port.dart',
+    'customers-port.ts': 'customers_port.dart',
+    'fake-customers-port.ts': 'fake_customers_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',
@@ -59,6 +61,26 @@ test('the password port exposes the SAME three methods on both platforms (Story 
   // backend leaked it — the whole reset flow collapses if that is ever allowed.
   assert.match(webPort, /requestResetCode\(email: string\): Promise<\{ expiresInSeconds: number \}>/, 'web requestResetCode must resolve only expiresInSeconds');
   assert.match(mobPort, /Future<int> requestResetCode\(String email\)/, 'mobile requestResetCode must resolve only the code lifetime');
+});
+
+test('the customers port exposes the SAME five methods on both platforms (Story 3.4)', () => {
+  const webPort = readFileSync(resolve(webDir, 'customers-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'customers_port.dart'), 'utf8');
+  for (const method of ['lookup', 'list', 'get', 'create', 'listSources']) {
+    assert.ok(webPort.includes(method), `web CustomersPort missing ${method}`);
+    assert.ok(mobPort.includes(method), `mobile CustomersPort missing ${method}`);
+  }
+  // NO ORDER DATA ON THIS PORT. `Order` does not exist until Story 4.1 — a port field
+  // the backend cannot fill is a number the UI would have to invent. Comments are
+  // stripped first: a doc comment that NAMES the banned field to explain why it is
+  // banned is documentation, not a violation.
+  const strip = (s) =>
+    s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/^\s*\/\/\/.*$/gm, '');
+  for (const [name, src] of [['web', strip(webPort)], ['mobile', strip(mobPort)]]) {
+    for (const absent of ['orderCount', 'orders:', 'List<Order>']) {
+      assert.ok(!src.includes(absent), `${name} CustomersPort must not carry "${absent}" — Order lands in Story 4.1`);
+    }
+  }
 });
 
 test('the session provider exposes the /me identity on both platforms (Story 2.8)', () => {

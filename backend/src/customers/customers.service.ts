@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Customer, CustomerSource } from '@prisma/client';
+import type { Customer, CustomerSource, Prisma } from '@prisma/client';
 import { AppException } from '../common/errors/app.exception';
 import { ErrorCode } from '../common/errors/error-code';
 import { isUniqueViolation } from '../common/errors/prisma-unique-violation';
@@ -11,8 +11,9 @@ import {
   type CustomerSnapshot,
 } from './domain/customer-events';
 import { FORBIDDEN_FIELDS, type CustType } from './domain/customer-type';
-import { normalizeVnPhone } from './domain/phone';
+import { normalizeVnPhone, phoneSearchNeedle } from './domain/phone';
 import { CreateCustomerRequestDto } from './dto/create-customer-request.dto';
+import { ListCustomersQueryDto } from './dto/list-customers-query.dto';
 import { UpdateCustomerRequestDto } from './dto/update-customer-request.dto';
 
 /**
@@ -265,10 +266,71 @@ export class CustomersService {
     return updated;
   }
 
-  async findAll(): Promise<Customer[]> {
-    return await this.prisma.customer.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+  /**
+   * Tra SĐT để CHỌN khách cũ hoặc mở đường TẠO khách mới (FR-29).
+   *
+   * Tra bằng chuỗi ĐÃ CHUẨN HOÁ — cùng bộ chuẩn hoá với lúc ghi (AD-9). Tra bằng chuỗi thô sẽ
+   * báo "chưa có khách" cho một khách ĐANG TỒN TẠI, và bước tiếp theo của người dùng là bấm "Tạo
+   * khách hàng mới" ⇒ đúng cái bất biến "một SĐT = một khách" mà cả story 3.3 dựng lên để chặn.
+   *
+   * Không thấy ⇒ `found: false`, KHÔNG ném `NOT_FOUND`: xem `CustomerLookupResponseDto`.
+   */
+  async lookup(rawSdt: string): Promise<{
+    found: boolean;
+    sdt: string;
+    customer: Customer | null;
+  }> {
+    const sdt = this.normalizeOrThrow(rawSdt);
+    const customer = await this.prisma.customer.findUnique({ where: { sdt } });
+    return { found: customer !== null, sdt, customer };
+  }
+
+  /**
+   * Danh sách khách: tìm theo tên/SĐT + lọc loại khách + phân trang.
+   *
+   * BẪY TRUNG TÂM — `q` là thứ NGƯỜI DÙNG GÕ (`0903`), còn PK lưu E.164 (`+84903176968`). Một
+   * `contains` thẳng trên `q` thô TRƯỢT 100% ca số nội địa, vì `'0903'` không phải chuỗi con của
+   * `'+84903176968'`. Nhánh `sdt` vì vậy tra bằng NEEDLE (`phoneSearchNeedle` — bỏ `0` đứng đầu).
+   *
+   * Needle rỗng (người dùng gõ chữ) ⇒ BỎ HẲN nhánh `sdt`. Để lại `contains: ''` là khớp MỌI dòng
+   * — bộ lọc thành no-op mà giao diện vẫn trông như đang lọc.
+   */
+  async list(query: ListCustomersQueryDto): Promise<{
+    items: Customer[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
+    const where: Prisma.CustomerWhereInput = {};
+    if (query.custType !== undefined && query.custType !== '') {
+      where.custType = query.custType;
+    }
+
+    const q = query.q?.trim() ?? '';
+    if (q !== '') {
+      const needle = phoneSearchNeedle(q);
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        ...(needle === '' ? [] : [{ sdt: { contains: needle } }]),
+      ];
+    }
+
+    // Một `$transaction` để trang và TỔNG được đọc trên cùng một ảnh chụp: đếm riêng ngoài
+    // transaction cho phép một khách mới chen vào giữa hai truy vấn ⇒ tổng lệch với danh sách.
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.customer.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.customer.count({ where }),
+    ]);
+
+    return { items, total, page, pageSize };
   }
 
   async findOne(rawSdt: string): Promise<Customer> {

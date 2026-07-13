@@ -99,11 +99,12 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     }
   });
 
-  it('spec chứa 3 route khách hàng + 4 schema Customer* (FE gen được client khách hàng, AD-12)', () => {
+  it('spec chứa 4 route khách hàng + 6 schema Customer* (FE gen được client khách hàng, AD-12)', () => {
     // Drift-guard byte-for-byte ở trên chỉ chứng minh spec KHỚP code — nó xanh y hệt nếu code
     // quên hẳn một route. Hợp đồng CÓ MẶT là một khẳng định khác, và phải được viết ra.
     const document = buildOpenApiDocument(app);
     expect(document.paths['/customers']).toBeDefined();
+    expect(document.paths['/customers/lookup']).toBeDefined();
     expect(document.paths['/customers/{sdt}']).toBeDefined();
     expect(document.paths['/customer-sources']).toBeDefined();
 
@@ -112,6 +113,44 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(schemas.UpdateCustomerRequestDto).toBeDefined();
     expect(schemas.CustomerResponseDto).toBeDefined();
     expect(schemas.CustomerSourceResponseDto).toBeDefined();
+    expect(schemas.CustomerLookupResponseDto).toBeDefined();
+    expect(schemas.CustomerListResponseDto).toBeDefined();
+  });
+
+  it('GET /customers trả ENVELOPE phân trang, KHÔNG phải mảng trần (đổi hợp đồng có chủ đích)', () => {
+    // Hợp đồng này ĐỔI ở story 3.4 (đóng LOW #5 của review 3.3). Rẻ vì chưa có consumer — nhưng
+    // "chưa có consumer" chỉ đúng một lần. Khẳng định tường minh để lần đổi sau ai cũng thấy.
+    const document = buildOpenApiDocument(app);
+    const schema = document.paths['/customers'].get?.responses?.['200'] as {
+      content?: Record<string, { schema?: { $ref?: string } }>;
+    };
+
+    expect(schema.content?.['application/json']?.schema?.$ref).toBe(
+      '#/components/schemas/CustomerListResponseDto',
+    );
+
+    const envelope = document.components?.schemas?.CustomerListResponseDto as {
+      required?: string[];
+    };
+    expect([...(envelope.required ?? [])].sort()).toEqual([
+      'items',
+      'page',
+      'pageSize',
+      'total',
+    ]);
+  });
+
+  it('CustomerLookupResponseDto khai đủ found/sdt/customer (FE điền sẵn form từ đây)', () => {
+    const document = buildOpenApiDocument(app);
+    const schema = document.components?.schemas?.CustomerLookupResponseDto as {
+      required?: string[];
+    };
+
+    expect([...(schema.required ?? [])].sort()).toEqual([
+      'customer',
+      'found',
+      'sdt',
+    ]);
   });
 
   it('CreateCustomerRequestDto đòi ĐÚNG 4 field định danh — không siết thêm', () => {
@@ -138,6 +177,7 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     const operations = [
       document.paths['/customers'].post,
       document.paths['/customers'].get,
+      document.paths['/customers/lookup'].get,
       document.paths['/customers/{sdt}'].get,
       document.paths['/customers/{sdt}'].patch,
       document.paths['/customer-sources'].get,
