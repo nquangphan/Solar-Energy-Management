@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AccountPermissionsService } from '../accounts/account-permissions.service';
+import { AuthenticatedOnly } from './authenticated-only.decorator';
 import {
   CurrentAccount,
   type AuthenticatedAccount,
@@ -17,8 +18,9 @@ import { MeResponseDto } from './dto/me-response.dto';
  * "Consistency Conventions: `/me` trả permission set"); KHÔNG vi phạm quy ước route danh
  * từ số nhiều.
  *
- * Endpoint CHỈ cần xác thực (KHÔNG `@RequirePermissions`): mọi phiên hợp lệ đọc được
- * quyền CỦA CHÍNH MÌNH. `JwtAuthGuard` toàn cục đã xác thực + gắn `request.account`.
+ * Endpoint CHỈ cần xác thực — khai tường minh bằng `@AuthenticatedOnly()`: mọi phiên hợp
+ * lệ đọc được quyền CỦA CHÍNH MÌNH. `JwtAuthGuard` toàn cục đã xác thực + gắn
+ * `request.account`.
  */
 @ApiTags('auth')
 @ApiBearerAuth()
@@ -27,6 +29,7 @@ export class MeController {
   constructor(private readonly accountPermissions: AccountPermissionsService) {}
 
   @Get('me')
+  @AuthenticatedOnly()
   @ApiOkResponse({
     type: MeResponseDto,
     description:

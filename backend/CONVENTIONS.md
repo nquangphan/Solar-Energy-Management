@@ -134,7 +134,7 @@ Ba route: `POST /auth/forgot-password` + `POST /auth/reset-password` (công khai
 - **Mã chưa tới tay người dùng:** chưa có kênh email/SMS; `NotificationDispatcher` bản đầu chỉ log. Luồng Quên mật khẩu chưa dùng được self-service.
 - **Cooldown mã reset KHÔNG atomic (đua):** `requestResetCode` là read-then-write (`findFirst(live)` → `create`), chưa có ràng buộc DB ⇒ N request `forgot-password` đồng thời cùng email có thể tạo N mã sống, làm yếu phòng thủ của mã 6 số (mỗi mã có trần attempt riêng). Trần-attempt và single-use *đã* atomic; chỉ cooldown thì chưa. **Cần fix khi mở kênh gửi mã** (cùng B-8): partial unique index `(account_id) WHERE consumed_at IS NULL` + xử lý P2002 như "đang có mã sống". Chưa khai thác được end-to-end vì mã chưa có kênh gửi.
 - **Audit ghi best-effort (có thể MẤT im lặng):** producer publish **sau** commit; `InProcessEventBus` cô lập + nuốt lỗi consumer ⇒ nếu `AuditService.record` throw (DB lỗi), thay đổi nghiệp vụ đã commit nhưng `AuditLog` không ghi, không ai quan sát được. Đúng cho notification, nhưng với audit append-only thì là trade-off Phase-1. Nếu audit cần mức compliance: ghi audit trong tx của producer, hoặc dead-letter để phát hiện mất.
-- **Authz cho route không khai `@RequirePermissions` = allow mọi user đã đăng nhập** (authn fail-closed, authz thì không). Chủ ý cho `/me`; nhưng route nghiệp vụ Epic 4+ **quên** khai quyền sẽ lộ cho mọi user. Cần source-guard "mọi handler không `@Public` phải có `@RequirePermissions`" trước khi thêm route nghiệp vụ.
+- ~~**Authz cho route không khai `@RequirePermissions` = allow mọi user đã đăng nhập**… Cần source-guard trước khi thêm route nghiệp vụ.~~ **ĐÃ TRẢ (Story 2.10):** `no-handler-without-require-permissions.spec.ts` bắt mọi handler thiếu khai báo. Runtime của `PermissionsGuard` **không đổi** (thiếu metadata quyền vẫn cho qua) — chặn nằm ở source-guard, nên handler ngoài `*.controller.ts` (WebSocket gateway, GraphQL resolver…) vẫn ngoài tầm quét; mở rộng guard khi có handler như vậy.
 - **Chưa có nút "Gửi lại mã":** đồng hồ "Gửi lại mã sau MM:SS" ở màn Quên mật khẩu hàm ý một affordance chưa nối (hoãn cùng kênh gửi mã).
 
 ## Guard quyền server-side — fail-closed toàn cục + `/me` (AD-4, Story 2.5)
@@ -151,6 +151,17 @@ Server là **ranh giới bảo mật DUY NHẤT**: backend enforce quyền **m�
 - **Quyền resolve TƯƠI mỗi request** qua `AccountPermissionsService.listForAccount` (AD-8) — KHÔNG suy quyền từ JWT claim/role. `JwtAuthGuard` kiểm `isActive` mỗi request ⇒ deactivate account có hiệu lực tức thì (không đợi hết TTL).
 - **`GET /me`** trả `{ id, email, displayName, permissions: string[] }` — `permissions` là effective set **sorted (tất định)**; contract chính tắc để FE (Story 2.6) dựng `PermissionSet`. Chỉ cần xác thực (mọi phiên đọc quyền CỦA MÌNH). `/me` là danh từ số ít ngoại lệ hạ-tầng (như `/health`).
 - **CẤM** để endpoint nghiệp vụ mới thiếu guard/`@RequirePermissions` — quên = mở toang. Thêm route domain: khai `@RequirePermissions(PERM.x)` cho quyền cần, dựa guard toàn cục lo xác thực.
+- **Mọi handler không `@Public` phải khai quyền tường minh** — `@RequirePermissions(...)` **hoặc** `@AuthenticatedOnly()`; source-guard `no-handler-without-require-permissions.spec.ts` enforce (Story 2.10). `@AuthenticatedOnly()` là marker `SetMetadata` thuần (KHÔNG đổi hành vi runtime) dùng cho route **self-service** đọc/sửa dữ liệu CỦA CHÍNH MÌNH (`GET /me`, `POST /auth/change-password`) — nó biến "chỉ cần phiên hợp lệ" thành **quyết định tuyên bố tại code site**, không phải "quên khai" im lặng. Route nghiệp vụ chạm dữ liệu người khác **KHÔNG** được dùng marker này.
+
+## Luật không-leo-thang quyền (FR-18, Story 2.10)
+
+Hai luật domain thuần (`accounts/domain/permission-escalation.ts`), enforce tại `AccountPermissionsService.setForAccount(actor, target, keys)` — **fail-closed, KHÔNG chạm DB khi từ chối** (403 `FORBIDDEN`):
+
+- **Luật #1 — không cấp quyền mình không có:** mọi key sắp ghi phải ⊆ effective set của **actor**.
+- **Luật #2 — không sửa account mang quyền mình không có:** effective set **HIỆN TẠI** của **target** phải ⊆ effective set của actor. Kiểm bộ *hiện tại* (không phải bộ mới) là điểm mấu chốt: gửi `keys = []` để "thu sạch" sẽ lọt luật #1, chỉ luật #2 chặn được.
+- **Hệ quả — "xoá Super Admin" bất khả:** `SUPER_ADMIN` mang `audit.read` + `system.feature_flags` mà `ADMIN` không có (`role-presets.ts`) ⇒ luật #2 chặn mọi thao tác của `ADMIN` lên account `SUPER_ADMIN`. Đừng thêm hai key đó vào `ADMIN_PRESET` — mất luôn lằn ranh (`permission-escalation.spec.ts` sẽ đỏ).
+- Quyền của actor **và** target resolve **tươi từ DB** mỗi lần gọi (AD-8) — KHÔNG nhận qua tham số/JWT claim; service là ranh giới bảo mật cuối.
+- Ghi thành công ⇒ publish `AccountPermissionsChanged` qua `EventBus` **sau commit** (AD-18); payload chỉ id + danh sách key (sorted), KHÔNG bí mật.
 
 ## Domain Event & EventBus (AD-18, Story 2.7)
 

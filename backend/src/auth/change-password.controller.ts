@@ -7,6 +7,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
+import { AuthenticatedOnly } from './authenticated-only.decorator';
 import { AuthService } from './auth.service';
 import {
   CurrentAccount,
@@ -22,9 +23,9 @@ import { ChangePasswordRequestDto } from './dto/change-password-request.dto';
  * cần xác thực vào đó là mở nó cho người chưa đăng nhập. Tách file là cách an toàn nhất —
  * KHÔNG nới guard, KHÔNG thêm `@Public()` cấp method.
  *
- * KHÔNG `@RequirePermissions`: đây là self-service, mọi phiên hợp lệ đổi được mật khẩu của
- * chính nó (giống `/me`). `JwtAuthGuard` toàn cục xác thực + gắn `request.account`; danh
- * tính lấy từ token qua `@CurrentAccount()`, KHÔNG từ body (AD-4).
+ * `@AuthenticatedOnly()` chứ không quyền cụ thể: đây là self-service, mọi phiên hợp lệ đổi
+ * được mật khẩu của chính nó (giống `/me`). `JwtAuthGuard` toàn cục xác thực + gắn
+ * `request.account`; danh tính lấy từ token qua `@CurrentAccount()`, KHÔNG từ body (AD-4).
  *
  * Controller KHÔNG dựng envelope lỗi: `AuthService` ném `AppException`, filter trung tâm
  * dựng envelope (AD-5).
@@ -36,6 +37,7 @@ export class ChangePasswordController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('change-password')
+  @AuthenticatedOnly()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({
     description:
