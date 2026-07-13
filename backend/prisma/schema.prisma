@@ -178,6 +178,63 @@ model FeatureFlag {
   @@map("feature_flags")
 }
 
+/// Nguồn khách — khách đến từ đâu (Facebook, Zalo, Đại lý…). Danh mục cấu hình được, seed 5
+/// dòng ở story này; CRUD + màn cấu hình thuộc Story 3.5 (KHÔNG tạo lại bảng này ở đó).
+///
+/// `isOther` = CỜ nhận biết nguồn "Khác" — luật "chọn Khác thì bắt buộc ghi rõ" (`sourceNote`)
+/// đọc CỜ này, KHÔNG so chuỗi `name === 'Khác'`: đổi tên hiển thị không được phép làm sập một
+/// luật nghiệp vụ. Đúng MỘT dòng mang cờ này.
+///
+/// `sortOrder` để form khách hiển thị theo thứ tự nghiệp vụ, không theo thứ tự chèn.
+model CustomerSource {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  active      Boolean    @default(true)
+  sortOrder   Int        @map("sort_order")
+  isOther     Boolean    @default(false) @map("is_other")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  customers   Customer[]
+
+  @@map("customer_sources")
+}
+
+/// Khách hàng (FR-29). KHOÁ CHÍNH là **SĐT đã chuẩn hoá E.164** (`+84…`) — ngoại lệ DUY NHẤT
+/// của quy ước "id UUID v4" (spine Conventions): một SĐT = một khách, trên toàn hệ thống.
+/// Chuẩn hoá xảy ra ở backend qua `customers/domain/phone.ts` TRƯỚC khi chạm DB (AD-9); PK ở
+/// đây vì vậy vừa là danh tính vừa là ràng buộc chống trùng — DB tự chặn, không phụ thuộc một
+/// câu `if` ở tầng app nhớ chạy.
+///
+/// Hai LOẠI khách dùng CHUNG một bảng, cột nullable theo loại: `name`/`address` có ở cả hai;
+/// `cccd` chỉ Cá nhân; `taxCode`/`bankAccount` chỉ Thương mại. Ràng buộc chéo-field (gửi
+/// `taxCode` cho khách Cá nhân ⇒ 400) enforce ở TẦNG APP — DB không biết loại khách.
+///
+/// `custType` lưu **String** + validate `@IsIn` ở tầng app, KHÔNG Postgres enum — nhất quán
+/// với `AccountPermission.permission`: registry evolve không cần migration enum.
+///
+/// `sourceId` BẮT BUỘC, không có mặc định: "khách này ở đâu ra" là câu hỏi nghiệp vụ phải trả
+/// lời lúc tạo, không phải thứ hệ thống đoán hộ. Story 4.1 sẽ SNAPSHOT giá trị này sang
+/// `Order.sourceId` lúc chốt đơn (khách quay lại qua kênh khác thì đơn cũ vẫn giữ kênh đã mang
+/// nó về) — nên ở đây nó luôn có giá trị để copy.
+model Customer {
+  sdt         String         @id
+  custType    String         @map("cust_type")
+  name        String
+  cccd        String?
+  taxCode     String?        @map("tax_code")
+  address     String?
+  bankAccount String?        @map("bank_account")
+  sourceId    String         @map("source_id")
+  source      CustomerSource @relation(fields: [sourceId], references: [id])
+  sourceNote  String?        @map("source_note")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  @@index([sourceId])
+  @@map("customers")
+}
+
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH
 /// của refresh token (KHÔNG lưu token thô). Logout/rotate set `revokedAt`.
 model Session {

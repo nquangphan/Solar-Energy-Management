@@ -99,6 +99,55 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     }
   });
 
+  it('spec chứa 3 route khách hàng + 4 schema Customer* (FE gen được client khách hàng, AD-12)', () => {
+    // Drift-guard byte-for-byte ở trên chỉ chứng minh spec KHỚP code — nó xanh y hệt nếu code
+    // quên hẳn một route. Hợp đồng CÓ MẶT là một khẳng định khác, và phải được viết ra.
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/customers']).toBeDefined();
+    expect(document.paths['/customers/{sdt}']).toBeDefined();
+    expect(document.paths['/customer-sources']).toBeDefined();
+
+    const schemas = document.components?.schemas ?? {};
+    expect(schemas.CreateCustomerRequestDto).toBeDefined();
+    expect(schemas.UpdateCustomerRequestDto).toBeDefined();
+    expect(schemas.CustomerResponseDto).toBeDefined();
+    expect(schemas.CustomerSourceResponseDto).toBeDefined();
+  });
+
+  it('CreateCustomerRequestDto đòi ĐÚNG 4 field định danh — không siết thêm', () => {
+    // Bộ field bắt buộc là một QUYẾT ĐỊNH có chủ đích: Story 3.4 tạo khách INLINE giữa lúc dựng
+    // báo giá, nên bắt gõ CCCD/MST lúc tạo sẽ giết chính luồng đó. Ai thêm một `@IsNotEmpty()`
+    // vào `cccd` sẽ đổi hợp đồng của 3.4 mà không hay — test này chặn đúng chỗ ấy.
+    const document = buildOpenApiDocument(app);
+    const schema = document.components?.schemas?.CreateCustomerRequestDto as {
+      required?: string[];
+    };
+
+    expect([...(schema.required ?? [])].sort()).toEqual([
+      'custType',
+      'name',
+      'sdt',
+      'sourceId',
+    ]);
+  });
+
+  it('MỌI route khách hàng đòi bearer — không route nào công khai (AD-4)', () => {
+    // Đây là danh bạ khách: SĐT, CCCD, MST, tài khoản ngân hàng. Một route quên guard là đường
+    // cho mọi người đã đăng nhập đọc trọn danh bạ. Spec là nơi cái quên đó lộ ra.
+    const document = buildOpenApiDocument(app);
+    const operations = [
+      document.paths['/customers'].post,
+      document.paths['/customers'].get,
+      document.paths['/customers/{sdt}'].get,
+      document.paths['/customers/{sdt}'].patch,
+      document.paths['/customer-sources'].get,
+    ];
+
+    for (const operation of operations) {
+      expect(operation?.security).toEqual([{ bearer: [] }]);
+    }
+  });
+
   it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
     // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
     // nào tham chiếu) — chứng minh `extraModels` hoạt động.

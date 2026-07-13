@@ -7,6 +7,7 @@ import { EventsModule } from './events/events.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { CustomersModule } from './customers/customers.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 
 /**
@@ -29,6 +30,10 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
  *
  * Story 3.2 — `FeatureFlagsModule`: cờ nghiệp vụ sống trên DB (AD-14), KHÔNG Remote Config.
  * `CatalogModule` import nó để gate giá phân tầng (FR-15).
+ *
+ * Story 3.3 — `CustomersModule`: Khách hàng (FR-29), SĐT chuẩn hoá E.164 làm khoá chính (AD-9).
+ * Nó KHÔNG import module nào: Prisma/Events là `@Global`, và không có quyền phụ nào cần resolve
+ * tại chỗ.
  */
 @Module({
   imports: [
@@ -41,6 +46,7 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
     NotificationsModule,
     FeatureFlagsModule,
     CatalogModule,
+    CustomersModule,
   ],
 })
 export class AppModule {}

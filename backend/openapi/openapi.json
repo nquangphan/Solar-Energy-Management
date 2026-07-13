@@ -792,6 +792,299 @@
           "catalog"
         ]
       }
+    },
+    "/customers": {
+      "post": {
+        "operationId": "CustomersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCustomerRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Khách hàng đã tạo. `sdt` trả về là chuỗi ĐÃ chuẩn hoá E.164.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SĐT không hợp lệ, thiếu/sai `sourceId`, thiếu `sourceNote` khi nguồn là \"Khác\", hoặc field lạc loại khách (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SĐT đã thuộc về một khách hàng khác (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      },
+      "get": {
+        "operationId": "CustomersController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customers/{sdt}": {
+      "get": {
+        "operationId": "CustomersController_findOne",
+        "parameters": [
+          {
+            "name": "sdt",
+            "required": true,
+            "in": "path",
+            "description": "SĐT — thô hay E.164 đều được; backend chuẩn hoá trước khi tra (AD-9).",
+            "schema": {
+              "example": "0912345678",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SĐT không hợp lệ (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có khách hàng với SĐT này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      },
+      "patch": {
+        "operationId": "CustomersController_update",
+        "parameters": [
+          {
+            "name": "sdt",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "example": "0912345678",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCustomerRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Khách hàng sau khi sửa. `sdt` KHÔNG sửa được qua đây.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body chứa `sdt` (bất biến), field lạc loại khách, `sourceId` không tồn tại, hoặc thiếu `sourceNote` khi nguồn mới là \"Khác\" (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có khách hàng với SĐT này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customer-sources": {
+      "get": {
+        "operationId": "CustomerSourcesController_findAll",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "true = trả cả nguồn đã ngừng dùng. Mặc định chỉ nguồn còn hiệu lực (dropdown khách mới).",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CustomerSourceResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu customers.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "customers"
+        ]
+      }
     }
   },
   "info": {
@@ -1319,6 +1612,208 @@
         },
         "required": [
           "prices"
+        ]
+      },
+      "CreateCustomerRequestDto": {
+        "type": "object",
+        "properties": {
+          "sdt": {
+            "type": "string",
+            "description": "SĐT dạng THÔ — backend tự chuẩn hoá về E.164 (`+84…`) và dùng làm khoá chính. Không hợp lệ ⇒ 400.",
+            "example": "0912 345 678"
+          },
+          "custType": {
+            "type": "string",
+            "description": "Loại khách — quyết định bộ trường hợp lệ.",
+            "enum": [
+              "CA_NHAN",
+              "THUONG_MAI"
+            ],
+            "example": "CA_NHAN"
+          },
+          "name": {
+            "type": "string",
+            "description": "Họ tên (Cá nhân) hoặc tên công ty (Thương mại).",
+            "example": "Nguyễn Văn A"
+          },
+          "cccd": {
+            "type": "object",
+            "description": "CCCD — CHỈ khách Cá nhân. Gửi kèm khách Thương mại ⇒ 400.",
+            "example": "079201001234"
+          },
+          "taxCode": {
+            "type": "object",
+            "description": "Mã số thuế — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.",
+            "example": "0312345678"
+          },
+          "address": {
+            "type": "object",
+            "description": "Địa chỉ — dùng cho cả hai loại khách.",
+            "example": "12 Nguyễn Huệ, Quận 1, TP.HCM"
+          },
+          "bankAccount": {
+            "type": "object",
+            "description": "Tài khoản ngân hàng — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.",
+            "example": "0071000123456 - Vietcombank"
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "Nguồn khách (id của CustomerSource) — BẮT BUỘC, không có mặc định. Trỏ tới nguồn không tồn tại ⇒ 400.",
+            "example": "5f4d3c2b-1a09-4e8d-9c7b-6a5f4e3d2c1b"
+          },
+          "sourceNote": {
+            "type": "object",
+            "description": "Ghi chú nguồn — BẮT BUỘC khi nguồn được chọn mang cờ `isOther` (thiếu ⇒ 400); optional với nguồn khác.",
+            "example": "Khách cũ giới thiệu"
+          }
+        },
+        "required": [
+          "sdt",
+          "custType",
+          "name",
+          "sourceId"
+        ]
+      },
+      "CustomerResponseDto": {
+        "type": "object",
+        "properties": {
+          "sdt": {
+            "type": "string",
+            "description": "SĐT đã chuẩn hoá E.164 — khoá chính của khách hàng.",
+            "example": "+84912345678"
+          },
+          "custType": {
+            "type": "string",
+            "description": "Loại khách: CA_NHAN | THUONG_MAI."
+          },
+          "name": {
+            "type": "string",
+            "description": "Họ tên hoặc tên công ty."
+          },
+          "cccd": {
+            "type": "string",
+            "nullable": true,
+            "description": "CCCD — chỉ khách Cá nhân; `null` với khách Thương mại."
+          },
+          "taxCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Mã số thuế — chỉ khách Thương mại; `null` với khách Cá nhân."
+          },
+          "address": {
+            "type": "string",
+            "nullable": true
+          },
+          "bankAccount": {
+            "type": "string",
+            "nullable": true,
+            "description": "Tài khoản ngân hàng — chỉ khách Thương mại."
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "Nguồn khách (id của CustomerSource)."
+          },
+          "sourceNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Ghi chú nguồn — bắt buộc khi nguồn mang cờ `isOther`."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sdt",
+          "custType",
+          "name",
+          "sourceId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateCustomerRequestDto": {
+        "type": "object",
+        "properties": {
+          "sdt": {
+            "type": "string",
+            "description": "KHÔNG gửi field này. SĐT là khoá chính, bất biến sau khi tạo — gửi kèm ⇒ 400 (không phải im lặng bỏ qua)."
+          },
+          "custType": {
+            "type": "string",
+            "description": "Loại khách.",
+            "enum": [
+              "CA_NHAN",
+              "THUONG_MAI"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Họ tên (Cá nhân) hoặc tên công ty (Thương mại)."
+          },
+          "cccd": {
+            "type": "object",
+            "description": "CCCD — CHỈ khách Cá nhân."
+          },
+          "taxCode": {
+            "type": "object",
+            "description": "Mã số thuế — CHỈ khách Thương mại."
+          },
+          "address": {
+            "type": "object",
+            "description": "Địa chỉ — dùng cho cả hai loại khách."
+          },
+          "bankAccount": {
+            "type": "object",
+            "description": "Tài khoản ngân hàng — CHỈ khách Thương mại."
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "Nguồn khách (id của CustomerSource). Trỏ tới nguồn không tồn tại ⇒ 400."
+          },
+          "sourceNote": {
+            "type": "object",
+            "description": "Ghi chú nguồn — BẮT BUỘC khi nguồn (mới hoặc đang có) mang cờ `isOther`."
+          }
+        }
+      },
+      "CustomerSourceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Facebook"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "active": {
+            "type": "boolean",
+            "description": "false = nguồn đã ngừng dùng."
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Thứ tự hiển thị trong form."
+          },
+          "isOther": {
+            "type": "boolean",
+            "description": "true = nguồn \"Khác\" ⇒ chọn nó thì `sourceNote` BẮT BUỘC. Đúng một dòng mang cờ này."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "active",
+          "sortOrder",
+          "isOther"
         ]
       }
     }

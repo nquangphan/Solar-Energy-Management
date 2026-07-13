@@ -3,6 +3,7 @@ import type { Product } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AppException } from '../common/errors/app.exception';
 import { ErrorCode } from '../common/errors/error-code';
+import { isUniqueViolation } from '../common/errors/prisma-unique-violation';
 import { EventBus } from '../events/event-bus';
 import {
   ProductCreated,
@@ -68,20 +69,6 @@ function snapshot(product: Product): ProductSnapshot {
     warrantyMonths: product.warrantyMonths,
     isActive: product.isActive,
   };
-}
-
-/**
- * Vi phạm UNIQUE của Prisma. Nhận diện bằng `code === 'P2002'` (duck-typing) thay vì
- * `instanceof PrismaClientKnownRequestError`: lỗi đi qua nhiều lớp adapter, và `instanceof`
- * sẽ âm thầm sai khi lỗi được tái tạo qua ranh giới module.
- */
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: unknown }).code === 'P2002'
-  );
 }
 
 @Injectable()
