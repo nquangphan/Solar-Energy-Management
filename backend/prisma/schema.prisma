@@ -100,6 +100,39 @@ model PasswordResetCode {
   @@map("password_reset_codes")
 }
 
+/// Vật tư trong danh mục (FR-14). Giá bán `price` và giá vốn `costPrice` là **Int đồng**
+/// (AD-10/AD-16) — KHÔNG Float/Decimal: tiền tính bằng số nguyên, làm tròn là quyết định
+/// nghiệp vụ tường minh, không phải nhiễu dấu phẩy động.
+///
+/// `costPrice` là giá vốn HIỆN HÀNH, KHÔNG phải snapshot: đơn đã chốt đóng băng giá riêng
+/// (`OrderLineItem.unitPriceSnapshot` lúc chốt, `costPriceSnapshot` lúc xuất kho — AD-20),
+/// nên sửa giá ở đây KHÔNG hồi tố đơn cũ. Đọc/ghi `costPrice` gate bởi quyền `costs.view`
+/// ở tầng app (AD-4) — DB không biết quyền.
+///
+/// Xoá = soft-delete (`isActive = false`), KHÔNG hard-delete: Epic 4 (`OrderLineItem`) và
+/// Epic 6 (`StockItem`) sẽ FK vào bảng này; xoá cứng sẽ mồ côi dòng đơn/tồn kho lịch sử.
+///
+/// `tracksStock` = có theo dõi tồn (pin/inverter = true; công lắp/phí vận chuyển = false).
+/// `priceEditable` = sale sửa được giá tại chỗ (phí lắp đặt = true; tấm pin = false —
+/// mặc định an toàn, vì sửa giá là cửa sau né duyệt chiết khấu).
+/// `warrantyMonths` nullable CÓ CHỦ ĐÍCH (công lắp không có bảo hành) — KHÔNG validate chặn null.
+model Product {
+  id             String   @id @default(uuid())
+  name           String
+  sku            String   @unique
+  unit           String
+  price          Int
+  costPrice      Int      @map("cost_price")
+  tracksStock    Boolean  @default(true) @map("tracks_stock")
+  priceEditable  Boolean  @default(false) @map("price_editable")
+  warrantyMonths Int?     @map("warranty_months")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("products")
+}
+
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH
 /// của refresh token (KHÔNG lưu token thô). Logout/rotate set `revokedAt`.
 model Session {

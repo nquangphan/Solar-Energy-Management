@@ -267,6 +267,283 @@
           "auth"
         ]
       }
+    },
+    "/products": {
+      "post": {
+        "operationId": "ProductsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sản phẩm đã tạo. `costPrice` chỉ có mặt nếu caller có costs.view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body không hợp lệ (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage; hoặc body có `costPrice` mà thiếu costs.view (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "get": {
+        "operationId": "ProductsController_findAll",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "true = trả cả sản phẩm đã ẩn (soft-delete). Mặc định chỉ sản phẩm còn hiệu lực.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "operationId": "ProductsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "patch": {
+        "operationId": "ProductsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sản phẩm sau khi sửa. Sửa giá KHÔNG hồi tố đơn đã chốt (đơn giữ giá snapshot riêng).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body không hợp lệ (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu catalog.manage; hoặc body có `costPrice` mà thiếu costs.view (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "delete": {
+        "operationId": "ProductsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Sản phẩm đã bị ẩn khỏi danh mục (soft-delete, không xoá bản ghi)."
+          },
+          "403": {
+            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có sản phẩm với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
     }
   },
   "info": {
@@ -544,6 +821,160 @@
           "displayName",
           "permissions"
         ]
+      },
+      "CreateProductRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên vật tư.",
+            "example": "Tấm pin JA Solar 580W"
+          },
+          "sku": {
+            "type": "string",
+            "description": "Mã vật tư — duy nhất.",
+            "example": "JAS-580-M10"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Đơn vị tính.",
+            "example": "tấm"
+          },
+          "price": {
+            "type": "number",
+            "description": "Giá bán — số nguyên ĐỒNG (không thập phân).",
+            "example": 2450000
+          },
+          "costPrice": {
+            "type": "number",
+            "description": "Giá vốn — số nguyên ĐỒNG. Ghi được CHỈ khi có quyền costs.view; thiếu quyền mà gửi field này ⇒ 403. Bỏ trống ⇒ 0 (từ Story 6.3 hệ thống tự cập nhật bằng bình quân gia quyền khi nhập kho).",
+            "example": 1950000
+          },
+          "tracksStock": {
+            "type": "boolean",
+            "description": "Có theo dõi tồn kho không (pin/inverter = true; công lắp, phí vận chuyển = false).",
+            "default": true
+          },
+          "priceEditable": {
+            "type": "boolean",
+            "description": "Cho phép sửa giá tại chỗ lúc lập báo giá (phí lắp đặt = true; tấm pin = false).",
+            "default": false
+          },
+          "warrantyMonths": {
+            "type": "object",
+            "description": "Bảo hành mặc định, tính bằng THÁNG. Bỏ trống/null = không bảo hành (công lắp, phí lắp đặt) — đây là giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.",
+            "example": 144
+          }
+        },
+        "required": [
+          "name",
+          "sku",
+          "unit",
+          "price"
+        ]
+      },
+      "ProductResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "price": {
+            "type": "number",
+            "description": "Giá bán — số nguyên ĐỒNG."
+          },
+          "costPrice": {
+            "type": "number",
+            "description": "Giá vốn — số nguyên ĐỒNG. CHỈ có mặt khi caller mang quyền costs.view; thiếu quyền ⇒ field bị loại khỏi payload (không phải 0, không phải null)."
+          },
+          "tracksStock": {
+            "type": "boolean"
+          },
+          "priceEditable": {
+            "type": "boolean"
+          },
+          "warrantyMonths": {
+            "type": "number",
+            "nullable": true,
+            "description": "Bảo hành mặc định (tháng). `null` = không bảo hành (hợp lệ)."
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = đã ẩn khỏi danh mục (soft-delete)."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "sku",
+          "unit",
+          "price",
+          "tracksStock",
+          "priceEditable",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateProductRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên vật tư.",
+            "example": "Tấm pin JA Solar 580W"
+          },
+          "sku": {
+            "type": "string",
+            "description": "Mã vật tư — duy nhất.",
+            "example": "JAS-580-M10"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Đơn vị tính.",
+            "example": "tấm"
+          },
+          "price": {
+            "type": "number",
+            "description": "Giá bán — số nguyên ĐỒNG (không thập phân).",
+            "example": 2450000
+          },
+          "costPrice": {
+            "type": "number",
+            "description": "Giá vốn — số nguyên ĐỒNG. Ghi được CHỈ khi có quyền costs.view; thiếu quyền mà gửi field này ⇒ 403.",
+            "example": 1950000
+          },
+          "tracksStock": {
+            "type": "boolean",
+            "description": "Có theo dõi tồn kho không (pin/inverter = true; công lắp, phí vận chuyển = false)."
+          },
+          "priceEditable": {
+            "type": "boolean",
+            "description": "Cho phép sửa giá tại chỗ lúc lập báo giá (phí lắp đặt = true; tấm pin = false)."
+          },
+          "warrantyMonths": {
+            "type": "object",
+            "description": "Bảo hành mặc định, tính bằng THÁNG. `null` = không bảo hành (công lắp, phí lắp đặt) — giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.",
+            "example": 144
+          }
+        }
       }
     }
   }

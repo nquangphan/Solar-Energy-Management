@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { EventsModule } from './events/events.module';
 import { AuditModule } from './audit/audit.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 /**
  * Root module.
@@ -21,6 +22,9 @@ import { NotificationsModule } from './notifications/notifications.module';
  * append-only, AD-8) và `NotificationsModule` (`NotificationDispatcher` no-op/log; Epic 9
  * thay bằng FCM không mở lại code). Producer (E4+) publish qua port, KHÔNG gọi
  * audit/notification trực tiếp (source-guard `no-direct-side-effect-outside-eventbus`).
+ *
+ * Story 3.1 — `CatalogModule`: danh mục vật tư & giá (FR-14), module domain đầu tiên có
+ * route nghiệp vụ thật. Nó tự import `AccountsModule` (resolve `costs.view` để che giá vốn).
  */
 @Module({
   imports: [
@@ -31,6 +35,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     EventsModule,
     AuditModule,
     NotificationsModule,
+    CatalogModule,
   ],
 })
 export class AppModule {}
