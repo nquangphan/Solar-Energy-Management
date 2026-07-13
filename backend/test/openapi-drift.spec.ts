@@ -234,6 +234,79 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     }
   });
 
+  it('spec chứa 7 operation gói vật tư + 6 DTO (picker báo giá gen được client từ đây)', () => {
+    // Drift-guard byte-for-byte chỉ chứng minh spec KHỚP code; nó xanh y hệt nếu code quên hẳn
+    // một route. Hợp đồng CÓ MẶT là khẳng định khác — bài học lặp lại từ 3.2/3.3/3.4/3.5.
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/product-groups'].get).toBeDefined();
+    expect(document.paths['/product-groups'].post).toBeDefined();
+    expect(document.paths['/product-groups/{id}'].get).toBeDefined();
+    expect(document.paths['/product-groups/{id}'].patch).toBeDefined();
+    expect(document.paths['/product-groups/{id}'].delete).toBeDefined();
+    expect(
+      document.paths['/product-groups/{id}/reactivate'].post,
+    ).toBeDefined();
+    expect(document.paths['/product-groups/{id}/items'].put).toBeDefined();
+
+    const schemas = document.components?.schemas ?? {};
+    expect(schemas.CreateProductGroupRequestDto).toBeDefined();
+    expect(schemas.UpdateProductGroupRequestDto).toBeDefined();
+    expect(schemas.ReplaceProductGroupItemsRequestDto).toBeDefined();
+    expect(schemas.ProductGroupResponseDto).toBeDefined();
+    expect(schemas.ProductGroupDetailResponseDto).toBeDefined();
+    expect(schemas.ProductGroupItemResponseDto).toBeDefined();
+  });
+
+  it('🔴 KHÔNG DTO nào của gói vật tư phơi `costPrice` — giá vốn không có cửa mới nào để rời server', () => {
+    // Đường `/products` gác giá vốn sau quyền `costs.view`. Gói là một CỬA MỚI vào cùng dữ liệu
+    // sản phẩm, nên HỢP ĐỒNG CÔNG KHAI của nó phải nói rõ: gói không bao giờ mang giá vốn.
+    //
+    // ⚠️ Ca này canh HỢP ĐỒNG (file DTO), KHÔNG canh service. Dự án không có
+    // `ClassSerializerInterceptor`, và controller ép kiểu object của service sang DTO — nên nếu ai
+    // đổi `select` thành `include: { product: true }` mà không đụng file DTO, spec vẫn sạch và ca
+    // này vẫn XANH. Cái rò TRÊN DÂY do e2e (`GET /product-groups/:id`, fixture có `costPrice`) và
+    // lane DB (Postgres thật, cột có giá trị) canh. Ba lớp, ba chỗ khác nhau — đừng nhầm lớp.
+    const document = buildOpenApiDocument(app);
+    const schemas = document.components?.schemas ?? {};
+
+    for (const name of [
+      'ProductGroupResponseDto',
+      'ProductGroupDetailResponseDto',
+      'ProductGroupItemResponseDto',
+    ]) {
+      expect(JSON.stringify(schemas[name])).not.toMatch(/costPrice/);
+    }
+
+    // Và DTO ghi không phơi `isActive`: tắt/bật đi route riêng, không qua POST/PATCH tuỳ tiện.
+    for (const name of [
+      'CreateProductGroupRequestDto',
+      'UpdateProductGroupRequestDto',
+    ]) {
+      const props = Object.keys(
+        (schemas[name] as { properties?: Record<string, unknown> })
+          .properties ?? {},
+      );
+      expect(props).not.toContain('isActive');
+    }
+  });
+
+  it('MỌI operation gói vật tư đòi bearer — không route nào công khai (AD-4)', () => {
+    const document = buildOpenApiDocument(app);
+    const operations = [
+      document.paths['/product-groups'].get,
+      document.paths['/product-groups'].post,
+      document.paths['/product-groups/{id}'].get,
+      document.paths['/product-groups/{id}'].patch,
+      document.paths['/product-groups/{id}'].delete,
+      document.paths['/product-groups/{id}/reactivate'].post,
+      document.paths['/product-groups/{id}/items'].put,
+    ];
+
+    for (const operation of operations) {
+      expect(operation?.security).toEqual([{ bearer: [] }]);
+    }
+  });
+
   it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
     // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
     // nào tham chiếu) — chứng minh `extraModels` hoạt động.

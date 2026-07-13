@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-13 (story 3.5 review)
+last_updated: 2026-07-13 (story 3.6 → review)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   3-3-crud-khach-hang-sdt-e-164-khoa-chinh-chan-trung: done
   3-4-tra-sdt-chon-tao-khach-inline-man-danh-sach-chi-tiet-khach: done
   3-5-danh-muc-nguon-khach-man-cau-hinh: done
-  3-6-goi-vat-tu-checklist-product-group: backlog
+  3-6-goi-vat-tu-checklist-product-group: done
   epic-3-retrospective: optional
   epic-4: backlog
   4-1-tao-don-dung-gio-hang-order-orderversion-orderlineitem: backlog

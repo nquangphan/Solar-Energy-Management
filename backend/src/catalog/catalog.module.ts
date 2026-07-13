@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { AccountsModule } from '../accounts/accounts.module';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
+import { ProductGroupsController } from './product-groups.controller';
+import { ProductGroupsService } from './product-groups.service';
 import { ProductPricesController } from './product-prices.controller';
 import { ProductPricesService } from './product-prices.service';
 import { ProductsController } from './products.controller';
@@ -10,8 +12,8 @@ import { ProductsService } from './products.service';
  * Danh mục vật tư & giá (FR-14/FR-15) — module domain đầu tiên của Epic 3.
  *
  * Tên thư mục là `catalog/` (ranh giới domain) còn route là `/products` (tài nguyên REST,
- * danh từ số nhiều theo CONVENTIONS) — KHÔNG mâu thuẫn: `ProductPrice` (Story 3.2) và
- * `ProductGroup` (Story 3.6) sẽ về CÙNG module này.
+ * danh từ số nhiều theo CONVENTIONS) — KHÔNG mâu thuẫn: `ProductPrice` và `ProductGroup` (gói
+ * vật tư) ở CÙNG module này, mỗi cái một cặp controller+service.
  *
  * `imports`:
  *  - `AccountsModule` — `AccountPermissionsService` để controller resolve `costs.view` tươi mỗi
@@ -24,7 +26,11 @@ import { ProductsService } from './products.service';
  */
 @Module({
   imports: [AccountsModule, FeatureFlagsModule],
-  controllers: [ProductsController, ProductPricesController],
-  providers: [ProductsService, ProductPricesService],
+  controllers: [
+    ProductsController,
+    ProductPricesController,
+    ProductGroupsController,
+  ],
+  providers: [ProductsService, ProductPricesService, ProductGroupsService],
 })
 export class CatalogModule {}

@@ -793,6 +793,438 @@
         ]
       }
     },
+    "/product-groups": {
+      "get": {
+        "operationId": "ProductGroupsController_findAll",
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "required": false,
+            "in": "query",
+            "description": "true = trả cả gói đã rút khỏi picker. Mặc định chỉ gói còn hiệu lực.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách GỌN — không kèm món. Món ở GET /product-groups/:id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProductGroupResponseDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "operationId": "ProductGroupsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProductGroupRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gói mới — luôn `isActive: true`, và RỖNG (chưa có món nào).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thiếu/sai `name` (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Tên gói đã có trong danh mục (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/product-groups/{id}/reactivate": {
+      "post": {
+        "operationId": "ProductGroupsController_reactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id gói vật tư.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gói đã bật lại (`isActive: true`). Món con còn nguyên.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có gói nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/product-groups/{id}/items": {
+      "put": {
+        "operationId": "ProductGroupsController_replaceItems",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id gói vật tư.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceProductGroupItemsRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gói kèm checklist MỚI. Danh sách cũ đã bị thay sạch (nguyên tử).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupDetailResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Sản phẩm lặp trong payload, hoặc `productId` không tồn tại (VALIDATION_ERROR) — kèm `fieldErrors`. KHÔNG có gì được ghi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có gói nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/product-groups/{id}": {
+      "get": {
+        "operationId": "ProductGroupsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id gói vật tư.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gói kèm các món, sắp theo displayOrder tăng dần. Món là PROJECTION HẸP của sản phẩm — không có giá vốn.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupDetailResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có gói nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "patch": {
+        "operationId": "ProductGroupsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id gói vật tư.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProductGroupRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gói sau khi sửa. Không cột nào đổi giá trị ⇒ KHÔNG ghi DB và KHÔNG ghi nhật ký.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductGroupResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`name` là `null` hoặc rỗng (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có gói nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Tên mới trùng một gói khác (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      },
+      "delete": {
+        "operationId": "ProductGroupsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Id gói vật tư.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Gói đã rút khỏi picker (`isActive: false`, soft-delete). Món con còn nguyên, bật lại là dùng được."
+          },
+          "403": {
+            "description": "Thiếu quyền sửa danh mục (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có gói nào mang id đó (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/customers": {
       "post": {
         "operationId": "CustomersController_create",
@@ -1987,6 +2419,180 @@
         "required": [
           "prices"
         ]
+      },
+      "ProductGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Gói Hybrid 8kW"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = gói đã rút khỏi picker (soft-delete)."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateProductGroupRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên gói — duy nhất trong danh mục (trùng ⇒ 409).",
+            "example": "Gói Hybrid 8kW"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả cho người dựng báo giá.",
+            "example": "Trọn bộ hybrid 8kW cho nhà phố, gồm pin + inverter + phụ kiện."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ReplaceProductGroupItemsRequestDto": {
+        "type": "object",
+        "properties": {
+          "productIds": {
+            "maxItems": 200,
+            "description": "Danh sách sản phẩm con MỚI, thay thế toàn bộ danh sách cũ. THỨ TỰ MẢNG là thứ tự hiện trên checklist. Mảng rỗng = gói không có món nào (hợp lệ).",
+            "example": [
+              "3b1f0c9a-5d2e-4a7b-8c6d-9e0f1a2b3c4d",
+              "7e6d5c4b-3a2f-4b1e-9d8c-0a1b2c3d4e5f"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "productIds"
+        ]
+      },
+      "ProductGroupItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Tấm pin JA Solar 580W"
+          },
+          "sku": {
+            "type": "string",
+            "example": "JAS-580-M10"
+          },
+          "unit": {
+            "type": "string",
+            "example": "tấm"
+          },
+          "price": {
+            "type": "number",
+            "description": "Giá bán — số nguyên ĐỒNG.",
+            "example": 2450000
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = sản phẩm đã ẩn khỏi danh mục. Món vẫn nằm trong gói (nó bị tắt SAU khi được thêm) — picker phải làm mờ / bỏ tick."
+          },
+          "displayOrder": {
+            "type": "number",
+            "description": "Thứ tự hiện trên checklist (server gán)."
+          }
+        },
+        "required": [
+          "productId",
+          "name",
+          "sku",
+          "unit",
+          "price",
+          "isActive",
+          "displayOrder"
+        ]
+      },
+      "ProductGroupDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Gói Hybrid 8kW"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = gói đã rút khỏi picker (soft-delete)."
+          },
+          "items": {
+            "description": "Các món trong gói, sắp theo displayOrder tăng dần. Rỗng = gói chưa có món nào (hợp lệ).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductGroupItemResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "isActive",
+          "items",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "UpdateProductGroupRequestDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên gói mới — vẫn phải DUY NHẤT (trùng gói khác ⇒ 409).",
+            "example": "Gói Hybrid 10kW"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả gói. Gửi `null` để XOÁ mô tả (cột nullable).",
+            "example": "Trọn bộ hybrid 10kW cho nhà phố.",
+            "nullable": true
+          }
+        }
       },
       "CreateCustomerRequestDto": {
         "type": "object",
