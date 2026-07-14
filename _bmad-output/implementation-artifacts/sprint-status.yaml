@@ -57,7 +57,7 @@ development_status:
   3-4-tra-sdt-chon-tao-khach-inline-man-danh-sach-chi-tiet-khach: done
   3-5-danh-muc-nguon-khach-man-cau-hinh: done
   3-6-goi-vat-tu-checklist-product-group: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
   epic-4: backlog
   4-1-tao-don-dung-gio-hang-order-orderversion-orderlineitem: backlog
   4-2-xem-truoc-tong-realtime-qua-post-orders-preview-total: backlog
@@ -137,11 +137,11 @@ action_items:
   - epic: 2
     action: "Dựng Postgres + chạy prisma migrate deploy 5 migration trên DB rỗng + prisma db seed; /health ping DB thật"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 2
     action: "Thêm lane integration test cần DB (skip khi vắng DB): login-refresh-logout, unique constraint account_permissions, reset-password end-to-end"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
   - epic: 2
     action: "Quyết định sản phẩm: kênh gửi mã đặt lại mật khẩu (admin đặt hộ / SMTP / SMS) — tính năng đã code nhưng mã chưa tới tay người dùng"
     owner: "Đại Ca (Project Lead)"
