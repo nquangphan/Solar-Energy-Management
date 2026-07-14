@@ -308,5 +308,35 @@ void main() {
       expect(find.text('Nguyễn Văn A'), findsOneWidget);
       expect(find.text('Công ty TNHH Hoà Phát'), findsNothing);
     });
+
+    testWidgets(
+        'pages through a result set larger than one page — Trước/Sau + Trang X/Y (C-9)',
+        (WidgetTester tester) async {
+      // 25 customers, pageSize defaults to 20 ⇒ two pages. The backend slices;
+      // the screen only asks for a page and renders what it is handed.
+      final List<Customer> many = List<Customer>.generate(
+        25,
+        (int i) => Customer(
+          sdt: '+8490300${(i + 10).toString().padLeft(4, '0')}',
+          custType: 'CA_NHAN',
+          name: 'Khách số $i',
+          sourceId: 'src-fb',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        ),
+      );
+      await tester.pumpWidget(
+          _host(CustomerListScreen(port: FakeCustomersPort(customers: many))));
+      await tester.pumpAndSettle();
+
+      // Page 1 of 2: 20 rows, the indicator, and both controls.
+      expect(find.text('Trang 1/2'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Xem'), findsNWidgets(20));
+
+      // Advancing asks the backend for page 2, which returns the 5-row tail.
+      await _tap(tester, 'Sau');
+      expect(find.text('Trang 2/2'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Xem'), findsNWidgets(5));
+    });
   });
 }

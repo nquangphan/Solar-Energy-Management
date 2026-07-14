@@ -59,6 +59,11 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
   const [q, setQ] = useState('');
   const [custType, setCustType] = useState<string>(ALL);
   const [items, setItems] = useState<Customer[]>([]);
+  // The backend owns the count and the slicing (AD-1): the screen holds only the
+  // page it asked for and the total it was told, and never counts rows itself.
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
   const [state, setState] = useState<LoadState>('loading');
 
   // Every keystroke starts a query, and the answers do not necessarily come back in
@@ -73,22 +78,40 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
     try {
       // The query goes to the backend untouched — `0903` is matched there against
       // the E.164 key, which is a thing only the backend knows how to do (AD-9).
-      const page = await port.list({
+      const result = await port.list({
         q: q === '' ? undefined : q,
         custType: custType === ALL ? undefined : custType,
+        page,
       });
       if (ticket !== latest.current) return;
-      setItems(page.items);
+      setItems(result.items);
+      setTotal(result.total);
+      setPageSize(result.pageSize);
       setState('ready');
     } catch {
       if (ticket !== latest.current) return;
       setState('error');
     }
-  }, [port, q, custType]);
+  }, [port, q, custType, page]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Any change to the query or filter invalidates the page number — page 3 of the
+  // old result set is meaningless against the new one, so every filter change
+  // returns to page 1.
+  const onSearch = (value: string) => {
+    setQ(value);
+    setPage(1);
+  };
+  const onFilter = (key: string) => {
+    setCustType(key);
+    setPage(1);
+  };
+
+  const searching = q !== '' || custType !== ALL;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <WebShell
@@ -101,9 +124,9 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
           <SearchField
             placeholder="Tìm theo SĐT hoặc tên khách…"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => onSearch(e.target.value)}
           />
-          <Seg options={FILTER_OPTIONS} activeKey={custType} onSelect={setCustType} />
+          <Seg options={FILTER_OPTIONS} activeKey={custType} onSelect={onFilter} />
           <Button variant="primary" type="button" onClick={onAdd}>
             + Thêm khách
           </Button>
@@ -120,7 +143,17 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
           <ErrorState message="Không tải được danh sách khách hàng." onRetry={load} retryLabel="Thử lại" />
         )}
 
-        {state === 'ready' && items.length === 0 && (
+        {/* A filtered view that comes back empty is NOT the same as an empty book:
+            the fix is to change the search, not to add the first customer. Two
+            different truths ⇒ two different empty states. */}
+        {state === 'ready' && items.length === 0 && searching && (
+          <EmptyState
+            title="Không có khách phù hợp"
+            message="Thử đổi từ khoá hoặc bỏ bớt bộ lọc."
+          />
+        )}
+
+        {state === 'ready' && items.length === 0 && !searching && (
           <EmptyState
             title="Chưa có khách hàng nào"
             message="Thêm khách đầu tiên để bắt đầu tạo báo giá."
@@ -159,6 +192,35 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
               ))}
             </tbody>
           </Table>
+        )}
+
+        {/* The pager only exists when there IS a second page — one page of results
+            needs no controls. Prev/Sau disable at the ends; the backend caps
+            pageSize so `totalPages` is always honest. */}
+        {state === 'ready' && items.length > 0 && totalPages > 1 && (
+          <div className="cust-pager">
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Trước
+            </Button>
+            <span className="cust-pager-label">
+              Trang {page}/{totalPages}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Sau
+            </Button>
+          </div>
         )}
       </div>
     </WebShell>

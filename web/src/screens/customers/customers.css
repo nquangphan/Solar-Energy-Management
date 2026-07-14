@@ -135,3 +135,18 @@
   font-weight: 600;
   color: var(--muted);
 }
+
+.cust-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+  padding-top: var(--space-8);
+}
+
+.cust-pager-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}

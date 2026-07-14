@@ -52,6 +52,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   String _custType = _kAll;
   List<Customer> _items = const [];
+  // The backend owns the count and the slicing (AD-1): the screen holds only the
+  // page it asked for and the total it was told, and never counts rows itself.
+  int _page = 1;
+  int _total = 0;
+  int _pageSize = 20;
   _LoadState _state = _LoadState.loading;
 
   /// Every keystroke starts a query, and the answers do not necessarily come back in
@@ -81,16 +86,32 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       final CustomerPage page = await widget.port.list(
         q: _q.text.isEmpty ? null : _q.text,
         custType: _custType == _kAll ? null : _custType,
+        page: _page,
       );
       if (!mounted || ticket != _latest) return;
       setState(() {
         _items = page.items;
+        _total = page.total;
+        _pageSize = page.pageSize;
         _state = _LoadState.ready;
       });
     } catch (_) {
       if (!mounted || ticket != _latest) return;
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  /// Any change to the query or filter invalidates the page number — page 3 of the
+  /// old result set is meaningless against the new one, so every filter change
+  /// returns to page 1.
+  void _reloadFromFirstPage() {
+    _page = 1;
+    _load();
+  }
+
+  void _goToPage(int p) {
+    _page = p;
+    _load();
   }
 
   @override
@@ -106,7 +127,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               controller: _q,
               size: AppFieldSize.large,
               placeholder: 'Tìm theo SĐT hoặc tên khách…',
-              onChanged: (_) => _load(),
+              onChanged: (_) => _reloadFromFirstPage(),
             ),
             const SizedBox(height: AppTokens.space8),
             _filters(),
@@ -122,8 +143,49 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             // SingleChildScrollView, so the height here is unbounded and a flex child
             // has nothing to divide — it throws instead of rendering.
             _body(),
+            _pager(),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Prev/next pager, byte-identical copy with the web twin. Only exists when there
+  /// IS a second page; the buttons disable at the ends by passing a null onPressed.
+  Widget _pager() {
+    if (_state != _LoadState.ready || _items.isEmpty) return const SizedBox.shrink();
+    final int totalPages = _total <= 0 ? 1 : (_total + _pageSize - 1) ~/ _pageSize;
+    if (totalPages <= 1) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: AppTokens.space16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          AppButton(
+            variant: AppButtonVariant.ghost,
+            size: AppButtonSize.sm,
+            label: 'Trước',
+            onPressed: _page <= 1 ? null : () => _goToPage(_page - 1),
+          ),
+          const SizedBox(width: AppTokens.space8),
+          Text(
+            'Trang $_page/$totalPages',
+            style: const TextStyle(
+              color: AppTokens.muted,
+              fontFamily: AppTokens.fontFamily,
+              fontSize: 13.0,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(width: AppTokens.space8),
+          AppButton(
+            variant: AppButtonVariant.ghost,
+            size: AppButtonSize.sm,
+            label: 'Sau',
+            onPressed: _page >= totalPages ? null : () => _goToPage(_page + 1),
+          ),
+        ],
       ),
     );
   }
@@ -146,7 +208,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               label: option[1],
               onPressed: () {
                 setState(() => _custType = option[0]);
-                _load();
+                _reloadFromFirstPage();
               },
             ),
           ),
@@ -183,6 +245,15 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         );
       case _LoadState.ready:
         if (_items.isEmpty) {
+          // A filtered view that comes back empty is NOT the same as an empty book:
+          // the fix is to change the search, not to add the first customer.
+          final bool searching = _q.text.isNotEmpty || _custType != _kAll;
+          if (searching) {
+            return const AppEmptyState(
+              title: 'Không có khách phù hợp',
+              message: 'Thử đổi từ khoá hoặc bỏ bớt bộ lọc.',
+            );
+          }
           return AppEmptyState(
             title: 'Chưa có khách hàng nào',
             message: 'Thêm khách đầu tiên để bắt đầu tạo báo giá.',

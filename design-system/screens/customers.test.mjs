@@ -178,6 +178,11 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Thêm khách đầu tiên để bắt đầu tạo báo giá.',
     'Không tải được danh sách khách hàng.',
     'Thử lại',
+    // pagination + search-empty (C-9)
+    'Trước',
+    'Sau',
+    'Không có khách phù hợp',
+    'Thử đổi từ khoá hoặc bỏ bớt bộ lọc.',
     // lookup
     'Tra cứu theo số điện thoại',
     'Khách cũ — trùng khớp',
@@ -221,6 +226,24 @@ test('the empty phone lookup offers the way forward, and never says "Không tìm
       `${name} pick screen must not use the forbidden dead-end copy (EXPERIENCE.md §Voice and Tone)`,
     );
   }
+});
+
+// (e.3) PAGINATION (C-9): the list pages through the BACKEND result set. It sends a
+// page number to the port (never slices in memory), shows a byte-identical
+// "Trang X/Y" indicator with Trước/Sau controls, and resets to page 1 on any new
+// search or filter — page 3 of a stale query is meaningless. The search-empty state
+// is separate from "no customers yet" (asserted in the byte-identical label list above).
+test('the list screen paginates through the backend, never in memory (C-9)', () => {
+  for (const [name, src] of [['web', web.list], ['mobile', mobile.list]]) {
+    assert.ok(src.includes('Trang '), `${name} list must render the "Trang X/Y" page indicator`);
+    assert.ok(src.includes('Trước') && src.includes('Sau'), `${name} list must render the Trước/Sau controls`);
+  }
+  // The page number is sent to the backend — the client does not paginate in memory (AD-1).
+  assert.match(stripTsx(web.list), /port\.list\(\{[\s\S]*?\bpage\b[\s\S]*?\}\)/, 'web list must send `page` to port.list');
+  assert.match(stripDart(mobile.list), /port\.list\([\s\S]*?page:\s*_page/, 'mobile list must send `page:` to port.list');
+  // A new search or filter must return to page 1.
+  assert.match(stripTsx(web.list), /setPage\(1\)/, 'web list must reset to page 1 on a new search/filter');
+  assert.match(stripDart(mobile.list), /_page = 1/, 'mobile list must reset to page 1 on a new search/filter');
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).

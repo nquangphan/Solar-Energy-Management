@@ -175,3 +175,8 @@ action_items:
     action: "Đánh giá rate-limit IP cho 3 endpoint công khai (login, forgot-password, reset-password)"
     owner: "Amelia (Dev)"
     status: open
+  - epic: 3
+    action: "Nối phân trang vào 2 màn Danh sách khách (backend đã có page/total); chuỗi VN cho điều khiển trang + search-empty riêng"
+    owner: "Amelia (Dev) + Đại Ca (copy)"
+    status: done
+    resolution: "C-9: cả hai nền tảng gửi `page` tới port (không phân trang trong bộ nhớ), footer 'Trước / Trang X/Y / Sau' (disable ở hai đầu), reset về trang 1 khi đổi tìm kiếm/lọc; tách state search-empty ('Không có khách phù hợp') khỏi 'Chưa có khách hàng nào'. Copy áp mặc định idiomatic (Đại Ca có thể veto). Guard customers.test.mjs +1 test; widget test mobile +1 (2 trang). design-system 251/251, mobile 14/14, flutter analyze sạch."
