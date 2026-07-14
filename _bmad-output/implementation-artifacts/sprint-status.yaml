@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-13 (story 3.6 → review)
+last_updated: 2026-07-14 (retro Epic 3 → action items C-4/C-10/C-11/C-12 closed)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -117,7 +117,8 @@ action_items:
   - epic: 1
     action: "Cải thiện drift-guard: strip/loại comment trước khi assert để triệt false-positive tái diễn (6 story)"
     owner: "Amelia (Dev)"
-    status: in-progress
+    status: done
+    resolution: "Helper dùng chung design-system/lib/strip-comments.mjs; 6 guard strip comment trước khi scan chuỗi cấm. Mutation-verified. Commit efe829c."
   - epic: 1
     action: "Đưa web tooling (tsc + bundler + test runtime) vào scope Story 2.1; typecheck toàn bộ .tsx tích luỹ từ Epic 1"
     owner: "Winston (Architect) + Amelia"
@@ -145,15 +146,18 @@ action_items:
   - epic: 2
     action: "Quyết định sản phẩm: kênh gửi mã đặt lại mật khẩu (admin đặt hộ / SMTP / SMS) — tính năng đã code nhưng mã chưa tới tay người dùng"
     owner: "Đại Ca (Project Lead)"
-    status: open
+    status: decided
+    resolution: "C-10: áp mặc định tuyên bố trước trong retro Epic 3 (im lặng ⇒ mặc định thành quyết định) — Phase 1 dùng 'admin đặt lại hộ'. Seam EventBus (PasswordResetRequested) giữ nguyên; KHÔNG thêm dep SMTP/SMS ở Phase 1. Mở lại khi có kênh gửi thật (Epic 9 FCM hoặc tích hợp email)."
   - epic: 2
     action: "Quyết TD-1: tạo story app-scaffold web trước Story 3.4, hoặc ghi nhận chấp nhận text-guard-only xuyên Epic 3"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
+    status: decided
+    resolution: "C-4: áp mặc định tuyên bố trước trong retro Epic 3 — CHẤP NHẬN text-guard-only cho web xuyên Epic 4 (rủi ro tường minh: .tsx chưa qua tsc/bundler/test-runtime), và BẮT BUỘC widget test cho MỌI màn mobile (harness Flutter có thật). Web app-scaffold/tooling xếp vào đầu Epic 5 hoặc khi cần app-runtime chạy thật."
   - epic: 2
     action: "Backfill hồ sơ Story 2.8: tick 14 task, điền Dev Agent Record (model, debug log, completion notes, file list)"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
+    resolution: "C-12: verify từng deliverable còn tồn tại trong cây nguồn rồi mới tick 14 task/63 subtask; điền Dev Agent Record + File List + Change Log từ commit ship 9565b99."
   - epic: 2
     action: "Chốt cách chuẩn hoá SĐT E.164 (thư viện vs tự viết) trước khi code Story 3.3; chuẩn hoá chỉ ở backend"
     owner: "Winston (Architect)"
@@ -161,7 +165,8 @@ action_items:
   - epic: 2
     action: "Hoàn tất strip-comment cho design-system guard: trích helper dùng chung, sửa shell-tsx.test.mjs và components.test.mjs scan trên code đã strip"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
+    resolution: "C-11: xem action item epic 1 cùng nội dung — cùng commit efe829c."
   - epic: 2
     action: "Quyết stance thu hồi access token (chấp nhận cửa sổ 15 phút vs denylist) trước Epic 8"
     owner: "Winston (Architect)"

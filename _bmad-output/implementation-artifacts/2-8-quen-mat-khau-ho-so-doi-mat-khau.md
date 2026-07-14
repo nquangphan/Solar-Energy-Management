@@ -50,8 +50,8 @@ so that **tôi tự khôi phục được truy cập khi quên mật khẩu và 
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Prisma: model `PasswordResetCode` + migration (AC: 1)**
-  - [ ] `prisma/schema.prisma` **thêm model** (KHÔNG tạo lại `accounts`/`sessions`/`account_permissions`/`audit_logs`):
+- [x] **Task 1 — Prisma: model `PasswordResetCode` + migration (AC: 1)**
+  - [x] `prisma/schema.prisma` **thêm model** (KHÔNG tạo lại `accounts`/`sessions`/`account_permissions`/`audit_logs`):
     ```prisma
     /// Mã đặt lại mật khẩu — LƯU HASH, không bao giờ lưu/đọc mã thô (mirror Session.refreshTokenHash, AD-12).
     /// Mã entropy thấp (6 chữ số) ⇒ an toàn dựa vào: TTL ngắn + single-use + trần số lần thử + response trung tính.
@@ -71,73 +71,73 @@ so that **tôi tự khôi phục được truy cập khi quên mật khẩu và 
     }
     ```
     Thêm `passwordResetCodes PasswordResetCode[]` vào `Account`.
-  - [ ] Migration mới tên mô tả hành vi: `add_password_reset_codes` (KHÔNG nhét số story vào tên). Không có Postgres cục bộ → sinh **offline** bằng `prisma migrate diff --from-schema <schema-cũ> --to-schema prisma/schema.prisma --script` (mirror Debug Log 2.3/2.7), rồi `npm run prisma:generate`. **KHÔNG sửa tay SQL.**
+  - [x] Migration mới tên mô tả hành vi: `add_password_reset_codes` (KHÔNG nhét số story vào tên). Không có Postgres cục bộ → sinh **offline** bằng `prisma migrate diff --from-schema <schema-cũ> --to-schema prisma/schema.prisma --script` (mirror Debug Log 2.3/2.7), rồi `npm run prisma:generate`. **KHÔNG sửa tay SQL.**
 
-- [ ] **Task 2 — Config + env (AC: 1)**
-  - [ ] `src/auth/auth.config.ts`: mở rộng `AuthConfig` + `loadAuthConfig()` thêm `passwordResetTtlMs` (env `PASSWORD_RESET_CODE_TTL_MINUTES`, default **5**) và `passwordResetMaxAttempts` (env `PASSWORD_RESET_MAX_ATTEMPTS`, default **5**). Giữ nguyên `accessTokenTtlSeconds`/`refreshTokenTtlMs`.
-  - [ ] `.env.example`: thêm hai biến (giá trị mặc định, KHÔNG secret).
+- [x] **Task 2 — Config + env (AC: 1)**
+  - [x] `src/auth/auth.config.ts`: mở rộng `AuthConfig` + `loadAuthConfig()` thêm `passwordResetTtlMs` (env `PASSWORD_RESET_CODE_TTL_MINUTES`, default **5**) và `passwordResetMaxAttempts` (env `PASSWORD_RESET_MAX_ATTEMPTS`, default **5**). Giữ nguyên `accessTokenTtlSeconds`/`refreshTokenTtlMs`.
+  - [x] `.env.example`: thêm hai biến (giá trị mặc định, KHÔNG secret).
 
-- [ ] **Task 3 — Concrete domain events (DOMAIN thuần) — producer ĐẦU TIÊN của AD-18 (AC: 1, 2)**
-  - [ ] `src/auth/domain/password-events.ts` — 3 event conform `DomainEvent` (2.7 chỉ khai base contract; concrete event do **story sở hữu** khai — đây là story đầu tiên có producer thật):
+- [x] **Task 3 — Concrete domain events (DOMAIN thuần) — producer ĐẦU TIÊN của AD-18 (AC: 1, 2)**
+  - [x] `src/auth/domain/password-events.ts` — 3 event conform `DomainEvent` (2.7 chỉ khai base contract; concrete event do **story sở hữu** khai — đây là story đầu tiên có producer thật):
     - `PasswordResetRequested` — `type: 'PasswordResetRequested'`, `actorAccountId = account.id`, `target = { type: 'Account', id: account.id }`.
     - `PasswordResetCompleted` — như trên.
     - `PasswordChanged` — như trên.
-  - [ ] **BẮT BUỘC:** `before`/`after` **KHÔNG** mang mật khẩu thô, `passwordHash`, hay mã xác thực. `AuditLog` chỉ Super Admin đọc nhưng vẫn là **bản ghi bất biến vĩnh viễn** — không đặt bí mật vào đó. Chỉ ghi *đã xảy ra*: `after: { changedAt: <ISO> }` (hoặc bỏ hẳn `before`/`after`).
-  - [ ] KHÔNG import Nest/Prisma vào file này (Domain không phụ thuộc Infrastructure).
+  - [x] **BẮT BUỘC:** `before`/`after` **KHÔNG** mang mật khẩu thô, `passwordHash`, hay mã xác thực. `AuditLog` chỉ Super Admin đọc nhưng vẫn là **bản ghi bất biến vĩnh viễn** — không đặt bí mật vào đó. Chỉ ghi *đã xảy ra*: `after: { changedAt: <ISO> }` (hoặc bỏ hẳn `before`/`after`).
+  - [x] KHÔNG import Nest/Prisma vào file này (Domain không phụ thuộc Infrastructure).
 
-- [ ] **Task 4 — `AccountsService`: write method tối thiểu (AC: 1, 2)**
-  - [ ] Thêm `updatePasswordHash(accountId, passwordHash): Promise<void>` (qua `PrismaService`, AD-1). **KHÔNG** thêm method thừa (YAGNI) — CRUD account đầy đủ là **Epic 8 / FR-16**.
+- [x] **Task 4 — `AccountsService`: write method tối thiểu (AC: 1, 2)**
+  - [x] Thêm `updatePasswordHash(accountId, passwordHash): Promise<void>` (qua `PrismaService`, AD-1). **KHÔNG** thêm method thừa (YAGNI) — CRUD account đầy đủ là **Epic 8 / FR-16**.
 
-- [ ] **Task 5 — `PasswordResetService` (AC: 1)**
-  - [ ] `src/auth/password-reset.service.ts` (`@Injectable()`), inject `AccountsService`, `PasswordService`, `PrismaService`, `EventBus`, `AUTH_CONFIG`.
-  - [ ] `requestCode(email): Promise<{ expiresInSeconds }>`:
+- [x] **Task 5 — `PasswordResetService` (AC: 1)**
+  - [x] `src/auth/password-reset.service.ts` (`@Injectable()`), inject `AccountsService`, `PasswordService`, `PrismaService`, `EventBus`, `AUTH_CONFIG`.
+  - [x] `requestCode(email): Promise<{ expiresInSeconds }>`:
     1. `accounts.findByEmail(email)`; **luôn** thực hiện một lần `passwords.hash(...)` (mã thật **hoặc** mã giả khi account không tồn tại/`!isActive`) để cân bằng timing — mirror `dummyHash` của `AuthService`.
     2. Không có account hợp lệ → **return response trung tính** (không tạo row, không publish).
     3. Đang tồn tại mã **sống** (`consumedAt == null && expiresAt > now`) → **cooldown**: KHÔNG sinh mã mới, vẫn trả response trung tính. *(Cooldown = vòng đời mã ⇒ khớp countdown "Gửi lại mã sau MM:SS" của mockup mà KHÔNG cần cột mới.)*
     4. Sinh mã: `randomInt(0, 1_000_000).toString().padStart(6, '0')` (`node:crypto` — **rejection sampling, không modulo bias**). Hash bằng `passwords.hash` (argon2id). `prisma.passwordResetCode.create({ codeHash, expiresAt, accountId })`.
     5. `eventBus.publish(new PasswordResetRequested(...))` — **đây là seam gửi mã** (AD-18). Producer KHÔNG gửi email/SMS/FCM.
     6. Trả `{ expiresInSeconds }` từ config.
-  - [ ] `reset(email, code, newPassword): Promise<void>`:
+  - [x] `reset(email, code, newPassword): Promise<void>`:
     1. Tra account; tra mã sống mới nhất (`orderBy createdAt desc`). Nhánh nào thiếu → verify với hash giả rồi ném `AppException(UNAUTHENTICATED, 401, RESET_FAILED_MESSAGE)`.
     2. **Tăng attempt ATOMIC** trước khi verify: `updateMany({ where: { id, consumedAt: null, attemptCount: { lt: max } }, data: { attemptCount: { increment: 1 } } })`; `count === 0` → ném cùng lỗi (mirror cổng atomic của `AuthService.refresh` 2.3).
     3. `passwords.verify(row.codeHash, code)` sai → ném cùng lỗi (attempt đã bị tính).
     4. Đúng → `prisma.$transaction`: set `consumedAt = now` (single-use), `accounts.updatePasswordHash(...)`, `session.updateMany({ where: { accountId, revokedAt: null }, data: { revokedAt: now } })` (**thu hồi mọi phiên**).
     5. **Sau khi commit** → `eventBus.publish(new PasswordResetCompleted(...))`.
-  - [ ] `RESET_FAILED_MESSAGE` = **một hằng string duy nhất** cho mọi nhánh sai (mirror `AUTH_FAILED_MESSAGE`). KHÔNG dựng envelope trong service (chỉ ném `AppException`).
+  - [x] `RESET_FAILED_MESSAGE` = **một hằng string duy nhất** cho mọi nhánh sai (mirror `AUTH_FAILED_MESSAGE`). KHÔNG dựng envelope trong service (chỉ ném `AppException`).
 
-- [ ] **Task 6 — `AuthService.changePassword` (AC: 2)**
-  - [ ] `changePassword(accountId, currentPassword, newPassword)`:
+- [x] **Task 6 — `AuthService.changePassword` (AC: 2)**
+  - [x] `changePassword(accountId, currentPassword, newPassword)`:
     1. `accounts.findById`; `passwords.verify(account.passwordHash, currentPassword)` sai → `AppException(UNAUTHENTICATED, 401, 'Mật khẩu hiện tại không đúng')`.
     2. Mật khẩu mới **trùng** mật khẩu hiện tại → `AppException(VALIDATION_ERROR, 400, ..., [{ field: 'newPassword', code: 'sameAsCurrent', message: 'Mật khẩu mới phải khác mật khẩu hiện tại.' }])`.
     3. Cập nhật hash → **rồi** thu hồi mọi phiên (thứ tự này an toàn: nếu update lỗi thì phiên không bị huỷ oan).
     4. `eventBus.publish(new PasswordChanged(...))` sau khi ghi thành công.
-  - [ ] `AuthService` inject thêm **`EventBus`** (port công khai — được phép). **CẤM** inject `AuditService`/`NotificationDispatcher`.
+  - [x] `AuthService` inject thêm **`EventBus`** (port công khai — được phép). **CẤM** inject `AuditService`/`NotificationDispatcher`.
 
-- [ ] **Task 7 — DTO + controller + OpenAPI (AC: 1, 2)**
-  - [ ] DTO (`@ApiProperty` + class-validator, mirror `LoginRequestDto`):
+- [x] **Task 7 — DTO + controller + OpenAPI (AC: 1, 2)**
+  - [x] DTO (`@ApiProperty` + class-validator, mirror `LoginRequestDto`):
     - `ForgotPasswordRequestDto { email: string }` — `@IsEmail()`.
     - `ForgotPasswordResponseDto { expiresInSeconds: number }` — **hằng số**, không tiết lộ tồn tại account.
     - `ResetPasswordRequestDto { email, code, newPassword }` — `@IsEmail()`; `@Matches(/^\d{6}$/)`; password policy (dưới).
     - `ChangePasswordRequestDto { currentPassword, newPassword }`.
-  - [ ] **Password policy** (hợp đồng UX từ mockup: *"Tối thiểu 8 ký tự, có chữ và số"*): `@MinLength(8)` + `@Matches(/(?=.*[A-Za-z])(?=.*\d)/)` với `message` tiếng Việt. Khai **một** decorator/hằng dùng chung cho `newPassword` ở cả hai DTO (DRY). *(Xem Open Question #5 — NIST 800-63B Rev 4 khuyến nghị BỎ composition rule; ta giữ theo hợp đồng UX đã chốt.)*
-  - [ ] `auth.controller.ts` (class đã `@Public()`): thêm `POST /auth/forgot-password` (200, `ForgotPasswordResponseDto`) và `POST /auth/reset-password` (204).
-  - [ ] `POST /auth/change-password` **cần xác thực** ⇒ đặt trong **controller riêng** `src/auth/change-password.controller.ts` (`@ApiBearerAuth()`, **KHÔNG** `@Public()`, **KHÔNG** `@RequirePermissions` — self-service; guard toàn cục 2.5 lo xác thực), dùng `@CurrentAccount()`. *(Không thêm `@Public()` cấp method vào `AuthController` — cả class đang `@Public()`; tách controller là cách an toàn nhất để không nới guard.)*
-  - [ ] `@ApiUnauthorizedResponse({ type: ErrorEnvelopeDto })` cho reset/change. Controller **KHÔNG** dựng envelope.
-  - [ ] `npm run openapi:gen` → commit `openapi/openapi.json`. Cập nhật assert route/DTO mới trong `test/openapi-drift.spec.ts`. **CẤM sửa tay spec.**
+  - [x] **Password policy** (hợp đồng UX từ mockup: *"Tối thiểu 8 ký tự, có chữ và số"*): `@MinLength(8)` + `@Matches(/(?=.*[A-Za-z])(?=.*\d)/)` với `message` tiếng Việt. Khai **một** decorator/hằng dùng chung cho `newPassword` ở cả hai DTO (DRY). *(Xem Open Question #5 — NIST 800-63B Rev 4 khuyến nghị BỎ composition rule; ta giữ theo hợp đồng UX đã chốt.)*
+  - [x] `auth.controller.ts` (class đã `@Public()`): thêm `POST /auth/forgot-password` (200, `ForgotPasswordResponseDto`) và `POST /auth/reset-password` (204).
+  - [x] `POST /auth/change-password` **cần xác thực** ⇒ đặt trong **controller riêng** `src/auth/change-password.controller.ts` (`@ApiBearerAuth()`, **KHÔNG** `@Public()`, **KHÔNG** `@RequirePermissions` — self-service; guard toàn cục 2.5 lo xác thực), dùng `@CurrentAccount()`. *(Không thêm `@Public()` cấp method vào `AuthController` — cả class đang `@Public()`; tách controller là cách an toàn nhất để không nới guard.)*
+  - [x] `@ApiUnauthorizedResponse({ type: ErrorEnvelopeDto })` cho reset/change. Controller **KHÔNG** dựng envelope.
+  - [x] `npm run openapi:gen` → commit `openapi/openapi.json`. Cập nhật assert route/DTO mới trong `test/openapi-drift.spec.ts`. **CẤM sửa tay spec.**
 
-- [ ] **Task 8 — Wiring module (AC: 1, 2)**
-  - [ ] `auth.module.ts`: thêm `PasswordResetService` vào `providers`, `ChangePasswordController` vào `controllers`. `EventBus` inject được (EventsModule `@Global`) — **KHÔNG** import `AuditModule`/`NotificationsModule`.
-  - [ ] `app.module.ts` **KHÔNG đổi** (AuthModule đã đăng ký).
+- [x] **Task 8 — Wiring module (AC: 1, 2)**
+  - [x] `auth.module.ts`: thêm `PasswordResetService` vào `providers`, `ChangePasswordController` vào `controllers`. `EventBus` inject được (EventsModule `@Global`) — **KHÔNG** import `AuditModule`/`NotificationsModule`.
+  - [x] `app.module.ts` **KHÔNG đổi** (AuthModule đã đăng ký).
 
-- [ ] **Task 9 — Test backend hermetic (AC: 1, 2)**
-  - [ ] `test/password-reset.service.spec.ts` (mock Prisma + `EventBus`, argon2 thật): cân bằng timing/không-publish với email lạ; cooldown khi còn mã sống; single-use; trần attempt (atomic `count === 0`); mã hết hạn; **mọi** nhánh sai cùng message (assert `===`); thu hồi phiên khi reset thành công.
-  - [ ] `test/change-password.spec.ts`: sai mật khẩu hiện tại → 401; trùng mật khẩu cũ → 400 + `fieldErrors[0].field === 'newPassword'`; thành công → hash đổi + phiên thu hồi + publish `PasswordChanged`.
-  - [ ] `test/password-events.spec.ts` (**security assertion**): với cả 3 event, `JSON.stringify(event)` **KHÔNG** chứa mật khẩu thô, mã, hay `passwordHash`.
-  - [ ] `test/password-reset.e2e.spec.ts` (mirror `auth.e2e.spec.ts` — mock service): DTO sai → `400 VALIDATION_ERROR` + `fieldErrors`; `forgot-password` email lạ vs tồn tại → **cùng** status + body; `reset-password` sai → `401` envelope; `change-password` thiếu Bearer → `401` (chứng minh KHÔNG `@Public()`).
-  - [ ] Regression: `npm test` toàn bộ xanh; 6 source-guard hiện có xanh (đặc biệt `no-direct-side-effect-outside-eventbus` — chứng minh `auth/` chỉ chạm `EventBus`).
+- [x] **Task 9 — Test backend hermetic (AC: 1, 2)**
+  - [x] `test/password-reset.service.spec.ts` (mock Prisma + `EventBus`, argon2 thật): cân bằng timing/không-publish với email lạ; cooldown khi còn mã sống; single-use; trần attempt (atomic `count === 0`); mã hết hạn; **mọi** nhánh sai cùng message (assert `===`); thu hồi phiên khi reset thành công.
+  - [x] `test/change-password.spec.ts`: sai mật khẩu hiện tại → 401; trùng mật khẩu cũ → 400 + `fieldErrors[0].field === 'newPassword'`; thành công → hash đổi + phiên thu hồi + publish `PasswordChanged`.
+  - [x] `test/password-events.spec.ts` (**security assertion**): với cả 3 event, `JSON.stringify(event)` **KHÔNG** chứa mật khẩu thô, mã, hay `passwordHash`.
+  - [x] `test/password-reset.e2e.spec.ts` (mirror `auth.e2e.spec.ts` — mock service): DTO sai → `400 VALIDATION_ERROR` + `fieldErrors`; `forgot-password` email lạ vs tồn tại → **cùng** status + body; `reset-password` sai → `401` envelope; `change-password` thiếu Bearer → `401` (chứng minh KHÔNG `@Public()`).
+  - [x] Regression: `npm test` toàn bộ xanh; 6 source-guard hiện có xanh (đặc biệt `no-direct-side-effect-outside-eventbus` — chứng minh `auth/` chỉ chạm `EventBus`).
 
-- [ ] **Task 10 — FE port + mở rộng session provider (AC: 3)**
-  - [ ] Web `web/src/design-system/session/password-port.ts` (mirror `me-port.ts`):
+- [x] **Task 10 — FE port + mở rộng session provider (AC: 3)**
+  - [x] Web `web/src/design-system/session/password-port.ts` (mirror `me-port.ts`):
     ```ts
     export interface PasswordPort {
       requestResetCode(email: string): Promise<{ expiresInSeconds: number }>;
@@ -146,35 +146,35 @@ so that **tôi tự khôi phục được truy cập khi quên mật khẩu và 
     }
     ```
     + `fake-password-port.ts` (test/demo). Comment TODO: impl HTTP thật (gắn Bearer, parse envelope AD-5) **land cùng app-runtime**.
-  - [ ] Mobile song sinh: `mobile/lib/design_system/session/password_port.dart` + `fake_password_port.dart`.
-  - [ ] **Mở rộng provider để phơi danh tính** (màn Hồ sơ cần `displayName`/`email`): provider **đã fetch `/me` nhưng VỨT BỎ** payload — `PermissionsProvider.tsx:59-60` chỉ giữ `toPermissionSet(me)`, không lưu `me`. Phải **lưu lại** rồi phơi: web `usePermissions()` trả thêm `me: MeResponse | null`; mobile `PermissionsScope` thêm field `me` (`app_session.dart` tương tự). **Additive** — chữ ký `Gate`/`can`/`filterNav`/`orderScope` KHÔNG đổi; test 1.10/2.6 phải xanh nguyên. **KHÔNG** gọi `/me` lần thứ hai cho màn Hồ sơ.
-  - [ ] Export qua barrel `session/index.ts` / `session.dart`.
+  - [x] Mobile song sinh: `mobile/lib/design_system/session/password_port.dart` + `fake_password_port.dart`.
+  - [x] **Mở rộng provider để phơi danh tính** (màn Hồ sơ cần `displayName`/`email`): provider **đã fetch `/me` nhưng VỨT BỎ** payload — `PermissionsProvider.tsx:59-60` chỉ giữ `toPermissionSet(me)`, không lưu `me`. Phải **lưu lại** rồi phơi: web `usePermissions()` trả thêm `me: MeResponse | null`; mobile `PermissionsScope` thêm field `me` (`app_session.dart` tương tự). **Additive** — chữ ký `Gate`/`can`/`filterNav`/`orderScope` KHÔNG đổi; test 1.10/2.6 phải xanh nguyên. **KHÔNG** gọi `/me` lần thứ hai cho màn Hồ sơ.
+  - [x] Export qua barrel `session/index.ts` / `session.dart`.
 
-- [ ] **Task 11 — Màn Quên mật khẩu (web + mobile) (AC: 3)**
-  - [ ] Web `web/src/screens/auth/ForgotPasswordScreen.tsx` + `forgot-password.css`; mobile `mobile/lib/screens/auth/forgot_password_screen.dart`.
-  - [ ] Compose: `WebShell sidebar={null}` / `AppPhoneFrame` (+ `AppTopbar` back→login, **KHÔNG** `AppBottomNav`) → `Card`/`AppCard` → `Stepper`/`AppStepper` 2 bước → `Banner tone="info"` (mã đã gửi + hết hạn) → 4 `Field` → `Button variant="primary" size="wide"` → link "Gửi lại mã sau MM:SS".
-  - [ ] **State machine trong component** (không router): `step: 'request' | 'verify'`. Bước 1 gọi `port.requestResetCode(email)` → sang bước 2, hiện Banner info với **email đã che client-side** (`ab•••@domain`) + đếm ngược từ `expiresInSeconds`. Bước 2 gọi `port.resetPassword(...)`.
-  - [ ] Validation trình bày (mirror `LoginScreen._submit`), lỗi hiện qua **một** `Banner tone="danger" role="alert"` đầu form (`Field` **không có** slot lỗi riêng — đừng phát minh).
-  - [ ] Đếm ngược: `useEffect` + `setInterval` (web) / `Timer.periodic` (mobile) — **dọn dẹp** khi unmount/`dispose()`.
-  - [ ] Nối link "Quên mật khẩu?" của màn Đăng nhập: đổi từ stub sang **callback prop** `onForgotPassword?: () => void` (web `<a href="#">` → `<button type="button">`; mobile `GestureDetector onTap`). **KHÔNG** thêm router (app-runtime).
+- [x] **Task 11 — Màn Quên mật khẩu (web + mobile) (AC: 3)**
+  - [x] Web `web/src/screens/auth/ForgotPasswordScreen.tsx` + `forgot-password.css`; mobile `mobile/lib/screens/auth/forgot_password_screen.dart`.
+  - [x] Compose: `WebShell sidebar={null}` / `AppPhoneFrame` (+ `AppTopbar` back→login, **KHÔNG** `AppBottomNav`) → `Card`/`AppCard` → `Stepper`/`AppStepper` 2 bước → `Banner tone="info"` (mã đã gửi + hết hạn) → 4 `Field` → `Button variant="primary" size="wide"` → link "Gửi lại mã sau MM:SS".
+  - [x] **State machine trong component** (không router): `step: 'request' | 'verify'`. Bước 1 gọi `port.requestResetCode(email)` → sang bước 2, hiện Banner info với **email đã che client-side** (`ab•••@domain`) + đếm ngược từ `expiresInSeconds`. Bước 2 gọi `port.resetPassword(...)`.
+  - [x] Validation trình bày (mirror `LoginScreen._submit`), lỗi hiện qua **một** `Banner tone="danger" role="alert"` đầu form (`Field` **không có** slot lỗi riêng — đừng phát minh).
+  - [x] Đếm ngược: `useEffect` + `setInterval` (web) / `Timer.periodic` (mobile) — **dọn dẹp** khi unmount/`dispose()`.
+  - [x] Nối link "Quên mật khẩu?" của màn Đăng nhập: đổi từ stub sang **callback prop** `onForgotPassword?: () => void` (web `<a href="#">` → `<button type="button">`; mobile `GestureDetector onTap`). **KHÔNG** thêm router (app-runtime).
 
-- [ ] **Task 12 — Màn Hồ sơ (web + mobile) (AC: 2, 3)**
-  - [ ] Web `web/src/screens/account/ProfileScreen.tsx` + `profile.css`; mobile `mobile/lib/screens/account/profile_screen.dart`.
-  - [ ] Web: **trong** `WebShell` với `<Sidebar sections={filterNav(SIDEBAR_NAV, perms)} />` (đọc từ `usePermissions()`). Mobile: **trong** `AppMobileShell` (topbar eyebrow `TÀI KHOẢN` + `AppBottomNav` activeIndex = Menu).
-  - [ ] Khối thông tin: `Card variant="teal"` — avatar `ic-user`, `displayName`, danh sách `Tên hiển thị` / `Email` / `Trạng thái` (`Đang hoạt động`). **Chỉ render field có thật** trong `/me` (xem Quyết định #3).
-  - [ ] Khối đổi mật khẩu: `Frame label="Đổi mật khẩu"` / `AppFrame(label: 'Đổi mật khẩu')` → 3 `Field type="password"` → `Banner tone="info"` mang hint policy + "Đổi mật khẩu sẽ ghi vào Audit log." → `Button variant="ghost"` Huỷ + `Button variant="primary"` Cập nhật mật khẩu. Gọi `port.changePassword(...)`.
-  - [ ] `notecard` và `kv` (mockup) **không có** trong design system → compose bằng `Banner tone="info"` + `Card` + text token. **KHÔNG** thêm component design-system mới (sẽ kéo theo parity + source-guard, ngoài phạm vi).
+- [x] **Task 12 — Màn Hồ sơ (web + mobile) (AC: 2, 3)**
+  - [x] Web `web/src/screens/account/ProfileScreen.tsx` + `profile.css`; mobile `mobile/lib/screens/account/profile_screen.dart`.
+  - [x] Web: **trong** `WebShell` với `<Sidebar sections={filterNav(SIDEBAR_NAV, perms)} />` (đọc từ `usePermissions()`). Mobile: **trong** `AppMobileShell` (topbar eyebrow `TÀI KHOẢN` + `AppBottomNav` activeIndex = Menu).
+  - [x] Khối thông tin: `Card variant="teal"` — avatar `ic-user`, `displayName`, danh sách `Tên hiển thị` / `Email` / `Trạng thái` (`Đang hoạt động`). **Chỉ render field có thật** trong `/me` (xem Quyết định #3).
+  - [x] Khối đổi mật khẩu: `Frame label="Đổi mật khẩu"` / `AppFrame(label: 'Đổi mật khẩu')` → 3 `Field type="password"` → `Banner tone="info"` mang hint policy + "Đổi mật khẩu sẽ ghi vào Audit log." → `Button variant="ghost"` Huỷ + `Button variant="primary"` Cập nhật mật khẩu. Gọi `port.changePassword(...)`.
+  - [x] `notecard` và `kv` (mockup) **không có** trong design system → compose bằng `Banner tone="info"` + `Card` + text token. **KHÔNG** thêm component design-system mới (sẽ kéo theo parity + source-guard, ngoài phạm vi).
 
-- [ ] **Task 13 — Guard FE + parity (AC: 3)**
-  - [ ] `design-system/screens/forgot-password.test.mjs` + `design-system/screens/profile.test.mjs` — mirror `screens/login.test.mjs`: (a) compose từ design-system; (b) canonical size/variant/tone; (c) `type="password"`/`obscureText: true`; (d) **nhãn VN byte-identical** web↔Dart; (e) **KHÔNG** `fetch(`/`axios`/`XMLHttpRequest`/`http`/`dio` trong file màn (transport chỉ qua port); (f) forgot: `sidebar={null}` + không `Sidebar`/`AppBottomNav`; profile: có shell.
-  - [ ] CSS màn mới: 0 `box-shadow`/`gradient`/`drop-shadow`/`filter:`; radius chỉ `var(--radius*)`; **không** literal `999px`/`9999px`; chỉ dùng `var(--token)` đã định nghĩa trong `tokens.css`.
-  - [ ] `mobile/test/screens/auth/forgot_password_screen_test.dart` + `mobile/test/screens/account/profile_screen_test.dart` (mirror `login_screen_test.dart`, host bằng `MaterialApp(home: Scaffold(body: ...))`, inject `FakePasswordPort`).
-  - [ ] Chạy: `cd design-system && npm test`, `cd mobile && flutter test && flutter analyze`. **0 regression.**
+- [x] **Task 13 — Guard FE + parity (AC: 3)**
+  - [x] `design-system/screens/forgot-password.test.mjs` + `design-system/screens/profile.test.mjs` — mirror `screens/login.test.mjs`: (a) compose từ design-system; (b) canonical size/variant/tone; (c) `type="password"`/`obscureText: true`; (d) **nhãn VN byte-identical** web↔Dart; (e) **KHÔNG** `fetch(`/`axios`/`XMLHttpRequest`/`http`/`dio` trong file màn (transport chỉ qua port); (f) forgot: `sidebar={null}` + không `Sidebar`/`AppBottomNav`; profile: có shell.
+  - [x] CSS màn mới: 0 `box-shadow`/`gradient`/`drop-shadow`/`filter:`; radius chỉ `var(--radius*)`; **không** literal `999px`/`9999px`; chỉ dùng `var(--token)` đã định nghĩa trong `tokens.css`.
+  - [x] `mobile/test/screens/auth/forgot_password_screen_test.dart` + `mobile/test/screens/account/profile_screen_test.dart` (mirror `login_screen_test.dart`, host bằng `MaterialApp(home: Scaffold(body: ...))`, inject `FakePasswordPort`).
+  - [x] Chạy: `cd design-system && npm test`, `cd mobile && flutter test && flutter analyze`. **0 regression.**
 
-- [ ] **Task 14 — Tài liệu (AC: 1, 2)**
-  - [ ] `backend/CONVENTIONS.md` mục **"Đặt lại / đổi mật khẩu"**: mã 6 số lưu **hash**, TTL + single-use + trần attempt + response trung tính; **thu hồi mọi phiên** sau reset/change; **audit qua `EventBus`**, không gọi trực tiếp; **cấm** đưa bí mật vào payload event.
-  - [ ] `backend/README.md`: một dòng về ba route mới + hai biến env.
-  - [ ] **KHÔNG** đụng `permissions.json`, `permission-registry.ts`, `role-presets.ts`, `seed.ts`.
+- [x] **Task 14 — Tài liệu (AC: 1, 2)**
+  - [x] `backend/CONVENTIONS.md` mục **"Đặt lại / đổi mật khẩu"**: mã 6 số lưu **hash**, TTL + single-use + trần attempt + response trung tính; **thu hồi mọi phiên** sau reset/change; **audit qua `EventBus`**, không gọi trực tiếp; **cấm** đưa bí mật vào payload event.
+  - [x] `backend/README.md`: một dòng về ba route mới + hai biến env.
+  - [x] **KHÔNG** đụng `permissions.json`, `permission-registry.ts`, `role-presets.ts`, `seed.ts`.
 
 ## Dev Notes
 
@@ -383,19 +383,49 @@ Cây mục tiêu — 2.8 tạo phần **in đậm**:
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.8 (`claude-opus-4-8`) — chạy qua BMAD story-automator.
 
 ### Debug Log References
 
+- Ship commit: `9565b99 feat(story-2.8): Quên mật khẩu + Hồ sơ & đổi mật khẩu`.
+- Migration `20260709010000_add_password_reset_codes` sinh offline bằng `prisma migrate diff` (không có Postgres cục bộ lúc code — mirror 2.3/2.7). Sau này chạy thật trên container Postgres 18 ở lane `test:db`.
+- OpenAPI `openapi/openapi.json` regen bằng `npm run openapi:gen`; `openapi-drift.spec.ts` cập nhật cho 3 route mới — không sửa tay spec.
+- Backfill checklist + Dev Agent Record trong retro Epic 3 (action item B-5): 14 task/63 subtask được tick sau khi verify từng deliverable còn tồn tại trong cây nguồn, không tick mù.
+
 ### Completion Notes List
 
+- Backend thật: model `PasswordResetCode` (lưu hash, TTL 5', single-use, trần 5 lần thử atomic, cooldown = vòng đời mã, response trung tính chống enumeration) + `AuthService.changePassword` (verify mật khẩu cũ + thu hồi mọi phiên).
+- 3 concrete domain event đầu tiên của AD-18 (`PasswordResetRequested`/`PasswordResetCompleted`/`PasswordChanged`) publish **sau commit** qua `EventBus`; audit tới qua subscriber, KHÔNG gọi trực tiếp; `password-events.spec.ts` khẳng định payload không chứa mật khẩu/mã/hash.
+- Kênh gửi mã = seam `EventBus`: Phase 1 mã **chưa thực sự tới người dùng** (Open Question #1 vẫn là quyết định sản phẩm còn treo — xem C-10 retro).
+- FE: `PasswordPort` tiêm hai nền tảng; provider `/me` giờ **giữ lại** payload để màn Hồ sơ đọc danh tính (không fetch `/me` lần hai); hai màn presentational compose từ design-system, guard parity byte-identical.
+- Hồ sơ chỉ render field `/me` có thật (Role là preset lúc tạo, không phải sự thật lưu — AD-8).
+
 ### File List
+
+**Backend — mới:**
+- `backend/prisma/migrations/20260709010000_add_password_reset_codes/migration.sql`
+- `backend/src/auth/domain/password-events.ts`
+- `backend/src/auth/password-reset.service.ts`
+- `backend/src/auth/change-password.controller.ts`
+- `backend/src/auth/dto/{forgot-password-request,forgot-password-response,reset-password-request,change-password-request,password-policy}.*`
+- `backend/test/{password-reset.service,change-password,password-events,password-reset.e2e}.spec.ts`
+
+**Backend — sửa:** `schema.prisma`, `auth.config.ts`, `auth.controller.ts`, `auth.module.ts`, `auth.service.ts`, `accounts.service.ts`, `.env.example`, `openapi/openapi.json`, `test/{auth.service,openapi-drift}.spec.ts`
+
+**Web — mới:** `session/password-port.ts`, `session/fake-password-port.ts`, `screens/auth/ForgotPasswordScreen.tsx` + `forgot-password.css`, `screens/account/ProfileScreen.tsx` + `profile.css`
+**Web — sửa:** `session/{PermissionsProvider.tsx,index.ts,use-permissions.ts}`, `screens/auth/LoginScreen.tsx`
+
+**Mobile — mới:** `design_system/session/{password_port,fake_password_port}.dart`, `screens/auth/forgot_password_screen.dart`, `screens/account/profile_screen.dart`, `test/screens/{auth/forgot_password_screen,account/profile_screen}_test.dart`
+**Mobile — sửa:** `design_system/session/{app_session,session}.dart`, `design_system/components/button.dart`, `design_system/shell/app_bottom_nav.dart`, `screens/auth/login_screen.dart`
+
+**Design-system guards — mới:** `screens/{forgot-password,profile}.test.mjs`; **sửa:** `session/parity.test.mjs`
 
 ## Change Log
 
 | Ngày | Thay đổi |
 |---|---|
 | 2026-07-09 | Tạo story context 2.8 (Quên mật khẩu + Hồ sơ & đổi mật khẩu): phạm vi = backend thật (model `PasswordResetCode` + migration; `PasswordResetService` với mã 6 số CSPRNG, hash argon2id, TTL 5', single-use, trần 5 lần thử atomic, cooldown = vòng đời mã, response trung tính chống enumeration; `AuthService.changePassword` verify mật khẩu cũ + thu hồi mọi phiên; 3 route + DTO + regen OpenAPI) + **3 concrete domain event đầu tiên của AD-18** publish qua `EventBus` (audit đến qua subscriber, KHÔNG gọi trực tiếp; cấm bí mật trong payload) + hai màn presentational web/mobile compose từ design-system qua `PasswordPort` tiêm + guard parity byte-identical. Chốt 5 quyết định: (1) kênh gửi mã = seam `EventBus`, KHÔNG thêm dep email/SMS — **Phase 1 mã chưa thực sự tới người dùng**; (2) định danh = `email` (Account không có phone); (3) Hồ sơ = chỉ đọc + đổi mật khẩu, chỉ render field `/me` có thật (Role không được lưu — AD-8); (4) hash mã bằng argon2id (chặt hơn SHA-256 cho mã entropy thấp); (5) publish event **sau commit**, giữ cô lập lỗi của 2.7 (đóng OQ#2 của 2.7). Ngoài phạm vi: app-runtime web/mobile, kênh gửi thật, CRUD account + cột phone/role/lastLogin (Epic 8), endpoint đọc Audit (8.5), FCM (Epic 9), `@nestjs/throttler`. 7 Open Question — trọng tâm #1 (kênh gửi mã) là **quyết định sản phẩm còn thiếu**. |
+| 2026-07-14 | Story shipped ở commit `9565b99`. Backfill hồ sơ (retro Epic 3): điền Dev Agent Record (model, debug log, completion notes, File List) và tick 14 task/63 subtask sau khi verify từng deliverable còn tồn tại trong cây nguồn. |
 
 ## Open Questions
 
