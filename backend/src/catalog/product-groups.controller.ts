@@ -41,16 +41,15 @@ import { ProductGroupsService } from './product-groups.service';
 /**
  * Gói vật tư — CRUD danh mục gói + thay checklist (FR-14).
  *
- * MỌI handler gate `catalog.manage` ("Sửa danh mục & giá") — khớp nguyên văn "người có quyền sửa
- * danh mục" của yêu cầu. `settings.manage` là SAI ở đây: nó dành cho cấu hình doanh nghiệp
+ * READ (`GET`) gate `catalog.view`; WRITE (`POST`/`PUT`/`PATCH`/`DELETE`) gate `catalog.manage`
+ * ("Sửa danh mục & giá"). `settings.manage` là SAI ở đây: nó dành cho cấu hình doanh nghiệp
  * đặt-một-lần (nguồn khách, VAT), còn gói vật tư là dữ liệu vận hành sửa hằng tuần.
  *
- * 🔴 HỆ QUẢ ĐÃ BIẾT, để lại cho story dựng giỏ hàng: preset Thợ khảo sát — CHÍNH LÀ người dựng
- * báo giá — KHÔNG có `catalog.manage`, và `@RequirePermissions` là AND thuần (không có OR). Nên
- * khi picker gói ra đời, nó sẽ 403 cho đúng người dùng nó phục vụ. Lỗ này ĐÃ tồn tại và rộng hơn
- * gói: `GET /products` cũng gate bằng `catalog.manage`. Vá nửa vời (nới riêng đường gói) để lại
- * giỏ hàng vẫn chết vì không đọc nổi danh mục sản phẩm ⇒ phải vá cả hai cùng lúc, ở story có
- * picker thật.
+ * ✅ Tách đọc/ghi (C-2, retro Epic 3): preset Thợ khảo sát — CHÍNH LÀ người dựng báo giá — có
+ * `catalog.view` (không `catalog.manage`), nên picker gói + picker sản phẩm của giỏ hàng đọc được
+ * danh mục mà không sửa. Vá đồng thời cả `GET /product-groups` LẪN `GET /products` — vì
+ * `@RequirePermissions` là AND thuần (không có OR), nới nửa vời một đường thì giỏ hàng vẫn chết ở
+ * đường kia. `costs.view` vẫn tách riêng ⇒ THO_KS đọc danh mục nhưng KHÔNG thấy giá vốn.
  *
  * Controller KHÔNG dựng envelope lỗi: service ném `AppException`, `AllExceptionsFilter` dựng
  * envelope (AD-5).
@@ -62,7 +61,7 @@ export class ProductGroupsController {
   constructor(private readonly productGroups: ProductGroupsService) {}
 
   @Get()
-  @RequirePermissions(PERM.catalogManage)
+  @RequirePermissions(PERM.catalogView)
   @ApiQuery({
     name: 'includeInactive',
     required: false,
@@ -189,7 +188,7 @@ export class ProductGroupsController {
 
   /** Gói KÈM checklist — endpoint mà picker báo giá sẽ gọi. KHÔNG bao giờ mang giá vốn. */
   @Get(':id')
-  @RequirePermissions(PERM.catalogManage)
+  @RequirePermissions(PERM.catalogView)
   @ApiParam({ name: 'id', description: 'Id gói vật tư.' })
   @ApiOkResponse({
     type: ProductGroupDetailResponseDto,

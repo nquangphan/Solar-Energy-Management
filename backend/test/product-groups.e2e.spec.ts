@@ -151,6 +151,32 @@ describe('/product-groups (e2e)', () => {
     featureFlagRepo.findUnique.mockResolvedValue(null);
   });
 
+  // C-2 (retro Epic 3): picker gói của giỏ hàng (Story 4.1) do THO_KS dùng — có `catalog.view`
+  // KHÔNG có `catalog.manage`. Đọc được gói, không sửa được gói.
+  describe('C-2 — catalog.view: ĐỌC được gói, KHÔNG ghi (kịch bản THO_KS)', () => {
+    it('GET /product-groups (chỉ catalog.view) ⇒ 200', async () => {
+      givenPermissions(PERM.catalogView);
+
+      const res = await request(server())
+        .get('/product-groups')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('POST /product-groups (chỉ catalog.view, thiếu catalog.manage) ⇒ 403', async () => {
+      givenPermissions(PERM.catalogView);
+
+      const res = await request(server())
+        .post('/product-groups')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ name: 'Gói thử' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+    });
+  });
+
   describe('thiếu quyền sửa danh mục ⇒ 403 trên CẢ 7 route', () => {
     // Một route quên `@RequirePermissions` sẽ đỏ ở đây — không cần nhớ kiểm tay.
     const routes: readonly { name: string; call: () => request.Test }[] = [
@@ -213,7 +239,7 @@ describe('/product-groups (e2e)', () => {
 
   describe('🔴 costPrice KHÔNG có đường nào rời server qua cửa gói', () => {
     it('GET /product-groups ⇒ 200, body KHÔNG chứa chuỗi costPrice', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/product-groups')
@@ -228,7 +254,7 @@ describe('/product-groups (e2e)', () => {
       // `include: { product: true }` sẽ nhận được từ Postgres thật. Nếu service serialize thẳng
       // cái nó nhận, giá vốn ra tới dây và test này đỏ. Đây là lý do test canh BODY, không canh
       // mock: canh mock chỉ chứng minh ta dạy mock đúng.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.findUnique.mockResolvedValue({
         ...GROUP,
         items: [
@@ -255,7 +281,7 @@ describe('/product-groups (e2e)', () => {
       //
       // ⚠️ Fixture PHẢI mang `costPrice`, kẻo ca này vô nghĩa: một mock không có giá vốn thì
       // không có gì để rò, và assert dưới xanh kể cả khi service trả nguyên bản ghi Product.
-      givenPermissions(PERM.catalogManage, PERM.costsView);
+      givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
       groupRepo.findUnique.mockResolvedValue({
         ...GROUP,
         items: [
@@ -274,7 +300,7 @@ describe('/product-groups (e2e)', () => {
 
   describe('thứ tự khai route — :id trần KHÔNG nuốt sub-resource', () => {
     it('POST :id/reactivate ⇒ 200 (KHÔNG 201 — bật lại không tạo tài nguyên nào)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.findUnique.mockResolvedValue({ ...GROUP, isActive: false });
       groupRepo.update.mockResolvedValue(GROUP);
 
@@ -290,7 +316,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PUT :id/items ⇒ 200 và trả gói kèm checklist mới', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .put(`/product-groups/${GROUP_ID}/items`)
@@ -309,7 +335,7 @@ describe('/product-groups (e2e)', () => {
     // thì `Boolean(includeInactive)` (mọi chuỗi kể cả 'false' đều thành true) vẫn xanh cả suite —
     // và gói ĐÃ TẮT rò ra picker qua `?includeInactive=false`.
     it('vắng query ⇒ chỉ gói còn hiệu lực', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/product-groups')
@@ -322,7 +348,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('?includeInactive=true ⇒ where rỗng (lấy cả gói đã tắt)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/product-groups?includeInactive=true')
@@ -333,7 +359,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('🔴 ?includeInactive=false ⇒ VẪN chỉ gói còn hiệu lực (chuỗi "false" KHÔNG phải true)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/product-groups?includeInactive=false')
@@ -348,7 +374,7 @@ describe('/product-groups (e2e)', () => {
 
   describe('trần độ dài — DTO là hàng rào DUY NHẤT (cột name/description là TEXT, DB không chặn)', () => {
     it('POST name dài quá 100 ký tự ⇒ 400, KHÔNG ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/product-groups')
@@ -362,7 +388,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('POST description dài quá 500 ký tự ⇒ 400, KHÔNG ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/product-groups')
@@ -375,7 +401,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PATCH name dài quá 100 ký tự ⇒ 400 (đường sửa cũng phải có trần, không chỉ đường tạo)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch(`/product-groups/${GROUP_ID}`)
@@ -390,7 +416,7 @@ describe('/product-groups (e2e)', () => {
 
   describe('CRUD qua dây', () => {
     it('POST ⇒ 201, event ProductGroupCreated tới audit', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/product-groups')
@@ -405,7 +431,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('POST name rỗng ⇒ 400 VALIDATION_ERROR, KHÔNG ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/product-groups')
@@ -419,7 +445,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('POST tên trùng ⇒ 409 CONFLICT kèm fieldErrors trỏ ô name', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.create.mockRejectedValue(
         Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
       );
@@ -436,7 +462,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('POST kèm isActive ⇒ field bị loại khỏi payload ghi DB (isActive luôn true)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/product-groups')
@@ -448,7 +474,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PATCH name: null ⇒ 400 (cột NOT NULL), KHÔNG ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch(`/product-groups/${GROUP_ID}`)
@@ -461,7 +487,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PATCH description: null ⇒ 200 (cột nullable — đó là cách XOÁ mô tả)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.update.mockResolvedValue({ ...GROUP, description: null });
 
       const res = await request(server())
@@ -477,7 +503,7 @@ describe('/product-groups (e2e)', () => {
       // Đối xứng với ca POST ở trên. Tắt/bật đi route riêng (DELETE / :id/reactivate) vì hai việc
       // đó publish event RIÊNG (`Deactivated`/`Reactivated`). Nếu `isActive` lọt vào DTO sửa, gói
       // bị tắt qua PATCH sẽ ghi nhật ký là "ProductGroupUpdated" — một dòng audit sai tên việc.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch(`/product-groups/${GROUP_ID}`)
@@ -491,7 +517,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('DELETE ⇒ 204 và là SOFT-delete (isActive=false)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.findUnique.mockResolvedValue(GROUP);
       groupRepo.update.mockResolvedValue({ ...GROUP, isActive: false });
 
@@ -507,7 +533,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('GET /product-groups/:id không tồn tại ⇒ 404', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
@@ -519,7 +545,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PUT :id/items với productId lặp ⇒ 400, KHÔNG chạm transaction', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .put(`/product-groups/${GROUP_ID}/items`)
@@ -533,7 +559,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PUT :id/items với productIds không phải uuid ⇒ 400 ở pipe', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .put(`/product-groups/${GROUP_ID}/items`)
@@ -552,7 +578,7 @@ describe('/product-groups (e2e)', () => {
       // vào nó là pipe tha `undefined` xuống thẳng service — đã kiểm bằng đột biến, ca này ĐỎ với
       // đúng `Received: 500`. (Không phải `@IsArray()`: gỡ riêng nó đi thì `@IsUUID(each)` vẫn
       // chặn, suite vẫn xanh.)
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .put(`/product-groups/${GROUP_ID}/items`)
@@ -566,7 +592,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PUT :id/items với productIds là chuỗi (không phải mảng) ⇒ 400', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .put(`/product-groups/${GROUP_ID}/items`)
@@ -579,7 +605,7 @@ describe('/product-groups (e2e)', () => {
     });
 
     it('PUT :id/items với productIds: [] ⇒ 200 (gói rỗng là hợp lệ)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       groupRepo.findUnique
         .mockResolvedValueOnce(GROUP)
         .mockResolvedValueOnce({ ...GROUP, items: [] });

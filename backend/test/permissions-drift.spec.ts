@@ -32,15 +32,15 @@ describe('permissions artifact drift-guard (AD-12, AD-17)', () => {
     expect(keys).toContain(PERM.permissionsManage);
   });
 
-  it('file commit có 20 entry, 3 key PRD §5 ở CUỐI đúng thứ tự (AC-4)', () => {
+  it('file commit có 21 entry, 4 key mới ở CUỐI đúng thứ tự (AC-4)', () => {
     // Soi CHÍNH file FE tiêu thụ (không phải bản regen in-memory): nếu artifact commit
     // thiếu key mới hoặc lệch thứ tự, FE gen sai key mà không suite nào khác bắt được.
     const committed = JSON.parse(
       readFileSync(PERMISSIONS_OUTPUT_PATH, 'utf8'),
     ) as { key: string; label: string; group: string }[];
 
-    expect(committed).toHaveLength(20);
-    expect(committed.slice(-3)).toEqual([
+    expect(committed).toHaveLength(21);
+    expect(committed.slice(-4)).toEqual([
       { key: 'settings.manage', label: 'Cấu hình hệ thống', group: 'settings' },
       {
         key: 'system.feature_flags',
@@ -48,6 +48,7 @@ describe('permissions artifact drift-guard (AD-12, AD-17)', () => {
         group: 'system',
       },
       { key: 'costs.view', label: 'Xem giá vốn & lợi nhuận', group: 'costs' },
+      { key: 'catalog.view', label: 'Xem danh mục vật tư', group: 'catalog' },
     ]);
   });
 });

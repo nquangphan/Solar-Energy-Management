@@ -27,4 +27,5 @@ class AppPermissionKeys {
   static const String settingsManage = 'settings.manage';
   static const String systemFeatureFlags = 'system.feature_flags';
   static const String costsView = 'costs.view';
+  static const String catalogView = 'catalog.view';
 }

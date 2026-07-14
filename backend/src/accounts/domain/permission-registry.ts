@@ -63,6 +63,8 @@ export const PERM = {
   systemFeatureFlags: 'system.feature_flags',
   /** Xem giá vốn & lợi nhuận (`Product.costPrice`, báo cáo lợi nhuận gộp). */
   costsView: 'costs.view',
+  /** ĐỌC danh mục (sản phẩm, gói vật tư) — người dựng báo giá cần, tách khỏi `catalog.manage`. */
+  catalogView: 'catalog.view',
 } as const;
 
 /** Union mọi key hợp lệ (`'orders.view_all' | 'orders.view_own' | …`). */
@@ -120,6 +122,7 @@ export const PERMISSIONS: readonly PermissionEntry[] = [
     group: 'system',
   },
   { key: PERM.costsView, label: 'Xem giá vốn & lợi nhuận', group: 'costs' },
+  { key: PERM.catalogView, label: 'Xem danh mục vật tư', group: 'catalog' },
 ];
 
 /** Mọi key chính tắc theo thứ tự registry (nguồn cho source-guard + validate). */

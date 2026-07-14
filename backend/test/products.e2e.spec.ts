@@ -174,7 +174,7 @@ describe('/products (e2e)', () => {
 
   describe('AC-4 — costPrice chỉ lộ cho người có costs.view', () => {
     it('GET /products (có catalog.manage, KHÔNG costs.view) ⇒ 200, body KHÔNG chứa costPrice', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/products')
@@ -187,7 +187,7 @@ describe('/products (e2e)', () => {
     });
 
     it('GET /products/:id (KHÔNG costs.view) ⇒ 200, không có costPrice', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .get('/products/prod-1')
@@ -198,7 +198,7 @@ describe('/products (e2e)', () => {
     });
 
     it('GET /products/:id (CÓ costs.view) ⇒ costPrice có mặt', async () => {
-      givenPermissions(PERM.catalogManage, PERM.costsView);
+      givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
 
       const res = await request(server())
         .get('/products/prod-1')
@@ -209,7 +209,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST có costPrice trong body nhưng KHÔNG costs.view ⇒ 403, KHÔNG ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -228,7 +228,7 @@ describe('/products (e2e)', () => {
     });
 
     it('PATCH có costPrice nhưng KHÔNG costs.view ⇒ 403', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch('/products/prod-1')
@@ -240,9 +240,60 @@ describe('/products (e2e)', () => {
     });
   });
 
+  // C-2 (retro Epic 3): người dựng báo giá (THO_KS) có `catalog.view` KHÔNG có `catalog.manage`.
+  // Trước khi tách quyền, picker của giỏ hàng (Story 4.1) 403 cho chính người dùng nó phục vụ.
+  describe('C-2 — catalog.view: ĐỌC được danh mục, KHÔNG ghi (kịch bản THO_KS)', () => {
+    it('GET /products (chỉ catalog.view, KHÔNG catalog.manage) ⇒ 200', async () => {
+      givenPermissions(PERM.catalogView);
+
+      const res = await request(server())
+        .get('/products')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      // Không costs.view ⇒ không thấy giá vốn (THO_KS dựng báo giá thấy giá bán, không giá vốn).
+      expect(res.body[0]).not.toHaveProperty('costPrice');
+    });
+
+    it('GET /products/:id (chỉ catalog.view) ⇒ 200', async () => {
+      givenPermissions(PERM.catalogView);
+
+      const res = await request(server())
+        .get('/products/prod-1')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    for (const w of [
+      { name: 'POST /products', call: () => request(server()).post('/products') },
+      {
+        name: 'PATCH /products/:id',
+        call: () => request(server()).patch('/products/prod-1'),
+      },
+      {
+        name: 'DELETE /products/:id',
+        call: () => request(server()).delete('/products/prod-1'),
+      },
+    ]) {
+      it(`${w.name} (chỉ catalog.view, thiếu catalog.manage) ⇒ 403`, async () => {
+        givenPermissions(PERM.catalogView);
+
+        const res = await w
+          .call()
+          .set('Authorization', `Bearer ${token()}`)
+          .send({});
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      });
+    }
+  });
+
   describe('CRUD happy path (có catalog.manage)', () => {
     it('POST /products ⇒ 201', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -266,7 +317,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST giá thập phân ⇒ 400 VALIDATION_ERROR (tiền là INT đồng — AD-10)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -284,7 +335,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST giá âm ⇒ 400', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -300,7 +351,7 @@ describe('/products (e2e)', () => {
     });
 
     it('DELETE /products/:id ⇒ 204 và là SOFT-delete (isActive=false)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.update.mockResolvedValue({ ...PRODUCT, isActive: false });
 
       const res = await request(server())
@@ -315,7 +366,7 @@ describe('/products (e2e)', () => {
     });
 
     it('GET /products/:id không tồn tại ⇒ 404', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
@@ -327,7 +378,7 @@ describe('/products (e2e)', () => {
     });
 
     it('PATCH /products/:id sửa giá ⇒ 200, audit ghi cả before lẫn after', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.update.mockResolvedValue({ ...PRODUCT, price: 2_600_000 });
 
       const res = await request(server())
@@ -344,7 +395,7 @@ describe('/products (e2e)', () => {
     });
 
     it('PATCH /products/:id không tồn tại ⇒ 404, KHÔNG ghi DB, KHÔNG ghi audit', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
@@ -358,7 +409,7 @@ describe('/products (e2e)', () => {
     });
 
     it('DELETE /products/:id không tồn tại ⇒ 404, KHÔNG ghi audit', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
@@ -370,7 +421,7 @@ describe('/products (e2e)', () => {
     });
 
     it('DELETE ⇒ event ProductDeactivated tới audit (isActive true → false)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.update.mockResolvedValue({ ...PRODUCT, isActive: false });
 
       await request(server())
@@ -384,7 +435,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST sku trùng ⇒ 409 CONFLICT kèm fieldErrors trỏ đúng ô sku', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.create.mockRejectedValue(
         Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
       );
@@ -406,7 +457,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST thiếu field bắt buộc ⇒ 400 kèm fieldErrors cho từng ô', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -423,7 +474,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST warrantyMonths: null ⇒ 201 (không bảo hành là giá trị hợp lệ, KHÔNG bị chặn)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -445,7 +496,7 @@ describe('/products (e2e)', () => {
 
   describe('AC-4 — ghi/đọc costPrice khi CÓ costs.view', () => {
     it('POST kèm costPrice ⇒ 201, giá vốn ghi vào DB và có trong response', async () => {
-      givenPermissions(PERM.catalogManage, PERM.costsView);
+      givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
 
       const res = await request(server())
         .post('/products')
@@ -466,7 +517,7 @@ describe('/products (e2e)', () => {
     });
 
     it('PATCH costPrice ⇒ 200, giá vốn mới được ghi (đường hiệu chỉnh tay của Story 3.1)', async () => {
-      givenPermissions(PERM.catalogManage, PERM.costsView);
+      givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
       productRepo.update.mockResolvedValue({
         ...PRODUCT,
         costPrice: 1_800_000,
@@ -485,7 +536,7 @@ describe('/products (e2e)', () => {
     });
 
     it('GET /products (CÓ costs.view) ⇒ mọi phần tử danh sách đều mang costPrice', async () => {
-      givenPermissions(PERM.catalogManage, PERM.costsView);
+      givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
       productRepo.findMany.mockResolvedValue([
         PRODUCT,
         { ...PRODUCT, id: 'prod-2' },
@@ -502,7 +553,7 @@ describe('/products (e2e)', () => {
     });
 
     it('POST costPrice: 0 mà KHÔNG có costs.view ⇒ 403 (0 là giá trị, không phải "vắng mặt")', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -524,7 +575,7 @@ describe('/products (e2e)', () => {
     // Controller nhận query dạng CHUỖI (`includeInactive === 'true'`); chỉ e2e chứng minh
     // được dây này nối đúng — unit test gọi thẳng service với boolean, không đi qua HTTP.
     it('không truyền query ⇒ chỉ lấy sản phẩm còn hiệu lực', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       await request(server())
         .get('/products')
@@ -536,7 +587,7 @@ describe('/products (e2e)', () => {
     });
 
     it('?includeInactive=true ⇒ lấy cả sản phẩm đã ẩn', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       await request(server())
         .get('/products?includeInactive=true')
@@ -546,7 +597,7 @@ describe('/products (e2e)', () => {
     });
 
     it('?includeInactive=false ⇒ vẫn chỉ sản phẩm còn hiệu lực (không lật cờ nhầm)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       await request(server())
         .get('/products?includeInactive=false')
@@ -575,7 +626,7 @@ describe('/products (e2e)', () => {
 
     for (const field of NOT_NULL_FIELDS) {
       it(`POST ${field}: null ⇒ 400 VALIDATION_ERROR, KHÔNG ghi DB`, async () => {
-        givenPermissions(PERM.catalogManage, PERM.costsView);
+        givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
 
         const res = await request(server())
           .post('/products')
@@ -594,7 +645,7 @@ describe('/products (e2e)', () => {
       });
 
       it(`PATCH ${field}: null ⇒ 400 VALIDATION_ERROR, KHÔNG ghi DB`, async () => {
-        givenPermissions(PERM.catalogManage, PERM.costsView);
+        givenPermissions(PERM.catalogView, PERM.catalogManage, PERM.costsView);
 
         const res = await request(server())
           .patch('/products/prod-1')
@@ -608,7 +659,7 @@ describe('/products (e2e)', () => {
     }
 
     it('PATCH warrantyMonths: null ⇒ 200 (ngoại lệ DUY NHẤT — cột nullable, đặt lại "không bảo hành")', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       productRepo.update.mockResolvedValue({
         ...PRODUCT,
         warrantyMonths: null,
@@ -632,7 +683,7 @@ describe('/products (e2e)', () => {
     // vẫn đỏ khi một trong hai lớp bị phá — `isActive` chỉ được đổi qua DELETE (soft-delete),
     // không qua POST/PATCH tuỳ tiện.
     it('POST kèm isActive/field lạ ⇒ bị loại khỏi payload ghi DB', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .post('/products')
@@ -653,7 +704,7 @@ describe('/products (e2e)', () => {
     });
 
     it('PATCH kèm isActive ⇒ bị loại (bật lại sản phẩm đã ẩn phải đi đường riêng, không qua PATCH tuỳ tiện)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch('/products/prod-1')

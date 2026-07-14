@@ -98,5 +98,10 @@
     "key": "costs.view",
     "label": "Xem giá vốn & lợi nhuận",
     "group": "costs"
+  },
+  {
+    "key": "catalog.view",
+    "label": "Xem danh mục vật tư",
+    "group": "catalog"
   }
 ]

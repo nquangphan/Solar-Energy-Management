@@ -213,7 +213,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     it('CÓ catalog.manage nhưng THIẾU system.feature_flags ⇒ 403 khi bấm cờ', async () => {
       // Bất biến quan trọng nhất của AC-3: sửa danh mục ≠ bấm công tắc hệ thống. Người bán
       // được cấu hình mức giá (khi cờ đã bật) nhưng KHÔNG được tự bật giá sỉ cho cả công ty.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
 
       const res = await request(server())
         .patch(`/feature-flags/${FLAG.catalogTieredPricing}`)
@@ -298,7 +298,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
 
   describe('AC-3/AC-7 — GET bậc thang (đường đi thành công)', () => {
     it('CÓ catalog.manage ⇒ 200, trả bậc thang sắp xếp minQty tăng dần', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
       productPriceRepo.findMany.mockResolvedValue([
         TIER_ROW,
@@ -321,7 +321,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('sản phẩm không tồn tại ⇒ 404 (không trả mảng rỗng giả vờ là "chưa cấu hình")', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
       productRepo.findUnique.mockResolvedValue(null);
 
@@ -337,7 +337,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
       // Ghim hành vi cố ý: tắt cờ KHÔNG xoá dữ liệu (AC-6), nên người có `catalog.manage`
       // phải nhìn thấy được thứ sẽ sống lại khi bật cờ. Cờ chặn ĐƯỜNG GHI (409) và chặn
       // `prices` rò vào payload sản phẩm (AC-5) — nó không làm màn cấu hình mù.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(false);
       productPriceRepo.findMany.mockResolvedValue([TIER_ROW]);
 
@@ -352,7 +352,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
 
   describe('AC-5 — cờ TẮT ⇒ payload sản phẩm KHÔNG CÓ key `prices`', () => {
     it('cờ TẮT ⇒ GET /products/:id body không có key `prices`', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(null); // vắng dòng = TẮT
 
       const res = await request(server())
@@ -367,7 +367,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     it('cờ BẬT ⇒ GET /products/:id body CÓ `prices`', async () => {
       // KHÔNG override mock: bậc thang chỉ tới được client nếu service THẬT SỰ truyền
       // `include` xuống Prisma — tức là cờ đã được nối đúng dây.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -381,7 +381,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     it('cờ TẮT ⇒ GET /products (DANH SÁCH) — mọi phần tử đều không có key `prices`', async () => {
       // AC-5 nêu CẢ HAI đường đọc. Danh sách là đường sale Epic 4 dùng nhiều nhất; ghim riêng
       // vì `findMany` và `findUnique` là hai call-site khác nhau — sửa đúng một chỗ là bug.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(null);
 
       const res = await request(server())
@@ -396,7 +396,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('cờ BẬT ⇒ GET /products (DANH SÁCH) — mỗi phần tử mang bậc thang của nó', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -408,7 +408,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('cờ TẮT ⇒ PUT prices bị chặn 409 (không ghi dữ liệu ma)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(false);
 
       const res = await request(server())
@@ -424,7 +424,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
 
   describe('AC-4/AC-7 — validate bậc thang', () => {
     it('minQty = 1 ⇒ 400 (mức 1 CHÍNH LÀ giá gốc — không được có hai nguồn chân lý)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -438,7 +438,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('price là số thập phân ⇒ 400 (tiền là số nguyên đồng — AD-10)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -450,7 +450,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('trùng minQty trong payload ⇒ 400', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -468,7 +468,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('sản phẩm không tồn tại ⇒ 404', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
       productRepo.findUnique.mockResolvedValue(null);
 
@@ -481,7 +481,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('price âm ⇒ 400 (@Min(0) — giá không thể âm)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -497,7 +497,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     it('thiếu hẳn key `prices` trong body ⇒ 400 (không được coi là "mảng rỗng")', async () => {
       // Body rỗng KHÁC `{"prices": []}`: một cái là quên gõ, một cái là cố ý xoá bậc thang.
       // Đoán hộ người dùng ở đây ⇒ một request lỗi âm thầm xoá sạch giá sỉ của sản phẩm.
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -521,7 +521,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
         // 400. Mock Prisma NUỐT `null` không kêu ca, nên chỉ có test tường minh qua HTTP mới
         // thấy được. DTO giá dùng validator trần — ghim lại để không ai "tiện tay" thêm
         // `@IsOptional()` vào sau này.
-        givenPermissions(PERM.catalogManage);
+        givenPermissions(PERM.catalogView, PERM.catalogManage);
         givenFlag(true);
 
         const res = await request(server())
@@ -552,7 +552,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
         { prices: [{ minQty: 3_000_000_000, price: 1 }] },
       ],
     ])('%s ⇒ 400, KHÔNG chạm DB', async (_name, body) => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
 
       const res = await request(server())
@@ -580,7 +580,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('PUT [] hợp lệ ⇒ 200 và bậc thang trống (xoá hết, quay về một giá)', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
       productPriceRepo.findMany.mockResolvedValue([]);
 
@@ -620,7 +620,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     });
 
     it('thay bậc thang ⇒ AuditLog ghi ProductPricesReplaced với CẢ tập trước và sau', async () => {
-      givenPermissions(PERM.catalogManage);
+      givenPermissions(PERM.catalogView, PERM.catalogManage);
       givenFlag(true);
       productPriceRepo.findMany
         .mockResolvedValueOnce([TIER_ROW]) // before

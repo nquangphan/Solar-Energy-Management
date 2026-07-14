@@ -66,21 +66,23 @@ describe('permission-registry (AC-1, AC-2)', () => {
     expect(isPermissionKey('/auth/login')).toBe(false);
   });
 
-  it('khai đúng 20 key chính tắc (17 ma trận FR-18 §4.6 + 3 key PRD §5)', () => {
-    expect(PERMISSION_KEYS.length).toBe(20);
+  it('khai đúng 21 key chính tắc (17 ma trận FR-18 §4.6 + 3 key PRD §5 + catalog.view)', () => {
+    expect(PERMISSION_KEYS.length).toBe(21);
   });
 
-  it('3 key PRD §5 khớp byte-for-byte (chống typo literal)', () => {
+  it('4 key mới khớp byte-for-byte (chống typo literal)', () => {
     expect(PERM.settingsManage).toBe('settings.manage');
     expect(PERM.systemFeatureFlags).toBe('system.feature_flags');
     expect(PERM.costsView).toBe('costs.view');
+    expect(PERM.catalogView).toBe('catalog.view');
   });
 
-  it('3 key mới append CUỐI, 17 key cũ giữ nguyên thứ tự (artifact deterministic)', () => {
-    expect(PERMISSION_KEYS.slice(-3)).toEqual([
+  it('4 key mới append CUỐI, 17 key cũ giữ nguyên thứ tự (artifact deterministic)', () => {
+    expect(PERMISSION_KEYS.slice(-4)).toEqual([
       PERM.settingsManage,
       PERM.systemFeatureFlags,
       PERM.costsView,
+      PERM.catalogView,
     ]);
     // Khoá TRỌN thứ tự 17 key cũ, không chỉ hai đầu mút: thứ tự registry QUYẾT ĐỊNH thứ
     // tự artifact (FE gen key từ đó) → đảo bất kỳ vị trí nào ở giữa cũng phải đỏ.

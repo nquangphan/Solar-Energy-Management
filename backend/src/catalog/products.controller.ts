@@ -37,9 +37,11 @@ import { UpdateProductRequestDto } from './dto/update-product-request.dto';
 import { ProductsService } from './products.service';
 
 /**
- * CRUD danh mục vật tư (FR-14). MỌI handler khai `@RequirePermissions(PERM.catalogManage)`
- * — KHÔNG `@Public()`, KHÔNG `@AuthenticatedOnly()`: đây là dữ liệu nghiệp vụ, và một route
- * quên guard là đường để mọi người đã đăng nhập đọc giá vốn (chính là lỗ hổng mà
+ * CRUD danh mục vật tư (FR-14). READ (`GET`) khai `@RequirePermissions(PERM.catalogView)`;
+ * WRITE (`POST`/`PATCH`/`DELETE`) khai `@RequirePermissions(PERM.catalogManage)`. Tách đọc/ghi
+ * để người dựng báo giá (`THO_KS`, có `catalog.view` không có `catalog.manage`) đọc được danh mục
+ * mà không sửa được — KHÔNG `@Public()`, KHÔNG `@AuthenticatedOnly()`: đây là dữ liệu nghiệp vụ,
+ * và một route quên guard là đường để mọi người đã đăng nhập đọc giá vốn (chính là lỗ hổng mà
  * source-guard `no-handler-without-require-permissions` của Story 2.10 tồn tại để chặn).
  *
  * `canViewCosts` resolve TƯƠI từ DB mỗi request qua `AccountPermissionsService`
@@ -106,7 +108,7 @@ export class ProductsController {
   }
 
   @Get()
-  @RequirePermissions(PERM.catalogManage)
+  @RequirePermissions(PERM.catalogView)
   @ApiQuery({
     name: 'includeInactive',
     required: false,
@@ -137,11 +139,11 @@ export class ProductsController {
   }
 
   @Get(':id')
-  @RequirePermissions(PERM.catalogManage)
+  @RequirePermissions(PERM.catalogView)
   @ApiOkResponse({ type: ProductResponseDto })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
-    description: 'Thiếu catalog.manage (FORBIDDEN).',
+    description: 'Thiếu catalog.view (FORBIDDEN).',
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,

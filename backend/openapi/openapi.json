@@ -500,7 +500,7 @@
             }
           },
           "403": {
-            "description": "Thiếu catalog.manage (FORBIDDEN).",
+            "description": "Thiếu catalog.view (FORBIDDEN).",
             "content": {
               "application/json": {
                 "schema": {

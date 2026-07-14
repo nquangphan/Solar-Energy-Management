@@ -36,6 +36,7 @@ const ADMIN_PRESET: readonly PermissionKey[] = [
   PERM.constructionTransition,
   PERM.deliveryConfirm,
   PERM.paymentsRecord,
+  PERM.catalogView,
   PERM.catalogManage,
   PERM.contractsGenerate,
   PERM.ordersViewAll,
@@ -65,6 +66,7 @@ export const ROLE_PRESETS: Record<RolePreset, readonly PermissionKey[]> = {
     PERM.constructionTransition,
     PERM.deliveryConfirm,
     PERM.paymentsRecord,
+    PERM.catalogView,
     PERM.catalogManage,
     PERM.contractsGenerate,
     PERM.ordersViewAll,
@@ -78,6 +80,7 @@ export const ROLE_PRESETS: Record<RolePreset, readonly PermissionKey[]> = {
   // đơn, giá vốn & lợi nhuận. KHÔNG `settings.manage`.
   KE_TOAN: [
     PERM.paymentsRecord,
+    PERM.catalogView,
     PERM.catalogManage,
     PERM.contractsGenerate,
     PERM.ordersViewAll,
@@ -87,12 +90,15 @@ export const ROLE_PRESETS: Record<RolePreset, readonly PermissionKey[]> = {
     PERM.costsView,
   ],
   // Cột "Thợ KS": báo giá, chốt đơn, áp chiết khấu, hợp đồng, khách; KHÔNG view_all → view_own.
+  // `catalog.view` (KHÔNG `catalog.manage`): dựng báo giá phải ĐỌC được danh mục sản phẩm + gói
+  // vật tư, nhưng không sửa danh mục. `costs.view` vẫn KHÔNG có ⇒ picker không thấy giá vốn.
   THO_KS: [
     PERM.quotesCreateEdit,
     PERM.ordersConfirm,
     PERM.discountsApply,
     PERM.contractsGenerate,
     PERM.customersManage,
+    PERM.catalogView,
     PERM.ordersViewOwn,
   ],
   // Cột "Thi công": chuyển bước thi công; KHÔNG view_all → view_own.

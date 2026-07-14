@@ -36,7 +36,7 @@ export class ProductPricesController {
   constructor(private readonly productPrices: ProductPricesService) {}
 
   @Get()
-  @RequirePermissions(PERM.catalogManage)
+  @RequirePermissions(PERM.catalogView)
   @ApiOkResponse({
     type: [ProductPriceResponseDto],
     description: 'Bậc thang hiện tại, sắp xếp minQty tăng dần.',

@@ -27,6 +27,7 @@ export const PERMISSION_KEYS = {
   settingsManage: 'settings.manage',
   systemFeatureFlags: 'system.feature_flags',
   costsView: 'costs.view',
+  catalogView: 'catalog.view',
 } as const;
 
 /** camelCase key name (e.g. `ordersViewAll`). */
