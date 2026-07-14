@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Bốn lane chạy CÙNG NHAU — mỗi lane canh một loại sự thật, không lane nào thay được lane khác
+# (bài học retro Epic 3): hermetic bắt logic thuần + createMany rỗng; test:db bắt ràng buộc DB +
+# lỗi đua; design-system bắt drift/parity token; flutter bắt màn không render. Một PR gỡ khoá
+# `FOR UPDATE` hay đổi một token là CI đỏ, không cần ai nhớ gõ tay.
+
+jobs:
+  backend:
+    name: Backend (hermetic + DB lane)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: pns_app
+          POSTGRES_PASSWORD: pns_local_dev
+          POSTGRES_DB: phuong_nam_solar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pns_app -d phuong_nam_solar"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        working-directory: backend
+        run: npm ci
+      - name: Prisma generate
+        working-directory: backend
+        run: npx prisma generate
+      - name: Lint
+        working-directory: backend
+        run: npm run lint
+      - name: Format check
+        working-directory: backend
+        run: npm run format:check
+      - name: Build
+        working-directory: backend
+        run: npm run build
+      # `npm test` KHÔNG có DATABASE_URL ⇒ lane DB tự skip, giữ hermetic đúng như thiết kế.
+      - name: Test (hermetic)
+        working-directory: backend
+        run: npm test
+      # Lane DB: DATABASE_URL CHỈ đặt ở các step dưới đây, không job-wide.
+      - name: Migrate deploy
+        working-directory: backend
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://pns_app:pns_local_dev@localhost:5432/phuong_nam_solar?schema=public
+      - name: Seed
+        working-directory: backend
+        run: npx prisma db seed
+        env:
+          DATABASE_URL: postgresql://pns_app:pns_local_dev@localhost:5432/phuong_nam_solar?schema=public
+      - name: Test (DB integration — Postgres thật)
+        working-directory: backend
+        run: npm run test:db
+        env:
+          DATABASE_URL: postgresql://pns_app:pns_local_dev@localhost:5432/phuong_nam_solar?schema=public
+
+  design-system:
+    name: Design-system (drift + parity guards)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # Guards đọc thẳng web/ + mobile/ source ⇒ không cần cài dep (node --test dựng sẵn).
+      - name: Test
+        working-directory: design-system
+        run: npm test
+
+  mobile:
+    name: Mobile (analyze + widget test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Pub get
+        working-directory: mobile
+        run: flutter pub get
+      - name: Analyze
+        working-directory: mobile
+        run: flutter analyze
+      - name: Test
+        working-directory: mobile
+        run: flutter test
