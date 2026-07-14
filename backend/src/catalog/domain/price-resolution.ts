@@ -36,7 +36,10 @@ export interface ResolveUnitPriceInput {
  *     nhất" vỡ âm thầm.
  *  2. Không tier nào có `minQty <= quantity` ⇒ `basePrice` (mua ít hơn ngưỡng thấp nhất).
  *  3. Ngược lại ⇒ `price` của tier có `minQty` LỚN NHẤT mà vẫn `<= quantity` — mua càng
- *     nhiều, ăn bậc càng cao.
+ *     nhiều, ăn bậc càng cao. Hai tier TRÙNG `minQty` (bất thường về dữ liệu): giá THẤP thắng
+ *     ⇒ kết quả KHÔNG phụ thuộc thứ tự mảng. `@@unique(productId, minQty)` chặn trùng ở đường
+ *     DB, nhưng hàm này thuần và Story 4.1 có thể truyền `tiers` từ nguồn gộp khác — nên tie-break
+ *     phải xác định NGAY TẠI ĐÂY, không dựa vào constraint ở tầng khác.
  */
 export function resolveUnitPrice(input: ResolveUnitPriceInput): number {
   if (!input.tieredPricingEnabled) return input.basePrice;
@@ -45,8 +48,15 @@ export function resolveUnitPrice(input: ResolveUnitPriceInput): number {
   for (const tier of input.tiers) {
     // `<=`: mua ĐÚNG BẰNG ngưỡng thì đã ăn bậc đó ("mua TỪ 10 trở lên").
     if (tier.minQty > input.quantity) continue;
-    // Tự chọn max — KHÔNG `tiers[tiers.length - 1]`: mảng có thể chưa sắp xếp.
-    if (best === null || tier.minQty > best.minQty) best = tier;
+    // Chọn max `minQty` — KHÔNG `tiers[tiers.length - 1]` (mảng có thể chưa sắp xếp). Trùng
+    // `minQty` ⇒ giá THẤP thắng: làm phép chọn ĐỘC LẬP với thứ tự mảng.
+    if (
+      best === null ||
+      tier.minQty > best.minQty ||
+      (tier.minQty === best.minQty && tier.price < best.price)
+    ) {
+      best = tier;
+    }
   }
 
   return best?.price ?? input.basePrice;

@@ -114,6 +114,30 @@ describe('resolveUnitPrice (pure)', () => {
         }),
       ).toBe(2_150_000);
     });
+
+    it('🔴 hai tier TRÙNG minQty ⇒ giá THẤP thắng, ĐẢO thứ tự cũng CÙNG kết quả (C-5)', () => {
+      // Trùng `minQty` là bất thường dữ liệu mà `@@unique(productId, minQty)` chặn ở đường DB —
+      // nhưng hàm này thuần và Story 4.1 có thể truyền tiers gộp từ nguồn khác. Không có tie-break
+      // xác định, kết quả phụ thuộc thứ tự mảng (mức gặp trước thắng) ⇒ cùng dữ liệu ra hai giá.
+      const thap = { minQty: 10, price: 2_200_000 };
+      const cao = { minQty: 10, price: 2_300_000 };
+
+      const xuoi = resolveUnitPrice({
+        basePrice: BASE_PRICE,
+        tiers: [cao, thap],
+        quantity: 20,
+        tieredPricingEnabled: ON,
+      });
+      const nguoc = resolveUnitPrice({
+        basePrice: BASE_PRICE,
+        tiers: [thap, cao],
+        quantity: 20,
+        tieredPricingEnabled: ON,
+      });
+
+      expect(xuoi).toBe(nguoc); // độc lập thứ tự
+      expect(xuoi).toBe(2_200_000); // giá THẤP thắng
+    });
   });
 
   it('trả nguyên integer đồng — không làm tròn, không nhân chia (AD-10)', () => {

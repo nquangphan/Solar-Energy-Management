@@ -11,9 +11,10 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  *
  * Vì sao lane này phải tồn tại: hai bất biến trung tâm của story KHÔNG chứng minh được bằng mock.
  *
- *  1. "**Đúng một** dòng `isOther`" — không có index DB nào enforce nó. Nó đứng được nhờ SEED,
- *     nên câu hỏi thật là "sau khi seed chạy trên Postgres, đếm ra bao nhiêu?". Chỉ ở đây mới
- *     đếm được.
+ *  1. "**Đúng một** dòng `isOther`" — nay ĐƯỢC enforce ở tầng DB bằng partial unique index
+ *     `customer_sources_single_is_other` (migration 20260714…, C-7 retro Epic 3). Trước đó bất
+ *     biến chỉ đứng nhờ SEED + service, và mutation test 3.5 đã chứng minh nó vỡ được. Ở đây đếm
+ *     được sau seed, VÀ chứng minh DB TỪ CHỐI dòng isOther thứ hai.
  *  2. "**Không bao giờ hard-delete**" — mock Prisma chấp nhận `delete()` không kêu ca. Chỉ FK
  *     `ON DELETE RESTRICT` thật mới ném P2003, và test dưới đây bắt nó ném — đó là bằng chứng
  *     cho vì sao soft-delete không phải một lựa chọn phong cách.
@@ -104,6 +105,27 @@ moTa('Ràng buộc tầng DB của customer_sources (Postgres THẬT)', () => {
       expect(sources.filter((s) => s.isOther)).toHaveLength(1);
       const taoMoi = sources.find((s) => s.name === TEN_TEST);
       expect(taoMoi?.isOther).toBe(false);
+    });
+
+    it('🔴 DB TỪ CHỐI dòng isOther thứ hai — kể cả ghi THẲNG bỏ qua service (C-7)', async () => {
+      // Nguồn chân lý CUỐI CÙNG: dù ai đó ghi thẳng vào DB (seed lỗi, script tay, bug ORM), partial
+      // unique index `customer_sources_single_is_other` vẫn chặn. Đây chính là kịch bản hỏng thật
+      // mà mutation test 3.5 tạo ra (seed upsert-theo-tên đẻ dòng isOther thứ hai). Bằng chứng: gỡ
+      // migration ⇒ INSERT này THÀNH CÔNG ⇒ ca đỏ.
+      await expect(
+        prisma.customerSource.create({
+          data: {
+            name: `${TEN_TEST} 2`,
+            active: true,
+            sortOrder: 999,
+            isOther: true,
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'P2002' });
+
+      // Và vẫn đúng MỘT dòng isOther sau khi bị chặn.
+      const sources = await prisma.customerSource.findMany();
+      expect(sources.filter((s) => s.isOther)).toHaveLength(1);
     });
   });
 

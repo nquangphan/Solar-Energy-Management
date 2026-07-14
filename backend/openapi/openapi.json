@@ -2892,7 +2892,7 @@
             "example": "Cộng tác viên"
           },
           "description": {
-            "type": "object",
+            "type": "string",
             "description": "Mô tả cho người nhập. Gửi `null` để XOÁ mô tả (cột nullable).",
             "example": "Khách do cộng tác viên giới thiệu về.",
             "nullable": true

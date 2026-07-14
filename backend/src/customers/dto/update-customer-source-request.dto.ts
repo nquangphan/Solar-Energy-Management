@@ -40,6 +40,10 @@ export class UpdateCustomerSourceRequestDto {
   name?: string;
 
   @ApiPropertyOptional({
+    // `type: String` BẮT BUỘC: kiểu khai báo là `string | null`, và không có `type` tường minh
+    // thì NestJS-Swagger suy ra `type:"object"` cho union ⇒ openapi.json sai (cùng lỗi DTO gói
+    // vật tư 3.6 đã vá). Có `type: String` ⇒ spec ra `"type":"string"`.
+    type: String,
     description:
       'Mô tả cho người nhập. Gửi `null` để XOÁ mô tả (cột nullable).',
     example: 'Khách do cộng tác viên giới thiệu về.',

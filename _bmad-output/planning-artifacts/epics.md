@@ -385,6 +385,7 @@ As a người có quyền quản lý khách hàng, I want tra SĐT để chọn 
 **Acceptance Criteria:**
 - **Given** một SĐT nhập trong luồng tra cứu, **When** backend tra, **Then** chạy cùng bộ chuẩn hoá E.164 trước khi kiểm tra tính duy nhất; trùng → trả khách cũ để điền sẵn (AD-9, FR-29).
 - **Given** SĐT không tìm thấy, **When** hiển thị kết quả, **Then** hiện "SĐT chưa có trong hệ thống." + nút "Tạo khách hàng mới" inline (FR-29, UX-DR-19).
+- **Given** màn Danh sách khách + Chi tiết khách, **When** dựng, **Then** dùng Table + trạng thái empty/loading/error, xem được thông tin theo Loại khách; parity web+mobile (FR-29).
 
 ### Story 3.5: Danh mục Nguồn khách — CRUD + Seed + Cấu hình (gate `settings.manage`)
 As a người có quyền cấu hình hệ thống, I want quản lý danh mục Nguồn khách (bảng `CustomerSource`), So that mỗi khách ghi rõ nguồn mà nó đến.
@@ -401,8 +402,7 @@ As a người có quyền sửa danh mục, I want tạo gói vật tư là danh
 - **Given** khái niệm Gói vật tư, **When** thiết kế, **Then** Gói là **checklist trên UI**, KHÔNG phải sản phẩm, KHÔNG phải dòng tự do; entity `ProductGroup` + `ProductGroupItem { productId }` (§2).
 - **Given** user chọn gói, **When** dựng báo giá, **Then** hiện danh sách sản phẩm con, user tick từng item, **mỗi item tick thành một `OrderLineItem` bình thường** trỏ vào `Product` thật (KHÔNG snapshot, KHÔNG BOM, KHÔNG lưu gói lên Đơn) (§2).
 - **Given** item gói được tick, **When** thêm, **Then** user nhập số lượng, giá = giá item × số lượng, KHÔNG có giá trọn gói mặc định (§2).
-- **Given** gói vật tư, **When** xem chi tiết đơn, **Then** gói KHÔNG hiển thị (in PDF), chỉ thấy dòng item thất vãn từ gói (Phase 1 KHÔNG BOM, không cần) (§2).
-- **Given** màn Danh sách khách + Chi tiết khách, **When** dựng, **Then** dùng Table + trạng thái empty/loading/error, xem được thông tin theo Loại khách; parity web+mobile (FR-29).
+- **Given** gói vật tư, **When** xem chi tiết đơn, **Then** gói KHÔNG hiển thị (in PDF), chỉ thấy dòng item tách ra từ gói (Phase 1 KHÔNG BOM, không cần) (§2).
 
 ## Epic 4: Báo giá, Chốt & Duyệt chiết khấu (trái tim)
 _Giỏ hàng + cờ phạm vi + VAT qua `/orders/preview-total`; chốt + snapshot giá; sửa đơn = bản update mới + lịch sử; xuất PDF + share ảnh; áp + duyệt chiết khấu. Mỗi hành động nghiệp vụ publish domain event (AD-18). FR-1..6, FR-21._

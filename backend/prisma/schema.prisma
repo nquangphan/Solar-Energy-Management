@@ -249,6 +249,10 @@ model CustomerSource {
   customers   Customer[]
 
   @@map("customer_sources")
+  // Bất biến "đúng MỘT dòng isOther" được enforce bằng PARTIAL UNIQUE INDEX
+  // `customer_sources_single_is_other` (migration 20260714000000, C-7). Prisma schema DSL không
+  // biểu diễn được filtered index ⇒ nó sống trong migration SQL thủ công, KHÔNG ở đây. Đừng
+  // tưởng "schema không thấy" là "không tồn tại": `\d customer_sources` trên DB sẽ thấy nó.
 }
 
 /// Khách hàng (FR-29). KHOÁ CHÍNH là **SĐT đã chuẩn hoá E.164** (`+84…`) — ngoại lệ DUY NHẤT
