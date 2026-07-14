@@ -121,6 +121,8 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
     featureFlag: featureFlagRepo,
     auditLog: auditRepo,
     $transaction: jest.fn().mockResolvedValue([]),
+    // Khoá `SELECT … FOR UPDATE` — op đầu của tx replace() (nối đuôi hai lệnh thay cùng sản phẩm).
+    $queryRaw: jest.fn().mockReturnValue({ op: 'lock' }),
   };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),

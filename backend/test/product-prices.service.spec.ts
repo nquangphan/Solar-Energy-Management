@@ -72,6 +72,9 @@ describe('ProductPricesService (unit, hermetic)', () => {
       productPrice: productPriceRepo,
       product: productRepo,
       $transaction: transaction,
+      // Khoá `SELECT … FOR UPDATE` là op ĐẦU của tx (nối đuôi hai lệnh thay cùng sản phẩm). Mock
+      // trả một "mô tả thao tác" nhận diện được để ca kiểm khẳng định nó đứng đầu mảng ops.
+      $queryRaw: jest.fn().mockReturnValue({ op: 'lock' }),
     } as unknown as PrismaService;
     const eventBus = { publish } as unknown as EventBus;
     const featureFlags = { isEnabled } as unknown as FeatureFlagsService;
@@ -140,9 +143,10 @@ describe('ProductPricesService (unit, hermetic)', () => {
       // chạy) — đã cắn một lần. Mảng rỗng là đầu vào HỢP LỆ ở đây, nên đây là đường đi thật.
       expect(productPriceRepo.createMany).not.toHaveBeenCalled();
 
-      // Và bậc thang thật sự TRỐNG sau đó.
-      const ops = transaction.mock.calls[0][0] as unknown[];
-      expect(ops).toHaveLength(1);
+      // Và bậc thang thật sự TRỐNG sau đó. Ops = [khoá FOR UPDATE, deleteMany] — KHÔNG createMany.
+      const ops = transaction.mock.calls[0][0] as { op: string }[];
+      expect(ops).toHaveLength(2);
+      expect(ops[0]).toEqual({ op: 'lock' }); // khoá đứng ĐẦU, trước deleteMany
       expect(result).toEqual([]);
     });
 
@@ -169,9 +173,11 @@ describe('ProductPricesService (unit, hermetic)', () => {
           { productId: PRODUCT_ID, minQty: 50, price: 2_150_000 },
         ],
       });
-      // Cả hai thao tác phải nằm trong MỘT tx — nửa vời (xoá xong mà tạo hỏng) là bậc thang bốc hơi.
-      const ops = transaction.mock.calls[0][0] as unknown[];
-      expect(ops).toHaveLength(2);
+      // Cả ba thao tác phải nằm trong MỘT tx: khoá FOR UPDATE → deleteMany → createMany. Nửa vời
+      // (xoá xong mà tạo hỏng) là bậc thang bốc hơi; thiếu khoá là hai lệnh thay gộp vào nhau.
+      const ops = transaction.mock.calls[0][0] as { op: string }[];
+      expect(ops).toHaveLength(3);
+      expect(ops[0]).toEqual({ op: 'lock' }); // khoá đứng ĐẦU
       expect(transaction).toHaveBeenCalledTimes(1);
 
       expect(result).toEqual([

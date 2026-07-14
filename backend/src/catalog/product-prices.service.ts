@@ -6,6 +6,7 @@ import { EventBus } from '../events/event-bus';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ProductPricesReplaced } from './domain/product-price-events';
+import type { PrismaPromise } from '@prisma/client';
 import type { PriceTier } from './domain/price-resolution';
 import { ProductPriceDto } from './dto/product-price.dto';
 
@@ -81,13 +82,24 @@ export class ProductPricesService {
       orderBy: { minQty: 'asc' },
     });
 
-    // Xoá bậc thang cũ, rồi CHỈ tạo mới khi có dòng.
+    // KHOÁ dòng product trước khi đụng bậc thang ⇒ hai lệnh thay cùng một sản phẩm phải NỐI ĐUÔI.
     //
-    // `createMany({ data: [] })` với mảng RỖNG làm hỏng atomic-replace ở Prisma 7 + adapter-pg
-    // (đã cắn một lần ở `account-permissions.service.ts`: revocation im lặng không chạy). Mảng
-    // rỗng là đầu vào HỢP LỆ ở đây ("xoá hết bậc thang, quay về một giá") nên nhánh này không
-    // phải phòng xa — nó là đường đi thật. `deleteMany` chạy VÔ ĐIỀU KIỆN.
-    const ops = [this.prisma.productPrice.deleteMany({ where: { productId } })];
+    // Thiếu khoá này, `$transaction` KHÔNG đủ để atomic-replace đúng: Postgres chạy READ COMMITTED,
+    // nên `deleteMany` của request B lấy ảnh chụp TẠI LÚC CÂU LỆNH BẮT ĐẦU và không thấy dòng A vừa
+    // commit ⇒ B xoá 0 dòng rồi chèn tiếp danh sách của mình. Hai lần "thay sạch" biến thành GỘP:
+    // `minQty` lặp, và nếu hai payload có `minQty` chung thì vỡ `@@unique` NGAY TRONG tx ⇒ 500 cho
+    // một cú double-click. `FOR UPDATE` bắt B chờ A commit rồi `deleteMany` trên ảnh chụp MỚI ⇒
+    // thay sạch thật, người ghi sau thắng gọn. (Cùng khuôn với `product-groups.service.ts`.)
+    //
+    // Rồi CHỈ tạo mới khi có dòng: `createMany({ data: [] })` với mảng RỖNG làm hỏng atomic-replace
+    // ở Prisma 7 + adapter-pg (đã cắn ở `account-permissions.service.ts`). Mảng rỗng là đầu vào HỢP
+    // LỆ ("xoá hết bậc thang, quay về một giá") nên nhánh này là đường đi thật. `deleteMany` chạy
+    // VÔ ĐIỀU KIỆN.
+    const ops: PrismaPromise<unknown>[] = [
+      this.prisma
+        .$queryRaw`SELECT id FROM products WHERE id = ${productId} FOR UPDATE`,
+      this.prisma.productPrice.deleteMany({ where: { productId } }),
+    ];
     if (prices.length > 0) {
       ops.push(
         this.prisma.productPrice.createMany({
