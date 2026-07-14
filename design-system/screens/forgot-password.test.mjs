@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -24,8 +25,8 @@ const web = readFileSync(WEB_TSX, 'utf8');
 const css = readFileSync(WEB_CSS, 'utf8');
 const mobile = readFileSync(MOBILE_DART, 'utf8');
 
-const stripDart = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+const stripDart = stripComments;
+const stripTsx = stripComments;
 
 test('both platform screens exist (parity coverage, AC-3)', () => {
   assert.ok(existsSync(WEB_TSX), 'web/src/screens/auth/ForgotPasswordScreen.tsx must exist');

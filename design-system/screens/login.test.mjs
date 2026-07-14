@@ -12,6 +12,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -87,7 +88,7 @@ test('web auth screen renders no nav — sidebar={null}, no Sidebar (UX-DR-15)',
 
 test('mobile auth screen renders no nav — no AppMobileShell/Topbar/BottomNav (UX-DR-15)', () => {
   assert.ok(mobile.includes('AppPhoneFrame'), 'login_screen.dart must wrap content in AppPhoneFrame');
-  const stripDart = (s) => s.replace(/\/\/.*$/gm, '');
+  const stripDart = stripComments;
   const code = stripDart(mobile);
   for (const banned of ['app_mobile_shell', 'AppMobileShell', 'AppBottomNav', 'AppTopbar']) {
     assert.ok(!code.includes(banned), `login_screen.dart must not use ${banned} (auth = no nav)`);

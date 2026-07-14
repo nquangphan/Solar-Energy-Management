@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/components -> repo root
@@ -20,7 +21,9 @@ const FILES = [
   'Topbar.tsx', 'Sidebar.tsx', 'WebFrame.tsx', 'Toolbar.tsx',
   'Seg.tsx', 'Tabs.tsx', 'SearchField.tsx', 'WebShell.tsx',
 ];
-const sources = Object.fromEntries(FILES.map((f) => [f, read(f)]));
+// Strip comment TRƯỚC KHI scan chuỗi cấm: một câu như "must not add box-shadow" trong comment
+// KHÔNG được làm guard đỏ (C-11). Guard chỉ nhìn code thật.
+const sources = Object.fromEntries(FILES.map((f) => [f, stripComments(read(f))]));
 
 // (1) No router — the shell emits intent, the app layer routes (AD-1/2).
 test('no router imports anywhere in the shell', () => {

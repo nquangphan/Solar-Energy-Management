@@ -16,6 +16,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRegistry, buildOutputs, OUT_PATHS } from './build-permission-keys.mjs';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/permissions -> repo root
@@ -49,7 +50,7 @@ test('(2) every PERM / AppPerm value is a canonical registry key (no drift)', ()
 
   // Strip comments first — doc comments mention `'mine'`/`'all'`, which are NOT
   // permission keys (they are orderScope return values).
-  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const strip = stripComments;
   const literals = (block) => [...strip(block).matchAll(/'([^']+)'/g)].map((m) => m[1]);
   const webValues = literals(webPermBlock);
   const mobValues = literals(mobPermBlock);

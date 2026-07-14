@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/components -> root
@@ -38,8 +39,7 @@ const statusChipTsx = readFileSync(
 // a real block-comment opener, but a block-first pass would treat it as one and
 // swallow every line up to the next `*/` — silently deleting real code from the
 // scanned string, which is where banned tokens would then hide.
-const stripDart = (src) =>
-  src.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+const stripDart = stripComments;
 
 // Interpolating a label straight into a RegExp makes any future label carrying
 // `(`, `+`, `?` or `.` a syntax error rather than a clean failure.
