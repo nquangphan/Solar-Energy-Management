@@ -75,7 +75,43 @@ class _RejectingUpdatePort extends FakeOrdersPort {
       throw error;
 }
 
+/// A port whose SCOPE PATCH is refused with the AD-5 envelope — proves a failed
+/// toggle surfaces the backend's sentence and never wipes the cart (Story 4.3).
+class _RejectingScopePort extends FakeOrdersPort {
+  _RejectingScopePort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<Order> updateScopeFlags(
+    String orderId,
+    UpdateScopeFlagsInput input,
+  ) async =>
+      throw error;
+}
+
+/// A port that RECORDS every scope PATCH — proves the toggle sends exactly the
+/// one flag the user touched (partial input, Story 4.3).
+class _RecordingScopePort extends FakeOrdersPort {
+  final List<UpdateScopeFlagsInput> scopeCalls = <UpdateScopeFlagsInput>[];
+
+  @override
+  Future<Order> updateScopeFlags(
+    String orderId,
+    UpdateScopeFlagsInput input,
+  ) {
+    scopeCalls.add(input);
+    return super.updateScopeFlags(orderId, input);
+  }
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
+
+/// The rendered on/off state of the scope chip with [label].
+bool _flagOn(WidgetTester tester, String label) => tester
+    .widgetList<AppScopeFlag>(find.byType(AppScopeFlag))
+    .firstWhere((AppScopeFlag f) => f.label == label)
+    .on;
 
 Future<void> _tap(WidgetTester tester, String label) async {
   final finder = find.widgetWithText(AppButton, label).first;
@@ -385,6 +421,91 @@ void main() {
       // Vẫn ở bước 1 (màn pick) — và câu của backend hiện nguyên văn.
       expect(find.text('Tra cứu theo số điện thoại'), findsWidgets);
       expect(find.text(backendSentence), findsOneWidget);
+    });
+
+    testWidgets(
+        'cờ phạm vi (4.3): khách CA_NHAN → preset cả 3 chip on (Thiết bị/Thi công/Vận chuyển)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen()));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester); // 0903176968 — demo CA_NHAN
+
+      expect(find.text('Phạm vi'), findsOneWidget);
+      expect(_flagOn(tester, 'Thiết bị'), isTrue);
+      expect(_flagOn(tester, 'Thi công'), isTrue);
+      expect(_flagOn(tester, 'Vận chuyển'), isTrue);
+    });
+
+    testWidgets('cờ phạm vi (4.3): khách THUONG_MAI → preset chỉ Thiết bị on',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen()));
+      await tester.pumpAndSettle();
+      // 0912345678 — demo THUONG_MAI (Công ty TNHH Hoà Phát).
+      await tester.enterText(find.byType(TextField).first, '0912345678');
+      await _tap(tester, 'Tra cứu');
+      await _tap(tester, 'Dùng khách này');
+
+      expect(_flagOn(tester, 'Thiết bị'), isTrue);
+      expect(_flagOn(tester, 'Thi công'), isFalse);
+      expect(_flagOn(tester, 'Vận chuyển'), isFalse);
+    });
+
+    testWidgets(
+        'cờ phạm vi (4.3): tap Checkbox Thi công → chip đổi on, fake nhận ĐÚNG một cờ partial',
+        (WidgetTester tester) async {
+      final _RecordingScopePort port = _RecordingScopePort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      // THUONG_MAI để Thi công khởi đầu OFF — tap bật lên mới nhìn thấy đổi chiều.
+      await tester.enterText(find.byType(TextField).first, '0912345678');
+      await _tap(tester, 'Tra cứu');
+      await _tap(tester, 'Dùng khách này');
+      expect(_flagOn(tester, 'Thi công'), isFalse);
+
+      await tester.tap(find.widgetWithText(AppCheckbox, 'Thi công'));
+      await tester.pumpAndSettle();
+
+      expect(_flagOn(tester, 'Thi công'), isTrue);
+      // Partial đúng nghĩa: CHỈ cờ user chạm đi ra port, cờ kia để null.
+      expect(port.scopeCalls, hasLength(1));
+      expect(port.scopeCalls.single.scopeThiCong, isTrue);
+      expect(port.scopeCalls.single.scopeVanChuyen, isNull);
+      // Cờ Thiết bị không suy suyển — và không có Checkbox nào để tắt nó.
+      expect(_flagOn(tester, 'Thiết bị'), isTrue);
+      expect(find.widgetWithText(AppCheckbox, 'Thiết bị'), findsNothing);
+    });
+
+    testWidgets(
+        'cờ phạm vi (4.3): port throw → banner message backend, chip giữ state cũ, giỏ còn nguyên',
+        (WidgetTester tester) async {
+      const String backendSentence =
+          'Chỉ sửa được dòng khi đơn còn ở trạng thái Báo giá.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingScopePort(
+          const OrderPortException(backendSentence),
+        ),
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // CA_NHAN: Thi công đang ON — tap tắt nhưng port từ chối. (Viewport có
+      // thể đã cuộn tới nút picker — kéo checkbox vào tầm nhìn trước khi tap.)
+      expect(_flagOn(tester, 'Thi công'), isTrue);
+      final Finder thiCongToggle = find.widgetWithText(AppCheckbox, 'Thi công');
+      await tester.ensureVisible(thiCongToggle);
+      await tester.pump();
+      await tester.tap(thiCongToggle);
+      await tester.pumpAndSettle();
+
+      // Câu của backend nguyên văn; chip KHÔNG đổi; dòng giỏ KHÔNG mất.
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(_flagOn(tester, 'Thi công'), isTrue);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
     });
 
     testWidgets(

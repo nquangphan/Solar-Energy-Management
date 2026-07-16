@@ -9,39 +9,104 @@
 // window, the priceEditable gate all live on the real server (AD-4).
 
 import 'catalog_port.dart';
+import 'customers_port.dart';
 import 'fake_catalog_port.dart';
+import 'fake_customers_port.dart';
 import 'orders_port.dart';
 
 const String _now = '2026-07-16T00:00:00.000Z';
 
+/// Digits of a string, minus leading zeros — mirrors the backend's phone matching.
+String _digits(String raw) =>
+    raw.replaceAll(RegExp(r'\D'), '').replaceFirst(RegExp(r'^0+'), '');
+
+/// Stand-in for the backend's scopePresetFor() (Story 4.3, FR-2) — lives in the
+/// fake (the demo "server"), never in a screen: CA_NHAN → all three on,
+/// THUONG_MAI → equipment only.
+({bool scopeThietBi, bool scopeThiCong, bool scopeVanChuyen}) _presetFor(
+  String custType,
+) {
+  final bool caNhan = custType == 'CA_NHAN';
+  return (scopeThietBi: true, scopeThiCong: caNhan, scopeVanChuyen: caNhan);
+}
+
 /// An [OrdersPort] backed by an in-memory store — TEST/DEMO ONLY.
 class FakeOrdersPort implements OrdersPort {
-  FakeOrdersPort({this.products = kDemoCatalogProducts});
+  FakeOrdersPort({
+    this.products = kDemoCatalogProducts,
+    this.customers = kDemoCustomers,
+  });
 
   final List<CatalogProduct> products;
+  final List<Customer> customers;
   final Map<String, Order> _orders = <String, Order>{};
   int _seq = 0;
 
   @override
   Future<Order> create(CreateOrderInput input) async {
     _seq += 1;
+    // The backend snapshots custType from the Customer and applies the scope
+    // preset explicitly (Story 4.3) — the fake plays that role for its demo
+    // customers; an unknown phone falls back to CA_NHAN.
+    final String needle = _digits(input.customerSdt);
+    Customer? customer;
+    for (final Customer c in customers) {
+      if (needle.isNotEmpty && _digits(c.sdt).endsWith(needle)) {
+        customer = c;
+        break;
+      }
+    }
+    final String custType = customer?.custType ?? 'CA_NHAN';
+    final ({bool scopeThietBi, bool scopeThiCong, bool scopeVanChuyen}) preset =
+        _presetFor(custType);
     final Order order = Order(
       id: 'ord-demo-$_seq',
       status: 'baogia',
       customerSdt: input.customerSdt,
       currentVersionId: 'ver-demo-$_seq',
       ownerAccountId: 'acc-demo',
-      sourceId: 'src-facebook',
-      custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: false,
-      scopeVanChuyen: false,
+      sourceId: customer?.sourceId ?? 'src-facebook',
+      custType: custType,
+      scopeThietBi: preset.scopeThietBi,
+      scopeThiCong: preset.scopeThiCong,
+      scopeVanChuyen: preset.scopeVanChuyen,
       lineItems: <OrderLine>[],
       createdAt: _now,
       updatedAt: _now,
     );
     _orders[order.id] = order;
     return _copy(order);
+  }
+
+  @override
+  Future<Order> updateScopeFlags(
+    String orderId,
+    UpdateScopeFlagsInput input,
+  ) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    final Order updated = Order(
+      id: order.id,
+      status: order.status,
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: input.scopeThiCong ?? order.scopeThiCong,
+      scopeVanChuyen: input.scopeVanChuyen ?? order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      lineItems: order.lineItems,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = updated;
+    return _copy(updated);
   }
 
   @override

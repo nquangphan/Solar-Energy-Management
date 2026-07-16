@@ -12,6 +12,8 @@ import {
   DEMO_CATALOG_PRODUCTS,
 } from './fake-catalog-port';
 import type { CatalogProduct } from './catalog-port';
+import { DEMO_CUSTOMERS } from './fake-customers-port';
+import type { Customer } from './customers-port';
 import type {
   AddOrderLineInput,
   CreateOrderInput,
@@ -21,9 +23,29 @@ import type {
   OrdersPort,
   PreviewTotalInput,
   UpdateOrderLineInput,
+  UpdateScopeFlagsInput,
 } from './orders-port';
 
 const NOW = '2026-07-16T00:00:00.000Z';
+
+/** Digits of a string, minus leading zeros — mirrors the backend's phone matching. */
+function digits(raw: string): string {
+  return raw.replace(/\D/g, '').replace(/^0+/, '');
+}
+
+/**
+ * Stand-in for the backend's scopePresetFor() (Story 4.3, FR-2) — lives in the
+ * fake (the demo "server"), never in a screen: CA_NHAN → all three on,
+ * THUONG_MAI → equipment only.
+ */
+function presetFor(custType: string): {
+  scopeThietBi: boolean;
+  scopeThiCong: boolean;
+  scopeVanChuyen: boolean;
+} {
+  const caNhan = custType === 'CA_NHAN';
+  return { scopeThietBi: true, scopeThiCong: caNhan, scopeVanChuyen: caNhan };
+}
 
 /** An `OrdersPort` backed by an in-memory store — TEST/DEMO ONLY. */
 export class FakeOrdersPort implements OrdersPort {
@@ -32,10 +54,19 @@ export class FakeOrdersPort implements OrdersPort {
 
   constructor(
     private readonly products: CatalogProduct[] = DEMO_CATALOG_PRODUCTS,
+    private readonly customers: Customer[] = DEMO_CUSTOMERS,
   ) {}
 
   create(input: CreateOrderInput): Promise<Order> {
     this.seq += 1;
+    // The backend snapshots custType from the Customer and applies the scope
+    // preset explicitly (Story 4.3) — the fake plays that role for its demo
+    // customers; an unknown phone falls back to CA_NHAN.
+    const needle = digits(input.customerSdt);
+    const customer = this.customers.find(
+      (c) => needle !== '' && digits(c.sdt).endsWith(needle),
+    );
+    const custType = customer?.custType ?? 'CA_NHAN';
     const order: Order = {
       id: `ord-demo-${this.seq}`,
       status: 'baogia',
@@ -43,11 +74,9 @@ export class FakeOrdersPort implements OrdersPort {
       currentVersionId: `ver-demo-${this.seq}`,
       ownerAccountId: 'acc-demo',
       assigneeAccountId: null,
-      sourceId: 'src-facebook',
-      custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: false,
-      scopeVanChuyen: false,
+      sourceId: customer?.sourceId ?? 'src-facebook',
+      custType,
+      ...presetFor(custType),
       kWp: null,
       vatMode: null,
       lineItems: [],
@@ -55,6 +84,21 @@ export class FakeOrdersPort implements OrdersPort {
       updatedAt: NOW,
     };
     this.orders.set(order.id, order);
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  updateScopeFlags(
+    orderId: string,
+    input: UpdateScopeFlagsInput,
+  ): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    if (input.scopeThiCong !== undefined) order.scopeThiCong = input.scopeThiCong;
+    if (input.scopeVanChuyen !== undefined) {
+      order.scopeVanChuyen = input.scopeVanChuyen;
+    }
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
   }
 

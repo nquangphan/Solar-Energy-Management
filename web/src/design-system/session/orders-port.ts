@@ -84,6 +84,16 @@ export interface UpdateOrderLineInput {
 }
 
 /**
+ * Body of `PATCH /orders/:id` (Story 4.3) — partial toggle of the two MUTABLE
+ * scope flags. `scopeThietBi` is deliberately absent: every order carries
+ * equipment, the backend keeps it `true` and accepts no write for it.
+ */
+export interface UpdateScopeFlagsInput {
+  scopeThiCong?: boolean;
+  scopeVanChuyen?: boolean;
+}
+
+/**
  * Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed integer
  * đồng numbers (AD-16). The screen renders them as-is, "—" until the first
  * response (or after a failed preview).
@@ -143,6 +153,12 @@ export interface OrdersPort {
 
   /** Remove a line from the current version. */
   removeLine(orderId: string, lineId: string): Promise<void>;
+
+  /**
+   * Toggle the Thi công/Vận chuyển scope flags (Story 4.3) — only while the
+   * order is still `'baogia'` (409 otherwise). Returns the full fresh order.
+   */
+  updateScopeFlags(orderId: string, input: UpdateScopeFlagsInput): Promise<Order>;
 
   /**
    * Stateless totals preview (AD-16): send the displayed lines, get the ONE

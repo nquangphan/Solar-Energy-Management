@@ -67,6 +67,10 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   String? _error;
   Map<String, String> _fieldErrors = const <String, String>{};
 
+  /// Đang chờ PATCH cờ phạm vi — disable 2 control toggle để tap nhanh không
+  /// đua response (cờ không ảnh hưởng tiền nên không cần ticket như preview).
+  bool _scopeBusy = false;
+
   // Free-line form state.
   final TextEditingController _freeName = TextEditingController();
   final TextEditingController _freeUnit = TextEditingController();
@@ -239,6 +243,28 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
       await _refresh();
     } catch (err) {
       _showError(err);
+    }
+  }
+
+  /// Toggle cờ Thi công/Vận chuyển (Story 4.3): PATCH qua port → thay order
+  /// bằng response. KHÔNG gọi previewTotal — cờ không ảnh hưởng tiền (AD-16
+  /// nguyên vẹn). Lỗi → banner, GIỮ nguyên giỏ + state cờ cũ (bất biến k).
+  Future<void> _toggleScope(UpdateScopeFlagsInput input) async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _scopeBusy = true);
+    try {
+      final Order updated =
+          await widget.ordersPort.updateScopeFlags(order.id, input);
+      if (!mounted) return;
+      setState(() {
+        _order = updated;
+        _error = null;
+      });
+    } catch (err) {
+      _showError(err);
+    } finally {
+      if (mounted) setState(() => _scopeBusy = false);
     }
   }
 
@@ -540,23 +566,59 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             AppCard(
               child: Padding(
                 padding: const EdgeInsets.all(AppTokens.space12),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Khách hàng', style: _microMuted),
-                          Text(
-                            _customer?.name ?? order.customerSdt,
-                            style: _strong,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Khách hàng', style: _microMuted),
+                              Text(
+                                _customer?.name ?? order.customerSdt,
+                                style: _strong,
+                              ),
+                              Text(order.customerSdt, style: _microMuted),
+                            ],
                           ),
-                          Text(order.customerSdt, style: _microMuted),
-                        ],
-                      ),
+                        ),
+                        AppCustomerTypeChip(
+                            label: customerTypeLabel(order.custType)),
+                      ],
                     ),
-                    AppCustomerTypeChip(
-                        label: customerTypeLabel(order.custType)),
+                    const SizedBox(height: AppTokens.space8),
+                    // Cờ phạm vi (Story 4.3): chip CHỈ hiển thị (AppScopeFlag
+                    // tĩnh, màn sở hữu quyết định on/off); toggle qua 2
+                    // AppCheckbox riêng — "Thiết bị" luôn bật nên KHÔNG có
+                    // control tắt.
+                    const Text('Phạm vi', style: _microMuted),
+                    const SizedBox(height: AppTokens.space8),
+                    Wrap(
+                      spacing: 6.0,
+                      runSpacing: 6.0,
+                      children: [
+                        AppScopeFlag(label: 'Thiết bị', on: order.scopeThietBi),
+                        AppScopeFlag(label: 'Thi công', on: order.scopeThiCong),
+                        AppScopeFlag(
+                            label: 'Vận chuyển', on: order.scopeVanChuyen),
+                      ],
+                    ),
+                    AppCheckbox(
+                      label: 'Thi công',
+                      checked: order.scopeThiCong,
+                      disabled: !editable || _scopeBusy,
+                      onChanged: (bool checked) => _toggleScope(
+                          UpdateScopeFlagsInput(scopeThiCong: checked)),
+                    ),
+                    AppCheckbox(
+                      label: 'Vận chuyển',
+                      checked: order.scopeVanChuyen,
+                      disabled: !editable || _scopeBusy,
+                      onChanged: (bool checked) => _toggleScope(
+                          UpdateScopeFlagsInput(scopeVanChuyen: checked)),
+                    ),
                   ],
                 ),
               ),

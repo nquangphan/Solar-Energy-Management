@@ -2067,6 +2067,89 @@
         "tags": [
           "orders"
         ]
+      },
+      "patch": {
+        "operationId": "OrdersController_updateScopeFlags",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOrderRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đơn sau khi đổi cờ phạm vi Thi công/Vận chuyển (partial). `scopeThietBi` luôn true — không nhận qua body (Story 4.3, FR-2).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cờ không phải boolean hoặc là null (VALIDATION_ERROR — kèm fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn không còn ở trạng thái 'baogia' — cờ gate máy trạng thái, không đổi giữa vòng đời (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/orders/{id}/line-items": {
@@ -3547,6 +3630,19 @@
           "vatAmount",
           "total"
         ]
+      },
+      "UpdateOrderRequestDto": {
+        "type": "object",
+        "properties": {
+          "scopeThiCong": {
+            "type": "boolean",
+            "description": "Cờ phạm vi Thi công — chỉ đổi được khi đơn còn ở baogia."
+          },
+          "scopeVanChuyen": {
+            "type": "boolean",
+            "description": "Cờ phạm vi Vận chuyển — chỉ đổi được khi đơn còn ở baogia."
+          }
+        }
       },
       "AddLineItemRequestDto": {
         "type": "object",

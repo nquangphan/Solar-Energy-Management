@@ -216,6 +216,10 @@ describe('/orders (e2e)', () => {
         call: () => request(server()).get(`/orders/${ORDER_ID}`),
       },
       {
+        name: 'PATCH /orders/:id',
+        call: () => request(server()).patch(`/orders/${ORDER_ID}`),
+      },
+      {
         name: 'POST /orders/:id/line-items',
         call: () => request(server()).post(`/orders/${ORDER_ID}/line-items`),
       },
@@ -328,6 +332,113 @@ describe('/orders (e2e)', () => {
           data: expect.objectContaining({ eventType: 'OrderLineRemoved' }),
         }),
       );
+    });
+  });
+
+  describe('PATCH /orders/:id — toggle cờ phạm vi (Story 4.3)', () => {
+    it('happy path ⇒ 200, cờ mới trong response, audit OrderScopeChanged qua EventBus', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.update.mockResolvedValue({ ...DON_BAOGIA, scopeThiCong: true });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThiCong: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body.scopeThiCong).toBe(true);
+      expect(res.body.scopeThietBi).toBe(true);
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'OrderScopeChanged' }),
+        }),
+      );
+    });
+
+    it('cờ không phải boolean (scopeThiCong: "yes") ⇒ 400 kèm fieldErrors, không ghi', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThiCong: 'yes' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ field: 'scopeThiCong' }),
+        ]),
+      );
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('cờ = null ⇒ 400 (null KHÔNG phải "bỏ qua field" trên cột NOT NULL)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeVanChuyen: null });
+
+      expect(res.status).toBe(400);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('đơn đã chốt ⇒ 409 CONFLICT envelope chuẩn', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThiCong: true });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('scopeThietBi: false bị whitelist strip IM LẶNG ⇒ 200, KHÔNG ghi, KHÔNG audit, cờ vẫn true', async () => {
+      // `scopeThietBi` không có trong DTO — client cố tắt cờ bất biến thì field bị strip,
+      // dto còn lại RỖNG ⇒ nhánh "trả view hiện tại": không có đường ghi nào chạm tới cờ.
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThietBi: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body.scopeThietBi).toBe(true);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('smuggle custType kèm cờ hợp lệ ⇒ custType bị strip: payload ghi CHỈ chứa 2 cờ, custType không đổi', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        scopeVanChuyen: true,
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ custType: 'THUONG_MAI', scopeVanChuyen: true });
+
+      expect(res.status).toBe(200);
+      // toHaveBeenCalledWith so KHỚP TOÀN BỘ object ⇒ chứng minh `custType` vắng mặt
+      // trong data — nhãn báo cáo snapshot lúc tạo đơn không đổi được qua PATCH.
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: { scopeThiCong: undefined, scopeVanChuyen: true },
+      });
+      expect(res.body.custType).toBe('CA_NHAN');
+      expect(res.body.scopeVanChuyen).toBe(true);
     });
   });
 

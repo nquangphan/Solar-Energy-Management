@@ -25,6 +25,7 @@ import {
   ErrorState,
   Field,
   Frame,
+  ScopeFlag,
   Sheet,
   Table,
 } from '../../design-system/components';
@@ -44,6 +45,7 @@ import type {
   OrderPortError,
   OrdersPort,
   OrderTotals,
+  UpdateScopeFlagsInput,
 } from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Sidebar, SIDEBAR_NAV, Topbar, WebShell } from '../../design-system/shell';
@@ -79,6 +81,9 @@ export function CreateQuoteScreen({
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [picker, setPicker] = useState<PickerKind>('none');
+  // Đang chờ PATCH cờ phạm vi — disable 2 control toggle để tap nhanh không đua
+  // response (cờ không ảnh hưởng tiền nên không cần ticket như preview).
+  const [scopeBusy, setScopeBusy] = useState(false);
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -230,6 +235,24 @@ export function CreateQuoteScreen({
     }
   }
 
+  /**
+   * Toggle cờ Thi công/Vận chuyển (Story 4.3): PATCH qua port → thay order bằng
+   * response. KHÔNG gọi previewTotal — cờ không ảnh hưởng tiền (AD-16 nguyên vẹn).
+   * Lỗi → Banner qua ErrorState, GIỮ nguyên giỏ + state cờ cũ (bất biến k).
+   */
+  async function handleScopeToggle(input: UpdateScopeFlagsInput) {
+    setScopeBusy(true);
+    try {
+      const updated = await ordersPort.updateScopeFlags(order!.id, input);
+      setOrder(updated);
+      setError(null);
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setScopeBusy(false);
+    }
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -277,6 +300,31 @@ export function CreateQuoteScreen({
               <div className="micro muted quote-mono">{order.customerSdt}</div>
             </div>
             <CustomerTypeChip>{typeLabel(order.custType)}</CustomerTypeChip>
+          </div>
+          {/* Cờ phạm vi (Story 4.3): chip CHỈ hiển thị (ScopeFlag là span tĩnh,
+              màn sở hữu quyết định on/off); toggle qua 2 Checkbox riêng —
+              "Thiết bị" luôn bật nên KHÔNG có control tắt. */}
+          <div className="quote-scope-row">
+            <div className="micro muted">Phạm vi</div>
+            <div className="quote-scope-flags">
+              <ScopeFlag on={order.scopeThietBi}>Thiết bị</ScopeFlag>
+              <ScopeFlag on={order.scopeThiCong}>Thi công</ScopeFlag>
+              <ScopeFlag on={order.scopeVanChuyen}>Vận chuyển</ScopeFlag>
+            </div>
+            <div className="quote-scope-toggles">
+              <Checkbox
+                label="Thi công"
+                checked={order.scopeThiCong}
+                disabled={!editable || scopeBusy}
+                onChange={(checked) => void handleScopeToggle({ scopeThiCong: checked })}
+              />
+              <Checkbox
+                label="Vận chuyển"
+                checked={order.scopeVanChuyen}
+                disabled={!editable || scopeBusy}
+                onChange={(checked) => void handleScopeToggle({ scopeVanChuyen: checked })}
+              />
+            </div>
           </div>
         </Card>
 

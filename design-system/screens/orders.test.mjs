@@ -61,7 +61,7 @@ test('the quote screen and its ports exist on BOTH platforms', () => {
 // row and the checklist control are the shipped components — including the two
 // pieces this story ADDED to the library (Checkbox, CartLineRow.priceEditable).
 test('web quote screen composes from shipped design-system components', () => {
-  for (const name of ['Button', 'Card', 'CartLineRow', 'Checkbox', 'EmptyState', 'ErrorState', 'Field', 'Frame', 'Sheet', 'Table']) {
+  for (const name of ['Button', 'Card', 'CartLineRow', 'Checkbox', 'EmptyState', 'ErrorState', 'Field', 'Frame', 'ScopeFlag', 'Sheet', 'Table']) {
     assert.match(
       web,
       new RegExp(`import[^;]*\\b${name}\\b[^;]*from '\\.\\./\\.\\./design-system/components'`),
@@ -79,7 +79,7 @@ test('web quote screen composes from shipped design-system components', () => {
 
 test('mobile quote screen composes from shipped design-system widgets', () => {
   assert.match(mobile, /import '\.\.\/\.\.\/design_system\/components\/components\.dart'/, 'must import the components barrel');
-  for (const name of ['AppCartLineRow', 'AppCheckbox', 'AppSheet', 'AppEmptyState', 'AppErrorState', 'AppFrame', 'AppCard', 'AppButton', 'AppField']) {
+  for (const name of ['AppCartLineRow', 'AppCheckbox', 'AppScopeFlag', 'AppSheet', 'AppEmptyState', 'AppErrorState', 'AppFrame', 'AppCard', 'AppButton', 'AppField']) {
     assert.ok(mobile.includes(name), `create_quote_screen.dart must use ${name}`);
   }
   // Swipe-to-delete needs the stable line id, and the price gate is per line.
@@ -115,7 +115,7 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -163,6 +163,11 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Diễn giải',
     // display-only flexibility flag (AC-2)
     'Linh động/dự kiến',
+    // scope flags row (Story 4.3, FR-2) — chip labels + the row caption
+    'Phạm vi',
+    'Thiết bị',
+    'Thi công',
+    'Vận chuyển',
     // the totals area — values come from preview-total; '—' is the fallback
     'Tổng trước VAT',
     'Tiền VAT',
@@ -283,6 +288,45 @@ test('step 1 reuses CustomerPickScreen via onSelect — no second lookup UI', ()
   assert.match(mobile, /import '\.\.\/customers\/customer_pick_screen\.dart'/, 'mobile must import the Story 3.4 pick screen');
   assert.match(mobile, /CustomerPickScreen\(\s*port: widget\.customersPort/, 'mobile must render the pick screen with the injected port');
   assert.match(stripDart(mobile), /CreateOrderInput\(customerSdt: picked\.sdt\)/, 'mobile onSelect must create the order from the picked customer');
+});
+
+// (l) 🔴 SCOPE FLAGS (Story 4.3). The chip stays a STATIC display primitive: the
+// screen may not bolt a handler onto it (toggling goes through the separate
+// Checkbox controls), `scopeThietBi` gets NO toggle control (always on — every
+// order carries equipment, EXPERIENCE §Máy trạng thái), and the toggle branch
+// must NOT re-preview totals — flags carry no money (AD-16 stays intact).
+test('scope chips render read-only, Thiết bị has no toggle, and toggling never re-previews totals', () => {
+  const webCode = stripTsx(web);
+  const mobileCode = stripDart(mobile);
+
+  // The display chip carries NO handler prop/callback in either screen.
+  assert.ok(!/<ScopeFlag[^>]*\son[A-Z]/.test(webCode), 'web: <ScopeFlag> must stay a static display — no on* handler prop');
+  assert.ok(!/AppScopeFlag\([^)]*\bon(?:Tap|Changed|Pressed)/.test(mobileCode), 'mobile: AppScopeFlag must stay a static display — no callback argument');
+
+  // Exactly TWO toggle controls — Thi công + Vận chuyển. A checkbox for
+  // Thiết bị would be a control for an immutable flag (and the DTO the
+  // backend exposes has no field for it).
+  const webToggles = webCode.match(/<Checkbox\s[^>]*label="(?:Thi công|Vận chuyển|Thiết bị)"/g) ?? [];
+  assert.deepEqual(
+    webToggles.map((m) => /label="([^"]+)"/.exec(m)[1]).sort(),
+    ['Thi công', 'Vận chuyển'],
+    'web must render exactly the two mutable-flag toggles (no Thiết bị control)',
+  );
+  const mobileToggles = mobileCode.match(/AppCheckbox\(\s*label: '(?:Thi công|Vận chuyển|Thiết bị)'/g) ?? [];
+  assert.deepEqual(
+    mobileToggles.map((m) => /label: '([^']+)'/.exec(m)[1]).sort(),
+    ['Thi công', 'Vận chuyển'],
+    'mobile must render exactly the two mutable-flag toggles (no Thiết bị control)',
+  );
+
+  // The toggle handler body: PATCH via the port, replace the order — and NO
+  // totals re-preview (flags do not touch money).
+  const webToggleBody = /async function handleScopeToggle[\s\S]*?\n  \}/.exec(webCode)?.[0];
+  assert.ok(webToggleBody, 'web must define handleScopeToggle');
+  assert.ok(!/previewTotal|refreshTotals/.test(webToggleBody), 'web handleScopeToggle must not re-preview totals — flags carry no money');
+  const mobileToggleBody = /Future<void> _toggleScope[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
+  assert.ok(mobileToggleBody, 'mobile must define _toggleScope');
+  assert.ok(!/previewTotal|_refreshTotals/.test(mobileToggleBody), 'mobile _toggleScope must not re-preview totals — flags carry no money');
 });
 
 // (k) A FAILURE NEVER WIPES THE CART (EXPERIENCE Flow 1). The error path sets a

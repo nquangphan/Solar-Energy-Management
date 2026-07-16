@@ -36,6 +36,7 @@ import { OrderResponseDto } from './dto/order-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
+import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 import { OrdersService } from './orders.service';
 
 /**
@@ -131,6 +132,44 @@ export class OrdersController {
   async findOne(@Param('id') id: string): Promise<OrderResponseDto> {
     return (await this.orders.get(
       id,
+      await this.tieredPricingEnabled(),
+    )) as OrderResponseDto;
+  }
+
+  @Patch(':id')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  @ApiOkResponse({
+    type: OrderResponseDto,
+    description:
+      'Đơn sau khi đổi cờ phạm vi Thi công/Vận chuyển (partial). `scopeThietBi` luôn true — không nhận qua body (Story 4.3, FR-2).',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Cờ không phải boolean hoặc là null (VALIDATION_ERROR — kèm fieldErrors).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      "Đơn không còn ở trạng thái 'baogia' — cờ gate máy trạng thái, không đổi giữa vòng đời (CONFLICT).",
+  })
+  async updateScopeFlags(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Body() body: UpdateOrderRequestDto,
+  ): Promise<OrderResponseDto> {
+    return (await this.orders.updateScopeFlags(
+      account.id,
+      id,
+      body,
       await this.tieredPricingEnabled(),
     )) as OrderResponseDto;
   }

@@ -22,6 +22,9 @@ export interface OrderSnapshot {
   readonly assigneeAccountId: string | null;
   readonly sourceId: string;
   readonly custType: string;
+  readonly scopeThietBi: boolean;
+  readonly scopeThiCong: boolean;
+  readonly scopeVanChuyen: boolean;
 }
 
 /** Ảnh chụp một Dòng báo giá — đủ mọi field nghiệp vụ (audit ghi sự thật đầy đủ). */
@@ -85,6 +88,22 @@ export class OrderLineUpdated implements DomainEvent {
     readonly occurredAt: Date,
   ) {
     this.target = { type: 'Order', id: orderId };
+  }
+}
+
+/** Cờ phạm vi của Đơn bị ĐỔI (toggle Thi công/Vận chuyển, Story 4.3) — mang cả trước và sau. */
+export class OrderScopeChanged implements DomainEvent {
+  readonly type = 'OrderScopeChanged';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
   }
 }
 

@@ -132,6 +132,16 @@ class UpdateOrderLineInput {
   final bool? isFlexible;
 }
 
+/// Body of `PATCH /orders/:id` (Story 4.3) — partial toggle of the two MUTABLE
+/// scope flags. `scopeThietBi` is deliberately absent: every order carries
+/// equipment, the backend keeps it `true` and accepts no write for it.
+class UpdateScopeFlagsInput {
+  const UpdateScopeFlagsInput({this.scopeThiCong, this.scopeVanChuyen});
+
+  final bool? scopeThiCong;
+  final bool? scopeVanChuyen;
+}
+
 /// Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed
 /// integer đồng numbers (AD-16). The screen renders them as-is, "—" until the
 /// first response (or after a failed preview).
@@ -209,6 +219,10 @@ abstract class OrdersPort {
 
   /// Remove a line from the current version.
   Future<void> removeLine(String orderId, String lineId);
+
+  /// Toggle the Thi công/Vận chuyển scope flags (Story 4.3) — only while the
+  /// order is still `'baogia'` (409 otherwise). Returns the full fresh order.
+  Future<Order> updateScopeFlags(String orderId, UpdateScopeFlagsInput input);
 
   /// Stateless totals preview (AD-16): send the displayed lines, get the ONE
   /// computer's subtotal/VAT/total back. No order is read or written.

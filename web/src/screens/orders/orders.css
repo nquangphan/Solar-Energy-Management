@@ -36,6 +36,31 @@
   letter-spacing: 0.02em;
 }
 
+/* Cờ phạm vi (Story 4.3): hàng chip hiển thị + 2 checkbox toggle, nằm trong
+   card khách hàng dưới hàng tên/loại khách. */
+.quote-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--line);
+}
+
+.quote-scope-flags {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.quote-scope-toggles {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+
 .quote-add-row {
   display: flex;
   gap: 8px;

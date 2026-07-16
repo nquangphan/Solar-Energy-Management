@@ -7,6 +7,7 @@ import {
 } from '../catalog/domain/price-resolution';
 import { AppException } from '../common/errors/app.exception';
 import { ErrorCode } from '../common/errors/error-code';
+import type { CustType } from '../customers/domain/customer-type';
 import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,14 +22,17 @@ import {
   OrderLineAdded,
   OrderLineRemoved,
   OrderLineUpdated,
+  OrderScopeChanged,
   type OrderLineSnapshot,
   type OrderSnapshot,
 } from './domain/order-events';
 import { TRANG_THAI_BAO_GIA } from './domain/order-status';
+import { scopePresetFor } from './domain/scope-preset';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
+import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 
 /**
  * Tạo Đơn + CRUD dòng báo giá kiểu giỏ hàng (Story 4.1, FR-1). Truy vấn CHỈ qua
@@ -108,6 +112,9 @@ function orderSnapshot(order: Order): OrderSnapshot {
     assigneeAccountId: order.assigneeAccountId,
     sourceId: order.sourceId,
     custType: order.custType,
+    scopeThietBi: order.scopeThietBi,
+    scopeThiCong: order.scopeThiCong,
+    scopeVanChuyen: order.scopeVanChuyen,
   };
 }
 
@@ -204,6 +211,9 @@ export class OrdersService {
    * → repoint. Tách 3 lệnh rời là mở cửa cho đơn-không-version khi bước giữa chết.
    *
    * `sourceId`/`custType` SNAPSHOT từ Customer NGAY TẠI ĐÂY (FR-35) — không nhận từ client.
+   *
+   * 3 cờ phạm vi ghi TƯỜNG MINH theo preset Loại khách (FR-2, Story 4.3) — KHÔNG dựa DB
+   * default (default trùng preset Thương mại chỉ là ngẫu nhiên, không mang ngữ nghĩa).
    */
   async create(
     actorAccountId: string,
@@ -230,6 +240,9 @@ export class OrdersService {
           ownerAccountId: actorAccountId,
           sourceId: customer.sourceId,
           custType: customer.custType,
+          // Cột `custType` là String ở Prisma nhưng giá trị đã validate `@IsIn(CUST_TYPES)`
+          // lúc tạo khách — cast về union domain để tra preset.
+          ...scopePresetFor(customer.custType as CustType),
         },
       }),
       this.prisma.orderVersion.create({
@@ -268,6 +281,14 @@ export class OrdersService {
   /** Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính. */
   async get(id: string, tieredPricingEnabled: boolean): Promise<OrderView> {
     const order = await this.findOrThrow(id);
+    return this.viewOf(order, tieredPricingEnabled);
+  }
+
+  /** Bản ghi Order ⇒ view response: nạp dòng của bản hiệu lực rồi phân giải qua `toViews`. */
+  private async viewOf(
+    order: Order,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
     const lines =
       order.currentVersionId === null
         ? []
@@ -279,6 +300,48 @@ export class OrdersService {
       ...order,
       lineItems: await this.toViews(lines, tieredPricingEnabled),
     };
+  }
+
+  /**
+   * Toggle cờ phạm vi Thi công/Vận chuyển (Story 4.3, FR-2) — độc lập với preset; `custType`
+   * KHÔNG đổi (giữ làm nhãn báo cáo). `scopeThietBi` không có trong DTO nên không đường ghi
+   * nào chạm tới (luôn `true`). Cửa sổ sửa = `baogia` — cờ gate máy trạng thái Epic 5 (AD-7),
+   * cùng ngữ nghĩa 409 với line-items.
+   *
+   * Nhận `tieredPricingEnabled` như `get()` vì `toViews` re-resolve giá SỐNG cho dòng catalog.
+   * Body rỗng ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event (không có mutation để audit).
+   */
+  async updateScopeFlags(
+    actorAccountId: string,
+    orderId: string,
+    dto: UpdateOrderRequestDto,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const before = await this.findOrThrow(orderId);
+    this.assertMutable(before);
+
+    if (dto.scopeThiCong === undefined && dto.scopeVanChuyen === undefined) {
+      return this.viewOf(before, tieredPricingEnabled);
+    }
+
+    const updated = await this.prisma.order.update({
+      where: { id: before.id },
+      // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH.
+      data: {
+        scopeThiCong: dto.scopeThiCong,
+        scopeVanChuyen: dto.scopeVanChuyen,
+      },
+    });
+
+    await this.eventBus.publish(
+      new OrderScopeChanged(
+        actorAccountId,
+        orderSnapshot(before),
+        orderSnapshot(updated),
+        new Date(),
+      ),
+    );
+    return this.viewOf(updated, tieredPricingEnabled);
   }
 
   /**

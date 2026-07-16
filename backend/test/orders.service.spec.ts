@@ -8,6 +8,7 @@ import {
   OrderLineAdded,
   OrderLineRemoved,
   OrderLineUpdated,
+  OrderScopeChanged,
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -174,6 +175,8 @@ describe('OrdersService', () => {
 
       // Op 1 — Order: assert TOÀN BỘ data. `sourceId`/`custType` phải là giá trị của
       // CUSTOMER (snapshot lúc tạo), `customerSdt` là chuỗi ĐÃ chuẩn hoá, owner là actor.
+      // 3 cờ phạm vi phải nằm TƯỜNG MINH trong payload (preset CA_NHAN = cả 3 true) —
+      // service tự ghi, KHÔNG dựa DB default (default trùng preset Thương mại là ngẫu nhiên).
       expect(orderRepo.create).toHaveBeenCalledWith({
         data: {
           id: expect.any(String),
@@ -182,6 +185,9 @@ describe('OrdersService', () => {
           ownerAccountId: ACTOR,
           sourceId: NGUON_FACEBOOK_ID,
           custType: 'CA_NHAN',
+          scopeThietBi: true,
+          scopeThiCong: true,
+          scopeVanChuyen: true,
         },
       });
 
@@ -200,6 +206,25 @@ describe('OrdersService', () => {
       expect(orderRepo.update).toHaveBeenCalledWith({
         where: { id: orderId },
         data: { currentVersionId: versionId },
+      });
+    });
+
+    it('khách THUONG_MAI ⇒ payload preset true/false/false (chỉ Thiết bị bật)', async () => {
+      customerRepo.findUnique.mockResolvedValue({
+        ...KHACH,
+        custType: 'THUONG_MAI',
+        taxCode: '0312345678',
+      });
+
+      await service.create(ACTOR, { customerSdt: '0912 345 678' });
+
+      expect(orderRepo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          custType: 'THUONG_MAI',
+          scopeThietBi: true,
+          scopeThiCong: false,
+          scopeVanChuyen: false,
+        }) as unknown,
       });
     });
 
@@ -642,6 +667,125 @@ describe('OrdersService', () => {
       expect(event).toBeInstanceOf(OrderLineUpdated);
       expect(event.before.qty).toBe(8);
       expect(event.after.qty).toBe(12);
+    });
+  });
+
+  describe('updateScopeFlags — toggle cờ phạm vi trong cửa sổ baogia (Story 4.3)', () => {
+    it('happy path: ghi ĐÚNG where + data (chỉ field client gửi), trả view phản ánh cờ mới', async () => {
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        scopeThiCong: true,
+      });
+
+      const view = await service.updateScopeFlags(
+        ACTOR,
+        DON_BAOGIA.id,
+        { scopeThiCong: true },
+        true,
+      );
+
+      // Partial đúng nghĩa: field không gửi phải là undefined (Prisma bỏ qua),
+      // KHÔNG được lôi giá trị hiện tại vào data.
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: { scopeThiCong: true, scopeVanChuyen: undefined },
+      });
+      expect(view.scopeThiCong).toBe(true);
+      expect(view.scopeThietBi).toBe(true);
+    });
+
+    it('đơn không tồn tại ⇒ 404 NOT_FOUND, không ghi', async () => {
+      orderRepo.findUnique.mockResolvedValue(null);
+
+      const err = await bat(
+        service.updateScopeFlags(ACTOR, 'ord-x', { scopeThiCong: true }, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
+      expect(err.getStatus()).toBe(404);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('đơn ngoài baogia ⇒ 409 CONFLICT, không ghi, không event', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const err = await bat(
+        service.updateScopeFlags(
+          ACTOR,
+          DON_BAOGIA.id,
+          { scopeVanChuyen: true },
+          true,
+        ),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('OrderScopeChanged publish SAU khi ghi, mang before→after đúng cờ đổi', async () => {
+      const thuTu: string[] = [];
+      orderRepo.update.mockImplementation(async () => {
+        thuTu.push('write');
+        return { ...DON_BAOGIA, scopeVanChuyen: true };
+      });
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+
+      await service.updateScopeFlags(
+        ACTOR,
+        DON_BAOGIA.id,
+        { scopeVanChuyen: true },
+        true,
+      );
+
+      expect(thuTu).toEqual(['write', 'publish']);
+      const event = eventBus.publish.mock.calls[0][0] as OrderScopeChanged;
+      expect(event).toBeInstanceOf(OrderScopeChanged);
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.before.scopeVanChuyen).toBe(false);
+      expect(event.after.scopeVanChuyen).toBe(true);
+      expect(event.target).toEqual({ type: 'Order', id: DON_BAOGIA.id });
+    });
+
+    it('cả 2 cờ trong MỘT lần PATCH ⇒ data mang cả hai, view phản ánh cả hai', async () => {
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        scopeThiCong: true,
+        scopeVanChuyen: true,
+      });
+
+      const view = await service.updateScopeFlags(
+        ACTOR,
+        DON_BAOGIA.id,
+        { scopeThiCong: true, scopeVanChuyen: true },
+        true,
+      );
+
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: { scopeThiCong: true, scopeVanChuyen: true },
+      });
+      expect(view.scopeThiCong).toBe(true);
+      expect(view.scopeVanChuyen).toBe(true);
+    });
+
+    it('body rỗng (không field nào) ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event', async () => {
+      const view = await service.updateScopeFlags(
+        ACTOR,
+        DON_BAOGIA.id,
+        {},
+        true,
+      );
+
+      expect(view.scopeThiCong).toBe(DON_BAOGIA.scopeThiCong);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
   });
 
