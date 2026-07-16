@@ -45,6 +45,7 @@ import type {
   OrderPortError,
   OrdersPort,
   OrderTotals,
+  UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
 } from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
@@ -84,6 +85,13 @@ export function CreateQuoteScreen({
   // Đang chờ PATCH cờ phạm vi — disable 2 control toggle để tap nhanh không đua
   // response (cờ không ảnh hưởng tiền nên không cần ticket như preview).
   const [scopeBusy, setScopeBusy] = useState(false);
+  // Đang chờ PATCH metadata (tick VAT / kWp / hạn hiệu lực, Story 4.4) — cùng
+  // pattern scopeBusy; tick VAT ảnh hưởng tiền nên sau PATCH phải refreshTotals.
+  const [metaBusy, setMetaBusy] = useState(false);
+  // Text đang gõ của 2 input metadata — commit-on-blur, prefill từ order; lỗi
+  // port thì revert về giá trị order cũ (bất biến k).
+  const [kWpText, setKWpText] = useState('');
+  const [validityText, setValidityText] = useState('');
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -130,6 +138,9 @@ export function CreateQuoteScreen({
     try {
       const fresh = await ordersPort.previewTotal({
         lines: fetched.lineItems.map((l) => ({ unitPrice: l.unitPrice, qty: l.qty })),
+        // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
+        // vatMode null thì bỏ qua field (backend coi như có VAT).
+        vatMode: fetched.vatMode ?? undefined,
       });
       if (ticket !== latestTotals.current) return;
       setTotals(fresh);
@@ -168,6 +179,7 @@ export function CreateQuoteScreen({
               const created = await ordersPort.create({ customerSdt: picked.sdt });
               setCustomer(picked);
               setOrder(created);
+              syncMetaTexts(created);
               setError(null);
               await refreshTotals(created);
             } catch (err) {
@@ -253,6 +265,71 @@ export function CreateQuoteScreen({
     }
   }
 
+  /** Đồng bộ text 2 input metadata từ Đơn — lúc tạo đơn, sau commit, và khi revert lỗi. */
+  function syncMetaTexts(source: Order) {
+    setKWpText(source.kWp === null ? '' : String(source.kWp));
+    setValidityText(source.validityNote ?? '');
+  }
+
+  /**
+   * PATCH nhóm metadata (Story 4.4): tick VAT / kWp / hạn hiệu lực. Tick VAT ĐỔI
+   * TIỀN ⇒ sau khi PATCH thành công phải refreshTotals với order MỚI (echo
+   * vatMode mới — 3 số tổng đổi tức thì, EXPERIENCE §Realtime). Lỗi → Banner,
+   * GIỮ nguyên giỏ + revert input về giá trị order cũ (bất biến k).
+   */
+  async function handleMetaUpdate(input: UpdateOrderMetaInput) {
+    setMetaBusy(true);
+    try {
+      const updated = await ordersPort.updateOrderMeta(order!.id, input);
+      setOrder(updated);
+      syncMetaTexts(updated);
+      setError(null);
+      await refreshTotals(updated);
+    } catch (err) {
+      setError(messageOf(err));
+      syncMetaTexts(order!);
+    } finally {
+      setMetaBusy(false);
+    }
+  }
+
+  /**
+   * Commit kWp on blur: "8,82"/"8.82" → 8.82 — CHUYỂN ĐỔI INPUT, không phải số
+   * học tiền; rỗng → null (xoá); parse NaN → giữ nguyên + báo lỗi field, KHÔNG
+   * gọi port.
+   */
+  function commitKWp() {
+    const raw = kWpText.trim();
+    const current = order!.kWp;
+    if (raw === '') {
+      if (current !== null) void handleMetaUpdate({ kWp: null });
+      return;
+    }
+    const parsed = Number(raw.replace(',', '.'));
+    if (!Number.isFinite(parsed)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        kWp: 'Công suất phải là số (vd 8,82).',
+      }));
+      return;
+    }
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next.kWp;
+      return next;
+    });
+    if (parsed === current) return;
+    void handleMetaUpdate({ kWp: parsed });
+  }
+
+  /** Commit hạn hiệu lực on blur — rỗng → null (xoá); chỉ PATCH khi giá trị đổi. */
+  function commitValidityNote() {
+    const raw = validityText.trim();
+    const next = raw === '' ? null : raw;
+    if (next === order!.validityNote) return;
+    void handleMetaUpdate({ validityNote: next });
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -326,6 +403,27 @@ export function CreateQuoteScreen({
               />
             </div>
           </div>
+          {/* Metadata Đơn (Story 4.4): commit-on-blur → PATCH; lỗi → Banner +
+              input revert giá trị cũ (bất biến k). kWp là CHUYỂN ĐỔI input
+              ("8,82" → 8.82), không phải số học tiền. */}
+          <div className="quote-meta-row">
+            <Field
+              label="Công suất (kWp)"
+              inputMode="decimal"
+              value={kWpText}
+              disabled={!editable || metaBusy}
+              onChange={(e) => setKWpText(e.target.value)}
+              onBlur={() => commitKWp()}
+            />
+            <Field
+              label="Hiệu lực báo giá"
+              value={validityText}
+              disabled={!editable || metaBusy}
+              onChange={(e) => setValidityText(e.target.value)}
+              onBlur={() => commitValidityNote()}
+            />
+          </div>
+          {fieldErrors.kWp && <Banner tone="danger">{fieldErrors.kWp}</Banner>}
         </Card>
 
         {error !== null && (
@@ -386,8 +484,20 @@ export function CreateQuoteScreen({
 
         {/* Khu tổng tiền: 3 số backend trả qua preview-total, integer thô (cùng
             convention `amount` của CartLineRow). "—" = chưa có/preview lỗi.
-            Client CẤM số học tiền. */}
+            Client CẤM số học tiền. Tick VAT (Story 4.4) phản ánh order.vatMode;
+            thuế suất % là GIÁ TRỊ BACKEND từ totals.vatRate — không nhãn tĩnh. */}
         <Frame label="Tổng kết">
+          <div className="quote-vat-toggle">
+            <Checkbox
+              label="Tính VAT"
+              checked={order.vatMode !== 'khong_vat'}
+              disabled={!editable || metaBusy}
+              onChange={(checked) =>
+                void handleMetaUpdate({ vatMode: checked ? 'co_vat' : 'khong_vat' })
+              }
+            />
+            <span className="micro muted">{totals ? `${totals.vatRate}%` : '—'}</span>
+          </div>
           <dl className="quote-totals">
             <dt>Tổng trước VAT</dt>
             <dd className="num mono">{totals ? String(totals.subtotal) : '—'}</dd>

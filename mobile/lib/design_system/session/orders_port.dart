@@ -63,6 +63,7 @@ class Order {
     required this.scopeVanChuyen,
     this.kWp,
     this.vatMode,
+    this.validityNote,
     required this.lineItems,
     required this.createdAt,
     required this.updatedAt,
@@ -79,8 +80,14 @@ class Order {
   final bool scopeThietBi;
   final bool scopeThiCong;
   final bool scopeVanChuyen;
-  final int? kWp;
+
+  /// System capacity in kWp — a FRACTIONAL number by nature ("8,82 kWp"), so
+  /// `double`, not `int` (AD-10's integer rule is for MONEY only — Story 4.4).
+  final double? kWp;
   final String? vatMode;
+
+  /// Quote validity note — free text ≤ 200 chars, display-only in Phase 1.
+  final String? validityNote;
   final List<OrderLine> lineItems;
   final String createdAt;
   final String updatedAt;
@@ -142,27 +149,71 @@ class UpdateScopeFlagsInput {
   final bool? scopeVanChuyen;
 }
 
+/// Sentinel meaning "field not included in this PATCH" — Dart has no
+/// `undefined`, so [UpdateOrderMetaInput] needs it to keep the tri-state the
+/// backend PATCH speaks: absent = keep, value = set, `null` = clear.
+const Object kMetaFieldAbsent = Object();
+
+/// Body of `PATCH /orders/:id` (Story 4.4) — the order-metadata group of the
+/// same endpoint: the VAT tick, the system capacity and the quote validity
+/// note. Call-site parity with the web input: omit a field to keep it, pass
+/// `null` explicitly to clear ([kWp]/[validityNote] only; [vatMode] is always
+/// one of the backend registry values echoed, never null).
+class UpdateOrderMetaInput {
+  const UpdateOrderMetaInput({
+    this.vatMode,
+    Object? kWp = kMetaFieldAbsent,
+    Object? validityNote = kMetaFieldAbsent,
+  })  : _kWp = kWp,
+        _validityNote = validityNote;
+
+  final String? vatMode;
+  final Object? _kWp;
+  final Object? _validityNote;
+
+  /// Whether the PATCH includes `kWp` at all (set OR clear).
+  bool get hasKWp => !identical(_kWp, kMetaFieldAbsent);
+
+  /// The kWp value to write — meaningful only when [hasKWp]; `null` = clear.
+  double? get kWp => hasKWp ? _kWp as double? : null;
+
+  /// Whether the PATCH includes `validityNote` at all (set OR clear).
+  bool get hasValidityNote => !identical(_validityNote, kMetaFieldAbsent);
+
+  /// The note to write — meaningful only when [hasValidityNote]; `null` = clear.
+  String? get validityNote => hasValidityNote ? _validityNote as String? : null;
+}
+
 /// Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed
-/// integer đồng numbers (AD-16). The screen renders them as-is, "—" until the
-/// first response (or after a failed preview).
+/// integer đồng numbers (AD-16) plus the applied [vatRate]/[applyVat] (Story
+/// 4.4) so the screen can label the VAT row ("VAT 8%") with a backend value,
+/// never a static label. The screen renders them as-is, "—" until the first
+/// response (or after a failed preview).
 class OrderTotals {
   const OrderTotals({
     required this.subtotal,
     required this.vatAmount,
     required this.total,
+    required this.vatRate,
+    required this.applyVat,
   });
 
   final int subtotal;
   final int vatAmount;
   final int total;
+  final int vatRate;
+  final bool applyVat;
 }
 
 /// Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
 /// echoed back (every `unitPrice` is a number the backend already returned).
+/// [vatMode] (Story 4.4) is echoed from `Order.vatMode` the same way — the
+/// client never sends a rate.
 class PreviewTotalInput {
-  const PreviewTotalInput({required this.lines});
+  const PreviewTotalInput({required this.lines, this.vatMode});
 
   final List<PreviewTotalLine> lines;
+  final String? vatMode;
 }
 
 /// One echoed line of a preview request.
@@ -223,6 +274,12 @@ abstract class OrdersPort {
   /// Toggle the Thi công/Vận chuyển scope flags (Story 4.3) — only while the
   /// order is still `'baogia'` (409 otherwise). Returns the full fresh order.
   Future<Order> updateScopeFlags(String orderId, UpdateScopeFlagsInput input);
+
+  /// Update the order metadata group — VAT tick / kWp / validity note (Story
+  /// 4.4). Same PATCH endpoint as [updateScopeFlags], kept as a second typed
+  /// method so each call site says which group it touches. Only while
+  /// `'baogia'` (409 otherwise). Returns the full fresh order.
+  Future<Order> updateOrderMeta(String orderId, UpdateOrderMetaInput input);
 
   /// Stateless totals preview (AD-16): send the displayed lines, get the ONE
   /// computer's subtotal/VAT/total back. No order is read or written.

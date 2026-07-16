@@ -105,6 +105,34 @@ class _RecordingScopePort extends FakeOrdersPort {
   }
 }
 
+/// A port that RECORDS every metadata PATCH (Story 4.4) — proves the VAT tick /
+/// kWp / validity-note commits send exactly the field the user touched.
+class _RecordingMetaPort extends FakeOrdersPort {
+  final List<UpdateOrderMetaInput> metaCalls = <UpdateOrderMetaInput>[];
+
+  @override
+  Future<Order> updateOrderMeta(String orderId, UpdateOrderMetaInput input) {
+    metaCalls.add(input);
+    return super.updateOrderMeta(orderId, input);
+  }
+}
+
+/// A port whose META PATCH is refused with the AD-5 envelope — proves a failed
+/// VAT tick surfaces the backend's sentence, keeps the cart AND the old tick
+/// state intact (Story 4.4, invariant k).
+class _RejectingMetaPort extends FakeOrdersPort {
+  _RejectingMetaPort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<Order> updateOrderMeta(
+    String orderId,
+    UpdateOrderMetaInput input,
+  ) async =>
+      throw error;
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
 
 /// The rendered on/off state of the scope chip with [label].
@@ -205,7 +233,8 @@ void main() {
       await tester.pumpAndSettle();
 
       // Khu tổng về "—" (không hiển thị số cũ đã sai) — giỏ không mất dòng nào.
-      expect(find.text('—'), findsNWidgets(3));
+      // 4 dấu: 3 hàng tổng + ô thuế suất % cạnh tick "Tính VAT" (4.4).
+      expect(find.text('—'), findsNWidgets(4));
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
       expect(find.text(backendSentence), findsOneWidget);
     });
@@ -253,13 +282,17 @@ void main() {
       await tester.pumpAndSettle();
 
       // 3 preview đã bắn (sau tạo đơn, sau thêm dòng, sau sửa qty) — chưa cái
-      // nào về nên khu tổng vẫn "—".
+      // nào về nên khu tổng vẫn "—" (3 hàng tổng + ô thuế suất %, 4.4).
       expect(port.pendingPreviews, hasLength(3));
-      expect(find.text('—'), findsNWidgets(3));
+      expect(find.text('—'), findsNWidgets(4));
 
       // Preview MỚI NHẤT (qty 2) về TRƯỚC.
       port.pendingPreviews[2].complete(const OrderTotals(
-          subtotal: 4900000, vatAmount: 392000, total: 5292000));
+          subtotal: 4900000,
+          vatAmount: 392000,
+          total: 5292000,
+          vatRate: 8,
+          applyVat: true));
       // Hai preview kia còn treo nhưng không giữ frame nào — settle an toàn.
       await tester.pumpAndSettle();
       expect(find.text('5292000'), findsOneWidget);
@@ -267,9 +300,13 @@ void main() {
       // Hai preview CŨ về TRỄ (1 dòng qty 1, rồi giỏ rỗng) — ticket phải vứt
       // cả hai, số mới giữ nguyên trên màn.
       port.pendingPreviews[1].complete(const OrderTotals(
-          subtotal: 2450000, vatAmount: 196000, total: 2646000));
-      port.pendingPreviews[0]
-          .complete(const OrderTotals(subtotal: 0, vatAmount: 0, total: 0));
+          subtotal: 2450000,
+          vatAmount: 196000,
+          total: 2646000,
+          vatRate: 8,
+          applyVat: true));
+      port.pendingPreviews[0].complete(const OrderTotals(
+          subtotal: 0, vatAmount: 0, total: 0, vatRate: 8, applyVat: true));
       await tester.pumpAndSettle();
 
       expect(find.text('5292000'), findsOneWidget);
@@ -326,8 +363,13 @@ void main() {
       await _pickDemoCustomer(tester);
 
       await _tap(tester, 'Dòng tự do');
+      // Scope vào Sheet: card khách giờ cũng có 2 TextField rỗng (kWp/hiệu lực,
+      // 4.4) nằm TRƯỚC trong cây — finder trần sẽ gõ nhầm vào chúng.
       await tester.enterText(
-        find.widgetWithText(TextField, '').first,
+        find
+            .descendant(
+                of: find.byType(AppSheet), matching: find.byType(TextField))
+            .first,
         'Vệ sinh mái trước lắp',
       );
       // Đơn giá: the form's controllers pre-fill qty=1 / price=0.
@@ -394,6 +436,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
 
+      // Card khách cao hơn từ 4.4 (2 input metadata) — kéo dòng vào tầm nhìn
+      // trước khi swipe, kẻo drag trượt ngoài viewport (bài học tap-miss 4.3).
+      await tester.ensureVisible(find.byType(Dismissible).first);
+      await tester.pump();
       await tester.drag(
           find.byType(Dismissible).first, const Offset(-500.0, 0.0));
       await tester.pumpAndSettle();
@@ -535,6 +581,192 @@ void main() {
       expect(find.text('Thử lại'), findsOneWidget);
       // The entered line is still there — a failure never wipes the cart.
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets(
+        'tick VAT (4.4): untick "Tính VAT" → fake nhận vatMode khong_vat, totals hiện VAT 0',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // 2_450_000 × 1
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+      // Trước khi untick: VAT 8% của fake-backend + nhãn % là GIÁ TRỊ backend.
+      expect(find.text('196000'), findsOneWidget);
+      expect(find.text('8%'), findsOneWidget);
+
+      final Finder vatToggle = find.widgetWithText(AppCheckbox, 'Tính VAT');
+      await tester.ensureVisible(vatToggle);
+      await tester.pump();
+      await tester.tap(vatToggle);
+      await tester.pumpAndSettle();
+
+      // Fake nhận ĐÚNG một field: vatMode 'khong_vat', kWp/validityNote vắng.
+      expect(port.metaCalls, hasLength(1));
+      expect(port.metaCalls.single.vatMode, 'khong_vat');
+      expect(port.metaCalls.single.hasKWp, isFalse);
+      expect(port.metaCalls.single.hasValidityNote, isFalse);
+      // Preview mới echo vatMode mới: VAT 0, total = subtotal — tức thì.
+      expect(find.text('196000'), findsNothing);
+      expect(find.text('0'), findsOneWidget);
+      expect(find.text('2450000'), findsWidgets);
+    });
+
+    testWidgets(
+        'kWp (4.4): nhập "8,82" rồi rời focus → fake nhận 8.82 (chuyển đổi input, không số học tiền)',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      // 2 TextField của card khách: kWp trước, hiệu lực sau (giỏ đang rỗng).
+      final Finder kwpField = find.byType(TextField).at(0);
+      await tester.ensureVisible(kwpField);
+      await tester.pump();
+      await tester.enterText(kwpField, '8,82');
+      // Rời focus = commit (pattern commit-on-blur).
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(port.metaCalls, hasLength(1));
+      expect(port.metaCalls.single.hasKWp, isTrue);
+      expect(port.metaCalls.single.kWp, 8.82);
+      expect(port.metaCalls.single.vatMode, isNull);
+    });
+
+    testWidgets(
+        'hiệu lực báo giá (4.4): nhập chuỗi rồi rời focus → fake nhận đúng chuỗi',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      final Finder validityField = find.byType(TextField).at(1);
+      await tester.ensureVisible(validityField);
+      await tester.pump();
+      await tester.enterText(validityField, '48h kể từ ngày lên PO');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(port.metaCalls, hasLength(1));
+      expect(port.metaCalls.single.hasValidityNote, isTrue);
+      expect(port.metaCalls.single.validityNote, '48h kể từ ngày lên PO');
+      expect(port.metaCalls.single.hasKWp, isFalse);
+    });
+
+    testWidgets(
+        'tick VAT (4.4): tick LẠI sau khi untick → fake nhận co_vat, VAT quay về số fake-backend',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // 2_450_000 × 1
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      final Finder vatToggle = find.widgetWithText(AppCheckbox, 'Tính VAT');
+      await tester.ensureVisible(vatToggle);
+      await tester.pump();
+      await tester.tap(vatToggle); // untick → khong_vat
+      await tester.pumpAndSettle();
+      expect(find.text('196000'), findsNothing);
+
+      await tester.tap(vatToggle); // tick lại → co_vat
+      await tester.pumpAndSettle();
+
+      // Nhánh checked=true của handler: giá trị gửi đi là 'co_vat' đúng registry.
+      expect(port.metaCalls, hasLength(2));
+      expect(port.metaCalls.last.vatMode, 'co_vat');
+      // Preview echo vatMode mới: VAT 8% của fake-backend hiện trở lại.
+      expect(find.text('196000'), findsOneWidget);
+      final AppCheckbox tick = tester.widget<AppCheckbox>(vatToggle);
+      expect(tick.checked, isTrue);
+    });
+
+    testWidgets(
+        'kWp (4.4): nhập rác "abc" rồi rời focus → báo lỗi field, KHÔNG gọi port',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      final Finder kwpField = find.byType(TextField).at(0);
+      await tester.ensureVisible(kwpField);
+      await tester.pump();
+      await tester.enterText(kwpField, 'abc');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      // Parse hỏng: giữ nguyên, báo lỗi tại field — KHÔNG có PATCH nào bay đi.
+      expect(port.metaCalls, isEmpty);
+      expect(find.text('Công suất phải là số (vd 8,82).'), findsOneWidget);
+    });
+
+    testWidgets(
+        'kWp (4.4): xoá rỗng khi đã có giá trị → fake nhận kWp null (xoá, tri-state sentinel)',
+        (WidgetTester tester) async {
+      final _RecordingMetaPort port = _RecordingMetaPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      final Finder kwpField = find.byType(TextField).at(0);
+      await tester.ensureVisible(kwpField);
+      await tester.pump();
+      await tester.enterText(kwpField, '8,82');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      expect(port.metaCalls, hasLength(1));
+
+      // Xoá sạch input rồi rời focus — PATCH kWp: null (xoá), không phải "bỏ qua".
+      await tester.enterText(kwpField, '');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(port.metaCalls, hasLength(2));
+      expect(port.metaCalls.last.hasKWp, isTrue);
+      expect(port.metaCalls.last.kWp, isNull);
+    });
+
+    testWidgets(
+        'meta lỗi (4.4): port throw → banner message backend, giỏ còn nguyên, tick giữ state cũ',
+        (WidgetTester tester) async {
+      const String backendSentence =
+          'Chỉ sửa được dòng khi đơn còn ở trạng thái Báo giá.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingMetaPort(
+          const OrderPortException(backendSentence),
+        ),
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      final Finder vatToggle = find.widgetWithText(AppCheckbox, 'Tính VAT');
+      await tester.ensureVisible(vatToggle);
+      await tester.pump();
+      await tester.tap(vatToggle);
+      await tester.pumpAndSettle();
+
+      // Câu backend nguyên văn; giỏ KHÔNG mất dòng; tick VẪN bật (state cũ).
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      final AppCheckbox tick = tester.widget<AppCheckbox>(vatToggle);
+      expect(tick.checked, isTrue);
     });
   });
 }

@@ -291,12 +291,26 @@ test('the screen hardcodes no permission literal (AD-17)', () => {
   );
 });
 
-// (h.1) 🔴 NEGATIVE ASSERT — NO VAT TAB (AC-7). The mockup draws a `Thuế suất VAT` tab
-// beside this one. VAT is FR-3 and has NO story: a tab that leads nowhere is the UI
-// telling the user a feature exists. Rendering the tab bar at all invites it back.
-test('the screen renders no VAT tab — VAT is FR-3 and has no story yet (AC-7)', () => {
-  assert.ok(!code.includes('Thuế suất'), 'the screen must not render a VAT surface — FR-3 has no story');
-  assert.ok(!/<Tabs\b/.test(code), 'the screen must not render a Tabs bar — there is only one config surface today');
+// (h.1) THE VAT SURFACE ARRIVED WITH ITS STORY (4.4, FR-3) — the 3.5-era negative
+// assert ("no VAT tab") retired WITH the story that ships the feature. What remains
+// deliberate: NO Tabs bar — the design-system has no Tabs component (AD-13), so the
+// VAT section is a separate Frame BELOW the source table, not the mockup's tab.
+test('the VAT-rate section ships as a Frame (Story 4.4) — still no Tabs bar', () => {
+  // The section exists: label + Lưu button + both port calls.
+  assert.ok(src.includes('Thuế suất VAT'), 'the screen must render the "Thuế suất VAT" section (FR-3, Story 4.4)');
+  assert.ok(src.includes('Thuế suất hiện hành:'), 'the section must show the CURRENT effective rate');
+  assert.ok(src.includes('Thuế suất mới (%)'), 'the section must offer the edit box');
+  assert.match(code, /settingsPort\.getVatRate\(\)/, 'the screen must load the rate through settingsPort.getVatRate()');
+  assert.match(code, /settingsPort\s*[\s\S]{0,30}?\.updateVatRate\(/, 'Lưu must write through settingsPort.updateVatRate()');
+  // The rate travels through the injected SettingsPort — never a hardcoded value:
+  // the displayed number must come from state the port filled.
+  assert.match(code, /\{vatRate === null \? '—' : `\$\{vatRate\}%`\}/, 'the current rate must render from port-filled state with a "—" fallback');
+  // Still no Tabs — a deliberate deviation from the mockup (no Tabs component, AD-13).
+  assert.ok(!/<Tabs\b/.test(code), 'the screen must not render a Tabs bar — the VAT section is a Frame, not a tab (AD-13)');
+  // Input hygiene mirrors sortOrder: digits only, so Number() cannot yield NaN.
+  assert.match(code, /setVatText\(e\.target\.value\.replace\(\/\\D\/g, ''\)\)/, 'the rate box must keep digits only');
+  // In-flight discipline mirrors Lưu: no double-submit.
+  assert.match(code, /disabled=\{vatBusy \|\| vatText\.trim\(\) === ''\}/, 'Lưu (VAT) must be disabled in flight and on an empty box');
 });
 
 // (h.2) 🔴 NEGATIVE ASSERT — THE FLAGGED ROW HAS AN EDIT PATH BUT NO SWITCH-OFF PATH

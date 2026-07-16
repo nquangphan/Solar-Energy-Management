@@ -8,6 +8,7 @@ import {
   OrderLineAdded,
   OrderLineRemoved,
   OrderLineUpdated,
+  OrderMetaChanged,
   OrderScopeChanged,
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
@@ -58,6 +59,7 @@ describe('OrdersService', () => {
     scopeVanChuyen: false,
     kWp: null,
     vatMode: null,
+    validityNote: null,
     createdAt: new Date('2026-07-16T01:00:00Z'),
     updatedAt: new Date('2026-07-16T01:00:00Z'),
   };
@@ -175,8 +177,9 @@ describe('OrdersService', () => {
 
       // Op 1 — Order: assert TOÀN BỘ data. `sourceId`/`custType` phải là giá trị của
       // CUSTOMER (snapshot lúc tạo), `customerSdt` là chuỗi ĐÃ chuẩn hoá, owner là actor.
-      // 3 cờ phạm vi phải nằm TƯỜNG MINH trong payload (preset CA_NHAN = cả 3 true) —
-      // service tự ghi, KHÔNG dựa DB default (default trùng preset Thương mại là ngẫu nhiên).
+      // 3 cờ phạm vi + `vatMode` phải nằm TƯỜNG MINH trong payload (preset CA_NHAN = cả 3
+      // true; tick VAT mặc định 'co_vat') — service tự ghi, KHÔNG dựa DB default/null
+      // (default trùng preset Thương mại là ngẫu nhiên; null là dấu hiệu đơn trước 4.4).
       expect(orderRepo.create).toHaveBeenCalledWith({
         data: {
           id: expect.any(String),
@@ -188,6 +191,7 @@ describe('OrdersService', () => {
           scopeThietBi: true,
           scopeThiCong: true,
           scopeVanChuyen: true,
+          vatMode: 'co_vat',
         },
       });
 
@@ -670,14 +674,14 @@ describe('OrdersService', () => {
     });
   });
 
-  describe('updateScopeFlags — toggle cờ phạm vi trong cửa sổ baogia (Story 4.3)', () => {
+  describe('update — toggle cờ phạm vi trong cửa sổ baogia (Story 4.3)', () => {
     it('happy path: ghi ĐÚNG where + data (chỉ field client gửi), trả view phản ánh cờ mới', async () => {
       orderRepo.update.mockResolvedValue({
         ...DON_BAOGIA,
         scopeThiCong: true,
       });
 
-      const view = await service.updateScopeFlags(
+      const view = await service.update(
         ACTOR,
         DON_BAOGIA.id,
         { scopeThiCong: true },
@@ -698,7 +702,7 @@ describe('OrdersService', () => {
       orderRepo.findUnique.mockResolvedValue(null);
 
       const err = await bat(
-        service.updateScopeFlags(ACTOR, 'ord-x', { scopeThiCong: true }, true),
+        service.update(ACTOR, 'ord-x', { scopeThiCong: true }, true),
       );
 
       expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
@@ -713,7 +717,7 @@ describe('OrdersService', () => {
       });
 
       const err = await bat(
-        service.updateScopeFlags(
+        service.update(
           ACTOR,
           DON_BAOGIA.id,
           { scopeVanChuyen: true },
@@ -737,7 +741,7 @@ describe('OrdersService', () => {
         thuTu.push('publish');
       });
 
-      await service.updateScopeFlags(
+      await service.update(
         ACTOR,
         DON_BAOGIA.id,
         { scopeVanChuyen: true },
@@ -760,7 +764,7 @@ describe('OrdersService', () => {
         scopeVanChuyen: true,
       });
 
-      const view = await service.updateScopeFlags(
+      const view = await service.update(
         ACTOR,
         DON_BAOGIA.id,
         { scopeThiCong: true, scopeVanChuyen: true },
@@ -776,7 +780,7 @@ describe('OrdersService', () => {
     });
 
     it('body rỗng (không field nào) ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event', async () => {
-      const view = await service.updateScopeFlags(
+      const view = await service.update(
         ACTOR,
         DON_BAOGIA.id,
         {},
@@ -789,17 +793,181 @@ describe('OrdersService', () => {
     });
   });
 
-  describe('previewTotal — stateless, một bộ tính (AD-16, Story 4.2)', () => {
-    it('trả đúng tổng theo VAT mặc định 8% half-up — số kỳ vọng tính TAY, không tautology', () => {
-      const result = service.previewTotal({
-        lines: [
-          { unitPrice: 2_450_000, qty: 8 },
-          { unitPrice: 500_000, qty: 1 },
-        ],
+  describe('update — metadata vatMode/kWp/validityNote (Story 4.4)', () => {
+    it('đổi tick VAT: ghi ĐÚNG where + data (chỉ vatMode), publish CHỈ OrderMetaChanged mang before→after', async () => {
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        vatMode: 'khong_vat',
       });
 
-      // 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000 — vatRate=8/applyVat=true
-      // là resolve của SERVICE: đổi rate hay tắt VAT ở service đều làm test này ĐỎ.
+      const view = await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        { vatMode: 'khong_vat' },
+        true,
+      );
+
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: {
+          scopeThiCong: undefined,
+          scopeVanChuyen: undefined,
+          vatMode: 'khong_vat',
+          kWp: undefined,
+          validityNote: undefined,
+        },
+      });
+      expect(view.vatMode).toBe('khong_vat');
+
+      // CHỈ meta đổi ⇒ đúng MỘT event, đúng loại — không OrderScopeChanged ké theo.
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const event = eventBus.publish.mock.calls[0][0] as OrderMetaChanged;
+      expect(event).toBeInstanceOf(OrderMetaChanged);
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.before.vatMode).toBeNull();
+      expect(event.after.vatMode).toBe('khong_vat');
+      expect(event.target).toEqual({ type: 'Order', id: DON_BAOGIA.id });
+    });
+
+    it('nhập kWp + validityNote: data mang đúng giá trị, snapshot event có đủ 3 field meta', async () => {
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        kWp: 8.82,
+        validityNote: '48h kể từ ngày lên PO',
+      });
+
+      const view = await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        { kWp: 8.82, validityNote: '48h kể từ ngày lên PO' },
+        true,
+      );
+
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: {
+          scopeThiCong: undefined,
+          scopeVanChuyen: undefined,
+          vatMode: undefined,
+          kWp: 8.82,
+          validityNote: '48h kể từ ngày lên PO',
+        },
+      });
+      expect(view.kWp).toBe(8.82);
+      expect(view.validityNote).toBe('48h kể từ ngày lên PO');
+
+      const event = eventBus.publish.mock.calls[0][0] as OrderMetaChanged;
+      expect(event.before.kWp).toBeNull();
+      expect(event.after.kWp).toBe(8.82);
+      expect(event.after.validityNote).toBe('48h kể từ ngày lên PO');
+    });
+
+    it('kWp/validityNote = null GHI null (xoá giá trị) — null đi TỚI Prisma, khác undefined', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        kWp: 8.82,
+        validityNote: '48h',
+      });
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        kWp: null,
+        validityNote: null,
+      });
+
+      const view = await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        { kWp: null, validityNote: null },
+        true,
+      );
+
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: {
+          scopeThiCong: undefined,
+          scopeVanChuyen: undefined,
+          vatMode: undefined,
+          kWp: null,
+          validityNote: null,
+        },
+      });
+      expect(view.kWp).toBeNull();
+      expect(view.validityNote).toBeNull();
+    });
+
+    it('CHỈ scope đổi ⇒ CHỈ OrderScopeChanged (không OrderMetaChanged ké)', async () => {
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        scopeThiCong: true,
+      });
+
+      await service.update(ACTOR, DON_BAOGIA.id, { scopeThiCong: true }, true);
+
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(
+        OrderScopeChanged,
+      );
+    });
+
+    it('scope + meta trong MỘT PATCH ⇒ HAI event, mỗi event đúng loại, cả hai SAU write', async () => {
+      const thuTu: string[] = [];
+      orderRepo.update.mockImplementation(async () => {
+        thuTu.push('write');
+        return { ...DON_BAOGIA, scopeVanChuyen: true, vatMode: 'khong_vat' };
+      });
+      eventBus.publish.mockImplementation(async (event: unknown) => {
+        thuTu.push(
+          event instanceof OrderScopeChanged ? 'publish-scope' : 'publish-meta',
+        );
+      });
+
+      await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        { scopeVanChuyen: true, vatMode: 'khong_vat' },
+        true,
+      );
+
+      expect(thuTu).toEqual(['write', 'publish-scope', 'publish-meta']);
+      expect(eventBus.publish).toHaveBeenCalledTimes(2);
+      expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(
+        OrderScopeChanged,
+      );
+      expect(eventBus.publish.mock.calls[1][0]).toBeInstanceOf(
+        OrderMetaChanged,
+      );
+    });
+
+    it('meta trên đơn ngoài baogia ⇒ 409, không ghi, không event (4.5 snapshot lúc Chốt)', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const err = await bat(
+        service.update(ACTOR, DON_BAOGIA.id, { vatMode: 'khong_vat' }, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(orderRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('previewTotal — stateless, một bộ tính (AD-16, Story 4.2/4.4)', () => {
+    it('trả đúng tổng theo rate truyền vào (8%) half-up — số kỳ vọng tính TAY, không tautology', () => {
+      const result = service.previewTotal(
+        {
+          lines: [
+            { unitPrice: 2_450_000, qty: 8 },
+            { unitPrice: 500_000, qty: 1 },
+          ],
+        },
+        8,
+      );
+
+      // 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000.
       expect(result).toEqual({
         subtotal: 20_100_000,
         vatAmount: 1_608_000,
@@ -807,8 +975,51 @@ describe('OrdersService', () => {
       });
     });
 
+    it('rate từ config (10) THẮNG — service dùng đúng số controller resolve, không hardcode 8', () => {
+      const result = service.previewTotal(
+        { lines: [{ unitPrice: 1_000_000, qty: 1 }] },
+        10,
+      );
+
+      expect(result).toEqual({
+        subtotal: 1_000_000,
+        vatAmount: 100_000,
+        total: 1_100_000,
+      });
+    });
+
+    it("vatMode 'khong_vat' ⇒ vatAmount 0, total = subtotal (tick tắt VAT, FR-3)", () => {
+      const result = service.previewTotal(
+        {
+          lines: [{ unitPrice: 2_450_000, qty: 8 }],
+          vatMode: 'khong_vat',
+        },
+        8,
+      );
+
+      expect(result).toEqual({
+        subtotal: 19_600_000,
+        vatAmount: 0,
+        total: 19_600_000,
+      });
+    });
+
+    it("vatMode 'co_vat' và VẮNG field cho CÙNG kết quả (đơn cũ vatMode null = có VAT)", () => {
+      const coVat = service.previewTotal(
+        { lines: [{ unitPrice: 1_000_000, qty: 1 }], vatMode: 'co_vat' },
+        8,
+      );
+      const vangField = service.previewTotal(
+        { lines: [{ unitPrice: 1_000_000, qty: 1 }] },
+        8,
+      );
+
+      expect(coVat).toEqual(vangField);
+      expect(coVat.vatAmount).toBe(80_000);
+    });
+
     it('mảng rỗng ⇒ {0,0,0}; KHÔNG chạm Prisma, KHÔNG publish event', () => {
-      const result = service.previewTotal({ lines: [] });
+      const result = service.previewTotal({ lines: [] }, 8);
 
       expect(result).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
       // Stateless đúng nghĩa: zero interaction với DB lẫn EventBus.

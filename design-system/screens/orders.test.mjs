@@ -115,7 +115,7 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -168,6 +168,10 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Thiết bị',
     'Thi công',
     'Vận chuyển',
+    // order metadata (Story 4.4, FR-3/FR-4) — VAT tick + the two commit-on-blur inputs
+    'Tính VAT',
+    'Công suất (kWp)',
+    'Hiệu lực báo giá',
     // the totals area — values come from preview-total; '—' is the fallback
     'Tổng trước VAT',
     'Tiền VAT',
@@ -252,13 +256,23 @@ test('web wires all three totals fields; both fakes carry the one half-up VAT fo
   }
   const webFake = read('web/src/design-system/session/fake-orders-port.ts');
   const dartFake = read('mobile/lib/design_system/session/fake_orders_port.dart');
+  // Story 4.4: the multiplier is the fake's `vatRate` const (pinned to the backend
+  // default 8) and the tick echo gates it — same shape on both twins.
   assert.ok(
-    webFake.includes('Math.floor((subtotal * 8 + 50) / 100)'),
-    'web fake must compute VAT with the backend formula floor((subtotal*8+50)/100) — half-up, grand subtotal',
+    webFake.includes('Math.floor((subtotal * vatRate + 50) / 100)'),
+    'web fake must compute VAT with the backend formula floor((subtotal*vatRate+50)/100) — half-up, grand subtotal',
   );
   assert.ok(
-    dartFake.includes('(subtotal * 8 + 50) ~/ 100'),
-    'dart fake must compute VAT with the backend formula (subtotal*8+50)~/100 — half-up, grand subtotal',
+    webFake.includes('const vatRate = 8;'),
+    'web fake must pin vatRate to the backend default 8',
+  );
+  assert.ok(
+    dartFake.includes('(subtotal * vatRate + 50) ~/ 100'),
+    'dart fake must compute VAT with the backend formula (subtotal*vatRate+50)~/100 — half-up, grand subtotal',
+  );
+  assert.ok(
+    dartFake.includes('const int vatRate = 8;'),
+    'dart fake must pin vatRate to the backend default 8',
   );
 });
 
@@ -327,6 +341,41 @@ test('scope chips render read-only, Thiết bị has no toggle, and toggling nev
   const mobileToggleBody = /Future<void> _toggleScope[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
   assert.ok(mobileToggleBody, 'mobile must define _toggleScope');
   assert.ok(!/previewTotal|_refreshTotals/.test(mobileToggleBody), 'mobile _toggleScope must not re-preview totals — flags carry no money');
+});
+
+// (m) 🔴 ORDER METADATA (Story 4.4). Three rules a wrong .tsx would break silently:
+//  · The VAT % label is a BACKEND value (totals.vatRate) — a static "8%" string is
+//    a second opinion that goes stale the day the admin changes the config.
+//  · The meta handler MUST re-preview totals (opposite of the 4.3 scope rule):
+//    the VAT tick changes money, so the three numbers must refresh with the new echo.
+//  · The preview echo carries the order's vatMode out — otherwise unticking VAT
+//    changes nothing the backend can see.
+test('VAT % is a backend value, the meta path re-previews totals, the echo carries vatMode', () => {
+  const webCode = stripTsx(web);
+  const mobileCode = stripDart(mobile);
+
+  // No static "8%" anywhere in a screen — the label renders totals.vatRate.
+  assert.ok(!/['"`]8%['"`]/.test(webCode), 'web must not hardcode "8%" — render totals.vatRate');
+  assert.ok(!/'8%'/.test(mobileCode), 'mobile must not hardcode "8%" — render _totals.vatRate');
+  assert.ok(web.includes('totals.vatRate'), 'web must render the applied rate from totals.vatRate');
+  assert.ok(mobile.includes('_totals!.vatRate'), 'mobile must render the applied rate from _totals.vatRate');
+
+  // The meta handler re-previews (VAT changes money) — unlike the scope handler.
+  const webMetaBody = /async function handleMetaUpdate[\s\S]*?\n  \}/.exec(webCode)?.[0];
+  assert.ok(webMetaBody, 'web must define handleMetaUpdate');
+  assert.match(webMetaBody, /refreshTotals\(/, 'web handleMetaUpdate must re-preview totals — the VAT tick changes money');
+  const mobileMetaBody = /Future<void> _updateMeta[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
+  assert.ok(mobileMetaBody, 'mobile must define _updateMeta');
+  assert.match(mobileMetaBody, /_refreshTotals\(/, 'mobile _updateMeta must re-preview totals — the VAT tick changes money');
+
+  // The preview echo carries the order's vatMode (like unitPrice — echo, never invent).
+  assert.match(webCode, /previewTotal\(\{[\s\S]{0,400}?vatMode: fetched\.vatMode/, 'web refreshTotals must echo the order vatMode');
+  assert.match(mobileCode, /PreviewTotalInput\([\s\S]{0,400}?vatMode: fetched\.vatMode/, 'mobile _refreshTotals must echo the order vatMode');
+
+  // kWp is an INPUT CONVERSION ("8,82" → 8.82), not money math — both platforms
+  // must normalise the decimal comma before parsing.
+  assert.match(webCode, /replace\(',', '\.'\)/, "web must normalise the decimal comma in the kWp box");
+  assert.match(mobileCode, /replaceAll\(',', '\.'\)/, "mobile must normalise the decimal comma in the kWp box");
 });
 
 // (k) A FAILURE NEVER WIPES THE CART (EXPERIENCE Flow 1). The error path sets a

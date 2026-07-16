@@ -1974,7 +1974,7 @@
         },
         "responses": {
           "200": {
-            "description": "Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); client CHỈ hiển thị.",
+            "description": "Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); kèm `vatRate`/`applyVat` đã áp để client hiển thị nhãn thuế suất; client CHỈ hiển thị.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1984,7 +1984,7 @@
             }
           },
           "400": {
-            "description": "Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) — VALIDATION_ERROR kèm fieldErrors.",
+            "description": "Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) hoặc vatMode ngoài registry — VALIDATION_ERROR kèm fieldErrors.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2069,7 +2069,7 @@
         ]
       },
       "patch": {
-        "operationId": "OrdersController_updateScopeFlags",
+        "operationId": "OrdersController_update",
         "parameters": [
           {
             "name": "id",
@@ -2092,7 +2092,7 @@
         },
         "responses": {
           "200": {
-            "description": "Đơn sau khi đổi cờ phạm vi Thi công/Vận chuyển (partial). `scopeThietBi` luôn true — không nhận qua body (Story 4.3, FR-2).",
+            "description": "Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeThietBi` luôn true — không nhận qua body (FR-2).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2102,7 +2102,7 @@
             }
           },
           "400": {
-            "description": "Cờ không phải boolean hoặc là null (VALIDATION_ERROR — kèm fieldErrors).",
+            "description": "Cờ không phải boolean/null; vatMode ngoài registry; kWp ≤ 0 hoặc quá 2 chữ số lẻ; validityNote quá 200 ký tự (VALIDATION_ERROR — kèm fieldErrors).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2391,6 +2391,96 @@
         ],
         "tags": [
           "orders"
+        ]
+      }
+    },
+    "/settings/vat-rate": {
+      "get": {
+        "operationId": "SettingsController_getVatRate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Thuế suất VAT (%) hiệu lực — chưa cấu hình ⇒ 8 (default).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VatRateResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN) — sale nhận rate qua preview-total, không qua đây.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "operationId": "SettingsController_updateVatRate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVatRateRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thuế suất VAT (%) sau khi đổi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VatRateResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ratePercent không phải Int 0..100 (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settings"
         ]
       }
     }
@@ -3537,12 +3627,17 @@
           "kWp": {
             "type": "number",
             "nullable": true,
-            "description": "Công suất kWp — hành vi nhập thuộc Story 4.4."
+            "description": "Công suất hệ (kWp) — Float tối đa 2 chữ số lẻ (vd 8.82), nhập qua PATCH (Story 4.4). null = chưa nhập."
           },
           "vatMode": {
             "type": "string",
             "nullable": true,
-            "description": "Chế độ VAT — hành vi thuộc Story 4.4."
+            "description": "Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT)."
+          },
+          "validityNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự, Phase 1 chỉ hiển thị (Story 4.4). null = chưa nhập."
           },
           "lineItems": {
             "description": "Dòng của BẢN HIỆU LỰC (qua currentVersionId), sắp theo displayOrder tăng dần. Rỗng = đơn mới tạo.",
@@ -3603,6 +3698,14 @@
             "items": {
               "$ref": "#/components/schemas/PreviewTotalLineDto"
             }
+          },
+          "vatMode": {
+            "type": "string",
+            "enum": [
+              "co_vat",
+              "khong_vat"
+            ],
+            "description": "Tick áp VAT — client ECHO từ `Order.vatMode` (như đã echo unitPrice), KHÔNG BAO GIỜ gửi rate. Vắng field = đơn cũ vatMode null ⇒ tính như có VAT."
           }
         },
         "required": [
@@ -3623,12 +3726,22 @@
           "total": {
             "type": "number",
             "description": "Tổng sau VAT — integer đồng."
+          },
+          "vatRate": {
+            "type": "number",
+            "description": "Thuế suất (%) ĐÃ ÁP cho lần tính này — backend resolve từ config hệ thống, client chỉ hiển thị nhãn (vd \"VAT 8%\")."
+          },
+          "applyVat": {
+            "type": "boolean",
+            "description": "Lần tính này có áp VAT không — theo vatMode client echo (vắng/co_vat ⇒ true)."
           }
         },
         "required": [
           "subtotal",
           "vatAmount",
-          "total"
+          "total",
+          "vatRate",
+          "applyVat"
         ]
       },
       "UpdateOrderRequestDto": {
@@ -3641,6 +3754,24 @@
           "scopeVanChuyen": {
             "type": "boolean",
             "description": "Cờ phạm vi Vận chuyển — chỉ đổi được khi đơn còn ở baogia."
+          },
+          "vatMode": {
+            "type": "string",
+            "enum": [
+              "co_vat",
+              "khong_vat"
+            ],
+            "description": "Tick áp VAT (FR-3): 'co_vat' | 'khong_vat' — chỉ đổi được khi đơn còn ở baogia (4.5 snapshot lúc Chốt)."
+          },
+          "kWp": {
+            "type": "number",
+            "nullable": true,
+            "description": "Công suất hệ (kWp) — số > 0, tối đa 2 chữ số lẻ (vd 8.82). Gửi null để xoá."
+          },
+          "validityNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự (vd \"48h kể từ ngày lên PO\"), Phase 1 chỉ hiển thị. Gửi null để xoá."
           }
         }
       },
@@ -3707,6 +3838,30 @@
             "description": "Cờ \"linh động/dự kiến\" — chỉ hiển thị."
           }
         }
+      },
+      "VatRateResponseDto": {
+        "type": "object",
+        "properties": {
+          "ratePercent": {
+            "type": "number",
+            "description": "Thuế suất VAT (%) hiệu lực — Int 0..100. Hệ thống chưa cấu hình ⇒ 8 (default từ registry, không cần seed)."
+          }
+        },
+        "required": [
+          "ratePercent"
+        ]
+      },
+      "UpdateVatRateRequestDto": {
+        "type": "object",
+        "properties": {
+          "ratePercent": {
+            "type": "number",
+            "description": "Thuế suất VAT mới (%) — Int 0..100."
+          }
+        },
+        "required": [
+          "ratePercent"
+        ]
       }
     }
   }

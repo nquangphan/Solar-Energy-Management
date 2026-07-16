@@ -65,16 +65,26 @@ export class OrderResponseDto {
   @ApiPropertyOptional({
     type: Number,
     nullable: true,
-    description: 'Công suất kWp — hành vi nhập thuộc Story 4.4.',
+    description:
+      'Công suất hệ (kWp) — Float tối đa 2 chữ số lẻ (vd 8.82), nhập qua PATCH (Story 4.4). null = chưa nhập.',
   })
   kWp!: number | null;
 
   @ApiPropertyOptional({
     type: String,
     nullable: true,
-    description: 'Chế độ VAT — hành vi thuộc Story 4.4.',
+    description:
+      "Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT).",
   })
   vatMode!: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự, Phase 1 chỉ hiển thị (Story 4.4). null = chưa nhập.',
+  })
+  validityNote!: string | null;
 
   @ApiProperty({
     type: [OrderLineItemResponseDto],

@@ -25,6 +25,9 @@ export interface OrderSnapshot {
   readonly scopeThietBi: boolean;
   readonly scopeThiCong: boolean;
   readonly scopeVanChuyen: boolean;
+  readonly vatMode: string | null;
+  readonly kWp: number | null;
+  readonly validityNote: string | null;
 }
 
 /** Ảnh chụp một Dòng báo giá — đủ mọi field nghiệp vụ (audit ghi sự thật đầy đủ). */
@@ -94,6 +97,26 @@ export class OrderLineUpdated implements DomainEvent {
 /** Cờ phạm vi của Đơn bị ĐỔI (toggle Thi công/Vận chuyển, Story 4.3) — mang cả trước và sau. */
 export class OrderScopeChanged implements DomainEvent {
   readonly type = 'OrderScopeChanged';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
+/**
+ * Metadata của Đơn bị ĐỔI (tick VAT / công suất kWp / hạn hiệu lực, Story 4.4) — mang cả
+ * trước và sau. Tách khỏi `OrderScopeChanged` theo ngữ nghĩa NHÓM field: một PATCH đụng cả
+ * cờ phạm vi lẫn metadata publish HAI event, mỗi event đúng nhóm của nó.
+ */
+export class OrderMetaChanged implements DomainEvent {
+  readonly type = 'OrderMetaChanged';
 
   readonly target: { readonly type: string; readonly id: string };
 

@@ -135,6 +135,52 @@ test('the customers port did NOT grow customer-source write methods (Story 3.5)'
   }
 });
 
+test('the orders port carries the Story 4.4 surface on BOTH platforms (twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+  // The new method + the metadata fields exist on both twins.
+  for (const token of ['updateOrderMeta', 'UpdateOrderMetaInput', 'validityNote', 'vatRate', 'applyVat']) {
+    assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 4.4)`);
+    assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 4.4)`);
+  }
+  // kWp is FRACTIONAL by nature ("8,82 kWp") — the mobile twin must carry double,
+  // not int (AD-10's integer rule is for money only).
+  assert.match(mobPort, /final double\? kWp;/, 'mobile Order.kWp must be double? — capacity is fractional (Story 4.4)');
+  assert.match(webPort, /kWp: number \| null/, 'web Order.kWp must stay number | null');
+  // NEITHER twin lets the client send a VAT rate — the rate is config the backend
+  // resolves; only the vatMode ECHO travels out (AD-16).
+  const stripTs = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  const stripDartSrc = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  // `[\s\S]*?\n\}` — KHÔNG `[^}]*`: PreviewTotalInput lồng `Array<{...}>` nên `[^}]*`
+  // dừng ở dấu `}` bên trong và một field lậu thêm SAU đó lọt qua (mutation-check bắt được).
+  const webInputs = stripTs(webPort).match(/interface (?:PreviewTotalInput|UpdateOrderMetaInput) \{[\s\S]*?\n\}/g) ?? [];
+  assert.equal(webInputs.length, 2, 'both web write inputs must be declared');
+  for (const input of webInputs) {
+    assert.ok(!/vatRate|ratePercent/.test(input), 'no web write input may carry a VAT rate — the backend resolves config (AD-16)');
+  }
+  const dartMetaInput = /class UpdateOrderMetaInput \{[\s\S]*?\n\}/.exec(stripDartSrc(mobPort))?.[0] ?? '';
+  assert.ok(dartMetaInput.length > 0, 'mobile UpdateOrderMetaInput must be declared');
+  assert.ok(!/vatRate|ratePercent/.test(dartMetaInput), 'no mobile write input may carry a VAT rate — the backend resolves config (AD-16)');
+});
+
+test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
+  // Same decision as customer-sources (Story 3.5): system config is desk work,
+  // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen
+  // calls. Sale screens get the EFFECTIVE rate on every previewTotal response
+  // (OrderTotals.vatRate), so no mobile surface needs this port.
+  assert.ok(existsSync(resolve(webDir, 'settings-port.ts')), 'web settings port missing');
+  assert.ok(existsSync(resolve(webDir, 'fake-settings-port.ts')), 'web fake settings port missing');
+  for (const dart of ['settings_port.dart', 'fake_settings_port.dart']) {
+    assert.ok(
+      !existsSync(resolve(mobDir, dart)),
+      `mobile/${dart} must NOT exist — system config is web-only (DESIGN.md). If a mobile config screen is ever commissioned, add the twin AND delete this assert deliberately.`,
+    );
+  }
+  // The write path takes ONE integer percent — no client-side derivation surface.
+  const webPort = readFileSync(resolve(webDir, 'settings-port.ts'), 'utf8');
+  assert.match(webPort, /updateVatRate\(ratePercent: number\): Promise<number>/, 'updateVatRate must take one integer percent and resolve the new rate');
+});
+
 test('the session provider exposes the /me identity on both platforms (Story 2.8)', () => {
   // The Hồ sơ screen needs displayName/email. The provider ALREADY fetched /me —
   // it must expose the payload, not force a second call.

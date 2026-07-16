@@ -33,6 +33,10 @@ import type {
   CustomerSourceRow,
   CustomerSourcesPort,
 } from '../../design-system/session/customer-sources-port';
+import type {
+  SettingsPort,
+  SettingsPortError,
+} from '../../design-system/session/settings-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Sidebar, SIDEBAR_NAV, Topbar, WebShell } from '../../design-system/shell';
 
@@ -40,6 +44,7 @@ import './settings.css';
 
 export interface CustomerSourceConfigScreenProps {
   port: CustomerSourcesPort;
+  settingsPort: SettingsPort;
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -62,7 +67,18 @@ function asPortError(err: unknown): CustomerSourcePortError {
     : { message: 'Không lưu được thay đổi.' };
 }
 
-export function CustomerSourceConfigScreen({ port }: CustomerSourceConfigScreenProps) {
+/** Narrow an unknown rejection to the AD-5 envelope the settings port promises. */
+function asSettingsError(err: unknown): SettingsPortError {
+  const envelope = err as SettingsPortError;
+  return typeof envelope?.message === 'string'
+    ? envelope
+    : { message: 'Không lưu được thuế suất.' };
+}
+
+export function CustomerSourceConfigScreen({
+  port,
+  settingsPort,
+}: CustomerSourceConfigScreenProps) {
   const { perms } = usePermissions();
 
   const [rows, setRows] = useState<CustomerSourceRow[]>([]);
@@ -79,6 +95,40 @@ export function CustomerSourceConfigScreen({ port }: CustomerSourceConfigScreenP
   // the reload that follows it, repainting the table with the row's OLD name. The
   // ticket makes the stale answer a no-op instead of a lie.
   const latest = useRef(0);
+
+  // Mục "Thuế suất VAT" (Story 4.4): giá trị hiện hành + ô sửa + Lưu. Mockup vẽ
+  // TABS "Nguồn khách | Thuế suất VAT" nhưng design-system chưa có component Tabs
+  // (AD-13: chỉ dùng component có sẵn) — dựng Frame RIÊNG dưới bảng nguồn khách;
+  // deviation có chủ đích, ghi ở story.
+  const [vatRate, setVatRate] = useState<number | null>(null);
+  const [vatText, setVatText] = useState('');
+  const [vatError, setVatError] = useState<SettingsPortError | null>(null);
+  const [vatBusy, setVatBusy] = useState(false);
+
+  useEffect(() => {
+    settingsPort.getVatRate().then(
+      (rate) => {
+        setVatRate(rate);
+        setVatText(String(rate));
+      },
+      (err: unknown) => setVatError(asSettingsError(err)),
+    );
+  }, [settingsPort]);
+
+  const saveVatRate = () => {
+    setVatError(null);
+    setVatBusy(true);
+    // Ô chỉ giữ chữ số (onChange lọc) nên Number() không thể NaN; luật Int 0..100
+    // vẫn là của BACKEND (400 + fieldErrors) — đây chỉ là chuyển đổi input.
+    settingsPort
+      .updateVatRate(Number(vatText))
+      .then((rate) => {
+        setVatRate(rate);
+        setVatText(String(rate));
+      })
+      .catch((err: unknown) => setVatError(asSettingsError(err)))
+      .finally(() => setVatBusy(false));
+  };
 
   const load = useCallback(async () => {
     const ticket = ++latest.current;
@@ -283,6 +333,44 @@ export function CustomerSourceConfigScreen({ port }: CustomerSourceConfigScreenP
             </Table>
           </Frame>
         )}
+
+        {/* Thuế suất VAT (Story 4.4, FR-3): giá trị HIỆN HÀNH từ backend (chưa
+            cấu hình = 8, default registry) + ô sửa + Lưu. Sale không cần màn này —
+            rate hiệu lực về theo mỗi preview-total. */}
+        <Frame label="Thuế suất VAT">
+          {vatError !== null && (
+            <Banner tone="danger" role="alert">
+              {vatError.message}
+            </Banner>
+          )}
+          <div className="set-vat-row">
+            <div className="set-vat-current">
+              Thuế suất hiện hành:{' '}
+              <b className="set-mono">{vatRate === null ? '—' : `${vatRate}%`}</b>
+            </div>
+            <Field
+              label="Thuế suất mới (%)"
+              inputMode="numeric"
+              value={vatText}
+              // Chỉ giữ chữ số — input hygiene, không phải luật nghiệp vụ: trần
+              // Int 0..100 vẫn do backend enforce (400 + fieldErrors).
+              onChange={(e) => setVatText(e.target.value.replace(/\D/g, ''))}
+            />
+            <Button
+              variant="primary"
+              type="button"
+              disabled={vatBusy || vatText.trim() === ''}
+              onClick={saveVatRate}
+            >
+              Lưu
+            </Button>
+          </div>
+          {vatError?.fieldErrors?.find((e) => e.field === 'ratePercent') !== undefined && (
+            <div className="set-field-error">
+              {vatError.fieldErrors.find((e) => e.field === 'ratePercent')?.message}
+            </div>
+          )}
+        </Frame>
 
         <Dialog
           open={form !== null}

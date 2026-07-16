@@ -34,8 +34,15 @@ export type {
   CreateOrderInput,
   AddOrderLineInput,
   UpdateOrderLineInput,
+  UpdateScopeFlagsInput,
+  UpdateOrderMetaInput,
+  PreviewTotalInput,
+  OrderTotals,
   OrderPortError,
 } from './orders-port';
+// WEB-ONLY on purpose (Story 4.4): system config is desk work — same decision as
+// customer-sources-port.ts, no Dart mirror. See the file header.
+export type { SettingsPort, SettingsPortError } from './settings-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -65,6 +72,7 @@ export {
   DEMO_CUSTOMER_SOURCE_ROWS,
 } from './fake-customer-sources-port';
 export { FakeOrdersPort } from './fake-orders-port';
+export { FakeSettingsPort } from './fake-settings-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

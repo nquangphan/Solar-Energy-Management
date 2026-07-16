@@ -70,6 +70,9 @@ class FakeOrdersPort implements OrdersPort {
       scopeThietBi: preset.scopeThietBi,
       scopeThiCong: preset.scopeThiCong,
       scopeVanChuyen: preset.scopeVanChuyen,
+      // The backend writes the VAT tick EXPLICITLY on create (Story 4.4) —
+      // null is reserved for pre-4.4 orders; the fake plays that role.
+      vatMode: 'co_vat',
       lineItems: <OrderLine>[],
       createdAt: _now,
       updatedAt: _now,
@@ -101,6 +104,42 @@ class FakeOrdersPort implements OrdersPort {
       scopeVanChuyen: input.scopeVanChuyen ?? order.scopeVanChuyen,
       kWp: order.kWp,
       vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      lineItems: order.lineItems,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = updated;
+    return _copy(updated);
+  }
+
+  @override
+  Future<Order> updateOrderMeta(
+    String orderId,
+    UpdateOrderMetaInput input,
+  ) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // PATCH semantics mirror the backend: absent = keep, null = clear (kWp/
+    // validityNote are nullable business values; vatMode never goes null here).
+    final Order updated = Order(
+      id: order.id,
+      status: order.status,
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: input.hasKWp ? input.kWp : order.kWp,
+      vatMode: input.vatMode ?? order.vatMode,
+      validityNote:
+          input.hasValidityNote ? input.validityNote : order.validityNote,
       lineItems: order.lineItems,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
@@ -227,17 +266,22 @@ class FakeOrdersPort implements OrdersPort {
   @override
   Future<OrderTotals> previewTotal(PreviewTotalInput input) async {
     // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
-    // integer half-up at the grand subtotal), lives in the fake (the demo
-    // "server"), never in a screen (AD-16).
+    // integer half-up at the grand subtotal, `vatMode` echo decides applyVat —
+    // Story 4.4), lives in the fake (the demo "server"), never in a screen
+    // (AD-16). Absent vatMode = pre-4.4 order = VAT applies.
+    const int vatRate = 8;
+    final bool applyVat = input.vatMode != 'khong_vat';
     int subtotal = 0;
     for (final PreviewTotalLine line in input.lines) {
       subtotal += _serverAmount(line.unitPrice, line.qty);
     }
-    final int vatAmount = (subtotal * 8 + 50) ~/ 100;
+    final int vatAmount = applyVat ? (subtotal * vatRate + 50) ~/ 100 : 0;
     return OrderTotals(
       subtotal: subtotal,
       vatAmount: vatAmount,
       total: subtotal + vatAmount,
+      vatRate: vatRate,
+      applyVat: applyVat,
     );
   }
 
@@ -255,6 +299,7 @@ class FakeOrdersPort implements OrdersPort {
         scopeVanChuyen: order.scopeVanChuyen,
         kWp: order.kWp,
         vatMode: order.vatMode,
+        validityNote: order.validityNote,
         lineItems: List<OrderLine>.of(order.lineItems),
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,

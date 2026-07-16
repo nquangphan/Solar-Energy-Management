@@ -17,4 +17,17 @@ export class PreviewTotalResponseDto {
 
   @ApiProperty({ type: Number, description: 'Tổng sau VAT — integer đồng.' })
   total!: number;
+
+  @ApiProperty({
+    type: Number,
+    description:
+      'Thuế suất (%) ĐÃ ÁP cho lần tính này — backend resolve từ config hệ thống, client chỉ hiển thị nhãn (vd "VAT 8%").',
+  })
+  vatRate!: number;
+
+  @ApiProperty({
+    description:
+      'Lần tính này có áp VAT không — theo vatMode client echo (vắng/co_vat ⇒ true).',
+  })
+  applyVat!: boolean;
 }

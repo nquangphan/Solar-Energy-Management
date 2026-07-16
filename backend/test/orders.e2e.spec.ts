@@ -77,6 +77,7 @@ describe('/orders (e2e)', () => {
     scopeVanChuyen: false,
     kWp: null,
     vatMode: null,
+    validityNote: null,
     createdAt: new Date('2026-07-16T01:00:00Z'),
     updatedAt: new Date('2026-07-16T01:00:00Z'),
   };
@@ -132,6 +133,8 @@ describe('/orders (e2e)', () => {
   const auditRepo = { create: jest.fn().mockResolvedValue({}) };
   // Cờ giá phân tầng: vắng dòng = TẮT (fail-closed).
   const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
+  // Config hệ thống: vắng row = default 8% (preview-total resolve rate qua SettingsService).
+  const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   const transaction = jest.fn(async (ops: Promise<unknown>[]) =>
     Promise.all(ops),
   );
@@ -143,6 +146,7 @@ describe('/orders (e2e)', () => {
     customer: customerRepo,
     auditLog: auditRepo,
     featureFlag: featureFlagRepo,
+    systemSetting: systemSettingRepo,
     $transaction: transaction,
   };
   const accountsMock = {
@@ -203,6 +207,7 @@ describe('/orders (e2e)', () => {
     productRepo.findMany.mockResolvedValue([PIN_580W]);
     auditRepo.create.mockResolvedValue({});
     featureFlagRepo.findUnique.mockResolvedValue(null);
+    systemSettingRepo.findUnique.mockResolvedValue(null);
     transaction.mockImplementation(async (ops: Promise<unknown>[]) =>
       Promise.all(ops),
     );
@@ -418,7 +423,7 @@ describe('/orders (e2e)', () => {
       expect(auditRepo.create).not.toHaveBeenCalled();
     });
 
-    it('smuggle custType kèm cờ hợp lệ ⇒ custType bị strip: payload ghi CHỈ chứa 2 cờ, custType không đổi', async () => {
+    it('smuggle custType kèm cờ hợp lệ ⇒ custType bị strip: payload ghi CHỈ chứa field DTO, custType không đổi', async () => {
       givenPermissions(PERM.quotesCreateEdit);
       orderRepo.update.mockResolvedValue({
         ...DON_BAOGIA,
@@ -435,10 +440,151 @@ describe('/orders (e2e)', () => {
       // trong data — nhãn báo cáo snapshot lúc tạo đơn không đổi được qua PATCH.
       expect(orderRepo.update).toHaveBeenCalledWith({
         where: { id: ORDER_ID },
-        data: { scopeThiCong: undefined, scopeVanChuyen: true },
+        data: {
+          scopeThiCong: undefined,
+          scopeVanChuyen: true,
+          vatMode: undefined,
+          kWp: undefined,
+          validityNote: undefined,
+        },
       });
       expect(res.body.custType).toBe('CA_NHAN');
       expect(res.body.scopeVanChuyen).toBe(true);
+    });
+  });
+
+  describe('PATCH /orders/:id — metadata vatMode/kWp/validityNote (Story 4.4)', () => {
+    it('happy path: đổi tick + kWp + hạn hiệu lực ⇒ 200, audit OrderMetaChanged qua EventBus', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        vatMode: 'khong_vat',
+        kWp: 8.82,
+        validityNote: '48h kể từ ngày lên PO',
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          vatMode: 'khong_vat',
+          kWp: 8.82,
+          validityNote: '48h kể từ ngày lên PO',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.vatMode).toBe('khong_vat');
+      expect(res.body.kWp).toBe(8.82);
+      expect(res.body.validityNote).toBe('48h kể từ ngày lên PO');
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'OrderMetaChanged' }),
+        }),
+      );
+      // CHỈ meta ⇒ KHÔNG có audit OrderScopeChanged ké theo.
+      expect(auditRepo.create).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'OrderScopeChanged' }),
+        }),
+      );
+    });
+
+    it("vatMode 'khac' + kWp 8.825 (3 chữ số lẻ) ⇒ 400 fieldErrors đủ 2 field, không ghi", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ vatMode: 'khac', kWp: 8.825 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      const fields = (res.body.fieldErrors as { field: string }[]).map(
+        (e) => e.field,
+      );
+      expect(fields).toEqual(expect.arrayContaining(['vatMode', 'kWp']));
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('kWp = 0 (không > 0) và validityNote quá 200 ký tự ⇒ 400 fieldErrors', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ kWp: 0, validityNote: 'x'.repeat(201) });
+
+      expect(res.status).toBe(400);
+      const fields = (res.body.fieldErrors as { field: string }[]).map(
+        (e) => e.field,
+      );
+      expect(fields).toEqual(
+        expect.arrayContaining(['kWp', 'validityNote']),
+      );
+      expect(orderRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('kWp/validityNote = null ⇒ 200 (null nghiệp vụ = xoá); vatMode = null ⇒ 400', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      // Nửa CHO QUA: kWp/validityNote nullable ở DB — null là "xoá giá trị".
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        kWp: null,
+        validityNote: null,
+      });
+      const choQua = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ kWp: null, validityNote: null });
+      expect(choQua.status).toBe(200);
+      expect(choQua.body.kWp).toBeNull();
+      expect(choQua.body.validityNote).toBeNull();
+
+      // Nửa CHẶN: tick VAT không có trạng thái "null" — đơn mới luôn có tick.
+      const biChan = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ vatMode: null });
+      expect(biChan.status).toBe(400);
+      expect(biChan.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    });
+
+    it('biên HỢP LỆ: kWp 0.01 (min) + validityNote đúng 200 ký tự ⇒ 200, có ghi', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const note200 = 'x'.repeat(200);
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        kWp: 0.01,
+        validityNote: note200,
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ kWp: 0.01, validityNote: note200 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.kWp).toBe(0.01);
+      expect(res.body.validityNote).toBe(note200);
+      expect(orderRepo.update).toHaveBeenCalled();
+    });
+
+    it('meta trên đơn đã chốt ⇒ 409 CONFLICT (4.5 snapshot lúc Chốt — tick là tiền đóng băng)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ vatMode: 'khong_vat' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+      expect(orderRepo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -459,16 +605,119 @@ describe('/orders (e2e)', () => {
       // 200 chứ không 201 — compute thuần, không tạo resource.
       expect(res.status).toBe(200);
       // Số kỳ vọng tính TAY: 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000.
+      // `vatRate`/`applyVat` (4.4) để client hiển thị nhãn thuế suất — giá trị backend.
       expect(res.body).toEqual({
         subtotal: 20_100_000,
         vatAmount: 1_608_000,
         total: 21_708_000,
+        vatRate: 8,
+        applyVat: true,
       });
       // Stateless: đường preview không đọc/ghi các model nghiệp vụ, không audit.
       expect(orderRepo.findUnique).not.toHaveBeenCalled();
       expect(lineRepo.findMany).not.toHaveBeenCalled();
       expect(productRepo.findMany).not.toHaveBeenCalled();
       expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it("vatMode 'khong_vat' ⇒ vatAmount 0, total = subtotal; body vẫn mang vatRate + applyVat=false (4.4)", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          lines: [{ unitPrice: 2_450_000, qty: 8 }],
+          vatMode: 'khong_vat',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        subtotal: 19_600_000,
+        vatAmount: 0,
+        total: 19_600_000,
+        vatRate: 8,
+        applyVat: false,
+      });
+    });
+
+    it("vatMode 'khac' (ngoài registry) ⇒ 400 fieldErrors trỏ vatMode", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 100, qty: 1 }], vatMode: 'khac' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'vatMode' })]),
+      );
+    });
+
+    it('rate đọc từ CONFIG: row vat.rate_percent = "10" ⇒ vatAmount theo 10%, vatRate 10 (4.4)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      systemSettingRepo.findUnique.mockResolvedValue({
+        key: 'vat.rate_percent',
+        value: '10',
+        updatedAt: new Date(),
+      });
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 1_000_000, qty: 1 }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        subtotal: 1_000_000,
+        vatAmount: 100_000,
+        total: 1_100_000,
+        vatRate: 10,
+        applyVat: true,
+      });
+      // Resolve đúng key registry — MỘT lần mỗi request.
+      expect(systemSettingRepo.findUnique).toHaveBeenCalledWith({
+        where: { key: 'vat.rate_percent' },
+      });
+    });
+
+    it("vatMode 'co_vat' TƯỜNG MINH ⇒ 200 như vắng field — nhánh tick-ON của UI đi qua @IsIn", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 1_000_000, qty: 1 }], vatMode: 'co_vat' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        subtotal: 1_000_000,
+        vatAmount: 80_000,
+        total: 1_080_000,
+        vatRate: 8,
+        applyVat: true,
+      });
+    });
+
+    it('client smuggle vatRate: 50 ⇒ bị whitelist strip IM LẶNG, tính theo CONFIG (client không bao giờ gửi rate)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 1_000_000, qty: 1 }], vatRate: 50 });
+
+      // Rate lạ của client KHÔNG lọt vào phép tính — vẫn 8% default từ config.
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        subtotal: 1_000_000,
+        vatAmount: 80_000,
+        total: 1_080_000,
+        vatRate: 8,
+        applyVat: true,
+      });
     });
 
     it('lines rỗng ⇒ 200 {0,0,0} — giỏ vừa xoá sạch vẫn preview được', async () => {
@@ -480,7 +729,13 @@ describe('/orders (e2e)', () => {
         .send({ lines: [] });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+      expect(res.body).toEqual({
+        subtotal: 0,
+        vatAmount: 0,
+        total: 0,
+        vatRate: 8,
+        applyVat: true,
+      });
     });
 
     it('unitPrice âm ⇒ 400 fieldErrors envelope (nested validation CHẠY THẬT — @Type instantiate phần tử)', async () => {
@@ -508,7 +763,13 @@ describe('/orders (e2e)', () => {
         .send({ lines: [{ unitPrice: 0, qty: 3 }] });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+      expect(res.body).toEqual({
+        subtotal: 0,
+        vatAmount: 0,
+        total: 0,
+        vatRate: 8,
+        applyVat: true,
+      });
     });
 
     it('tiền/số lượng FLOAT ⇒ 400 — @IsInt chặn trước khi float lọt vào hàm pricing (AD-10)', async () => {
@@ -547,6 +808,8 @@ describe('/orders (e2e)', () => {
         subtotal: 500,
         vatAmount: 40,
         total: 540,
+        vatRate: 8,
+        applyVat: true,
       });
 
       const qua500 = await request(server())

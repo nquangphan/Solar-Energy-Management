@@ -49,3 +49,19 @@
   font-weight: 600;
   color: var(--muted);
 }
+
+/* Mục Thuế suất VAT (Story 4.4): giá trị hiện hành + ô sửa + Lưu. */
+.set-vat-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.set-vat-current {
+  padding-bottom: 8px;
+}
+
+.set-vat-row .fgroup {
+  min-width: 140px;
+}

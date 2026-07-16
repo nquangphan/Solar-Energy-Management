@@ -71,6 +71,15 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// đua response (cờ không ảnh hưởng tiền nên không cần ticket như preview).
   bool _scopeBusy = false;
 
+  /// Đang chờ PATCH metadata (tick VAT / kWp / hạn hiệu lực, Story 4.4) — cùng
+  /// pattern _scopeBusy; tick VAT ảnh hưởng tiền nên sau PATCH phải _refreshTotals.
+  bool _metaBusy = false;
+
+  // Text đang gõ của 2 input metadata — commit khi mất focus, prefill từ order;
+  // lỗi port thì revert về giá trị order cũ (bất biến k).
+  final TextEditingController _kWpCtl = TextEditingController();
+  final TextEditingController _validityCtl = TextEditingController();
+
   // Free-line form state.
   final TextEditingController _freeName = TextEditingController();
   final TextEditingController _freeUnit = TextEditingController();
@@ -93,6 +102,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     _freeQty.dispose();
     _freeUnitPrice.dispose();
     _freeNote.dispose();
+    _kWpCtl.dispose();
+    _validityCtl.dispose();
     super.dispose();
   }
 
@@ -122,6 +133,9 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
               .map((OrderLine l) =>
                   PreviewTotalLine(unitPrice: l.unitPrice, qty: l.qty))
               .toList(),
+          // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
+          // vatMode null thì bỏ qua field (backend coi như có VAT).
+          vatMode: fetched.vatMode,
         ),
       );
       if (!mounted || ticket != _latestTotals) return;
@@ -160,11 +174,83 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         _order = created;
         _error = null;
       });
+      _syncMetaTexts(created);
       await _refreshTotals(created);
     } catch (err) {
       // Đơn chưa tạo được — ở lại màn pick; message backend nguyên văn.
       _showError(err);
     }
+  }
+
+  /// Đồng bộ text 2 input metadata từ Đơn — lúc tạo đơn, sau commit, và khi
+  /// revert lỗi (KHÔNG setState: controller tự thông báo cho TextField).
+  void _syncMetaTexts(Order source) {
+    _kWpCtl.text = source.kWp == null ? '' : '${source.kWp}';
+    _validityCtl.text = source.validityNote ?? '';
+  }
+
+  /// PATCH nhóm metadata (Story 4.4): tick VAT / kWp / hạn hiệu lực. Tick VAT
+  /// ĐỔI TIỀN ⇒ sau khi PATCH thành công phải _refreshTotals với order MỚI
+  /// (echo vatMode mới — 3 số tổng đổi tức thì, EXPERIENCE §Realtime). Lỗi →
+  /// banner, GIỮ nguyên giỏ + revert input về giá trị order cũ (bất biến k).
+  Future<void> _updateMeta(UpdateOrderMetaInput input) async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _metaBusy = true);
+    try {
+      final Order updated =
+          await widget.ordersPort.updateOrderMeta(order.id, input);
+      if (!mounted) return;
+      setState(() {
+        _order = updated;
+        _error = null;
+      });
+      _syncMetaTexts(updated);
+      await _refreshTotals(updated);
+    } catch (err) {
+      _showError(err);
+      _syncMetaTexts(order);
+    } finally {
+      if (mounted) setState(() => _metaBusy = false);
+    }
+  }
+
+  /// Commit kWp khi mất focus: "8,82"/"8.82" → 8.82 — CHUYỂN ĐỔI INPUT, không
+  /// phải số học tiền; rỗng → null (xoá); parse hỏng → giữ nguyên + báo lỗi
+  /// field, KHÔNG gọi port.
+  void _commitKWp() {
+    final Order? order = _order;
+    if (order == null) return;
+    final String raw = _kWpCtl.text.trim();
+    if (raw.isEmpty) {
+      if (order.kWp != null) _updateMeta(const UpdateOrderMetaInput(kWp: null));
+      return;
+    }
+    final double? parsed = double.tryParse(raw.replaceAll(',', '.'));
+    if (parsed == null) {
+      setState(() {
+        _fieldErrors = <String, String>{
+          ..._fieldErrors,
+          'kWp': 'Công suất phải là số (vd 8,82).',
+        };
+      });
+      return;
+    }
+    setState(() {
+      _fieldErrors = Map<String, String>.of(_fieldErrors)..remove('kWp');
+    });
+    if (parsed == order.kWp) return;
+    _updateMeta(UpdateOrderMetaInput(kWp: parsed));
+  }
+
+  /// Commit hạn hiệu lực khi mất focus — rỗng → null (xoá); chỉ PATCH khi đổi.
+  void _commitValidityNote() {
+    final Order? order = _order;
+    if (order == null) return;
+    final String raw = _validityCtl.text.trim();
+    final String? next = raw.isEmpty ? null : raw;
+    if (next == order.validityNote) return;
+    _updateMeta(UpdateOrderMetaInput(validityNote: next));
   }
 
   Future<String?> _addCatalogLine(String productId, int qty) async {
@@ -619,6 +705,38 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                       onChanged: (bool checked) => _toggleScope(
                           UpdateScopeFlagsInput(scopeVanChuyen: checked)),
                     ),
+                    const SizedBox(height: AppTokens.space8),
+                    // Metadata Đơn (Story 4.4): commit khi mất focus → PATCH;
+                    // lỗi → banner + input revert giá trị cũ (bất biến k). kWp
+                    // là CHUYỂN ĐỔI input ("8,82" → 8.82), không phải số học tiền.
+                    Focus(
+                      onFocusChange: (bool has) {
+                        if (!has) _commitKWp();
+                      },
+                      child: AppField(
+                        label: 'Công suất (kWp)',
+                        controller: _kWpCtl,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                      ),
+                    ),
+                    if (_fieldErrors['kWp'] != null) ...[
+                      const SizedBox(height: AppTokens.space8),
+                      AppBanner(
+                        tone: AppBannerTone.danger,
+                        message: _fieldErrors['kWp']!,
+                      ),
+                    ],
+                    const SizedBox(height: AppTokens.space8),
+                    Focus(
+                      onFocusChange: (bool has) {
+                        if (!has) _commitValidityNote();
+                      },
+                      child: AppField(
+                        label: 'Hiệu lực báo giá',
+                        controller: _validityCtl,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -695,7 +813,29 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             AppFrame(
               label: 'Tổng kết',
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Tick VAT (Story 4.4) phản ánh order.vatMode; thuế suất % là
+                  // GIÁ TRỊ BACKEND từ _totals.vatRate — không nhãn tĩnh.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppCheckbox(
+                          label: 'Tính VAT',
+                          checked: order.vatMode != 'khong_vat',
+                          disabled: !editable || _metaBusy,
+                          onChanged: (bool checked) => _updateMeta(
+                            UpdateOrderMetaInput(
+                                vatMode: checked ? 'co_vat' : 'khong_vat'),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _totals == null ? '—' : '${_totals!.vatRate}%',
+                        style: _microMuted,
+                      ),
+                    ],
+                  ),
                   _TotalRow(
                     label: 'Tổng trước VAT',
                     value: _totals == null ? '—' : '${_totals!.subtotal}',

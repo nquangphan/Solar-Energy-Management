@@ -49,6 +49,7 @@ export interface Order {
   scopeVanChuyen: boolean;
   kWp: number | null;
   vatMode: string | null;
+  validityNote: string | null;
   lineItems: OrderLine[];
   createdAt: string;
   updatedAt: string;
@@ -94,22 +95,42 @@ export interface UpdateScopeFlagsInput {
 }
 
 /**
+ * Body of `PATCH /orders/:id` (Story 4.4) — the order-metadata group of the same
+ * endpoint: the VAT tick, the system capacity and the quote validity note.
+ * `kWp`/`validityNote` accept `null` = clear the value; `vatMode` is always one
+ * of the backend registry values (`'co_vat' | 'khong_vat'`) echoed, never
+ * invented here.
+ */
+export interface UpdateOrderMetaInput {
+  vatMode?: string;
+  kWp?: number | null;
+  validityNote?: string | null;
+}
+
+/**
  * Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed integer
- * đồng numbers (AD-16). The screen renders them as-is, "—" until the first
- * response (or after a failed preview).
+ * đồng numbers (AD-16) plus the applied `vatRate`/`applyVat` (Story 4.4) so the
+ * screen can label the VAT row ("VAT 8%") with a backend value, never a static
+ * label. The screen renders them as-is, "—" until the first response (or after
+ * a failed preview).
  */
 export interface OrderTotals {
   subtotal: number;
   vatAmount: number;
   total: number;
+  vatRate: number;
+  applyVat: boolean;
 }
 
 /**
  * Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
  * echoed back (every `unitPrice` is a number the backend already returned).
+ * `vatMode` (Story 4.4) is echoed from `Order.vatMode` the same way — the
+ * client never sends a rate.
  */
 export interface PreviewTotalInput {
   lines: Array<{ unitPrice: number; qty: number }>;
+  vatMode?: string;
 }
 
 /**
@@ -159,6 +180,14 @@ export interface OrdersPort {
    * order is still `'baogia'` (409 otherwise). Returns the full fresh order.
    */
   updateScopeFlags(orderId: string, input: UpdateScopeFlagsInput): Promise<Order>;
+
+  /**
+   * Update the order metadata group — VAT tick / kWp / validity note (Story
+   * 4.4). Same PATCH endpoint as `updateScopeFlags`, kept as a second typed
+   * method so each call site says which group it touches. Only while `'baogia'`
+   * (409 otherwise). Returns the full fresh order.
+   */
+  updateOrderMeta(orderId: string, input: UpdateOrderMetaInput): Promise<Order>;
 
   /**
    * Stateless totals preview (AD-16): send the displayed lines, get the ONE

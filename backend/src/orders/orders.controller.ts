@@ -29,6 +29,8 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { SettingsService } from '../settings/settings.service';
+import { vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
@@ -59,6 +61,7 @@ export class OrdersController {
   constructor(
     private readonly orders: OrdersService,
     private readonly featureFlags: FeatureFlagsService,
+    private readonly settings: SettingsService,
   ) {}
 
   private async tieredPricingEnabled(): Promise<boolean> {
@@ -99,19 +102,28 @@ export class OrdersController {
   @ApiOkResponse({
     type: PreviewTotalResponseDto,
     description:
-      'Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); client CHỈ hiển thị.',
+      'Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); kèm `vatRate`/`applyVat` đã áp để client hiển thị nhãn thuế suất; client CHỈ hiển thị.',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) — VALIDATION_ERROR kèm fieldErrors.',
+      'Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) hoặc vatMode ngoài registry — VALIDATION_ERROR kèm fieldErrors.',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
     description: 'Thiếu quotes.create_edit (FORBIDDEN).',
   })
-  previewTotal(@Body() body: PreviewTotalRequestDto): PreviewTotalResponseDto {
-    return this.orders.previewTotal(body) as PreviewTotalResponseDto;
+  async previewTotal(
+    @Body() body: PreviewTotalRequestDto,
+  ): Promise<PreviewTotalResponseDto> {
+    // Rate resolve TƯƠI từ config hệ thống MỘT lần mỗi request (pattern tieredPricingEnabled)
+    // — service giữ đúng 2 dep, client không bao giờ gửi rate.
+    const vatRate = await this.settings.vatRatePercent();
+    return {
+      ...this.orders.previewTotal(body, vatRate),
+      vatRate,
+      applyVat: vatApplies(body.vatMode ?? null),
+    } as PreviewTotalResponseDto;
   }
 
   @Get(':id')
@@ -141,12 +153,12 @@ export class OrdersController {
   @ApiOkResponse({
     type: OrderResponseDto,
     description:
-      'Đơn sau khi đổi cờ phạm vi Thi công/Vận chuyển (partial). `scopeThietBi` luôn true — không nhận qua body (Story 4.3, FR-2).',
+      'Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeThietBi` luôn true — không nhận qua body (FR-2).',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Cờ không phải boolean hoặc là null (VALIDATION_ERROR — kèm fieldErrors).',
+      'Cờ không phải boolean/null; vatMode ngoài registry; kWp ≤ 0 hoặc quá 2 chữ số lẻ; validityNote quá 200 ký tự (VALIDATION_ERROR — kèm fieldErrors).',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
@@ -161,12 +173,12 @@ export class OrdersController {
     description:
       "Đơn không còn ở trạng thái 'baogia' — cờ gate máy trạng thái, không đổi giữa vòng đời (CONFLICT).",
   })
-  async updateScopeFlags(
+  async update(
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
     @Body() body: UpdateOrderRequestDto,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.updateScopeFlags(
+    return (await this.orders.update(
       account.id,
       id,
       body,

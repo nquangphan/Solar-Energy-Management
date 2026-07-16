@@ -1,12 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsIn,
   IsInt,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { IsOptionalNotNull } from '../../catalog/dto/is-optional-not-null.decorator';
+import { VAT_MODES } from '../domain/vat-mode';
 
 /**
  * Body của `POST /orders/preview-total` — STATELESS (AD-16): client gửi CHÍNH các dòng
@@ -44,4 +47,13 @@ export class PreviewTotalRequestDto {
   @ValidateNested({ each: true })
   @Type(() => PreviewTotalLineDto)
   lines!: PreviewTotalLineDto[];
+
+  @ApiPropertyOptional({
+    enum: [...VAT_MODES],
+    description:
+      "Tick áp VAT — client ECHO từ `Order.vatMode` (như đã echo unitPrice), KHÔNG BAO GIỜ gửi rate. Vắng field = đơn cũ vatMode null ⇒ tính như có VAT.",
+  })
+  @IsOptionalNotNull()
+  @IsIn(VAT_MODES)
+  vatMode?: string;
 }

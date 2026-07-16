@@ -12,22 +12,20 @@ import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
 import { lineAmount } from './domain/line-amount';
-import {
-  VAT_RATE_MAC_DINH,
-  computeOrderTotals,
-  type OrderTotals,
-} from './domain/order-totals';
+import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
   OrderCreated,
   OrderLineAdded,
   OrderLineRemoved,
   OrderLineUpdated,
+  OrderMetaChanged,
   OrderScopeChanged,
   type OrderLineSnapshot,
   type OrderSnapshot,
 } from './domain/order-events';
 import { TRANG_THAI_BAO_GIA } from './domain/order-status';
 import { scopePresetFor } from './domain/scope-preset';
+import { VAT_MODE, vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
@@ -115,6 +113,9 @@ function orderSnapshot(order: Order): OrderSnapshot {
     scopeThietBi: order.scopeThietBi,
     scopeThiCong: order.scopeThiCong,
     scopeVanChuyen: order.scopeVanChuyen,
+    vatMode: order.vatMode,
+    kWp: order.kWp,
+    validityNote: order.validityNote,
   };
 }
 
@@ -243,6 +244,9 @@ export class OrdersService {
           // Cột `custType` là String ở Prisma nhưng giá trị đã validate `@IsIn(CUST_TYPES)`
           // lúc tạo khách — cast về union domain để tra preset.
           ...scopePresetFor(customer.custType as CustType),
+          // Tick VAT ghi TƯỜNG MINH (FR-3, Story 4.4) — không dựa DB default/null; null chỉ
+          // dành cho đơn tạo trước 4.4 (tính như có VAT qua `vatApplies`).
+          vatMode: VAT_MODE.coVat,
         },
       }),
       this.prisma.orderVersion.create({
@@ -265,16 +269,21 @@ export class OrdersService {
   /**
    * Tổng preview realtime — STATELESS (AD-16): KHÔNG chạm Prisma, KHÔNG publish event
    * (preview không phải mutation nghiệp vụ — FR-20 không đòi audit). Client echo các dòng
-   * backend đã trả; MỌI số học tiền xảy ra ở `computeOrderTotals()` — hàm pricing duy nhất.
+   * backend đã trả + `vatMode` của Đơn; MỌI số học tiền xảy ra ở `computeOrderTotals()` —
+   * hàm pricing duy nhất.
    *
-   * `vatRate`/`applyVat` resolve TẠI ĐÂY (chưa có config VAT — Story 4.4 mở rộng chỗ
-   * resolve: đọc config + tick trên Đơn, không đổi chữ ký hàm domain).
+   * `vatRatePercent` do CONTROLLER resolve từ config hệ thống MỘT lần mỗi request rồi truyền
+   * xuống (pattern `tieredPricingEnabled` — service giữ đúng 2 dep); client KHÔNG BAO GIỜ
+   * gửi rate. `applyVat` theo tick echo — vắng field = đơn cũ vatMode null ⇒ có VAT.
    */
-  previewTotal(dto: PreviewTotalRequestDto): OrderTotals {
+  previewTotal(
+    dto: PreviewTotalRequestDto,
+    vatRatePercent: number,
+  ): OrderTotals {
     return computeOrderTotals({
       lines: dto.lines,
-      vatRate: VAT_RATE_MAC_DINH,
-      applyVat: true,
+      vatRate: vatRatePercent,
+      applyVat: vatApplies(dto.vatMode ?? null),
     });
   }
 
@@ -303,15 +312,20 @@ export class OrdersService {
   }
 
   /**
-   * Toggle cờ phạm vi Thi công/Vận chuyển (Story 4.3, FR-2) — độc lập với preset; `custType`
-   * KHÔNG đổi (giữ làm nhãn báo cáo). `scopeThietBi` không có trong DTO nên không đường ghi
-   * nào chạm tới (luôn `true`). Cửa sổ sửa = `baogia` — cờ gate máy trạng thái Epic 5 (AD-7),
-   * cùng ngữ nghĩa 409 với line-items.
+   * PATCH Đơn — HAI nhóm field, mỗi nhóm một event audit đúng ngữ nghĩa:
+   *  - Cờ phạm vi Thi công/Vận chuyển (Story 4.3, FR-2) ⇒ `OrderScopeChanged`. Độc lập với
+   *    preset; `custType` KHÔNG đổi. `scopeThietBi` không có trong DTO nên không đường ghi
+   *    nào chạm tới (luôn `true`).
+   *  - Metadata vatMode/kWp/validityNote (Story 4.4, FR-3/FR-4) ⇒ `OrderMetaChanged`.
+   *    `kWp`/`validityNote` nhận `null` = xoá giá trị.
+   * Một PATCH đụng cả hai nhóm publish HAI event. Cửa sổ sửa = `baogia` cho MỌI field — cờ
+   * gate máy trạng thái Epic 5 (AD-7); 4.5 snapshot vatRate/vatMode lúc Chốt, đổi tick sau
+   * chốt là đổi tiền đã đóng băng — cùng ngữ nghĩa 409 với line-items.
    *
    * Nhận `tieredPricingEnabled` như `get()` vì `toViews` re-resolve giá SỐNG cho dòng catalog.
    * Body rỗng ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event (không có mutation để audit).
    */
-  async updateScopeFlags(
+  async update(
     actorAccountId: string,
     orderId: string,
     dto: UpdateOrderRequestDto,
@@ -320,27 +334,50 @@ export class OrdersService {
     const before = await this.findOrThrow(orderId);
     this.assertMutable(before);
 
-    if (dto.scopeThiCong === undefined && dto.scopeVanChuyen === undefined) {
+    const coScope =
+      dto.scopeThiCong !== undefined || dto.scopeVanChuyen !== undefined;
+    const coMeta =
+      dto.vatMode !== undefined ||
+      dto.kWp !== undefined ||
+      dto.validityNote !== undefined;
+    if (!coScope && !coMeta) {
       return this.viewOf(before, tieredPricingEnabled);
     }
 
     const updated = await this.prisma.order.update({
       where: { id: before.id },
-      // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH.
+      // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `kWp`/`validityNote`
+      // = null GHI null (xoá giá trị).
       data: {
         scopeThiCong: dto.scopeThiCong,
         scopeVanChuyen: dto.scopeVanChuyen,
+        vatMode: dto.vatMode,
+        kWp: dto.kWp,
+        validityNote: dto.validityNote,
       },
     });
 
-    await this.eventBus.publish(
-      new OrderScopeChanged(
-        actorAccountId,
-        orderSnapshot(before),
-        orderSnapshot(updated),
-        new Date(),
-      ),
-    );
+    // Publish SAU write — mỗi event đúng nhóm field nó mô tả (audit tra theo ngữ nghĩa).
+    if (coScope) {
+      await this.eventBus.publish(
+        new OrderScopeChanged(
+          actorAccountId,
+          orderSnapshot(before),
+          orderSnapshot(updated),
+          new Date(),
+        ),
+      );
+    }
+    if (coMeta) {
+      await this.eventBus.publish(
+        new OrderMetaChanged(
+          actorAccountId,
+          orderSnapshot(before),
+          orderSnapshot(updated),
+          new Date(),
+        ),
+      );
+    }
     return this.viewOf(updated, tieredPricingEnabled);
   }
 

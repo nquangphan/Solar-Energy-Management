@@ -23,6 +23,7 @@ import type {
   OrdersPort,
   PreviewTotalInput,
   UpdateOrderLineInput,
+  UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
 } from './orders-port';
 
@@ -78,7 +79,10 @@ export class FakeOrdersPort implements OrdersPort {
       custType,
       ...presetFor(custType),
       kWp: null,
-      vatMode: null,
+      // The backend writes the VAT tick EXPLICITLY on create (Story 4.4) —
+      // null is reserved for pre-4.4 orders; the fake plays that role.
+      vatMode: 'co_vat',
+      validityNote: null,
       lineItems: [],
       createdAt: NOW,
       updatedAt: NOW,
@@ -99,6 +103,19 @@ export class FakeOrdersPort implements OrdersPort {
     if (input.scopeVanChuyen !== undefined) {
       order.scopeVanChuyen = input.scopeVanChuyen;
     }
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  updateOrderMeta(orderId: string, input: UpdateOrderMetaInput): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    // PATCH semantics mirror the backend: absent = keep, null = clear (kWp/
+    // validityNote are nullable business values; vatMode never goes null here).
+    if (input.vatMode !== undefined) order.vatMode = input.vatMode;
+    if (input.kWp !== undefined) order.kWp = input.kWp;
+    if (input.validityNote !== undefined) order.validityNote = input.validityNote;
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
   }
 
@@ -188,14 +205,25 @@ export class FakeOrdersPort implements OrdersPort {
 
   previewTotal(input: PreviewTotalInput): Promise<OrderTotals> {
     // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
-    // integer half-up at the grand subtotal), lives in the fake (the demo
-    // "server"), never in a screen (AD-16).
+    // integer half-up at the grand subtotal, `vatMode` echo decides applyVat —
+    // Story 4.4), lives in the fake (the demo "server"), never in a screen
+    // (AD-16). Absent vatMode = pre-4.4 order = VAT applies.
+    const vatRate = 8;
+    const applyVat = input.vatMode !== 'khong_vat';
     let subtotal = 0;
     for (const line of input.lines) {
       subtotal += this.serverAmount(line.unitPrice, line.qty);
     }
-    const vatAmount = Math.floor((subtotal * 8 + 50) / 100);
-    return Promise.resolve({ subtotal, vatAmount, total: subtotal + vatAmount });
+    const vatAmount = applyVat
+      ? Math.floor((subtotal * vatRate + 50) / 100)
+      : 0;
+    return Promise.resolve({
+      subtotal,
+      vatAmount,
+      total: subtotal + vatAmount,
+      vatRate,
+      applyVat,
+    });
   }
 
   private buildLine(

@@ -139,3 +139,26 @@
   resize: vertical;
   min-height: 44px;
 }
+
+/* Metadata Đơn (Story 4.4): 2 input commit-on-blur trên card khách. */
+.quote-meta-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1.5px solid var(--line);
+}
+
+.quote-meta-row .fgroup {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* Tick VAT + thuế suất % (giá trị backend) trong khối Tổng kết. */
+.quote-vat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}

@@ -232,6 +232,17 @@ model FeatureFlag {
   @@map("feature_flags")
 }
 
+/// Cấu hình hệ thống key-value — mirror khuôn `FeatureFlag`: bảng giữ TRẠNG THÁI, registry
+/// (`settings/domain/setting-registry.ts`) giữ DANH SÁCH key hợp lệ + default. Row vắng =
+/// dùng default từ registry (KHÔNG cần seed). `value` là String — parse theo kiểu ở service.
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}
+
 /// Nguồn khách — khách đến từ đâu (Facebook, Zalo, Đại lý…). Danh mục cấu hình được, seed 5
 /// dòng ở story này; CRUD + màn cấu hình thuộc Story 3.5 (KHÔNG tạo lại bảng này ở đó).
 ///
@@ -330,8 +341,9 @@ model Order {
   scopeThietBi      Boolean         @default(true) @map("scope_thiet_bi")
   scopeThiCong      Boolean         @default(false) @map("scope_thi_cong")
   scopeVanChuyen    Boolean         @default(false) @map("scope_van_chuyen")
-  kWp               Int?            @map("k_wp")
+  kWp               Float?          @map("k_wp")
   vatMode           String?         @map("vat_mode")
+  validityNote      String?         @map("validity_note")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
   versions          OrderVersion[]  @relation("OrderVersions")
