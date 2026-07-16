@@ -5,11 +5,13 @@
 // THE CLIENT DOES NO MONEY MATH (AD-10/16). Every `unitPrice`/`amount` on this
 // screen is a number the BACKEND computed and the port carried in. A qty edit
 // goes OUT through `updateLine`; the fresh numbers come BACK in the response.
-// The totals area renders "—" until Story 4.2 wires `preview-total`.
+// The totals (Tổng trước VAT / Tiền VAT / Tổng sau VAT) come from the stateless
+// `previewTotal` port call — the screen echoes the displayed lines out and
+// renders the backend's three integers as-is; "—" is the not-yet/failed state.
 //
 // A network failure NEVER wipes entered lines (EXPERIENCE Flow 1): the error
 // path only sets a Banner/ErrorState — it never resets `order`.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import {
@@ -41,6 +43,7 @@ import type {
   Order,
   OrderPortError,
   OrdersPort,
+  OrderTotals,
 } from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Sidebar, SIDEBAR_NAV, Topbar, WebShell } from '../../design-system/shell';
@@ -71,9 +74,15 @@ export function CreateQuoteScreen({
 
   const [order, setOrder] = useState<Order | null>(null);
   const [customer, setCustomer] = useState<Customer | null>(null);
+  // null = chưa có/preview lỗi → khu tổng hiển thị "—" (không hiển thị số cũ đã sai).
+  const [totals, setTotals] = useState<OrderTotals | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [picker, setPicker] = useState<PickerKind>('none');
+
+  // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
+  // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
+  const latestTotals = useRef(0);
 
   // Catalog picker state.
   const [search, setSearch] = useState('');
@@ -106,12 +115,34 @@ export function CreateQuoteScreen({
     catalogPort.listGroups().then(setGroups, () => setGroups([]));
   }, [picker, catalogPort]);
 
+  /**
+   * MỘT đường code duy nhất cho tổng: echo các dòng backend vừa trả qua
+   * `previewTotal` — KHÔNG phép tính nào trong màn (AD-16). Lỗi preview → totals
+   * về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp (bất biến k).
+   */
+  async function refreshTotals(fetched: Order) {
+    const ticket = ++latestTotals.current;
+    try {
+      const fresh = await ordersPort.previewTotal({
+        lines: fetched.lineItems.map((l) => ({ unitPrice: l.unitPrice, qty: l.qty })),
+      });
+      if (ticket !== latestTotals.current) return;
+      setTotals(fresh);
+    } catch (err) {
+      if (ticket !== latestTotals.current) return;
+      setTotals(null);
+      setError(messageOf(err));
+    }
+  }
+
   /** Re-read the order — the retry path after a failed refresh; NEVER resets state on failure. */
   async function refresh() {
     if (order === null) return;
     try {
-      setOrder(await ordersPort.get(order.id));
+      const fetched = await ordersPort.get(order.id);
+      setOrder(fetched);
       setError(null);
+      await refreshTotals(fetched);
     } catch (err) {
       setError(messageOf(err));
     }
@@ -133,6 +164,7 @@ export function CreateQuoteScreen({
               setCustomer(picked);
               setOrder(created);
               setError(null);
+              await refreshTotals(created);
             } catch (err) {
               // Đơn chưa tạo được — ở lại màn pick; message backend nguyên văn.
               setError(messageOf(err));
@@ -304,15 +336,17 @@ export function CreateQuoteScreen({
           </div>
         </Frame>
 
-        {/* Khu tổng tiền: placeholder — Story 4.2 nối preview-total. Client CẤM số học tiền. */}
+        {/* Khu tổng tiền: 3 số backend trả qua preview-total, integer thô (cùng
+            convention `amount` của CartLineRow). "—" = chưa có/preview lỗi.
+            Client CẤM số học tiền. */}
         <Frame label="Tổng kết">
           <dl className="quote-totals">
             <dt>Tổng trước VAT</dt>
-            <dd className="num mono">—</dd>
+            <dd className="num mono">{totals ? String(totals.subtotal) : '—'}</dd>
             <dt>Tiền VAT</dt>
-            <dd className="num mono">—</dd>
+            <dd className="num mono">{totals ? String(totals.vatAmount) : '—'}</dd>
             <dt>Tổng sau VAT</dt>
-            <dd className="num mono strong">—</dd>
+            <dd className="num mono strong">{totals ? String(totals.total) : '—'}</dd>
           </dl>
         </Frame>
       </div>

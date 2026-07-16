@@ -33,6 +33,8 @@ import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
+import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
+import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { OrdersService } from './orders.service';
 
@@ -86,6 +88,29 @@ export class OrdersController {
     @Body() body: CreateOrderRequestDto,
   ): Promise<OrderResponseDto> {
     return (await this.orders.create(account.id, body)) as OrderResponseDto;
+  }
+
+  // Route TĨNH khai TRƯỚC các route `:id` — kỷ luật từ 3.4 (dù POST hiện không collision).
+  @Post('preview-total')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  // Compute thuần, không tạo resource — 201 mặc định của @Post là sai ngữ nghĩa.
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: PreviewTotalResponseDto,
+    description:
+      'Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); client CHỈ hiển thị.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) — VALIDATION_ERROR kèm fieldErrors.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+  })
+  previewTotal(@Body() body: PreviewTotalRequestDto): PreviewTotalResponseDto {
+    return this.orders.previewTotal(body) as PreviewTotalResponseDto;
   }
 
   @Get(':id')

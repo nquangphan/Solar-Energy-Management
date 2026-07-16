@@ -7,7 +7,9 @@
 // THE CLIENT DOES NO MONEY MATH (AD-10/16). Every `unitPrice`/`amount` on this
 // screen is a number the BACKEND computed and the port carried in. A qty edit
 // goes OUT through `updateLine`; the fresh numbers come BACK in the response.
-// The totals area renders "—" until Story 4.2 wires `preview-total`.
+// The totals (Tổng trước VAT / Tiền VAT / Tổng sau VAT) come from the stateless
+// `previewTotal` port call — the screen echoes the displayed lines out and
+// renders the backend's three integers as-is; "—" is the not-yet/failed state.
 //
 // A network failure NEVER wipes entered lines (EXPERIENCE Flow 1): the error
 // path only sets an error banner — it never resets `_order`.
@@ -54,6 +56,14 @@ class CreateQuoteScreen extends StatefulWidget {
 class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   Order? _order;
   Customer? _customer;
+
+  /// null = chưa có/preview lỗi → khu tổng hiển thị "—" (không hiển thị số cũ đã sai).
+  OrderTotals? _totals;
+
+  /// Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
+  /// tiếp không được cho tổng cũ đè tổng mới (pattern `_latest` của CustomerListScreen).
+  int _latestTotals = 0;
+
   String? _error;
   Map<String, String> _fieldErrors = const <String, String>{};
 
@@ -96,6 +106,29 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     });
   }
 
+  /// MỘT đường code duy nhất cho tổng: echo các dòng backend vừa trả qua
+  /// `previewTotal` — KHÔNG phép tính nào trong màn (AD-16). Lỗi preview →
+  /// totals về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp.
+  Future<void> _refreshTotals(Order fetched) async {
+    final int ticket = ++_latestTotals;
+    try {
+      final OrderTotals fresh = await widget.ordersPort.previewTotal(
+        PreviewTotalInput(
+          lines: fetched.lineItems
+              .map((OrderLine l) =>
+                  PreviewTotalLine(unitPrice: l.unitPrice, qty: l.qty))
+              .toList(),
+        ),
+      );
+      if (!mounted || ticket != _latestTotals) return;
+      setState(() => _totals = fresh);
+    } catch (err) {
+      if (!mounted || ticket != _latestTotals) return;
+      setState(() => _totals = null);
+      _showError(err);
+    }
+  }
+
   /// Re-read the order — the retry path; NEVER resets entered lines on failure.
   Future<void> _refresh() async {
     final Order? order = _order;
@@ -107,6 +140,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         _order = fresh;
         _error = null;
       });
+      await _refreshTotals(fresh);
     } catch (err) {
       _showError(err);
     }
@@ -122,6 +156,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         _order = created;
         _error = null;
       });
+      await _refreshTotals(created);
     } catch (err) {
       // Đơn chưa tạo được — ở lại màn pick; message backend nguyên văn.
       _showError(err);
@@ -592,15 +627,26 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
               ),
             ),
             const SizedBox(height: AppTokens.space12),
-            // Khu tổng tiền: placeholder — Story 4.2 nối preview-total. Client
-            // CẤM số học tiền.
-            const AppFrame(
+            // Khu tổng tiền: 3 số backend trả qua preview-total, integer thô
+            // (cùng convention `amount` của AppCartLineRow). "—" = chưa có/
+            // preview lỗi. Client CẤM số học tiền.
+            AppFrame(
               label: 'Tổng kết',
               child: Column(
                 children: [
-                  _TotalRow(label: 'Tổng trước VAT', value: '—'),
-                  _TotalRow(label: 'Tiền VAT', value: '—'),
-                  _TotalRow(label: 'Tổng sau VAT', value: '—', strong: true),
+                  _TotalRow(
+                    label: 'Tổng trước VAT',
+                    value: _totals == null ? '—' : '${_totals!.subtotal}',
+                  ),
+                  _TotalRow(
+                    label: 'Tiền VAT',
+                    value: _totals == null ? '—' : '${_totals!.vatAmount}',
+                  ),
+                  _TotalRow(
+                    label: 'Tổng sau VAT',
+                    value: _totals == null ? '—' : '${_totals!.total}',
+                    strong: true,
+                  ),
                 ],
               ),
             ),
@@ -611,7 +657,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   }
 }
 
-/// One placeholder totals row — the value stays "—" until Story 4.2.
+/// One totals row — the value is a backend preview number, "—" until the
+/// first response (or after a failed preview).
 class _TotalRow extends StatelessWidget {
   const _TotalRow(
       {required this.label, required this.value, this.strong = false});

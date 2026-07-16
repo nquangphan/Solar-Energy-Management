@@ -1958,6 +1958,62 @@
         ]
       }
     },
+    "/orders/preview-total": {
+      "post": {
+        "operationId": "OrdersController_previewTotal",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreviewTotalRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tổng trước VAT / Tiền VAT / Tổng sau VAT — integer đồng, tính bằng hàm pricing duy nhất (AD-16); client CHỈ hiển thị.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PreviewTotalResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Dòng không hợp lệ (unitPrice < 0, qty < 1, thiếu lines, quá 500 dòng) — VALIDATION_ERROR kèm fieldErrors.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}": {
       "get": {
         "operationId": "OrdersController_findOne",
@@ -3434,6 +3490,62 @@
           "lineItems",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "PreviewTotalLineDto": {
+        "type": "object",
+        "properties": {
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá — số nguyên ĐỒNG, echo từ số backend đã trả.",
+            "example": 2450000
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng — nguyên, tối thiểu 1.",
+            "example": 8
+          }
+        },
+        "required": [
+          "unitPrice",
+          "qty"
+        ]
+      },
+      "PreviewTotalRequestDto": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "description": "Các dòng giỏ hàng đang hiển thị. Mảng RỖNG hợp lệ (giỏ vừa xoá sạch ⇒ tổng 0). Tối đa 500 dòng.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PreviewTotalLineDto"
+            }
+          }
+        },
+        "required": [
+          "lines"
+        ]
+      },
+      "PreviewTotalResponseDto": {
+        "type": "object",
+        "properties": {
+          "subtotal": {
+            "type": "number",
+            "description": "Tổng trước VAT — integer đồng."
+          },
+          "vatAmount": {
+            "type": "number",
+            "description": "Tiền VAT — integer đồng, round-half-up một điểm."
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng sau VAT — integer đồng."
+          }
+        },
+        "required": [
+          "subtotal",
+          "vatAmount",
+          "total"
         ]
       },
       "AddLineItemRequestDto": {

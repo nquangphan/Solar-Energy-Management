@@ -17,7 +17,9 @@ import type {
   CreateOrderInput,
   Order,
   OrderLine,
+  OrderTotals,
   OrdersPort,
+  PreviewTotalInput,
   UpdateOrderLineInput,
 } from './orders-port';
 
@@ -138,6 +140,18 @@ export class FakeOrdersPort implements OrdersPort {
     }
     order.lineItems = order.lineItems.filter((l) => l.id !== lineId);
     return Promise.resolve();
+  }
+
+  previewTotal(input: PreviewTotalInput): Promise<OrderTotals> {
+    // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
+    // integer half-up at the grand subtotal), lives in the fake (the demo
+    // "server"), never in a screen (AD-16).
+    let subtotal = 0;
+    for (const line of input.lines) {
+      subtotal += this.serverAmount(line.unitPrice, line.qty);
+    }
+    const vatAmount = Math.floor((subtotal * 8 + 50) / 100);
+    return Promise.resolve({ subtotal, vatAmount, total: subtotal + vatAmount });
   }
 
   private buildLine(

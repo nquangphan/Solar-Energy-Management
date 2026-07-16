@@ -12,6 +12,11 @@ import { EventBus } from '../events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
 import { lineAmount } from './domain/line-amount';
 import {
+  VAT_RATE_MAC_DINH,
+  computeOrderTotals,
+  type OrderTotals,
+} from './domain/order-totals';
+import {
   OrderCreated,
   OrderLineAdded,
   OrderLineRemoved,
@@ -22,6 +27,7 @@ import {
 import { TRANG_THAI_BAO_GIA } from './domain/order-status';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
+import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 
 /**
@@ -241,6 +247,22 @@ export class OrdersService {
       new OrderCreated(actorAccountId, orderSnapshot(order), new Date()),
     );
     return { ...order, lineItems: [] };
+  }
+
+  /**
+   * Tổng preview realtime — STATELESS (AD-16): KHÔNG chạm Prisma, KHÔNG publish event
+   * (preview không phải mutation nghiệp vụ — FR-20 không đòi audit). Client echo các dòng
+   * backend đã trả; MỌI số học tiền xảy ra ở `computeOrderTotals()` — hàm pricing duy nhất.
+   *
+   * `vatRate`/`applyVat` resolve TẠI ĐÂY (chưa có config VAT — Story 4.4 mở rộng chỗ
+   * resolve: đọc config + tick trên Đơn, không đổi chữ ký hàm domain).
+   */
+  previewTotal(dto: PreviewTotalRequestDto): OrderTotals {
+    return computeOrderTotals({
+      lines: dto.lines,
+      vatRate: VAT_RATE_MAC_DINH,
+      applyVat: true,
+    });
   }
 
   /** Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính. */

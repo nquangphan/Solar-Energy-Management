@@ -45,8 +45,9 @@ class OrderLine {
 
 /// Mirrors the backend `OrderResponseDto`. [lineItems] are the lines of the
 /// CURRENT version (AD-6) — the client never sees the version concept in 4.1.
-/// There is deliberately NO subtotal/VAT/total: that is Story 4.2's
-/// `preview-total`; the totals area renders "—" until then.
+/// Totals are deliberately NOT on [Order]: they travel through `previewTotal`
+/// (stateless `POST /orders/preview-total`) so there is exactly ONE computer
+/// of money — the backend (AD-16).
 class Order {
   const Order({
     required this.id,
@@ -131,6 +132,37 @@ class UpdateOrderLineInput {
   final bool? isFlexible;
 }
 
+/// Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed
+/// integer đồng numbers (AD-16). The screen renders them as-is, "—" until the
+/// first response (or after a failed preview).
+class OrderTotals {
+  const OrderTotals({
+    required this.subtotal,
+    required this.vatAmount,
+    required this.total,
+  });
+
+  final int subtotal;
+  final int vatAmount;
+  final int total;
+}
+
+/// Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
+/// echoed back (every `unitPrice` is a number the backend already returned).
+class PreviewTotalInput {
+  const PreviewTotalInput({required this.lines});
+
+  final List<PreviewTotalLine> lines;
+}
+
+/// One echoed line of a preview request.
+class PreviewTotalLine {
+  const PreviewTotalLine({required this.unitPrice, required this.qty});
+
+  final int unitPrice;
+  final int qty;
+}
+
 /// The AD-5 error envelope, raised by an [OrdersPort] when the backend rejects a
 /// call (400 validation, 404, 409 non-draft order).
 ///
@@ -177,4 +209,8 @@ abstract class OrdersPort {
 
   /// Remove a line from the current version.
   Future<void> removeLine(String orderId, String lineId);
+
+  /// Stateless totals preview (AD-16): send the displayed lines, get the ONE
+  /// computer's subtotal/VAT/total back. No order is read or written.
+  Future<OrderTotals> previewTotal(PreviewTotalInput input);
 }

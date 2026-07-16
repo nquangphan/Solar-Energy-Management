@@ -229,6 +229,10 @@ describe('/orders (e2e)', () => {
         call: () =>
           request(server()).delete(`/orders/${ORDER_ID}/line-items/line-1`),
       },
+      {
+        name: 'POST /orders/preview-total',
+        call: () => request(server()).post('/orders/preview-total'),
+      },
     ];
 
     for (const route of routes) {
@@ -324,6 +328,140 @@ describe('/orders (e2e)', () => {
           data: expect.objectContaining({ eventType: 'OrderLineRemoved' }),
         }),
       );
+    });
+  });
+
+  describe('POST /orders/preview-total — stateless, một bộ tính (AD-16, Story 4.2)', () => {
+    it('happy path 2 dòng ⇒ 200 với 3 integer đồng (VAT 8% mặc định), KHÔNG chạm order/line/product', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          lines: [
+            { unitPrice: 2_450_000, qty: 8 },
+            { unitPrice: 500_000, qty: 1 },
+          ],
+        });
+
+      // 200 chứ không 201 — compute thuần, không tạo resource.
+      expect(res.status).toBe(200);
+      // Số kỳ vọng tính TAY: 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000.
+      expect(res.body).toEqual({
+        subtotal: 20_100_000,
+        vatAmount: 1_608_000,
+        total: 21_708_000,
+      });
+      // Stateless: đường preview không đọc/ghi các model nghiệp vụ, không audit.
+      expect(orderRepo.findUnique).not.toHaveBeenCalled();
+      expect(lineRepo.findMany).not.toHaveBeenCalled();
+      expect(productRepo.findMany).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('lines rỗng ⇒ 200 {0,0,0} — giỏ vừa xoá sạch vẫn preview được', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [] });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+    });
+
+    it('unitPrice âm ⇒ 400 fieldErrors envelope (nested validation CHẠY THẬT — @Type instantiate phần tử)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: -1, qty: 1 }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      const fields = (res.body.fieldErrors as { field: string }[]).map(
+        (e) => e.field,
+      );
+      expect(fields.some((f) => f.includes('unitPrice'))).toBe(true);
+    });
+
+    it('unitPrice=0 hợp lệ (dòng tự do 0 đồng) ⇒ 200 — @Min(0) là 0, không phải 1', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 0, qty: 3 }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+    });
+
+    it('tiền/số lượng FLOAT ⇒ 400 — @IsInt chặn trước khi float lọt vào hàm pricing (AD-10)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const floatPrice = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 100.5, qty: 1 }] });
+      expect(floatPrice.status).toBe(400);
+      expect(floatPrice.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      const fields = (floatPrice.body.fieldErrors as { field: string }[]).map(
+        (e) => e.field,
+      );
+      expect(fields.some((f) => f.includes('unitPrice'))).toBe(true);
+
+      const floatQty = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 100, qty: 1.5 }] });
+      expect(floatQty.status).toBe(400);
+      expect(floatQty.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    });
+
+    it('biên 500 dòng: đúng 500 ⇒ 200 (tính tay 500/40/540), 501 ⇒ 400 — @ArrayMaxSize chạy thật', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const line = { unitPrice: 1, qty: 1 };
+
+      const dung500 = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: Array.from({ length: 500 }, () => line) });
+      expect(dung500.status).toBe(200);
+      // subtotal 500×1 = 500; VAT 8%: floor((500×8 + 50)/100) = floor(40.5) = 40.
+      expect(dung500.body).toEqual({
+        subtotal: 500,
+        vatAmount: 40,
+        total: 540,
+      });
+
+      const qua500 = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: Array.from({ length: 501 }, () => line) });
+      expect(qua500.status).toBe(400);
+      expect(qua500.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    });
+
+    it('qty=0 ⇒ 400; thiếu lines ⇒ 400', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const qtyKhong = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 100, qty: 0 }] });
+      expect(qtyKhong.status).toBe(400);
+      expect(qtyKhong.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+
+      const thieuLines = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({});
+      expect(thieuLines.status).toBe(400);
+      expect(thieuLines.body.code).toBe(ErrorCode.VALIDATION_ERROR);
     });
   });
 

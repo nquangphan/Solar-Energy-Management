@@ -115,7 +115,7 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -163,7 +163,7 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Diễn giải',
     // display-only flexibility flag (AC-2)
     'Linh động/dự kiến',
-    // totals placeholders — Story 4.2 wires the numbers
+    // the totals area — values come from preview-total; '—' is the fallback
     'Tổng trước VAT',
     'Tiền VAT',
     'Tổng sau VAT',
@@ -211,11 +211,50 @@ test('no screen multiplies or adds money — amount/totals come from the backend
     /(?:unitPrice|amount|price|qty)\s*[*+\-]\s*[\w.$_]*(?:qty|unitPrice|amount|price)/i;
   for (const [name, code] of allCode) {
     assert.ok(!moneyMath.test(code), `${name} must not compute money — render the backend's amount as-is (AD-16)`);
-    assert.ok(!/\breduce\(/.test(code), `${name} must not sum lines — totals are Story 4.2's preview-total`);
+    assert.ok(!/\breduce\(/.test(code), `${name} must not sum lines — totals come ONLY from preview-total`);
   }
-  // The totals area is a PLACEHOLDER until Story 4.2 — the dash, not a number.
-  assert.ok(web.includes('—'), 'web totals must render the "—" placeholder');
-  assert.ok(mobile.includes('—'), 'mobile totals must render the "—" placeholder');
+  // "—" is the initial/failed-preview state of the totals area — it must stay
+  // present in the source of both platforms (fallback khi chưa có/lỗi preview).
+  assert.ok(web.includes('—'), 'web totals must keep the "—" fallback (no preview yet / preview failed)');
+  assert.ok(mobile.includes('—'), 'mobile totals must keep the "—" fallback (no preview yet / preview failed)');
+});
+
+// (h.2) 🔴 TOTALS COME ONLY FROM preview-total (Story 4.2, AD-16). Both screens
+// call previewTotal(); NEITHER contains VAT math — the 8%/half-up formula lives
+// in the backend and its fake stand-in ONLY. A `* 8` or a floor-divide on money
+// inside a screen is a SECOND computer of money — the exact forbidden bug.
+test('totals are wired through previewTotal — and no screen computes VAT', () => {
+  for (const [name, code] of allCode) {
+    assert.match(code, /previewTotal\(/, `${name} must call previewTotal() to fill the totals area`);
+    assert.ok(!/\*\s*8\b/.test(code), `${name} must not contain the VAT multiplier — the formula lives in the backend/fake only`);
+    assert.ok(!/0\.08/.test(code), `${name} must not contain a float VAT rate — money math is backend-only (AD-16)`);
+  }
+  // Rounding operators on the money path: floor for TS, integer-divide for Dart.
+  assert.ok(!/Math\.floor\(/.test(stripTsx(web)), 'web:quote must not round money — the backend already did');
+  assert.ok(!/~\/\s*100/.test(stripDart(mobile)), 'mobile:quote must not integer-divide money — the backend already did');
+});
+
+// (h.3) 🔴 THE WEB HALF HAS NO RUNTIME LANE (TD-1/C-4): the mobile widget tests
+// pin the Dart fake's numbers, but NOTHING executes the web screen or web fake.
+// Text is the only defense, so pin the two things a runtime test would catch:
+// the web render wires all THREE distinct totals fields (a copy-pasted
+// `totals.subtotal` in every row passes every other assert), and the web fake
+// carries the EXACT half-up formula so it cannot drift from the Dart twin the
+// widget tests DO execute.
+test('web wires all three totals fields; both fakes carry the one half-up VAT formula', () => {
+  for (const field of ['totals.subtotal', 'totals.vatAmount', 'totals.total']) {
+    assert.ok(web.includes(field), `web:quote must render ${field} — three distinct backend numbers, not one copied thrice`);
+  }
+  const webFake = read('web/src/design-system/session/fake-orders-port.ts');
+  const dartFake = read('mobile/lib/design_system/session/fake_orders_port.dart');
+  assert.ok(
+    webFake.includes('Math.floor((subtotal * 8 + 50) / 100)'),
+    'web fake must compute VAT with the backend formula floor((subtotal*8+50)/100) — half-up, grand subtotal',
+  );
+  assert.ok(
+    dartFake.includes('(subtotal * 8 + 50) ~/ 100'),
+    'dart fake must compute VAT with the backend formula (subtotal*8+50)~/100 — half-up, grand subtotal',
+  );
 });
 
 // (i) 🔴 NEGATIVE ASSERT — A GROUP LEAVES NO TRACE ON THE ORDER (§2, Story 3.6

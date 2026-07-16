@@ -159,6 +159,23 @@ class FakeOrdersPort implements OrdersPort {
     order.lineItems.removeWhere((OrderLine l) => l.id == lineId);
   }
 
+  @override
+  Future<OrderTotals> previewTotal(PreviewTotalInput input) async {
+    // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
+    // integer half-up at the grand subtotal), lives in the fake (the demo
+    // "server"), never in a screen (AD-16).
+    int subtotal = 0;
+    for (final PreviewTotalLine line in input.lines) {
+      subtotal += _serverAmount(line.unitPrice, line.qty);
+    }
+    final int vatAmount = (subtotal * 8 + 50) ~/ 100;
+    return OrderTotals(
+      subtotal: subtotal,
+      vatAmount: vatAmount,
+      total: subtotal + vatAmount,
+    );
+  }
+
   Order _copy(Order order) => Order(
         id: order.id,
         status: order.status,

@@ -31,8 +31,9 @@ export interface OrderLine {
 /**
  * Mirrors the backend `OrderResponseDto`. `lineItems` are the lines of the
  * CURRENT version (AD-6) — the client never sees the version concept in 4.1.
- * There is deliberately NO subtotal/VAT/total: that is Story 4.2's
- * `preview-total`; the totals area renders "—" until then.
+ * Totals are deliberately NOT on `Order`: they travel through `previewTotal`
+ * (stateless `POST /orders/preview-total`) so there is exactly ONE computer
+ * of money — the backend (AD-16).
  */
 export interface Order {
   id: string;
@@ -83,6 +84,25 @@ export interface UpdateOrderLineInput {
 }
 
 /**
+ * Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed integer
+ * đồng numbers (AD-16). The screen renders them as-is, "—" until the first
+ * response (or after a failed preview).
+ */
+export interface OrderTotals {
+  subtotal: number;
+  vatAmount: number;
+  total: number;
+}
+
+/**
+ * Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
+ * echoed back (every `unitPrice` is a number the backend already returned).
+ */
+export interface PreviewTotalInput {
+  lines: Array<{ unitPrice: number; qty: number }>;
+}
+
+/**
  * The AD-5 error envelope an `OrdersPort` rejects with when the backend refuses a
  * call (400 validation, 404, 409 non-draft order). Mirrors Flutter `OrderPortException`.
  *
@@ -123,4 +143,10 @@ export interface OrdersPort {
 
   /** Remove a line from the current version. */
   removeLine(orderId: string, lineId: string): Promise<void>;
+
+  /**
+   * Stateless totals preview (AD-16): send the displayed lines, get the ONE
+   * computer's subtotal/VAT/total back. No order is read or written.
+   */
+  previewTotal(input: PreviewTotalInput): Promise<OrderTotals>;
 }

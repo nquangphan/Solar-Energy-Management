@@ -9,6 +9,8 @@
 // that a non-priceEditable line offers NO price input, that deleting works, and
 // that a backend rejection reaches the user in the BACKEND'S words.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
@@ -27,6 +29,33 @@ class _RejectingCreatePort extends FakeOrdersPort {
 
   @override
   Future<Order> create(CreateOrderInput input) async => throw error;
+}
+
+/// A port whose PREVIEW is refused — proves a failed preview drops the totals
+/// back to "—" (never a stale number) while the cart lines stay intact.
+class _RejectingPreviewPort extends FakeOrdersPort {
+  _RejectingPreviewPort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<OrderTotals> previewTotal(PreviewTotalInput input) async =>
+      throw error;
+}
+
+/// A port whose PREVIEW never resolves until the test says so — the only way
+/// to replay the race the `_latestTotals` ticket exists for: an OLDER preview
+/// response landing AFTER a newer one must be thrown away, not rendered.
+class _ManualPreviewPort extends FakeOrdersPort {
+  final List<Completer<OrderTotals>> pendingPreviews =
+      <Completer<OrderTotals>>[];
+
+  @override
+  Future<OrderTotals> previewTotal(PreviewTotalInput input) {
+    final Completer<OrderTotals> completer = Completer<OrderTotals>();
+    pendingPreviews.add(completer);
+    return completer.future;
+  }
 }
 
 /// A port whose line UPDATE is refused the way the real backend refuses it —
@@ -93,8 +122,126 @@ void main() {
       expect(find.text('Tổng trước VAT'), findsOneWidget);
       expect(find.text('Tiền VAT'), findsOneWidget);
       expect(find.text('Tổng sau VAT'), findsOneWidget);
-      // No total number — Story 4.2 owns preview-total; the client shows "—".
+      // Giỏ rỗng vẫn preview được: fake-backend trả 0/0/0 và màn hiển thị
+      // NGUYÊN VĂN — không còn "—" nào (preview đã chạy ngay sau create).
+      expect(find.text('—'), findsNothing);
+      expect(find.text('0'), findsNWidgets(3));
+    });
+
+    testWidgets(
+        'tổng preview: 3 số của FAKE-BACKEND trả, màn không nhân/cộng gì',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen()));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // Tấm pin JA Solar 580W — 2_450_000
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // qty 1 → 5: subtotal 12_250_000, VAT 8% = 980_000, total 13_230_000 —
+      // ba con số do PORT trả; số kỳ vọng tính tay ghi thẳng, không tautology.
+      await tester.enterText(find.widgetWithText(TextField, '1').first, '5');
+      await tester.pumpAndSettle();
+
+      expect(find.text('12250000'), findsWidgets);
+      expect(find.text('980000'), findsOneWidget);
+      expect(find.text('13230000'), findsOneWidget);
+      expect(find.text('—'), findsNothing);
+    });
+
+    testWidgets(
+        'preview lỗi: totals về "—", dòng giỏ VẪN CÒN, message backend nguyên văn',
+        (WidgetTester tester) async {
+      const String backendSentence = 'Dữ liệu không hợp lệ';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingPreviewPort(
+          const OrderPortException(backendSentence),
+        ),
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Khu tổng về "—" (không hiển thị số cũ đã sai) — giỏ không mất dòng nào.
       expect(find.text('—'), findsNWidgets(3));
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      expect(find.text(backendSentence), findsOneWidget);
+    });
+
+    testWidgets('sửa qty → totals đổi theo response preview mới',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen()));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // qty 1: subtotal 2_450_000, VAT 196_000, total 2_646_000.
+      expect(find.text('196000'), findsOneWidget);
+      expect(find.text('2646000'), findsOneWidget);
+
+      // qty 1 → 2: preview mới 4_900_000 / 392_000 / 5_292_000 — số cũ biến mất.
+      await tester.enterText(find.widgetWithText(TextField, '1').first, '2');
+      await tester.pumpAndSettle();
+
+      expect(find.text('4900000'), findsWidgets);
+      expect(find.text('392000'), findsOneWidget);
+      expect(find.text('5292000'), findsOneWidget);
+      expect(find.text('196000'), findsNothing);
+    });
+
+    testWidgets(
+        'race preview: response CŨ về SAU response mới bị vứt — tổng mới không bị đè',
+        (WidgetTester tester) async {
+      final _ManualPreviewPort port = _ManualPreviewPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Sửa qty 1 → 2 khi các preview trước vẫn còn treo trên đường về.
+      await tester.enterText(find.widgetWithText(TextField, '1').first, '2');
+      await tester.pumpAndSettle();
+
+      // 3 preview đã bắn (sau tạo đơn, sau thêm dòng, sau sửa qty) — chưa cái
+      // nào về nên khu tổng vẫn "—".
+      expect(port.pendingPreviews, hasLength(3));
+      expect(find.text('—'), findsNWidgets(3));
+
+      // Preview MỚI NHẤT (qty 2) về TRƯỚC.
+      port.pendingPreviews[2].complete(const OrderTotals(
+          subtotal: 4900000, vatAmount: 392000, total: 5292000));
+      // Hai preview kia còn treo nhưng không giữ frame nào — settle an toàn.
+      await tester.pumpAndSettle();
+      expect(find.text('5292000'), findsOneWidget);
+
+      // Hai preview CŨ về TRỄ (1 dòng qty 1, rồi giỏ rỗng) — ticket phải vứt
+      // cả hai, số mới giữ nguyên trên màn.
+      port.pendingPreviews[1].complete(const OrderTotals(
+          subtotal: 2450000, vatAmount: 196000, total: 2646000));
+      port.pendingPreviews[0]
+          .complete(const OrderTotals(subtotal: 0, vatAmount: 0, total: 0));
+      await tester.pumpAndSettle();
+
+      expect(find.text('5292000'), findsOneWidget);
+      expect(find.text('392000'), findsOneWidget);
+      expect(find.text('2646000'), findsNothing);
+      expect(find.text('196000'), findsNothing);
+      // Không quay về "—", không về 0 — mọi response trễ đều bị vứt sạch.
+      expect(find.text('—'), findsNothing);
     });
 
     testWidgets(

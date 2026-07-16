@@ -645,6 +645,45 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('previewTotal — stateless, một bộ tính (AD-16, Story 4.2)', () => {
+    it('trả đúng tổng theo VAT mặc định 8% half-up — số kỳ vọng tính TAY, không tautology', () => {
+      const result = service.previewTotal({
+        lines: [
+          { unitPrice: 2_450_000, qty: 8 },
+          { unitPrice: 500_000, qty: 1 },
+        ],
+      });
+
+      // 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000 — vatRate=8/applyVat=true
+      // là resolve của SERVICE: đổi rate hay tắt VAT ở service đều làm test này ĐỎ.
+      expect(result).toEqual({
+        subtotal: 20_100_000,
+        vatAmount: 1_608_000,
+        total: 21_708_000,
+      });
+    });
+
+    it('mảng rỗng ⇒ {0,0,0}; KHÔNG chạm Prisma, KHÔNG publish event', () => {
+      const result = service.previewTotal({ lines: [] });
+
+      expect(result).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+      // Stateless đúng nghĩa: zero interaction với DB lẫn EventBus.
+      for (const repo of [
+        orderRepo,
+        orderVersionRepo,
+        lineRepo,
+        productRepo,
+        customerRepo,
+      ]) {
+        for (const fn of Object.values(repo)) {
+          expect(fn).not.toHaveBeenCalled();
+        }
+      }
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+  });
+
   describe('FR-5 — giá trước chốt: GET trả giá SỐNG cho dòng catalog không sửa giá', () => {
     it('giá danh mục đổi sau khi thêm dòng ⇒ unitPrice/amount trong response theo giá MỚI, DB không bị ghi đè', async () => {
       // Dòng lưu cache 2_450_000; danh mục đã đổi basePrice thành 2_600_000.

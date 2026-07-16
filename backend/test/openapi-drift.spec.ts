@@ -307,6 +307,30 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     }
   });
 
+  it('spec chứa POST /orders/preview-total + 3 schema PreviewTotal* (FE gen được client preview, AD-12)', () => {
+    // Drift-guard byte-for-byte chỉ chứng minh spec KHỚP code; nó xanh y hệt nếu code quên
+    // hẳn route. Hợp đồng CÓ MẶT là khẳng định khác — bài học lặp lại từ 3.2..3.5.
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/orders/preview-total'].post).toBeDefined();
+    // Đòi bearer — preview cũng gate quyền như mọi route orders (AD-4).
+    expect(document.paths['/orders/preview-total'].post?.security).toEqual([
+      { bearer: [] },
+    ]);
+
+    const schemas = document.components?.schemas ?? {};
+    expect(schemas.PreviewTotalRequestDto).toBeDefined();
+    expect(schemas.PreviewTotalLineDto).toBeDefined();
+    expect(schemas.PreviewTotalResponseDto).toBeDefined();
+
+    // Response ĐỦ 3 field bắt buộc — client chỉ hiển thị, không suy diễn field nào (AD-16).
+    const response = schemas.PreviewTotalResponseDto as { required?: string[] };
+    expect([...(response.required ?? [])].sort()).toEqual([
+      'subtotal',
+      'total',
+      'vatAmount',
+    ]);
+  });
+
   it('spec chứa ErrorEnvelopeDto + FieldErrorDto trong components.schemas (AC-1/AC-3)', () => {
     // Hợp đồng lỗi cross-repo phải luôn xuất hiện để FE gen được type (dù chưa endpoint
     // nào tham chiếu) — chứng minh `extraModels` hoạt động.
