@@ -4,6 +4,7 @@ import { ErrorCode } from '../src/common/errors/error-code';
 import type { EventBus } from '../src/events/event-bus';
 import { lineAmount } from '../src/orders/domain/line-amount';
 import {
+  OrderConfirmed,
   OrderCreated,
   OrderLineAdded,
   OrderLineRemoved,
@@ -123,6 +124,15 @@ describe('OrdersService', () => {
   const productRepo = { findUnique: jest.fn(), findMany: jest.fn() };
   const customerRepo = { findUnique: jest.fn() };
   const transaction = jest.fn();
+  // Interactive tx cho confirm(): callback nhận CHÍNH bộ mock này làm `tx`.
+  const txOrderRepo = { updateMany: jest.fn() };
+  const txVersionRepo = { update: jest.fn() };
+  const txLineRepo = { update: jest.fn() };
+  const txMock = {
+    order: txOrderRepo,
+    orderVersion: txVersionRepo,
+    orderLineItem: txLineRepo,
+  };
   const prisma = {
     order: orderRepo,
     orderVersion: orderVersionRepo,
@@ -161,10 +171,16 @@ describe('OrdersService', () => {
     lineRepo.findMany.mockResolvedValue([]);
     productRepo.findUnique.mockResolvedValue(PIN_580W);
     productRepo.findMany.mockResolvedValue([PIN_580W]);
-    // `$transaction` array Prisma: trả tuple đúng thứ tự op truyền vào.
-    transaction.mockImplementation(async (ops: Promise<unknown>[]) =>
-      Promise.all(ops),
+    // `$transaction` hai kiểu: array trả tuple đúng thứ tự op; interactive (callback) gọi
+    // callback với bộ mock tx — throw trong callback nổi lên như Prisma rollback thật.
+    transaction.mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as (tx: unknown) => Promise<unknown>)(txMock)
+        : Promise.all(arg as Promise<unknown>[]),
     );
+    txOrderRepo.updateMany.mockResolvedValue({ count: 1 });
+    txVersionRepo.update.mockResolvedValue({});
+    txLineRepo.update.mockResolvedValue({});
   });
 
   describe('AC-1/AC-4 — tạo đơn: một transaction 3 op, snapshot sourceId từ Customer', () => {
@@ -1036,6 +1052,325 @@ describe('OrdersService', () => {
       }
       expect(transaction).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirm — Chốt Đơn + snapshot giá (Story 4.5, FR-5/AD-6/AD-16)', () => {
+    /** Dòng phí lắp đặt ĐÃ SỬA GIÁ (4tr) — giá danh mục là 5tr: chênh lệch phải lộ ra. */
+    const DONG_PHI_LAP: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-phi-lap',
+      productId: PHI_LAP_DAT.id,
+      name: PHI_LAP_DAT.name,
+      unit: PHI_LAP_DAT.unit,
+      qty: 1,
+      unitPrice: 4_000_000,
+      priceEditable: true,
+      warrantyMonths: null,
+      displayOrder: 1,
+    };
+    /** Dòng tự do nhập tay — không có giá danh mục để so. */
+    const DONG_TU_DO: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-tu-do',
+      productId: null,
+      name: 'Combo phụ kiện',
+      unit: 'bộ',
+      qty: 2,
+      unitPrice: 350_000,
+      priceEditable: true,
+      warrantyMonths: null,
+      displayOrder: 2,
+    };
+
+    beforeEach(() => {
+      lineRepo.findMany.mockResolvedValue([
+        DONG_CATALOG,
+        DONG_PHI_LAP,
+        DONG_TU_DO,
+      ]);
+      // Giá danh mục pin ĐÃ ĐỔI (2_450_000 → 2_600_000) sau khi dòng được thêm: snapshot
+      // phải là giá SỐNG resolve tại thời điểm chốt, KHÔNG phải cache `unitPrice` lúc nhập.
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 2_600_000 },
+        PHI_LAP_DAT,
+      ]);
+    });
+
+    it('happy: payload từng op trong tx — updateMany đúng where, version ghi vatRate/vatMode/chotAt, từng dòng đúng cặp snapshot theo 3 loại', async () => {
+      const view = await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      // Cổng atomic: UPDATE có điều kiện status ngay trong WHERE — không phải update trần.
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'baogia' },
+        data: { status: 'dachot' },
+      });
+
+      // Version hiệu lực: vatRate từ config (controller resolve), vatMode HIỆU LỰC — đơn
+      // vatMode null (trước 4.4) đóng băng thành 'co_vat' TƯỜNG MINH, chotAt là thời điểm chốt.
+      expect(txVersionRepo.update).toHaveBeenCalledWith({
+        where: { id: VERSION_ID },
+        data: { vatRate: 8, vatMode: 'co_vat', chotAt: expect.any(Date) },
+      });
+
+      // 3 loại dòng — catalog thường: CẢ HAI cột = giá resolve SỐNG (2_600_000, không phải
+      // cache 2_450_000); phí lắp: unitPrice ĐÃ SỬA ≠ catalog resolve; tự do: catalog null.
+      expect(txLineRepo.update).toHaveBeenCalledTimes(3);
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_CATALOG.id },
+        data: {
+          unitPriceSnapshot: 2_600_000,
+          catalogPriceSnapshot: 2_600_000,
+        },
+      });
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_PHI_LAP.id },
+        data: {
+          unitPriceSnapshot: 4_000_000,
+          catalogPriceSnapshot: 5_000_000,
+        },
+      });
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_TU_DO.id },
+        data: { unitPriceSnapshot: 350_000, catalogPriceSnapshot: null },
+      });
+
+      // Response nói 'dachot' dù updateMany không trả row (compose trong bộ nhớ).
+      expect(view.status).toBe('dachot');
+
+      // Đường tra product của confirm KHÔNG kéo costPrice (PRODUCT_QUOTE_SELECT).
+      const select = (
+        productRepo.findMany.mock.calls[0][0] as {
+          select: Record<string, unknown>;
+        }
+      ).select;
+      expect(select).not.toHaveProperty('costPrice');
+    });
+
+    it("đơn vatMode 'khong_vat' ⇒ version snapshot giữ 'khong_vat' (giá trị hiệu lực, không ép co_vat)", async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        vatMode: 'khong_vat',
+      });
+
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(txVersionRepo.update).toHaveBeenCalledWith({
+        where: { id: VERSION_ID },
+        data: { vatRate: 8, vatMode: 'khong_vat', chotAt: expect.any(Date) },
+      });
+    });
+
+    it("thứ tự ['write','publish'] — OrderConfirmed publish SAU commit, mang before baogia → after dachot", async () => {
+      const thuTu: string[] = [];
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const ketQua = await callback(txMock);
+          thuTu.push('write');
+          return ketQua;
+        },
+      );
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(thuTu).toEqual(['write', 'publish']);
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const event = eventBus.publish.mock.calls[0][0] as OrderConfirmed;
+      expect(event).toBeInstanceOf(OrderConfirmed);
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.before.status).toBe('baogia');
+      expect(event.after.status).toBe('dachot');
+      expect(event.target).toEqual({ type: 'Order', id: DON_BAOGIA.id });
+    });
+
+    it("retry trên đơn ĐÃ 'dachot' ⇒ trả view hiện tại, KHÔNG transaction, KHÔNG update, KHÔNG event", async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const view = await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(view.status).toBe('dachot');
+      expect(transaction).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(txVersionRepo.update).not.toHaveBeenCalled();
+      expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it("race thua cổng atomic (count 0) → đọc lại thấy 'dachot' ⇒ idempotent: trả view, KHÔNG ghi tiếp, KHÔNG event", async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+      // Lần 1 (pre-check): còn baogia; lần 2 (đọc lại sau khi thua): bên kia đã chốt.
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_BAOGIA)
+        .mockResolvedValueOnce({ ...DON_BAOGIA, status: 'dachot' });
+
+      const view = await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(view.status).toBe('dachot');
+      // Sentinel abort: các op SAU cổng không được chạy.
+      expect(txVersionRepo.update).not.toHaveBeenCalled();
+      expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('race thua cổng → đọc lại thấy trạng thái LẠ (huy) ⇒ 409 CONFLICT', async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_BAOGIA)
+        .mockResolvedValueOnce({ ...DON_BAOGIA, status: 'huy' });
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it("trạng thái khác baogia/dachot (huy) ⇒ 409 CONFLICT, KHÔNG transaction", async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'huy',
+      });
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('đơn 0 dòng ⇒ 400 VALIDATION_ERROR (báo giá rỗng không có gì để đóng băng), KHÔNG transaction', async () => {
+      lineRepo.findMany.mockResolvedValue([]);
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(err.getStatus()).toBe(400);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('toViews ưu tiên snapshot: dòng đã đóng băng trả snapshot dù giá danh mục ĐÃ ĐỔI, bỏ hẳn tra product', async () => {
+      // 3 con số PHÂN BIỆT để mutation nào cũng lộ: snapshot 2_400_000 (đúng), cache
+      // `unitPrice` 2_450_000 (sai nếu rơi về cache), danh mục sống 9_999_999 (sai nếu
+      // live-resolve). Chỉ snapshot được phép thắng.
+      lineRepo.findMany.mockResolvedValue([
+        {
+          ...DONG_CATALOG,
+          unitPriceSnapshot: 2_400_000,
+          catalogPriceSnapshot: 2_400_000,
+        },
+      ]);
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 9_999_999 },
+      ]);
+
+      const view = await service.get(DON_BAOGIA.id, true);
+
+      expect(view.lineItems[0].unitPrice).toBe(2_400_000);
+      expect(view.lineItems[0].amount).toBe(lineAmount(2_400_000, 8));
+      // Dòng đóng băng KHÔNG vào liveIds — không còn dòng live nào ⇒ không tra product.
+      expect(productRepo.findMany).not.toHaveBeenCalled();
+    });
+
+    it('chốt qty chạm bậc thang (cờ tier BẬT) ⇒ snapshot = giá TIER, không phải basePrice', async () => {
+      // qty 10 ≥ minQty 10: giá hiệu lực khách đang thấy là tier 2_300_000 —
+      // đóng băng phải đúng con số đó, không phải base sống 2_600_000.
+      lineRepo.findMany.mockResolvedValue([{ ...DONG_CATALOG, qty: 10 }]);
+
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_CATALOG.id },
+        data: {
+          unitPriceSnapshot: 2_300_000,
+          catalogPriceSnapshot: 2_300_000,
+        },
+      });
+    });
+
+    it('chốt qty chạm bậc thang nhưng cờ tier TẮT ⇒ snapshot = basePrice (CÙNG cờ với đường live)', async () => {
+      // Cùng dữ liệu với test trên, chỉ đảo cờ: nếu confirm() hardcode cờ thay vì
+      // nhận từ controller thì test này RED — đóng băng phải đúng số màn đang hiển thị.
+      lineRepo.findMany.mockResolvedValue([{ ...DONG_CATALOG, qty: 10 }]);
+
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, false);
+
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_CATALOG.id },
+        data: {
+          unitPriceSnapshot: 2_600_000,
+          catalogPriceSnapshot: 2_600_000,
+        },
+      });
+    });
+
+    it('product biến mất khỏi danh mục (dữ liệu hỏng) ⇒ snapshot rơi về giá cache của dòng, tx vẫn hoàn tất', async () => {
+      // FK restrict lẽ ra chặn xoá Product còn được tham chiếu — nhánh này chỉ là
+      // phòng dữ liệu hỏng: rơi về cache `unitPrice` như đường đọc `toViews`.
+      lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
+      productRepo.findMany.mockResolvedValue([]);
+
+      const view = await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_CATALOG.id },
+        data: {
+          unitPriceSnapshot: 2_450_000,
+          catalogPriceSnapshot: 2_450_000,
+        },
+      });
+      expect(view.status).toBe('dachot');
+    });
+
+    it('toViews trộn dòng đóng băng + dòng sống: mỗi dòng theo tín hiệu RIÊNG, product chỉ tra cho dòng sống', async () => {
+      // Forward-compat 4.6 (version cũ đã chốt + version mới đang sửa): tín hiệu
+      // snapshot nằm trên DÒNG — dòng frozen trả snapshot, dòng sống vẫn re-resolve
+      // theo danh mục hiện hành, và liveIds CHỈ chứa product của dòng sống.
+      const TU_DIEN = {
+        id: 'prod-tu-dien',
+        name: 'Tủ điện AC',
+        unit: 'bộ',
+        price: 1_800_000,
+        priceEditable: false,
+        warrantyMonths: 24,
+        prices: [],
+      };
+      const DONG_SONG: OrderLineItem = {
+        ...DONG_CATALOG,
+        id: 'line-song',
+        productId: TU_DIEN.id,
+        name: TU_DIEN.name,
+        unit: TU_DIEN.unit,
+        qty: 2,
+        // Cache lúc nhập 1_700_000 ≠ danh mục hiện hành 1_800_000: dòng sống phải
+        // trả giá MỚI để chứng minh nó không bị dòng frozen kéo theo.
+        unitPrice: 1_700_000,
+        displayOrder: 1,
+      };
+      lineRepo.findMany.mockResolvedValue([
+        {
+          ...DONG_CATALOG,
+          unitPriceSnapshot: 2_400_000,
+          catalogPriceSnapshot: 2_400_000,
+        },
+        DONG_SONG,
+      ]);
+      productRepo.findMany.mockResolvedValue([TU_DIEN]);
+
+      const view = await service.get(DON_BAOGIA.id, true);
+
+      expect(view.lineItems[0].unitPrice).toBe(2_400_000);
+      expect(view.lineItems[1].unitPrice).toBe(1_800_000);
+      expect(view.lineItems[1].amount).toBe(lineAmount(1_800_000, 2));
+      expect(productRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: [TU_DIEN.id] } } }),
+      );
     });
   });
 

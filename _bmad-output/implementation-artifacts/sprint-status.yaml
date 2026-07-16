@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-17 (story 4.4 → done, code review approve)
+last_updated: 2026-07-17 (story 4.5 → review, dev-story)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -63,7 +63,7 @@ development_status:
   4-2-xem-truoc-tong-realtime-qua-post-orders-preview-total: done
   4-3-co-pham-vi-loai-khach-preset: done
   4-4-vat-cau-hinh-tick-ap-vat-metadata-don: done
-  4-5-chot-don-snapshot-gia: backlog
+  4-5-chot-don-snapshot-gia: done
   4-6-sua-don-da-chot-ban-update-moi-lich-su: backlog
   4-7-ap-chiet-khau-duyet-chiet-khau: backlog
   4-8-xuat-chia-se-bao-gia-pdf-anh: backlog

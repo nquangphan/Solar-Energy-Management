@@ -2152,6 +2152,81 @@
         ]
       }
     },
+    "/orders/{id}/chot": {
+      "post": {
+        "operationId": "OrdersController_confirm",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đơn sau khi Chốt: status 'dachot', giá dòng đã đóng băng bằng snapshot (FR-5, AD-6) — unitPrice trong line view tự động = snapshot. Retry trên đơn đã chốt: 200 view hiện tại, không ghi lại, không audit thêm (idempotent, NFR-1).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Báo giá chưa có dòng nào — không có gì để đóng băng (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu orders.confirm — quotes.create_edit KHÔNG thay thế được (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn ở trạng thái khác 'baogia'/'dachot' — không chốt được từ đó (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}/line-items": {
       "post": {
         "operationId": "OrdersController_addLine",

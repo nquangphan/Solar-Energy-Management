@@ -162,3 +162,9 @@
   gap: 8px;
   margin-bottom: 8px;
 }
+
+/* Nút Chốt báo giá (Story 4.5) — dưới khối Tổng kết, đẩy về phải theo mockup. */
+.quote-chot-row {
+  display: flex;
+  justify-content: flex-end;
+}

@@ -130,6 +130,26 @@ export class OrderMetaChanged implements DomainEvent {
   }
 }
 
+/**
+ * Đơn được CHỐT (Story 4.5, FR-5) — status baogia → dachot, giá dòng + vatRate/vatMode đã
+ * đóng băng bằng snapshot. Mang cả trước và sau; before/after tự nói baogia→dachot. CHỈ publish
+ * ở nhánh chốt THẬT — retry idempotent im lặng, không event thứ hai (NFR-1).
+ */
+export class OrderConfirmed implements DomainEvent {
+  readonly type = 'OrderConfirmed';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
 /** Một dòng bị XOÁ — chỉ có trạng thái "trước". */
 export class OrderLineRemoved implements DomainEvent {
   readonly type = 'OrderLineRemoved';

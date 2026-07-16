@@ -135,8 +135,19 @@ describe('/orders (e2e)', () => {
   const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   // Config hệ thống: vắng row = default 8% (preview-total resolve rate qua SettingsService).
   const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
-  const transaction = jest.fn(async (ops: Promise<unknown>[]) =>
-    Promise.all(ops),
+  // Interactive tx cho POST :id/chot: callback nhận bộ mock tx (kiểu array giữ nguyên).
+  const txOrderRepo = { updateMany: jest.fn() };
+  const txVersionRepo = { update: jest.fn() };
+  const txLineRepo = { update: jest.fn() };
+  const txMock = {
+    order: txOrderRepo,
+    orderVersion: txVersionRepo,
+    orderLineItem: txLineRepo,
+  };
+  const transaction = jest.fn(async (arg: unknown) =>
+    typeof arg === 'function'
+      ? (arg as (tx: unknown) => Promise<unknown>)(txMock)
+      : Promise.all(arg as Promise<unknown>[]),
   );
   const prismaMock = {
     order: orderRepo,
@@ -208,9 +219,14 @@ describe('/orders (e2e)', () => {
     auditRepo.create.mockResolvedValue({});
     featureFlagRepo.findUnique.mockResolvedValue(null);
     systemSettingRepo.findUnique.mockResolvedValue(null);
-    transaction.mockImplementation(async (ops: Promise<unknown>[]) =>
-      Promise.all(ops),
+    transaction.mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function'
+        ? (arg as (tx: unknown) => Promise<unknown>)(txMock)
+        : Promise.all(arg as Promise<unknown>[]),
     );
+    txOrderRepo.updateMany.mockResolvedValue({ count: 1 });
+    txVersionRepo.update.mockResolvedValue({});
+    txLineRepo.update.mockResolvedValue({});
   });
 
   describe('authn/authz fail-closed trên MỌI route', () => {
@@ -836,6 +852,156 @@ describe('/orders (e2e)', () => {
         .send({});
       expect(thieuLines.status).toBe(400);
       expect(thieuLines.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    });
+  });
+
+  describe('POST /orders/:id/chot — Chốt Đơn + snapshot giá (Story 4.5)', () => {
+    it('không token ⇒ 401', async () => {
+      const res = await request(server()).post(`/orders/${ORDER_ID}/chot`);
+
+      expect(res.status).toBe(401);
+    });
+
+    it("CHỈ có quotes.create_edit ⇒ 403 — quyền dựng báo giá KHÔNG thay được orders.confirm", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("happy: 200 status 'dachot', tx ghi status + version + snapshot dòng, audit OrderConfirmed qua AuditSubscriber thật", async () => {
+      givenPermissions(PERM.ordersConfirm);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('dachot');
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: ORDER_ID, status: 'baogia' },
+        data: { status: 'dachot' },
+      });
+      // vatRate 8 = default config (systemSetting vắng row); vatMode null ⇒ 'co_vat'.
+      expect(txVersionRepo.update).toHaveBeenCalledWith({
+        where: { id: VERSION_ID },
+        data: { vatRate: 8, vatMode: 'co_vat', chotAt: expect.any(Date) },
+      });
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_CATALOG.id },
+        data: {
+          unitPriceSnapshot: 2_450_000,
+          catalogPriceSnapshot: 2_450_000,
+        },
+      });
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'OrderConfirmed' }),
+        }),
+      );
+    });
+
+    it("vatRate đóng băng theo CONFIG: row vat.rate_percent = '10' ⇒ version snapshot vatRate 10, không phải default", async () => {
+      // Chứng minh controller resolve SettingsService thật rồi truyền xuống —
+      // hardcode default 8 ở bất kỳ tầng nào cũng làm test này RED.
+      givenPermissions(PERM.ordersConfirm);
+      systemSettingRepo.findUnique.mockResolvedValue({
+        key: 'vat.rate_percent',
+        value: '10',
+        updatedAt: new Date(),
+      });
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(txVersionRepo.update).toHaveBeenCalledWith({
+        where: { id: VERSION_ID },
+        data: { vatRate: 10, vatMode: 'co_vat', chotAt: expect.any(Date) },
+      });
+    });
+
+    it('retry trên đơn đã chốt ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm', async () => {
+      givenPermissions(PERM.ordersConfirm, PERM.quotesCreateEdit);
+      const DON_DA_CHOT = { ...DON_BAOGIA, status: 'dachot' };
+      const DONG_DA_CHOT = {
+        ...DONG_CATALOG,
+        unitPriceSnapshot: 2_450_000,
+        catalogPriceSnapshot: 2_450_000,
+      };
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+      lineRepo.findMany.mockResolvedValue([DONG_DA_CHOT]);
+
+      const retry = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+      const get = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(get.body);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('sửa giá danh mục SAU chốt ⇒ GET trả đơn giá dòng KHÔNG đổi (snapshot thắng giá sống — FR-5)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      // Dòng đã đóng băng 2_450_000; danh mục hiện hành đã nhảy lên 9_999_999.
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+      lineRepo.findMany.mockResolvedValue([
+        {
+          ...DONG_CATALOG,
+          unitPriceSnapshot: 2_450_000,
+          catalogPriceSnapshot: 2_450_000,
+        },
+      ]);
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 9_999_999 },
+      ]);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.lineItems[0].unitPrice).toBe(2_450_000);
+      expect(res.body.lineItems[0].amount).toBe(2_450_000 * 8);
+    });
+
+    it('chốt đơn 0 dòng ⇒ 400 VALIDATION_ERROR, không ghi', async () => {
+      givenPermissions(PERM.ordersConfirm);
+      lineRepo.findMany.mockResolvedValue([]);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('đơn ma ⇒ 404 envelope chuẩn', async () => {
+      givenPermissions(PERM.ordersConfirm);
+      orderRepo.findUnique.mockResolvedValue(null);
+
+      const res = await request(server())
+        .post('/orders/khong-co/chot')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
     });
   });
 

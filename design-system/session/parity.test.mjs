@@ -163,6 +163,19 @@ test('the orders port carries the Story 4.4 surface on BOTH platforms (twin re-c
   assert.ok(!/vatRate|ratePercent/.test(dartMetaInput), 'no mobile write input may carry a VAT rate — the backend resolves config (AD-16)');
 });
 
+test('the orders port carries confirmOrder on BOTH platforms (Story 4.5 twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+  // The confirm method exists on both twins — and takes ONLY the order id: the
+  // endpoint has an empty body (no DTO), so a confirm input type on either twin
+  // would invent a payload the backend does not accept.
+  assert.match(webPort, /confirmOrder\(orderId: string\): Promise<Order>;/, 'web OrdersPort missing confirmOrder (Story 4.5)');
+  assert.match(mobPort, /Future<Order> confirmOrder\(String orderId\);/, 'mobile OrdersPort missing confirmOrder (Story 4.5)');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(!/ConfirmOrderInput/.test(src), `${name} must not declare a ConfirmOrderInput — POST :id/chot carries no body`);
+  }
+});
+
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
   // Same decision as customer-sources (Story 3.5): system config is desk work,
   // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen

@@ -25,3 +25,6 @@ export type OrderStatusKey =
 
 /** Trạng thái khởi tạo của mọi Đơn — giá trị DUY NHẤT mà Story 4.1 được phép ghi. */
 export const TRANG_THAI_BAO_GIA: OrderStatusKey = 'baogia';
+
+/** Đơn đã Chốt — giá đã đóng băng bằng snapshot (FR-5, Story 4.5). */
+export const TRANG_THAI_DA_CHOT: OrderStatusKey = 'dachot';

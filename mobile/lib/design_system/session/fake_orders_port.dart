@@ -285,6 +285,41 @@ class FakeOrdersPort implements OrdersPort {
     );
   }
 
+  @override
+  Future<Order> confirmOrder(String orderId) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // Already confirmed = idempotent no-op, mirroring the backend retry path.
+    // The fake does NOT simulate the price freeze — the client never computes
+    // money and never reads snapshots; the returned numbers just stay as-is.
+    if (order.status == 'dachot') {
+      return _copy(order);
+    }
+    final Order confirmed = Order(
+      id: order.id,
+      status: 'dachot',
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      lineItems: order.lineItems,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = confirmed;
+    return _copy(confirmed);
+  }
+
   Order _copy(Order order) => Order(
         id: order.id,
         status: order.status,

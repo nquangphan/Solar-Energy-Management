@@ -115,7 +115,7 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -177,6 +177,10 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Tiền VAT',
     'Tổng sau VAT',
     '—',
+    // Chốt (Story 4.5) — the button + the FULL consequence sentence of the
+    // confirm dialog (UX-DR-19: the dialog states what freezing means).
+    'Chốt báo giá',
+    'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `web quote screen is missing the label "${label}"`);
@@ -376,6 +380,20 @@ test('VAT % is a backend value, the meta path re-previews totals, the echo carri
   // must normalise the decimal comma before parsing.
   assert.match(webCode, /replace\(',', '\.'\)/, "web must normalise the decimal comma in the kWp box");
   assert.match(mobileCode, /replaceAll\(',', '\.'\)/, "mobile must normalise the decimal comma in the kWp box");
+});
+
+// (n) 🔴 CHỐT (Story 4.5). The confirmed status only ever ARRIVES on the Order
+// the port returns — a screen writing the confirmed status literal into its own
+// state would fake a confirmation the backend may have refused (the atomic gate
+// is server-side). The fakes are excluded: they ARE the demo backend and write
+// the status as the server would.
+test('no screen self-assigns the confirmed status — it only renders the Order the port returns', () => {
+  for (const [name, code] of allCode) {
+    assert.ok(
+      !code.includes("'dachot'"),
+      `${name} must not carry the confirmed-status literal — status comes only from the Order the port returns`,
+    );
+  }
 });
 
 // (k) A FAILURE NEVER WIPES THE CART (EXPERIENCE Flow 1). The error path sets a

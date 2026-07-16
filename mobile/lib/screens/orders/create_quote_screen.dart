@@ -17,6 +17,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../../design_system/components/components.dart';
+import '../../design_system/gating/gating.dart';
 import '../../design_system/session/catalog_port.dart';
 import '../../design_system/session/customers_port.dart';
 import '../../design_system/session/orders_port.dart';
@@ -39,6 +40,7 @@ class CreateQuoteScreen extends StatefulWidget {
     required this.ordersPort,
     required this.catalogPort,
     required this.customersPort,
+    this.perms = const <PermissionKey>{},
     this.onDone,
   });
 
@@ -46,7 +48,13 @@ class CreateQuoteScreen extends StatefulWidget {
   final CatalogPort catalogPort;
   final CustomersPort customersPort;
 
-  /// Called when the user finishes building (Story 4.5 owns Chốt — nothing here).
+  /// Effective permission set of the signed-in user (twin of the web screen's
+  /// `usePermissions()` — mobile has no permissions context yet, so the host
+  /// injects it). Default `{}` = every gated control hidden — fail-closed
+  /// (Story 4.5 gates the Chốt button on `orders.confirm`).
+  final Set<PermissionKey> perms;
+
+  /// Called after the order is confirmed ("Chốt", Story 4.5) with the frozen order.
   final void Function(Order order)? onDone;
 
   @override
@@ -74,6 +82,10 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// Đang chờ PATCH metadata (tick VAT / kWp / hạn hiệu lực, Story 4.4) — cùng
   /// pattern _scopeBusy; tick VAT ảnh hưởng tiền nên sau PATCH phải _refreshTotals.
   bool _metaBusy = false;
+
+  /// Đang chờ port Chốt (Story 4.5) — cùng khuôn _scopeBusy/_metaBusy; thành
+  /// công thì `editable` tự tắt vì status đổi.
+  bool _chotBusy = false;
 
   // Text đang gõ của 2 input metadata — commit khi mất focus, prefill từ order;
   // lỗi port thì revert về giá trị order cũ (bất biến k).
@@ -352,6 +364,44 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     } finally {
       if (mounted) setState(() => _scopeBusy = false);
     }
+  }
+
+  /// Chốt Đơn (Story 4.5, FR-5): BACKEND đóng băng giá bằng snapshot và đổi
+  /// status — màn chỉ render Order trả về (`editable` tự tắt, nút Chốt biến
+  /// mất). KHÔNG toast hô hào (voice EXPERIENCE) — chip trạng thái đổi là đủ.
+  /// Lỗi → banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
+  Future<void> _confirmOrder() async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _chotBusy = true);
+    try {
+      final Order confirmed = await widget.ordersPort.confirmOrder(order.id);
+      if (!mounted) return;
+      setState(() {
+        _order = confirmed;
+        _error = null;
+      });
+      widget.onDone?.call(confirmed);
+    } catch (err) {
+      _showError(err);
+    } finally {
+      if (mounted) setState(() => _chotBusy = false);
+    }
+  }
+
+  /// Dialog xác nhận Chốt — Chốt là hành động có hệ quả (UX-DR-19). Huỷ (nút,
+  /// X, barrier, back) = đóng dialog, KHÔNG gọi port — đơn ở nguyên baogia.
+  Future<void> _openChotDialog() async {
+    await showAppDialog<void>(
+      context: context,
+      child: AppConfirmDialog(
+        title: 'Chốt báo giá',
+        consequence:
+            'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.',
+        confirmTone: AppButtonVariant.primary,
+        onConfirm: _confirmOrder,
+      ),
+    );
   }
 
   /// Tick = thêm một dòng THƯỜNG trỏ Product thật; untick = gỡ đúng dòng vừa thêm.
@@ -852,6 +902,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                 ],
               ),
             ),
+            // Chốt (Story 4.5): quyền riêng `orders.confirm` — thiếu quyền thì
+            // nút BIẾN MẤT (AppGate, UX-DR-22), không disabled xám; backend vẫn
+            // enforce (AD-4). Bấm mở dialog nêu hệ quả.
+            if (editable)
+              AppGate(
+                perms: widget.perms,
+                requires: AppPermissionKeys.ordersConfirm,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space12),
+                  child: AppButton(
+                    label: 'Chốt báo giá',
+                    variant: AppButtonVariant.primary,
+                    onPressed: _chotBusy ? null : _openChotDialog,
+                  ),
+                ),
+              ),
           ],
         ),
       ),

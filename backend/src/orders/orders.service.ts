@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
+  OrderConfirmed,
   OrderCreated,
   OrderLineAdded,
   OrderLineRemoved,
@@ -23,7 +24,10 @@ import {
   type OrderLineSnapshot,
   type OrderSnapshot,
 } from './domain/order-events';
-import { TRANG_THAI_BAO_GIA } from './domain/order-status';
+import {
+  TRANG_THAI_BAO_GIA,
+  TRANG_THAI_DA_CHOT,
+} from './domain/order-status';
 import { scopePresetFor } from './domain/scope-preset';
 import { VAT_MODE, vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
@@ -48,10 +52,16 @@ import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
  *
  * GIÁ TRƯỚC CHỐT (FR-5/FR-14): dòng catalog `priceEditable = false` trả giá SỐNG tính lại từ
  * danh mục hiện hành qua `resolveUnitPrice()` mỗi lần đọc — giá trị lưu trong `unitPrice` chỉ
- * là cache lúc nhập. Giá chỉ đóng băng lúc Chốt (`unitPriceSnapshot`, Story 4.5 — ở đây để NULL).
+ * là cache lúc nhập. SAU CHỐT giá đóng băng: `confirm()` ghi `unitPriceSnapshot` từng dòng,
+ * đường đọc `toViews` ưu tiên snapshot khi non-null và CHỈ live-resolve khi snapshot null —
+ * tín hiệu tự thân trên DÒNG, không dựa `Order.status` (version cũ đã chốt ở 4.6 vẫn đọc đúng).
  *
  * MUTATION DÒNG chỉ khi `status === 'baogia'` (khác ⇒ 409) — sửa sau chốt là luồng version
- * mới (Story 4.6). Story 4.1 không có đường nào ĐỔI status (AD-11: đổi = `applyTransition()`, 5.1).
+ * mới (Story 4.6).
+ *
+ * GHI STATUS (AD-11): `confirm()` là điểm ghi `Order.status` DUY NHẤT tạm thời trong codebase
+ * — transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt block đó vào
+ * `applyTransition()`; ngoài nó không đường nào ĐỔI status.
  */
 
 /**
@@ -118,6 +128,13 @@ function orderSnapshot(order: Order): OrderSnapshot {
     validityNote: order.validityNote,
   };
 }
+
+/**
+ * Sentinel abort transaction Chốt: bên thua cổng atomic (`count === 0`) ném nó để rollback
+ * toàn tx (Prisma interactive tx: throw trong callback ⇒ rollback), caller catch RIÊNG nó
+ * rồi đọc lại trạng thái — mọi lỗi khác ném tiếp nguyên vẹn.
+ */
+const CHOT_GATE_THUA = new Error('chot-gate-thua');
 
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
@@ -382,6 +399,173 @@ export class OrdersService {
   }
 
   /**
+   * CHỐT Đơn (Story 4.5, FR-5/AD-6/AD-16): đóng băng giá bằng snapshot trong MỘT transaction.
+   * ⚠️ 5.1 nuốt block này vào `applyTransition()` — đây là điểm ghi `Order.status` DUY NHẤT
+   * tạm thời (KHÔNG thêm điểm ghi thứ hai; KHÔNG dựng bảng transition ở đây).
+   *
+   * Cổng idempotency = atomic `updateMany({where: {id, status: 'baogia'}})` + `count === 1`
+   * (khuôn Story 2.3 chống replay): Postgres READ COMMITTED re-check WHERE sau row lock ⇒
+   * 2 request đồng thời đúng MỘT bên thắng; bên thua nhận `count 0` → sentinel abort tx →
+   * đọc lại → `dachot` thì trả idempotent, trạng thái lạ thì 409. Pre-check `dachot` trước
+   * tx chỉ là fast-path; cổng thật nằm TRONG tx. Bắt buộc interactive `$transaction` —
+   * array-style không abort được các op sau khi `count === 0`.
+   *
+   * Snapshot 3 loại dòng: catalog `priceEditable=false` ⇒ cả hai cột = giá resolve SỐNG tại
+   * thời điểm chốt (không phải cache `unitPrice` lúc nhập); catalog `priceEditable=true` (phí
+   * lắp) ⇒ `unitPriceSnapshot` = giá đã sửa, `catalogPriceSnapshot` = giá resolve — chênh lệch
+   * lộ ra cho màn duyệt chiết khấu 4.7; dòng tự do ⇒ `catalogPriceSnapshot` null.
+   * `costPriceSnapshot` KHÔNG ghi — giá vốn đóng băng lúc XUẤT KHO (AD-20, Story 6.4).
+   *
+   * `OrderVersion` hiệu lực ghi `vatRate` (config resolve ở controller) + `vatMode` GIÁ TRỊ
+   * HIỆU LỰC (`order.vatMode ?? 'co_vat'` — sau chốt không bao giờ null) + `chotAt`.
+   *
+   * Publish `OrderConfirmed` SAU commit, CHỈ ở nhánh chốt thật — retry im lặng (NFR-1, AD-18).
+   */
+  async confirm(
+    actorAccountId: string,
+    orderId: string,
+    vatRatePercent: number,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const before = await this.findOrThrow(orderId);
+    if (before.status === TRANG_THAI_DA_CHOT) {
+      // Retry sau khi đã chốt: 200 view hiện tại — KHÔNG ghi lại snapshot, KHÔNG event.
+      return this.viewOf(before, tieredPricingEnabled);
+    }
+    if (before.status !== TRANG_THAI_BAO_GIA) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ chốt được đơn đang ở trạng thái Báo giá.',
+      );
+    }
+    const versionId = this.currentVersionIdOrThrow(before);
+
+    const lines = await this.prisma.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      orderBy: { displayOrder: 'asc' },
+    });
+    // Báo giá rỗng không có gì để đóng băng — gần như chắc chắn là mis-tap. Kiểm TRƯỚC tx.
+    if (lines.length === 0) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Không thể chốt báo giá chưa có dòng nào.',
+      );
+    }
+
+    // Giá danh mục resolve MỘT lần cho mọi dòng catalog (kể cả priceEditable — cần
+    // catalogPriceSnapshot song song), CÙNG cờ với đường live/toViews — đóng băng đúng con
+    // số khách đang thấy trên màn.
+    const catalogIds = [
+      ...new Set(
+        lines
+          .filter((line) => line.productId !== null)
+          .map((line) => line.productId as string),
+      ),
+    ];
+    const products =
+      catalogIds.length === 0
+        ? []
+        : ((await this.prisma.product.findMany({
+            where: { id: { in: catalogIds } },
+            select: PRODUCT_QUOTE_SELECT,
+          })) as ProductQuoteView[]);
+    const productById = new Map(products.map((p) => [p.id, p]));
+
+    const lineSnapshots = lines.map((line) => {
+      if (line.productId === null) {
+        // Dòng tự do: giá nhập tay đóng băng, không có giá danh mục để so.
+        return {
+          id: line.id,
+          unitPriceSnapshot: line.unitPrice,
+          catalogPriceSnapshot: null,
+        };
+      }
+      const product = productById.get(line.productId);
+      // Product PHẢI còn (FK restrict) — nhánh undefined chỉ là phòng dữ liệu hỏng, rơi về
+      // giá cache như `toViews`.
+      const catalogPrice =
+        product === undefined
+          ? line.unitPrice
+          : resolveUnitPrice({
+              basePrice: product.price,
+              tiers: product.prices,
+              quantity: line.qty,
+              tieredPricingEnabled,
+            });
+      return line.priceEditable
+        ? {
+            // Phí lắp đặt đã sửa giá: đóng băng giá ĐÃ SỬA, giá danh mục lưu SONG SONG.
+            id: line.id,
+            unitPriceSnapshot: line.unitPrice,
+            catalogPriceSnapshot: catalogPrice,
+          }
+        : {
+            // Catalog thường: giá SỐNG tại thời điểm chốt — cả hai cột cùng con số.
+            id: line.id,
+            unitPriceSnapshot: catalogPrice,
+            catalogPriceSnapshot: catalogPrice,
+          };
+    });
+
+    const chotAt = new Date();
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.order.updateMany({
+          where: { id: before.id, status: TRANG_THAI_BAO_GIA },
+          data: { status: TRANG_THAI_DA_CHOT },
+        });
+        if (count === 0) throw CHOT_GATE_THUA;
+        await tx.orderVersion.update({
+          where: { id: versionId },
+          data: {
+            vatRate: vatRatePercent,
+            // Giá trị HIỆU LỰC — đơn tạo trước 4.4 (vatMode null, tính như có VAT) chốt
+            // xong phải tường minh 'co_vat': quyết định thuế đã đóng băng không được mập mờ.
+            vatMode: before.vatMode ?? VAT_MODE.coVat,
+            chotAt,
+          },
+        });
+        for (const snap of lineSnapshots) {
+          await tx.orderLineItem.update({
+            where: { id: snap.id },
+            data: {
+              unitPriceSnapshot: snap.unitPriceSnapshot,
+              catalogPriceSnapshot: snap.catalogPriceSnapshot,
+            },
+          });
+        }
+      });
+    } catch (error) {
+      if (error !== CHOT_GATE_THUA) throw error;
+      // Thua cổng atomic (race 2 request đồng thời): đọc lại sự thật hiện tại.
+      const current = await this.findOrThrow(orderId);
+      if (current.status === TRANG_THAI_DA_CHOT) {
+        return this.viewOf(current, tieredPricingEnabled);
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ chốt được đơn đang ở trạng thái Báo giá.',
+      );
+    }
+
+    // `updateMany` không trả row — compose status mới lên object `before` trong bộ nhớ để
+    // response (và snapshot `after` của event) nói 'dachot'.
+    const after: Order = { ...before, status: TRANG_THAI_DA_CHOT };
+    await this.eventBus.publish(
+      new OrderConfirmed(
+        actorAccountId,
+        orderSnapshot(before),
+        orderSnapshot(after),
+        new Date(),
+      ),
+    );
+    return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
    * Thêm dòng — hai dạng (UX-DR-24):
    *  - CATALOG (`productId`): copy `name`/`unit`/`priceEditable`/`warrantyMonths` từ Product;
    *    `unitPrice` auto-điền qua `resolveUnitPrice()` — client CHỈ được gửi giá khi
@@ -598,10 +782,15 @@ export class OrdersService {
   /**
    * Dòng DB ⇒ view response: đơn giá HIỆU LỰC + `amount` server tính (AD-16).
    *
-   * Dòng catalog `priceEditable = false` ⇒ giá SỐNG tính lại từ danh mục hiện hành qua CÙNG
-   * `resolveUnitPrice()` + cờ với lúc thêm (FR-5: đơn chưa chốt luôn theo giá mới nhất; giá trị
-   * lưu chỉ là cache lúc nhập, KHÔNG ghi đè DB). Dòng `priceEditable = true` và dòng tự do trả
-   * giá đã lưu. Product tra MỘT lần cho cả danh sách — không N+1.
+   * SNAPSHOT-FIRST (FR-5, Story 4.5): dòng có `unitPriceSnapshot` non-null là dòng ĐÃ đóng
+   * băng — trả snapshot, bỏ hẳn tra product (không hồi tố theo danh mục mới). Tín hiệu nằm
+   * trên DÒNG, không phải `Order.status` — 4.6 có version cũ đã chốt + version mới đang sửa
+   * cùng lúc.
+   *
+   * Dòng snapshot null giữ hành vi live: catalog `priceEditable = false` ⇒ giá SỐNG tính lại
+   * từ danh mục hiện hành qua CÙNG `resolveUnitPrice()` + cờ với lúc thêm (đơn chưa chốt luôn
+   * theo giá mới nhất; giá trị lưu chỉ là cache lúc nhập, KHÔNG ghi đè DB). Dòng
+   * `priceEditable = true` và dòng tự do trả giá đã lưu. Product tra MỘT lần — không N+1.
    */
   private async toViews(
     lines: OrderLineItem[],
@@ -610,7 +799,12 @@ export class OrdersService {
     const liveIds = [
       ...new Set(
         lines
-          .filter((line) => line.productId !== null && !line.priceEditable)
+          .filter(
+            (line) =>
+              line.unitPriceSnapshot === null &&
+              line.productId !== null &&
+              !line.priceEditable,
+          )
           .map((line) => line.productId as string),
       ),
     ];
@@ -625,18 +819,22 @@ export class OrdersService {
 
     return lines.map((line) => {
       const product =
-        line.productId !== null && !line.priceEditable
+        line.unitPriceSnapshot === null &&
+        line.productId !== null &&
+        !line.priceEditable
           ? productById.get(line.productId)
           : undefined;
       const unitPrice =
-        product === undefined
-          ? line.unitPrice
-          : resolveUnitPrice({
-              basePrice: product.price,
-              tiers: product.prices,
-              quantity: line.qty,
-              tieredPricingEnabled,
-            });
+        line.unitPriceSnapshot !== null
+          ? line.unitPriceSnapshot
+          : product === undefined
+            ? line.unitPrice
+            : resolveUnitPrice({
+                basePrice: product.price,
+                tiers: product.prices,
+                quantity: line.qty,
+                tieredPricingEnabled,
+              });
       return {
         id: line.id,
         productId: line.productId,

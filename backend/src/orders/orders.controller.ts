@@ -186,6 +186,52 @@ export class OrdersController {
     )) as OrderResponseDto;
   }
 
+  // Action nghiệp vụ là sub-resource POST (`/orders/{id}/chot` — spine Consistency
+  // Conventions verbatim). Body rỗng, không DTO request; response giữ nguyên OrderResponseDto
+  // — chotAt/snapshot chi tiết để màn 5.4/4.7 tự mở khi cần.
+  @Post(':id/chot')
+  @RequirePermissions(PERM.ordersConfirm)
+  // Transition trên resource có sẵn, không tạo resource mới — 201 mặc định của @Post sai
+  // ngữ nghĩa (khuôn preview-total).
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: OrderResponseDto,
+    description:
+      "Đơn sau khi Chốt: status 'dachot', giá dòng đã đóng băng bằng snapshot (FR-5, AD-6) — unitPrice trong line view tự động = snapshot. Retry trên đơn đã chốt: 200 view hiện tại, không ghi lại, không audit thêm (idempotent, NFR-1).",
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Báo giá chưa có dòng nào — không có gì để đóng băng (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu orders.confirm — quotes.create_edit KHÔNG thay thế được (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      "Đơn ở trạng thái khác 'baogia'/'dachot' — không chốt được từ đó (CONFLICT).",
+  })
+  async confirm(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<OrderResponseDto> {
+    // vatRate resolve TƯƠI từ config MỘT lần mỗi request rồi truyền xuống (pattern 4.4) —
+    // service giữ đúng 2 dep, client không bao giờ gửi rate.
+    return (await this.orders.confirm(
+      account.id,
+      id,
+      await this.settings.vatRatePercent(),
+      await this.tieredPricingEnabled(),
+    )) as OrderResponseDto;
+  }
+
   @Post(':id/line-items')
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiCreatedResponse({

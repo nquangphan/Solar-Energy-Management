@@ -20,6 +20,7 @@ import {
   Card,
   CartLineRow,
   Checkbox,
+  ConfirmDialog,
   CustomerTypeChip,
   EmptyState,
   ErrorState,
@@ -29,6 +30,7 @@ import {
   Sheet,
   Table,
 } from '../../design-system/components';
+import { Gate, PERM } from '../../design-system/gating';
 import { filterNav } from '../../design-system/gating/permissions';
 import type {
   CatalogGroup,
@@ -58,7 +60,7 @@ export interface CreateQuoteScreenProps {
   ordersPort: OrdersPort;
   catalogPort: CatalogPort;
   customersPort: CustomersPort;
-  /** Called when the user finishes building (Story 4.5 owns Chốt — nothing here). */
+  /** Called after the order is confirmed ("Chốt", Story 4.5) with the frozen order. */
   onDone?: (order: Order) => void;
 }
 
@@ -71,7 +73,7 @@ export function CreateQuoteScreen({
   ordersPort,
   catalogPort,
   customersPort,
-  onDone: _onDone,
+  onDone,
 }: CreateQuoteScreenProps) {
   const { perms } = usePermissions();
 
@@ -92,6 +94,10 @@ export function CreateQuoteScreen({
   // port thì revert về giá trị order cũ (bất biến k).
   const [kWpText, setKWpText] = useState('');
   const [validityText, setValidityText] = useState('');
+  // Dialog xác nhận Chốt (Story 4.5) + busy trong lúc chờ port — cùng khuôn
+  // scopeBusy/metaBusy; thành công thì `editable` tự tắt vì status đổi.
+  const [chotDialogOpen, setChotDialogOpen] = useState(false);
+  const [chotBusy, setChotBusy] = useState(false);
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -330,6 +336,27 @@ export function CreateQuoteScreen({
     void handleMetaUpdate({ validityNote: next });
   }
 
+  /**
+   * Chốt Đơn (Story 4.5, FR-5): BACKEND đóng băng giá bằng snapshot và đổi
+   * status — màn chỉ render Order trả về (`editable` tự tắt, nút Chốt biến
+   * mất). KHÔNG toast hô hào (voice EXPERIENCE) — chip trạng thái đổi là đủ.
+   * Lỗi → Banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
+   */
+  async function handleConfirmOrder() {
+    setChotDialogOpen(false);
+    setChotBusy(true);
+    try {
+      const confirmed = await ordersPort.confirmOrder(order!.id);
+      setOrder(confirmed);
+      setError(null);
+      onDone?.(confirmed);
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setChotBusy(false);
+    }
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -507,6 +534,24 @@ export function CreateQuoteScreen({
             <dd className="num mono strong">{totals ? String(totals.total) : '—'}</dd>
           </dl>
         </Frame>
+
+        {/* Chốt (Story 4.5): quyền riêng `orders.confirm` — thiếu quyền thì nút
+            BIẾN MẤT (Gate, UX-DR-22), không disabled xám; backend vẫn enforce
+            (AD-4). Bấm mở dialog nêu hệ quả — Chốt là hành động có hệ quả. */}
+        {editable && (
+          <Gate perms={perms} requires={PERM.ordersConfirm}>
+            <div className="quote-chot-row">
+              <Button
+                variant="primary"
+                type="button"
+                disabled={chotBusy}
+                onClick={() => setChotDialogOpen(true)}
+              >
+                Chốt báo giá
+              </Button>
+            </div>
+          </Gate>
+        )}
       </div>
 
       {/* Picker: lựa chọn nhanh ⇒ Sheet (UX-DR-20); chồng tối đa 1 cấp. */}
@@ -608,6 +653,15 @@ export function CreateQuoteScreen({
           </Button>
         </div>
       </Sheet>
+
+      {/* Huỷ = đóng dialog, KHÔNG gọi port — đơn ở nguyên baogia. */}
+      <ConfirmDialog
+        open={chotDialogOpen}
+        title="Chốt báo giá"
+        consequence="Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới."
+        onConfirm={() => void handleConfirmOrder()}
+        onCancel={() => setChotDialogOpen(false)}
+      />
 
       <Sheet open={picker === 'free'} onClose={() => setPicker('none')} title="Dòng tự do">
         <form onSubmit={handleFreeLineSubmit} noValidate className="quote-picker">

@@ -194,4 +194,14 @@ export interface OrdersPort {
    * computer's subtotal/VAT/total back. No order is read or written.
    */
   previewTotal(input: PreviewTotalInput): Promise<OrderTotals>;
+
+  /**
+   * Confirm ("Chốt") the order — `POST /orders/:id/chot` (Story 4.5, FR-5).
+   * The BACKEND freezes every line price into snapshots and flips the status
+   * to `'dachot'`; the screen just renders the returned order (whose line
+   * `unitPrice` is now the frozen number). Idempotent on the server: retrying
+   * an already-confirmed order returns it unchanged. Rejects 400 (empty
+   * quote), 403 (`orders.confirm` missing), 404, 409 (non-confirmable status).
+   */
+  confirmOrder(orderId: string): Promise<Order>;
 }

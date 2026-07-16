@@ -284,4 +284,12 @@ abstract class OrdersPort {
   /// Stateless totals preview (AD-16): send the displayed lines, get the ONE
   /// computer's subtotal/VAT/total back. No order is read or written.
   Future<OrderTotals> previewTotal(PreviewTotalInput input);
+
+  /// Confirm ("Chốt") the order — `POST /orders/:id/chot` (Story 4.5, FR-5).
+  /// The BACKEND freezes every line price into snapshots and flips the status
+  /// to `'dachot'`; the screen just renders the returned order (whose line
+  /// `unitPrice` is now the frozen number). Idempotent on the server: retrying
+  /// an already-confirmed order returns it unchanged. Throws 400 (empty
+  /// quote), 403 (`orders.confirm` missing), 404, 409 (non-confirmable status).
+  Future<Order> confirmOrder(String orderId);
 }

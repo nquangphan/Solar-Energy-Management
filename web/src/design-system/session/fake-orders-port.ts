@@ -226,6 +226,20 @@ export class FakeOrdersPort implements OrdersPort {
     });
   }
 
+  confirmOrder(orderId: string): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    // Already confirmed = idempotent no-op, mirroring the backend retry path.
+    // The fake does NOT simulate the price freeze — the client never computes
+    // money and never reads snapshots; the returned numbers just stay as-is.
+    if (order.status !== 'dachot') {
+      order.status = 'dachot';
+    }
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
   private buildLine(
     order: Order,
     fields: Omit<OrderLine, 'id' | 'displayOrder' | 'amount'>,

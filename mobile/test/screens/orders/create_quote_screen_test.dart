@@ -14,6 +14,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
+import 'package:pns_mobile/design_system/gating/gating.dart';
 import 'package:pns_mobile/design_system/session/fake_catalog_port.dart';
 import 'package:pns_mobile/design_system/session/fake_customers_port.dart';
 import 'package:pns_mobile/design_system/session/fake_orders_port.dart';
@@ -133,6 +134,30 @@ class _RejectingMetaPort extends FakeOrdersPort {
       throw error;
 }
 
+/// A port that RECORDS every confirm call (Story 4.5) — proves the Chốt dialog
+/// sends exactly one confirmOrder with the right order id, and none on cancel.
+class _RecordingConfirmPort extends FakeOrdersPort {
+  final List<String> confirmCalls = <String>[];
+
+  @override
+  Future<Order> confirmOrder(String orderId) {
+    confirmCalls.add(orderId);
+    return super.confirmOrder(orderId);
+  }
+}
+
+/// A port whose CONFIRM is refused with the AD-5 envelope — proves a failed
+/// Chốt surfaces the backend's sentence, keeps the cart AND the editable state
+/// intact (Story 4.5, invariant k).
+class _RejectingConfirmPort extends FakeOrdersPort {
+  _RejectingConfirmPort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<Order> confirmOrder(String orderId) async => throw error;
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
 
 /// The rendered on/off state of the scope chip with [label].
@@ -157,10 +182,15 @@ Future<void> _pickDemoCustomer(WidgetTester tester) async {
   await _tap(tester, 'Dùng khách này');
 }
 
-CreateQuoteScreen _screen({FakeOrdersPort? ordersPort}) => CreateQuoteScreen(
+CreateQuoteScreen _screen({
+  FakeOrdersPort? ordersPort,
+  Set<PermissionKey> perms = const <PermissionKey>{},
+}) =>
+    CreateQuoteScreen(
       ordersPort: ordersPort ?? FakeOrdersPort(),
       catalogPort: FakeCatalogPort(),
       customersPort: FakeCustomersPort(),
+      perms: perms,
     );
 
 void main() {
@@ -767,6 +797,122 @@ void main() {
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
       final AppCheckbox tick = tester.widget<AppCheckbox>(vatToggle);
       expect(tick.checked, isTrue);
+    });
+
+    const String kChotConsequence =
+        'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.';
+
+    testWidgets(
+        'Chốt (4.5): bấm nút → dialog nêu hệ quả → xác nhận → fake nhận confirmOrder, màn về read-only, nút Chốt biến mất',
+        (WidgetTester tester) async {
+      final _RecordingConfirmPort port = _RecordingConfirmPort();
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{AppPermissionKeys.ordersConfirm},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Nút primary dưới khối Tổng kết (_tap đã ensureVisible trước khi tap).
+      await _tap(tester, 'Chốt báo giá');
+
+      // Dialog nêu hệ quả đóng băng giá — đúng nguyên văn nhãn chung 2 nền tảng.
+      expect(find.text(kChotConsequence), findsOneWidget);
+
+      await _tap(tester, 'Xác nhận');
+
+      // Fake nhận ĐÚNG một lần với đúng orderId.
+      expect(port.confirmCalls, hasLength(1));
+      expect(port.confirmCalls.single, 'ord-demo-1');
+      // Status 'dachot' → editable tắt: ô SL không còn là input, tick VAT
+      // disabled, nút Chốt biến mất — KHÔNG toast hô hào nào.
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      final AppCheckbox tick = tester
+          .widget<AppCheckbox>(find.widgetWithText(AppCheckbox, 'Tính VAT'));
+      expect(tick.disabled, isTrue);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsNothing);
+      // Giỏ vẫn hiển thị đủ dòng ở chế độ read-only.
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets('Chốt (4.5): huỷ dialog → fake KHÔNG bị gọi, đơn vẫn sửa được',
+        (WidgetTester tester) async {
+      final _RecordingConfirmPort port = _RecordingConfirmPort();
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{AppPermissionKeys.ordersConfirm},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      await _tap(tester, 'Chốt báo giá');
+      expect(find.text(kChotConsequence), findsOneWidget);
+
+      await _tap(tester, 'Huỷ');
+
+      // Không call nào bay đi; đơn ở nguyên baogia — input SL còn, nút Chốt còn.
+      expect(port.confirmCalls, isEmpty);
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Chốt (4.5): port throw → banner message backend, giỏ còn nguyên, VẪN editable',
+        (WidgetTester tester) async {
+      const String backendSentence = 'Không thể chốt báo giá chưa có dòng nào.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingConfirmPort(
+          const OrderPortException(backendSentence),
+        ),
+        perms: const <PermissionKey>{AppPermissionKeys.ordersConfirm},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      await _tap(tester, 'Chốt báo giá');
+      await _tap(tester, 'Xác nhận');
+
+      // Câu backend nguyên văn; dòng giỏ KHÔNG mất; đơn VẪN sửa được (status
+      // không đổi) — nút Chốt còn đó để thử lại.
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Chốt (4.5): perms KHÔNG có orders.confirm → nút không render (gate biến mất, không disabled xám)',
+        (WidgetTester tester) async {
+      // Có quyền KHÁC (dựng báo giá) nhưng thiếu orders.confirm — đúng ca sale.
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Đơn editable nhưng nút Chốt KHÔNG tồn tại trong cây widget.
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsNothing);
     });
   });
 }
