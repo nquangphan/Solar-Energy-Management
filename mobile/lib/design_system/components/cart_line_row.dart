@@ -29,6 +29,7 @@ class AppCartLineRow extends StatelessWidget {
     required this.unitPrice,
     required this.amount,
     this.editable = false,
+    this.priceEditable,
     this.flag,
     this.zebra = false,
     this.onQtyChange,
@@ -55,6 +56,12 @@ class AppCartLineRow extends StatelessWidget {
   /// from qty/unitPrice here (AD-10/16).
   final num amount;
   final bool editable;
+
+  /// Gate the UNIT-PRICE input separately from qty (Story 4.1): qty is editable
+  /// on every line of a draft quote, but the price only when the line allows it
+  /// (free line / Product.priceEditable). Null = follow [editable] so pre-4.1
+  /// callers keep their behavior.
+  final bool? priceEditable;
 
   /// Display-only badge (e.g. "linh động"/"dự kiến") — never affects price.
   final String? flag;
@@ -85,7 +92,7 @@ class AppCartLineRow extends StatelessWidget {
             flex: 2,
             child: _numberCell(
               value: unitPrice,
-              editable: editable,
+              editable: priceEditable ?? editable,
               semanticsLabel: 'Đơn giá',
               onChanged: onUnitPriceChange,
             ),

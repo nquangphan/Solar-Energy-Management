@@ -1,0 +1,269 @@
+// Source-guard + parity for the Tạo báo giá screen (Story 4.1 — AC-2..AC-5).
+//
+// THIS FILE IS THE WEB HALF'S REAL TEST. The web app still has no tsc/bundler/
+// JSDOM (TD-1, decision C-4: accepted through Epic 4), so CreateQuoteScreen.tsx
+// gets NO typecheck and NO runtime test — what stands between a wrong `.tsx`
+// and "done" is this guard and a human review. The mobile half additionally has
+// native widget tests (create_quote_screen_test.dart).
+//
+// Groups: (a) both platforms exist · (b) composed from the design-system ·
+// (c) transport only through injected ports · (d) shell hosting ·
+// (e) byte-identical Vietnamese labels · (f) Viền nét · (g) no permission
+// literal · plus the story's own NEGATIVE asserts: (h) no client money math,
+// (i) no group provenance persisted, (j) reuse of the Story 3.4 pick flow.
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
+
+const WEB_SCREEN = 'web/src/screens/orders/CreateQuoteScreen.tsx';
+const MOBILE_SCREEN = 'mobile/lib/screens/orders/create_quote_screen.dart';
+const WEB_CSS = resolve(repoRoot, 'web/src/screens/orders/orders.css');
+
+const PORT_FILES = [
+  'web/src/design-system/session/orders-port.ts',
+  'web/src/design-system/session/fake-orders-port.ts',
+  'web/src/design-system/session/catalog-port.ts',
+  'web/src/design-system/session/fake-catalog-port.ts',
+  'mobile/lib/design_system/session/orders_port.dart',
+  'mobile/lib/design_system/session/fake_orders_port.dart',
+  'mobile/lib/design_system/session/catalog_port.dart',
+  'mobile/lib/design_system/session/fake_catalog_port.dart',
+];
+
+const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
+
+const web = read(WEB_SCREEN);
+const mobile = read(MOBILE_SCREEN);
+const css = readFileSync(WEB_CSS, 'utf8');
+
+const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+const stripDart = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+const allCode = [
+  ['web:quote', stripTsx(web)],
+  ['mobile:quote', stripDart(mobile)],
+];
+
+// (a) BOTH PLATFORMS SHIP THE SCREEN (UX-DR-27) — plus the four new port twins.
+test('the quote screen and its ports exist on BOTH platforms', () => {
+  for (const rel of [WEB_SCREEN, MOBILE_SCREEN, ...PORT_FILES]) {
+    assert.ok(existsSync(resolve(repoRoot, rel)), `${rel} must exist`);
+  }
+});
+
+// (b) COMPOSE FROM THE DESIGN-SYSTEM (AD-13). No bare form controls; the cart
+// row and the checklist control are the shipped components — including the two
+// pieces this story ADDED to the library (Checkbox, CartLineRow.priceEditable).
+test('web quote screen composes from shipped design-system components', () => {
+  for (const name of ['Button', 'Card', 'CartLineRow', 'Checkbox', 'EmptyState', 'ErrorState', 'Field', 'Frame', 'Sheet', 'Table']) {
+    assert.match(
+      web,
+      new RegExp(`import[^;]*\\b${name}\\b[^;]*from '\\.\\./\\.\\./design-system/components'`),
+      `CreateQuoteScreen.tsx must import ${name} from design-system/components`,
+    );
+  }
+  const code = stripTsx(web);
+  assert.ok(!/<input\b/.test(code), 'web:quote must not render a bare <input> — use <Field>');
+  assert.ok(!/<textarea\b/.test(code), 'web:quote must not render a bare <textarea> — use <Field multiline>');
+  assert.ok(!/<button\b/.test(code), 'web:quote must not render a bare <button> — use <Button>');
+  assert.ok(!/<select\b/.test(code), 'web:quote must not render a bare <select>');
+  // The price input is gated SEPARATELY from qty (Task 7's new prop).
+  assert.match(web, /priceEditable=\{editable && line\.priceEditable\}/, 'the cart row must gate the price input on line.priceEditable');
+});
+
+test('mobile quote screen composes from shipped design-system widgets', () => {
+  assert.match(mobile, /import '\.\.\/\.\.\/design_system\/components\/components\.dart'/, 'must import the components barrel');
+  for (const name of ['AppCartLineRow', 'AppCheckbox', 'AppSheet', 'AppEmptyState', 'AppErrorState', 'AppFrame', 'AppCard', 'AppButton', 'AppField']) {
+    assert.ok(mobile.includes(name), `create_quote_screen.dart must use ${name}`);
+  }
+  // Swipe-to-delete needs the stable line id, and the price gate is per line.
+  assert.match(mobile, /id: line\.id/, 'AppCartLineRow must receive the stable line id (Dismissible key)');
+  assert.match(mobile, /priceEditable: editable && line\.priceEditable/, 'the cart row must gate the price input on line.priceEditable');
+});
+
+// (c) TRANSPORT ONLY THROUGH THE INJECTED PORTS (AD-1/AD-2) — screens AND the
+// port layer itself (ports are contracts + fakes until app-runtime).
+test('no screen or port talks to the network directly — transport is the injected OrdersPort/CatalogPort', () => {
+  const surfaces = [
+    ...allCode,
+    ...PORT_FILES.map((rel) => [rel, rel.endsWith('.dart') ? stripDart(read(rel)) : stripTsx(read(rel))]),
+  ];
+  for (const [name, code] of surfaces) {
+    const banned = name.includes('.dart') || name.startsWith('mobile:')
+      ? ['package:http', 'package:dio', 'HttpClient']
+      : ['fetch(', 'axios', 'XMLHttpRequest'];
+    for (const token of banned) {
+      assert.ok(!code.includes(token), `${name} must not use ${token} — inject a port`);
+    }
+  }
+  for (const [name, code] of allCode) {
+    assert.match(code, /OrdersPort/, `${name} must take an OrdersPort`);
+    assert.match(code, /CatalogPort/, `${name} must take a CatalogPort`);
+    assert.match(code, /CustomersPort/, `${name} must take a CustomersPort (the pick step)`);
+  }
+});
+
+// (c.2) THE SCREEN ACTUALLY CALLS THE PORTS — a screen with baked-in data is not
+// a screen. Every quote mutation and both picker reads must be reachable.
+test('each platform reaches the backend through every port method the cart needs', () => {
+  // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
+  // and the method (`widget.ordersPort\n    .create(`).
+  for (const [name, code] of allCode) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine']) {
+      assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
+    }
+    for (const call of ['listProducts', 'listGroups', 'getGroup']) {
+      assert.match(code, new RegExp(`catalogPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call catalogPort.${call}()`);
+    }
+  }
+});
+
+// (d) SHELL HOSTING. Step 2 lives in the shell; step 1 IS the reused pick screen
+// (which self-hosts its own shell — no shell-in-shell).
+test('web quote screen renders INSIDE the shell with a permission-filtered Sidebar', () => {
+  assert.match(web, /<WebShell/, 'must render inside <WebShell>');
+  assert.match(web, /<Sidebar\s+sections=\{filterNav\(SIDEBAR_NAV, perms\)\}/, 'must render a <Sidebar> filtered by the session perms');
+  assert.match(web, /activeKey="orders"/, 'must mark the orders nav item active');
+  assert.match(web, /usePermissions\(\)/, 'must read the session via usePermissions()');
+});
+
+test('mobile quote screen renders INSIDE the shell on the Tạo tab', () => {
+  assert.ok(mobile.includes('AppPhoneFrame'), 'must render inside AppPhoneFrame');
+  assert.ok(mobile.includes('AppMobileShell'), 'must render inside AppMobileShell');
+  assert.match(mobile, /AppBottomNav\(activeIndex: kCreateTabIndex\)/, 'must mark the Tạo tab active');
+  assert.match(mobile, /const int kCreateTabIndex = 2;/, 'the Tạo tab is index 2 (locked nav, UX-DR-15)');
+});
+
+// (e) PARITY (UX-DR-27): byte-identical Vietnamese labels across web ↔ mobile.
+test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => {
+  const labels = [
+    'ĐƠN HÀNG',
+    'Tạo báo giá',
+    'Khách hàng',
+    'Giỏ hàng',
+    'Chưa có dòng nào. Thêm dòng đầu tiên để bắt đầu.',
+    // the three ways into the cart
+    'Chọn từ danh mục',
+    'Chọn gói vật tư',
+    'Dòng tự do',
+    'Tìm theo tên hoặc SKU',
+    'Mở checklist',
+    'Thêm dòng',
+    // the free-line form
+    'Tên dòng',
+    'Đơn vị',
+    'Số lượng',
+    'Đơn giá',
+    'Diễn giải',
+    // display-only flexibility flag (AC-2)
+    'Linh động/dự kiến',
+    // totals placeholders — Story 4.2 wires the numbers
+    'Tổng trước VAT',
+    'Tiền VAT',
+    'Tổng sau VAT',
+    '—',
+  ];
+  for (const label of labels) {
+    assert.ok(web.includes(label), `web quote screen is missing the label "${label}"`);
+    assert.ok(mobile.includes(label), `mobile quote screen is missing the label "${label}"`);
+  }
+});
+
+// (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).
+test('no ad-hoc shadow/gradient/elevation, radius via tokens (Viền nét, UX-DR-4)', () => {
+  assert.ok(!/box-shadow/i.test(css), 'orders.css must contain 0 box-shadow');
+  assert.ok(!/gradient/i.test(css), 'orders.css must contain 0 gradient');
+  assert.ok(!/drop-shadow/i.test(css), 'orders.css must contain 0 drop-shadow');
+  assert.ok(!/filter:/i.test(css), 'orders.css must contain 0 filter:');
+  for (const decl of css.match(/border-radius:[^;]+;/g) ?? []) {
+    assert.match(decl, /var\(--radius/, `orders.css radius must come from a token: ${decl}`);
+  }
+  assert.ok(!/BoxShadow/.test(mobile), 'mobile quote screen must contain 0 BoxShadow');
+  assert.ok(!/elevation/i.test(mobile), 'mobile quote screen must contain 0 elevation');
+});
+
+// (g) NO PERMISSION LITERAL IN A SCREEN (AD-17). `quotes.create_edit` is enforced
+// by the BACKEND guard; the screen carries no permission strings at all.
+test('no quote screen hardcodes a permission literal (AD-17)', () => {
+  const registryLike = /['"][a-z_]+\.[a-z_]+['"]/;
+  for (const [name, code] of allCode) {
+    const body = code.replace(/^\s*(?:import|export)\s+[^;]+;/gm, '');
+    assert.ok(!registryLike.test(body), `${name} must not hardcode a permission literal`);
+  }
+});
+
+// (h) 🔴 NEGATIVE ASSERT — NO CLIENT MONEY MATH (AD-10/16). `unitPrice`, `amount`
+// and every total are BACKEND numbers. A `unitPrice * qty` in a screen is the
+// exact bug the architecture forbids: two sources of truth for one sum. (The
+// fake ports simulate the backend and are excluded on purpose — they ARE the
+// demo server.)
+test('no screen multiplies or adds money — amount/totals come from the backend', () => {
+  // `[\w.$_]*` on BOTH sides of the operator: the operands are usually property
+  // accesses (`line.unitPrice * line.qty`) — a bare-identifier pattern let that
+  // exact mutant pass green (caught by the mutation spot-check).
+  const moneyMath =
+    /(?:unitPrice|amount|price|qty)\s*[*+\-]\s*[\w.$_]*(?:qty|unitPrice|amount|price)/i;
+  for (const [name, code] of allCode) {
+    assert.ok(!moneyMath.test(code), `${name} must not compute money — render the backend's amount as-is (AD-16)`);
+    assert.ok(!/\breduce\(/.test(code), `${name} must not sum lines — totals are Story 4.2's preview-total`);
+  }
+  // The totals area is a PLACEHOLDER until Story 4.2 — the dash, not a number.
+  assert.ok(web.includes('—'), 'web totals must render the "—" placeholder');
+  assert.ok(mobile.includes('—'), 'mobile totals must render the "—" placeholder');
+});
+
+// (i) 🔴 NEGATIVE ASSERT — A GROUP LEAVES NO TRACE ON THE ORDER (§2, Story 3.6
+// handover). Each ticked item becomes an ORDINARY line pointing at the real
+// Product; no group name/id is persisted, sent, or rendered as provenance.
+test('no group provenance is persisted or sent — items become ordinary lines', () => {
+  for (const [name, code] of [...allCode, ...PORT_FILES.map((rel) => [rel, read(rel)])]) {
+    assert.ok(!/groupName/.test(code), `${name} must not carry a groupName — groups are input tools, not order data`);
+    assert.ok(!/productGroupId/.test(code), `${name} must not persist a group id on a line`);
+  }
+  // The tick path calls addLine with the PRODUCT id.
+  assert.match(stripTsx(web), /addCatalogLine\(item\.productId|addCatalogLine\(productId/, 'web tick must add by productId');
+  assert.match(stripDart(mobile), /_tickGroupItem\(item\.productId/, 'mobile tick must add by productId');
+  // Deactivated products render as DISABLED checklist items (Story 3.6 payload).
+  assert.match(web, /disabled=\{!item\.isActive\}/, 'web checklist must disable inactive items');
+  assert.match(mobile, /disabled: !item\.isActive/, 'mobile checklist must disable inactive items');
+});
+
+// (j) THE PICK FLOW IS REUSED, NOT REBUILT (AC-3). Step 1 renders the Story 3.4
+// screen as the WHOLE view (it hosts its own shell) and the order is created
+// from its onSelect callback — the exact seam that story left behind.
+test('step 1 reuses CustomerPickScreen via onSelect — no second lookup UI', () => {
+  assert.match(web, /import \{ CustomerPickScreen[^}]*\} from '\.\.\/customers\/CustomerPickScreen'/, 'web must import the Story 3.4 pick screen');
+  assert.match(web, /<CustomerPickScreen\s+port=\{customersPort\}/, 'web must render the pick screen with the injected port');
+  assert.match(stripTsx(web), /ordersPort\.create\(\{ customerSdt: picked\.sdt \}\)/, 'web onSelect must create the order from the picked customer');
+  assert.match(mobile, /import '\.\.\/customers\/customer_pick_screen\.dart'/, 'mobile must import the Story 3.4 pick screen');
+  assert.match(mobile, /CustomerPickScreen\(\s*port: widget\.customersPort/, 'mobile must render the pick screen with the injected port');
+  assert.match(stripDart(mobile), /CreateOrderInput\(customerSdt: picked\.sdt\)/, 'mobile onSelect must create the order from the picked customer');
+});
+
+// (k) A FAILURE NEVER WIPES THE CART (EXPERIENCE Flow 1). The error path sets a
+// message and offers retry — it never resets the order state.
+test('the error path keeps entered lines: error state + retry, no order reset', () => {
+  assert.match(web, /<ErrorState message=\{error\} onRetry=/, 'web must render ErrorState with a retry');
+  assert.match(mobile, /AppErrorState\(message: _error!, onRetry: _refresh\)/, 'mobile must render AppErrorState with a retry');
+  // The catch blocks only record the message — they must not null the order out.
+  assert.ok(!/catch[^}]*setOrder\(null\)/.test(stripTsx(web)), 'web: a failed call must not reset the order');
+  assert.ok(!/catch[^}]*_order = null/.test(stripDart(mobile)), 'mobile: a failed call must not reset the order');
+  // Step 1 has NO ErrorState yet — a failed create must surface a banner right
+  // on the pick view, or the tap fails in total silence (review fix H1).
+  assert.match(
+    stripTsx(web),
+    /\{error !== null && <Banner tone="danger">\{error\}<\/Banner>\}[\s\S]*?<CustomerPickScreen/,
+    'web step 1 must render the create-failure message above the pick screen',
+  );
+  assert.match(
+    stripDart(mobile),
+    /AppBanner\(tone: AppBannerTone\.danger, message: _error!\)/,
+    'mobile step 1 must render the create-failure message above the pick screen',
+  );
+});

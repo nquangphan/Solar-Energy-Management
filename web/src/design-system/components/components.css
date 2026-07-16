@@ -170,3 +170,18 @@
 /* Skeleton (AC-2): token-based loading bar — surface-2 fill + 6px radius. Width/
    height come from the component (props); static (no shimmer — Viền nét). */
 .skel{background:var(--surface-2);border-radius:6px}
+
+/* ---------- Checkbox (Story 4.1) ----------
+   A REAL control replacing the mockup's static tick span. Flat 1.5px border
+   (Viền nét); the whole label row is the hit area, floored at >=44px. The
+   native input is visually hidden but keeps semantics/keyboard/focus. */
+.checkbox{position:relative;display:inline-flex;align-items:center;gap:9px;min-height:44px;
+  cursor:pointer;font-size:13px;font-weight:600;color:var(--ink);font-family:var(--font)}
+.checkbox input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.checkbox-box{display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:18px;height:18px;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+  background:var(--surface);color:#fff}
+.checkbox-box .icn{width:12px;height:12px}
+.checkbox input:checked + .checkbox-box{background:var(--teal);border-color:var(--teal)}
+.checkbox input:focus-visible + .checkbox-box{border-color:var(--teal)}
+.checkbox--disabled{cursor:default;opacity:.45}

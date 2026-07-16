@@ -216,6 +216,7 @@ test('every web component has a matching Flutter widget file (parity coverage)',
     ErrorState: 'error_state.dart',
     ShareButton: 'share_button.dart',
     ImageUpload: 'image_upload.dart',
+    Checkbox: 'checkbox.dart',
   };
   for (const [component, file] of Object.entries(parityFiles)) {
     assert.ok(
@@ -232,7 +233,7 @@ test('the mobile widget classes carry the App-prefixed parity names', () => {
     'AppCustomerTypeChip', 'AppScopeFlag', 'AppTable', 'AppStepper', 'AppKpi',
     'AppBanner', 'AppCartLineRow', 'AppDialog', 'AppConfirmDialog', 'AppSheet',
     'AppSkeleton', 'AppEmptyState', 'AppErrorState', 'AppShareButton',
-    'AppImageUpload',
+    'AppImageUpload', 'AppCheckbox',
   ];
   for (const name of names) {
     assert.ok(barrel.includes(name), `components.dart barrel missing export ${name}`);

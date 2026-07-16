@@ -10,6 +10,9 @@
 export 'me_port.dart';
 export 'password_port.dart';
 export 'customers_port.dart';
+// Orders + catalog-read seam (Story 4.1): the quote screen's transport.
+export 'orders_port.dart';
+export 'catalog_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
@@ -18,3 +21,5 @@ export 'app_session_gating_example.dart';
 export 'fake_me_port.dart';
 export 'fake_password_port.dart';
 export 'fake_customers_port.dart';
+export 'fake_orders_port.dart';
+export 'fake_catalog_port.dart';

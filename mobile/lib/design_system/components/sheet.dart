@@ -78,9 +78,16 @@ class AppSheet extends StatelessWidget {
               ),
             ),
             if (title != null) _head(context),
-            Padding(
-              padding: const EdgeInsets.all(AppTokens.space16),
-              child: body,
+            // Flexible (loose): during the open/close ANIMATION the modal hands
+            // the sheet shrinking constraints — a fixed-height body would
+            // overflow on every intermediate frame. Loose fit keeps the settled
+            // layout identical for small bodies and lets tall bodies (a
+            // scrollable picker) shrink instead of overflowing.
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.all(AppTokens.space16),
+                child: body,
+              ),
             ),
           ],
         ),

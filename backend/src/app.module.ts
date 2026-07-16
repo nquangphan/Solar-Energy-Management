@@ -9,6 +9,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CustomersModule } from './customers/customers.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
+import { OrdersModule } from './orders/orders.module';
 
 /**
  * Root module.
@@ -34,6 +35,9 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
  * Story 3.3 — `CustomersModule`: Khách hàng (FR-29), SĐT chuẩn hoá E.164 làm khoá chính (AD-9).
  * Nó KHÔNG import module nào: Prisma/Events là `@Global`, và không có quyền phụ nào cần resolve
  * tại chỗ.
+ *
+ * Story 4.1 — `OrdersModule`: Đơn hàng + giỏ hàng dòng báo giá (AD-6). Nó import
+ * `FeatureFlagsModule` (cờ giá phân tầng cho auto-điền đơn giá — module này không `@Global`).
  */
 @Module({
   imports: [
@@ -47,6 +51,7 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
     FeatureFlagsModule,
     CatalogModule,
     CustomersModule,
+    OrdersModule,
   ],
 })
 export class AppModule {}

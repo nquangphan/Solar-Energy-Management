@@ -1891,6 +1891,369 @@
           "customers"
         ]
       }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "OrdersController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đơn mới ở trạng thái 'baogia' + version 1 rỗng; `sourceId`/`custType` snapshot từ Customer lúc tạo (FR-35); `ownerAccountId` = người gọi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SĐT không hợp lệ (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "SĐT chưa có khách hàng (NOT_FOUND) — tạo khách trước.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrdersController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đơn + dòng của bản hiệu lực (qua currentVersionId, AD-6); mỗi dòng kèm `amount` server tính. Tổng đơn KHÔNG có ở đây (Story 4.2).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/line-items": {
+      "post": {
+        "operationId": "OrdersController_addLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddLineItemRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Dòng mới ở cuối giỏ. Dòng catalog: backend auto-điền đơn giá theo danh mục hiện tại; dòng tự do: nhập tay, priceEditable = true.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderLineItemResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body không hợp lệ; sản phẩm không tồn tại; hoặc gửi `unitPrice` cho sản phẩm không cho sửa giá (VALIDATION_ERROR — kèm fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn không còn ở trạng thái 'baogia' — sửa sau chốt là Story 4.6 (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/line-items/{lineId}": {
+      "patch": {
+        "operationId": "OrdersController_updateLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLineItemRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dòng sau khi sửa — `unitPrice`/`amount` là giá hiệu lực.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderLineItemResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body không hợp lệ, hoặc sửa `unitPrice` trên dòng priceEditable = false (VALIDATION_ERROR — kèm fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn không còn ở trạng thái 'baogia' (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      },
+      "delete": {
+        "operationId": "OrdersController_removeLine",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lineId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dòng đã bị xoá khỏi bản hiệu lực."
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn không còn ở trạng thái 'baogia' (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
     }
   },
   "info": {
@@ -2903,6 +3266,237 @@
             "example": 4,
             "minimum": 0,
             "maximum": 2147483647
+          }
+        }
+      },
+      "CreateOrderRequestDto": {
+        "type": "object",
+        "properties": {
+          "customerSdt": {
+            "type": "string",
+            "description": "SĐT khách — thô hay E.164 đều được, backend chuẩn hoá trước khi tra (AD-9). Khách chưa tồn tại ⇒ 404 (luồng tạo khách inline đã có ở màn tra SĐT).",
+            "example": "0912345678"
+          }
+        },
+        "required": [
+          "customerSdt"
+        ]
+      },
+      "OrderLineItemResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string",
+            "nullable": true,
+            "description": "`null` = dòng tự do; có giá trị = dòng trỏ Product danh mục."
+          },
+          "name": {
+            "type": "string",
+            "description": "Tên dòng — nhiều dòng được."
+          },
+          "unit": {
+            "type": "string",
+            "example": "tấm"
+          },
+          "qty": {
+            "type": "number"
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá HIỆU LỰC — số nguyên ĐỒNG (giá sống với dòng catalog không sửa giá)."
+          },
+          "priceEditable": {
+            "type": "boolean",
+            "description": "true = giá sửa được tại chỗ (dòng tự do, hoặc Product.priceEditable)."
+          },
+          "isFlexible": {
+            "type": "boolean",
+            "description": "Cờ \"linh động/dự kiến\" — chỉ hiển thị."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "warrantyMonths": {
+            "type": "number",
+            "nullable": true,
+            "description": "Bảo hành (tháng), copy default từ Product — hành vi thuộc Story 4.9."
+          },
+          "displayOrder": {
+            "type": "number",
+            "description": "Thứ tự hiển thị trong giỏ (server gán)."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Thành tiền = unitPrice hiệu lực × qty — SERVER tính (AD-16).",
+            "example": 19600000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "unit",
+          "qty",
+          "unitPrice",
+          "priceEditable",
+          "isFlexible",
+          "displayOrder",
+          "amount"
+        ]
+      },
+      "OrderResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Trạng thái đơn — 4.1 luôn 'baogia'; mọi thay đổi thuộc applyTransition() (Story 5.1).",
+            "example": "baogia"
+          },
+          "customerSdt": {
+            "type": "string",
+            "description": "SĐT khách (E.164) — FK về Customer."
+          },
+          "currentVersionId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Con trỏ bản hiệu lực (AD-6) — luôn có sau khi tạo xong."
+          },
+          "ownerAccountId": {
+            "type": "string",
+            "description": "Người tạo/phụ trách (AD-15) — actor lúc tạo."
+          },
+          "assigneeAccountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceId": {
+            "type": "string",
+            "description": "SNAPSHOT nguồn khách LÚC TẠO đơn (FR-35) — copy từ Customer.sourceId, không đổi theo khách."
+          },
+          "custType": {
+            "type": "string",
+            "description": "Loại khách — nhãn báo cáo, copy từ Customer lúc tạo."
+          },
+          "scopeThietBi": {
+            "type": "boolean",
+            "description": "Phạm vi: thiết bị. Hành vi preset thuộc Story 4.3."
+          },
+          "scopeThiCong": {
+            "type": "boolean",
+            "description": "Phạm vi: thi công. Hành vi preset thuộc Story 4.3."
+          },
+          "scopeVanChuyen": {
+            "type": "boolean",
+            "description": "Phạm vi: vận chuyển. Hành vi preset thuộc Story 4.3."
+          },
+          "kWp": {
+            "type": "number",
+            "nullable": true,
+            "description": "Công suất kWp — hành vi nhập thuộc Story 4.4."
+          },
+          "vatMode": {
+            "type": "string",
+            "nullable": true,
+            "description": "Chế độ VAT — hành vi thuộc Story 4.4."
+          },
+          "lineItems": {
+            "description": "Dòng của BẢN HIỆU LỰC (qua currentVersionId), sắp theo displayOrder tăng dần. Rỗng = đơn mới tạo.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineItemResponseDto"
+            }
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "customerSdt",
+          "ownerAccountId",
+          "sourceId",
+          "custType",
+          "scopeThietBi",
+          "scopeThiCong",
+          "scopeVanChuyen",
+          "lineItems",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AddLineItemRequestDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "description": "Id sản phẩm danh mục. Vắng mặt = dòng tự do. Id không tồn tại ⇒ 400 kèm fieldErrors."
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng — nguyên, tối thiểu 1.",
+            "example": 8
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá — số nguyên ĐỒNG. BẮT BUỘC với dòng tự do. Với dòng catalog: CHỈ được gửi khi Product.priceEditable = true (ngược lại 400) — mặc định backend auto-điền theo danh mục hiện tại.",
+            "example": 2450000
+          },
+          "name": {
+            "type": "string",
+            "description": "Tên dòng (nhiều dòng được) — BẮT BUỘC với dòng tự do; dòng catalog bỏ qua (copy từ Product).",
+            "example": "Combo phụ kiện lắp đặt\n(dây DC + jack MC4)"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Đơn vị tính — BẮT BUỘC với dòng tự do; dòng catalog bỏ qua (copy từ Product).",
+            "example": "bộ"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Diễn giải cho dòng — nullable."
+          },
+          "isFlexible": {
+            "type": "boolean",
+            "description": "Cờ \"linh động/dự kiến\" — CHỈ hiển thị, không đổi hành vi giá.",
+            "default": false
+          }
+        },
+        "required": [
+          "qty"
+        ]
+      },
+      "UpdateLineItemRequestDto": {
+        "type": "object",
+        "properties": {
+          "qty": {
+            "type": "number",
+            "description": "Số lượng — nguyên, tối thiểu 1."
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá — số nguyên ĐỒNG. CHỈ dòng priceEditable = true (ngược lại 400)."
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Diễn giải — gửi `null` để xoá."
+          },
+          "isFlexible": {
+            "type": "boolean",
+            "description": "Cờ \"linh động/dự kiến\" — chỉ hiển thị."
           }
         }
       }

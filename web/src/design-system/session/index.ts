@@ -26,6 +26,23 @@ export type {
   UpdateCustomerSourceInput,
   CustomerSourcePortError,
 } from './customer-sources-port';
+// Orders + catalog-read seam (Story 4.1): the quote screen's transport.
+export type {
+  OrdersPort,
+  Order,
+  OrderLine,
+  CreateOrderInput,
+  AddOrderLineInput,
+  UpdateOrderLineInput,
+  OrderPortError,
+} from './orders-port';
+export type {
+  CatalogPort,
+  CatalogProduct,
+  CatalogGroup,
+  CatalogGroupItem,
+  CatalogGroupDetail,
+} from './catalog-port';
 export { toPermissionSet } from './session';
 export type { SessionStatus } from './session';
 export { PermissionsProvider, usePermissionsContext } from './PermissionsProvider';
@@ -47,3 +64,9 @@ export {
   FakeCustomerSourcesPort,
   DEMO_CUSTOMER_SOURCE_ROWS,
 } from './fake-customer-sources-port';
+export { FakeOrdersPort } from './fake-orders-port';
+export {
+  FakeCatalogPort,
+  DEMO_CATALOG_PRODUCTS,
+  DEMO_CATALOG_GROUPS,
+} from './fake-catalog-port';

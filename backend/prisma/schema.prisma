@@ -39,6 +39,8 @@ model Account {
   sessions     Session[]
   permissions  AccountPermission[]
   passwordResetCodes PasswordResetCode[]
+  ownedOrders    Order[] @relation("OrderOwner")
+  assignedOrders Order[] @relation("OrderAssignee")
 
   @@map("accounts")
 }
@@ -131,6 +133,7 @@ model Product {
   updatedAt      DateTime       @updatedAt @map("updated_at")
   prices         ProductPrice[]
   groupItems     ProductGroupItem[]
+  orderLineItems OrderLineItem[]
 
   @@map("products")
 }
@@ -247,6 +250,7 @@ model CustomerSource {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   customers   Customer[]
+  orders      Order[]
 
   @@map("customer_sources")
   // Bất biến "đúng MỘT dòng isOther" được enforce bằng PARTIAL UNIQUE INDEX
@@ -269,9 +273,9 @@ model CustomerSource {
 /// với `AccountPermission.permission`: registry evolve không cần migration enum.
 ///
 /// `sourceId` BẮT BUỘC, không có mặc định: "khách này ở đâu ra" là câu hỏi nghiệp vụ phải trả
-/// lời lúc tạo, không phải thứ hệ thống đoán hộ. Story 4.1 sẽ SNAPSHOT giá trị này sang
-/// `Order.sourceId` lúc chốt đơn (khách quay lại qua kênh khác thì đơn cũ vẫn giữ kênh đã mang
-/// nó về) — nên ở đây nó luôn có giá trị để copy.
+/// lời lúc tạo, không phải thứ hệ thống đoán hộ. Story 4.1 SNAPSHOT giá trị này sang
+/// `Order.sourceId` **lúc TẠO đơn** (FR-35 — khách quay lại qua kênh khác thì đơn cũ vẫn giữ
+/// kênh đã mang nó về) — nên ở đây nó luôn có giá trị để copy.
 model Customer {
   sdt         String         @id
   custType    String         @map("cust_type")
@@ -285,9 +289,115 @@ model Customer {
   sourceNote  String?        @map("source_note")
   createdAt   DateTime       @default(now()) @map("created_at")
   updatedAt   DateTime       @updatedAt @map("updated_at")
+  orders      Order[]
 
   @@index([sourceId])
   @@map("customers")
+}
+
+/// Đơn hàng (Epic 4, AD-6). `Order` KHÔNG sở hữu line item nào trực tiếp — `OrderVersion` sở
+/// hữu TẤT CẢ dòng, và `currentVersionId` là CON TRỎ CHÂN LÝ DUY NHẤT tới bản hiệu lực: mọi
+/// đường đọc dòng phân giải qua nó, KHÔNG suy từ timestamp/đếm version.
+///
+/// `status` lưu **String** + validate tầng app (nhất quán `Customer.custType` — KHÔNG Postgres
+/// enum); bộ khoá = `StatusKey` của chip design-system. Story 4.1 CHỈ gán `'baogia'` lúc INSERT;
+/// mọi THAY ĐỔI status đi qua `applyTransition()` (Story 5.1, AD-11) — không UPDATE trần.
+///
+/// `sourceId` là **SNAPSHOT lúc TẠO đơn** copy từ `Customer.sourceId` (FR-35): khách quay lại
+/// qua kênh khác thì `Customer.sourceId` đổi nhưng đơn cũ giữ nguyên kênh đã mang nó về —
+/// cùng bài học `unitPriceSnapshot` (FR-5). `custType` cũng copy lúc tạo (nhãn báo cáo).
+///
+/// FK vòng với `OrderVersion`: `currentVersionId → order_versions.id` trong khi
+/// `order_versions.order_id → orders.id` — hai named relation; tạo đơn = MỘT transaction 3 bước
+/// với id sinh trước (order pointer null → version → repoint).
+///
+/// Cột hành-vi-story-sau tạo sẵn theo ERD nhưng 4.1 KHÔNG có hành vi: cờ phạm vi (preset 4.3),
+/// `kWp`/`vatMode` (4.4).
+model Order {
+  id                String          @id @default(uuid())
+  status            String
+  customerSdt       String          @map("customer_sdt")
+  customer          Customer        @relation(fields: [customerSdt], references: [sdt])
+  currentVersionId  String?         @unique @map("current_version_id")
+  currentVersion    OrderVersion?   @relation("OrderCurrentVersion", fields: [currentVersionId], references: [id])
+  ownerAccountId    String          @map("owner_account_id")
+  owner             Account         @relation("OrderOwner", fields: [ownerAccountId], references: [id])
+  assigneeAccountId String?         @map("assignee_account_id")
+  assignee          Account?        @relation("OrderAssignee", fields: [assigneeAccountId], references: [id])
+  sourceId          String          @map("source_id")
+  source            CustomerSource  @relation(fields: [sourceId], references: [id])
+  custType          String          @map("cust_type")
+  scopeThietBi      Boolean         @default(true) @map("scope_thiet_bi")
+  scopeThiCong      Boolean         @default(false) @map("scope_thi_cong")
+  scopeVanChuyen    Boolean         @default(false) @map("scope_van_chuyen")
+  kWp               Int?            @map("k_wp")
+  vatMode           String?         @map("vat_mode")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  versions          OrderVersion[]  @relation("OrderVersions")
+
+  @@index([customerSdt])
+  @@index([ownerAccountId])
+  @@index([sourceId])
+  @@map("orders")
+}
+
+/// Một BẢN của đơn — chủ sở hữu DUY NHẤT của line item (AD-6). 4.1 luôn tạo `versionNo = 1`;
+/// sửa-sau-chốt đẻ version mới (4.6). `vatRate`/`vatMode`/`chotAt` null tới 4.4/4.5 —
+/// `updatedAt` cần vì 4.5/4.6 sẽ ghi `chotAt`/`vatRate` lên row này.
+model OrderVersion {
+  id        String          @id @default(uuid())
+  orderId   String          @map("order_id")
+  order     Order           @relation("OrderVersions", fields: [orderId], references: [id])
+  versionNo Int             @map("version_no")
+  vatRate   Int?            @map("vat_rate")
+  vatMode   String?         @map("vat_mode")
+  chotAt    DateTime?       @map("chot_at")
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  lineItems OrderLineItem[]
+  currentOf Order?          @relation("OrderCurrentVersion")
+
+  @@unique([orderId, versionNo])
+  @@map("order_versions")
+}
+
+/// Dòng báo giá — thuộc MỘT `OrderVersion` (không bao giờ trỏ thẳng `Order`).
+///
+/// `productId` null = dòng tự do (tên/đơn vị/giá nhập tay). `onDelete: Restrict` TƯỜNG MINH:
+/// default Prisma cho relation optional là SetNull — xoá Product sẽ âm thầm biến dòng catalog
+/// thành "dòng tự do"; RESTRICT + `Product` soft-delete là đúng thiết kế (schema comment trên
+/// `Product` đã hứa FK này từ Epic 3).
+///
+/// Tiền `Int` đồng (AD-10). `unitPrice` với dòng catalog `priceEditable=false` chỉ là CACHE lúc
+/// nhập — đường đọc trả giá SỐNG từ danh mục tới khi Chốt (FR-5/FR-14); `unitPriceSnapshot`/
+/// `catalogPriceSnapshot` null tới Chốt (4.5), `costPriceSnapshot` null tới xuất kho (6.4,
+/// AD-20), `warrantyStartAt` null tới 4.9. `isFlexible` = cờ "linh động/dự kiến" — CHỈ hiển thị.
+model OrderLineItem {
+  id                   String       @id @default(uuid())
+  orderVersionId       String       @map("order_version_id")
+  orderVersion         OrderVersion @relation(fields: [orderVersionId], references: [id])
+  productId            String?      @map("product_id")
+  product              Product?     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  name                 String
+  unit                 String
+  qty                  Int
+  unitPrice            Int          @map("unit_price")
+  priceEditable        Boolean      @default(false) @map("price_editable")
+  isFlexible           Boolean      @default(false) @map("is_flexible")
+  note                 String?
+  warrantyMonths       Int?         @map("warranty_months")
+  unitPriceSnapshot    Int?         @map("unit_price_snapshot")
+  catalogPriceSnapshot Int?         @map("catalog_price_snapshot")
+  costPriceSnapshot    Int?         @map("cost_price_snapshot")
+  warrantyStartAt      DateTime?    @map("warranty_start_at")
+  displayOrder         Int          @map("display_order")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@index([orderVersionId])
+  @@index([productId])
+  @@map("order_line_items")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

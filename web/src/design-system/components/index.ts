@@ -74,5 +74,9 @@ export type { ShareButtonProps } from './ShareButton';
 export { ImageUpload } from './ImageUpload';
 export type { ImageUploadProps, ImageUploadItem } from './ImageUpload';
 
+// Form control layer (Story 4.1): real checkbox for the group-picker checklist.
+export { Checkbox } from './Checkbox';
+export type { CheckboxProps } from './Checkbox';
+
 export { shareFiles } from './share';
 export type { ShareFilesOptions, ShareResult } from './share';

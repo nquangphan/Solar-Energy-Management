@@ -12,6 +12,11 @@ export interface CartLineRowProps {
   // qty × unitPrice, never sums, never formats money.
   amount: number;
   editable?: boolean;
+  // Gate the UNIT-PRICE input separately from qty (Story 4.1): qty is editable
+  // on every line of a draft quote, but the price only when the line allows it
+  // (free line / Product.priceEditable). Defaults to `editable` so pre-4.1
+  // callers keep their behavior.
+  priceEditable?: boolean;
   flag?: string; // display-only badge (e.g. "linh động"/"dự kiến") — never affects price
   zebra?: boolean;
   onQtyChange?: (qty: number) => void;
@@ -40,6 +45,7 @@ export function CartLineRow({
   unitPrice,
   amount,
   editable,
+  priceEditable,
   flag,
   zebra,
   onQtyChange,
@@ -47,6 +53,8 @@ export function CartLineRow({
   onDelete,
 }: CartLineRowProps) {
   const cls = ['', zebra && 'zebra'].filter(Boolean).join(' ').trim() || undefined;
+  // Undefined = follow `editable` (back-compat); explicit false = read-only price.
+  const priceInputOn = priceEditable ?? editable;
   return (
     <tr className={cls}>
       <td>
@@ -82,7 +90,7 @@ export function CartLineRow({
         )}
       </td>
       <td className="num">
-        {editable ? (
+        {priceInputOn ? (
           <input
             className="field"
             inputMode="numeric"

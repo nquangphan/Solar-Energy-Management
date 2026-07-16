@@ -26,6 +26,10 @@ test('the session module ships on BOTH platforms (twin files)', () => {
     'password-port.ts': 'password_port.dart',
     'customers-port.ts': 'customers_port.dart',
     'fake-customers-port.ts': 'fake_customers_port.dart',
+    'orders-port.ts': 'orders_port.dart',
+    'fake-orders-port.ts': 'fake_orders_port.dart',
+    'catalog-port.ts': 'catalog_port.dart',
+    'fake-catalog-port.ts': 'fake_catalog_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',

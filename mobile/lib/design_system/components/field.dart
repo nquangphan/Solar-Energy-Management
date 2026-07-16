@@ -21,6 +21,7 @@ class AppField extends StatefulWidget {
     this.keyboardType,
     this.obscureText = false,
     this.semanticsLabel,
+    this.maxLines = 1,
   });
 
   /// Optional `.flabel` micro-uppercase caption above the input.
@@ -40,6 +41,10 @@ class AppField extends StatefulWidget {
 
   /// a11y label when no visible [label] is shown (e.g. inline table fields).
   final String? semanticsLabel;
+
+  /// >1 = multi-line input (parity with web `<Field multiline/>` — Story 4.1
+  /// free-line name accepts several lines, UX-DR-24).
+  final int maxLines;
 
   @override
   State<AppField> createState() => _AppFieldState();
@@ -64,8 +69,7 @@ class _AppFieldState extends State<AppField> {
         _owned != null &&
         widget.value != _owned!.text) {
       _owned!.text = widget.value!;
-      _owned!.selection =
-          TextSelection.collapsed(offset: widget.value!.length);
+      _owned!.selection = TextSelection.collapsed(offset: widget.value!.length);
     }
   }
 
@@ -94,6 +98,7 @@ class _AppFieldState extends State<AppField> {
       onChanged: widget.onChanged,
       keyboardType: widget.keyboardType,
       obscureText: widget.obscureText,
+      maxLines: widget.maxLines,
       cursorColor: AppTokens.teal,
       style: TextStyle(
         color: AppTokens.ink,

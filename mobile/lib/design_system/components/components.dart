@@ -39,6 +39,10 @@ export 'share_button.dart'
 export 'image_upload.dart'
     show AppImageUpload, AppUploadItem, ImagePickFn, platformPickImages;
 
+// Form control layer (mirror Story 4.1): real checkbox for the group-picker
+// checklist.
+export 'checkbox.dart' show AppCheckbox;
+
 // The picker/share value types callers need (from cross_file, re-exported by
 // image_picker). ImageSource selects camera vs gallery.
 export 'package:image_picker/image_picker.dart' show XFile, ImageSource;
