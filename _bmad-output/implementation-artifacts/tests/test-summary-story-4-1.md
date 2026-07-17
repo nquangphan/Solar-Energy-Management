@@ -71,3 +71,7 @@ prettier --check ✓ · dart format -o none ✓ · flutter analyze ✓
 
 - Chạy `npm run test:db` khi Postgres cục bộ lên (nợ môi trường từ phiên dev, không phải nợ test).
 - CI 4 lane (C-3) tự chạy các suite này trên push.
+
+---
+
+**Cập nhật 2026-07-17 — DB lane đã chạy:** Postgres 18 (container `pns-postgres`) đã dựng, `prisma migrate deploy` áp đủ 4 migration Epic 4, `npm run test:db` **xanh 8 suite / 56 test** (toàn bộ DB integration lane, gồm case của story này). Caveat "chờ Postgres/Docker" ở trên đã được giải quyết.

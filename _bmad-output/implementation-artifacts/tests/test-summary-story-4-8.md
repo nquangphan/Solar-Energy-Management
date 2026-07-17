@@ -90,3 +90,7 @@ số học tiền trong template** — template chỉ FORMAT (AD-16), số đún
 - DB lane story 4.8 chưa chạy (Docker down) — unique `orderId` (upsert 2 lần = 1 row + P2002) + FK P2003 đơn ma trên Postgres thật chờ xác nhận.
 - Action item treo từ 4.4: các migration (giờ gồm `20260717040000_add_quote_exports`) chưa `migrate deploy` thật.
 - Render Puppeteer thật chỉ mới chạy tay 1 lần (dev phase) — chưa có lane định kỳ; screenshot throw transient 1 lần đã ghi nhận ở Debug Log story.
+
+---
+
+**Cập nhật 2026-07-17 — DB lane đã chạy:** Postgres 18 (container `pns-postgres`) đã dựng, `prisma migrate deploy` áp đủ 4 migration Epic 4, `npm run test:db` **xanh 8 suite / 56 test** (toàn bộ DB integration lane, gồm case của story này). Caveat "chờ Postgres/Docker" ở trên đã được giải quyết.

@@ -56,3 +56,7 @@ UI 2 nền tảng: 4 widget test mobile (confirm-flow, huỷ dialog, port throw 
 ## Unresolved
 
 - Action item 4.4 còn treo: migration `20260717000000` chưa `migrate deploy` thật (chờ Postgres/Docker).
+
+---
+
+**Cập nhật 2026-07-17 — DB lane đã chạy:** Postgres 18 (container `pns-postgres`) đã dựng, `prisma migrate deploy` áp đủ 4 migration Epic 4, `npm run test:db` **xanh 8 suite / 56 test** (toàn bộ DB integration lane, gồm case của story này). Caveat "chờ Postgres/Docker" ở trên đã được giải quyết.

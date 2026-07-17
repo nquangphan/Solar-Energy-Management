@@ -48,3 +48,7 @@ Coverage sẵn có từ dev phase đã rất dày (settings e2e 401/403/400/biê
 ## Unresolved
 
 - DB lane (`npm run test:db`) vẫn cần chạy khi có Postgres — migration 4.4 sinh offline, chưa từng deploy thật (tồn đọng dev phase, ngoài phạm vi QA automation).
+
+---
+
+**Cập nhật 2026-07-17 — DB lane đã chạy:** Postgres 18 (container `pns-postgres`) đã dựng, `prisma migrate deploy` áp đủ 4 migration Epic 4, `npm run test:db` **xanh 8 suite / 56 test** (toàn bộ DB integration lane, gồm case của story này). Caveat "chờ Postgres/Docker" ở trên đã được giải quyết.

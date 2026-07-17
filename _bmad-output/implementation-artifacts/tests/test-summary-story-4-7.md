@@ -75,3 +75,7 @@ mobile đủ error case + guard 13 test mutation-checked 2 nhánh (dev phase) �
 
 - DB lane story 4.7 chưa chạy (Docker down) — cổng atomic race trên Postgres thật + FK P2003 + snapshot discountAmount chờ xác nhận.
 - Action item 4.4 còn treo: các migration (giờ gồm `20260717020000_add_discount_approvals`) chưa `migrate deploy` thật.
+
+---
+
+**Cập nhật 2026-07-17 — DB lane đã chạy:** Postgres 18 (container `pns-postgres`) đã dựng, `prisma migrate deploy` áp đủ 4 migration Epic 4, `npm run test:db` **xanh 8 suite / 56 test** (toàn bộ DB integration lane, gồm case của story này). Caveat "chờ Postgres/Docker" ở trên đã được giải quyết.
