@@ -11,8 +11,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRegistry, buildOutputs, OUT_PATHS } from './build-permission-keys.mjs';
@@ -65,6 +65,63 @@ test('(2) every PERM / AppPerm value is a canonical registry key (no drift)', ()
     assert.ok(webValues.includes(key), `web PERM missing required 2.6 key "${key}"`);
     assert.ok(mobValues.includes(key), `mobile AppPerm missing required 2.6 key "${key}"`);
   }
+});
+
+// (4) 🔴 EVERY key NAME a screen references EXISTS in its source block/file —
+// the Story 4.5 bug class: `PERM.ordersConfirm` referenced a name the 7-key
+// hand-block never declared, so `Gate requires=undefined` fail-closed and the
+// button NEVER rendered (web has no tsc to catch it — TD-1/C-4). This scans
+// every screen for `PERM.x` / `PERMISSION_KEYS.x` (web) and `AppPermissionKeys.x`
+// / `AppPerm.x` (mobile) and asserts each NAME is declared where it claims to be.
+test('(4) every permission-key NAME a screen references is declared in its source (no ghost keys)', () => {
+  /** Every file under `dir` (recursive) with one of `exts`. */
+  const filesUnder = (dir, exts) =>
+    readdirSync(resolve(repoRoot, dir), { recursive: true })
+      .filter((f) => exts.some((ext) => String(f).endsWith(ext)))
+      .map((f) => join(dir, String(f)));
+
+  // Declared names, per source-of-truth.
+  const names = (src, re) => new Set([...stripComments(src).matchAll(re)].map((m) => m[1]));
+  const permNames = names(
+    webPerms.match(/export const PERM =\s*\{([\s\S]*?)\}\s*as const;/)?.[1] ?? '',
+    /(\w+):\s*'[^']+'/g,
+  );
+  const generatedTs = readFileSync(resolve(repoRoot, 'web/src/design-system/gating/permission-keys.generated.ts'), 'utf8');
+  const permissionKeysNames = names(
+    generatedTs.match(/export const PERMISSION_KEYS = \{([\s\S]*?)\}\s*as const;/)?.[1] ?? '',
+    /(\w+):\s*'[^']+'/g,
+  );
+  const generatedDart = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/gating/app_permission_keys.g.dart'), 'utf8');
+  const appPermissionKeysNames = names(generatedDart, /static const String (\w+) =/g);
+  const appPermNames = names(mobPerms, /static const String (\w+) =/g);
+  assert.ok(permNames.size > 0, 'could not extract PERM names');
+  assert.ok(permissionKeysNames.size >= 21, 'could not extract PERMISSION_KEYS names');
+  assert.ok(appPermissionKeysNames.size >= 21, 'could not extract AppPermissionKeys names');
+
+  // References, per platform — comments stripped first (a doc comment may NAME
+  // a ghost key to explain this very bug).
+  const sources = {
+    'PERM.': permNames,
+    'PERMISSION_KEYS.': permissionKeysNames,
+    'AppPermissionKeys.': appPermissionKeysNames,
+    'AppPerm.': appPermNames,
+  };
+  const scan = (files, prefixes) => {
+    for (const rel of files) {
+      const code = stripComments(readFileSync(resolve(repoRoot, rel), 'utf8'));
+      for (const prefix of prefixes) {
+        const declared = sources[prefix];
+        for (const [, ref] of code.matchAll(new RegExp(`\\b${prefix.replace('.', '\\.')}(\\w+)`, 'g'))) {
+          assert.ok(
+            declared.has(ref),
+            `${rel} references ${prefix}${ref} — that name is NOT declared in its source (ghost key: Gate would get undefined and fail closed, the 4.5 bug)`,
+          );
+        }
+      }
+    }
+  };
+  scan(filesUnder('web/src/screens', ['.tsx', '.ts']), ['PERM.', 'PERMISSION_KEYS.']);
+  scan(filesUnder('mobile/lib/screens', ['.dart']), ['AppPermissionKeys.', 'AppPerm.']);
 });
 
 // (3) Every SIDEBAR_NAV `requires` resolves (via PERM.*) to a registry key — the

@@ -20,6 +20,7 @@ import {
   OrderLineRemoved,
   OrderLineUpdated,
   OrderMetaChanged,
+  OrderRevised,
   OrderScopeChanged,
   type OrderLineSnapshot,
   type OrderSnapshot,
@@ -59,9 +60,9 @@ import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
  * MUTATION DÒNG chỉ khi `status === 'baogia'` (khác ⇒ 409) — sửa sau chốt là luồng version
  * mới (Story 4.6).
  *
- * GHI STATUS (AD-11): `confirm()` là điểm ghi `Order.status` DUY NHẤT tạm thời trong codebase
- * — transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt block đó vào
- * `applyTransition()`; ngoài nó không đường nào ĐỔI status.
+ * GHI STATUS (AD-11): `confirm()` + `revise()` là HAI điểm ghi `Order.status` tạm thời trong
+ * codebase — cùng khuôn transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt cả
+ * hai block vào `applyTransition()`; ngoài chúng không đường nào ĐỔI status.
  */
 
 /**
@@ -135,6 +136,13 @@ function orderSnapshot(order: Order): OrderSnapshot {
  * rồi đọc lại trạng thái — mọi lỗi khác ném tiếp nguyên vẹn.
  */
 const CHOT_GATE_THUA = new Error('chot-gate-thua');
+
+/**
+ * Sentinel abort transaction Mở lại (Story 4.6) — cùng khuôn `CHOT_GATE_THUA`: bên thua cổng
+ * atomic rollback TOÀN tx (kể cả version/dòng đã create trong callback), caller đọc lại rồi
+ * quyết idempotent hay 409.
+ */
+const MO_LAI_GATE_THUA = new Error('mo-lai-gate-thua');
 
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
@@ -556,6 +564,147 @@ export class OrdersService {
     const after: Order = { ...before, status: TRANG_THAI_DA_CHOT };
     await this.eventBus.publish(
       new OrderConfirmed(
+        actorAccountId,
+        orderSnapshot(before),
+        orderSnapshot(after),
+        new Date(),
+      ),
+    );
+    return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
+   * MỞ LẠI Đơn đã chốt để sửa (Story 4.6, FR-6/AD-6): sinh BẢN UPDATE MỚI, không ghi đè bản
+   * cũ. ⚠️ Điểm ghi `Order.status` tạm thời thứ HAI (cùng `confirm()`) — 5.1 nuốt block này
+   * vào `applyTransition()`.
+   *
+   * MỘT interactive `$transaction`: cổng atomic `updateMany({where: {id, status: 'dachot'}})`
+   * đặt ĐẦU tx — bên thua race (`count === 0`) abort TRƯỚC khi create gì, rollback rẻ; sau
+   * cổng: tạo `OrderVersion` mới `versionNo + 1` (vatRate/vatMode/chotAt null — bản đang sửa
+   * chưa đóng băng thuế), copy TOÀN BỘ dòng bản hiệu lực sang bản mới (snapshot cả 3 cột =
+   * null ⇒ `toViews` live-resolve lại giá danh mục hiện tại — hành vi trước-chốt FR-5;
+   * `warrantyStartAt` copy nguyên — AD-20 "hàng cũ giữ ngày cũ", 4.9 chỉ đặt khi null lúc
+   * chốt), rồi repoint `currentVersionId`. Version cũ + dòng cũ + snapshot cũ KHÔNG bị op
+   * update/delete nào chạm tới — lịch sử bất biến, "bản hiệu lực" CHỈ phân giải qua con trỏ.
+   *
+   * Idempotent kiểu 4.5: đơn ĐANG `baogia` (retry/double-tap, hoặc đơn chưa từng chốt) ⇒ 200
+   * view hiện tại — KHÔNG version mới, KHÔNG event. Trạng thái khác `dachot`/`baogia` ⇒ 409.
+   * Race mo-lai ↔ chot: hai cổng `updateMany` điều kiện NGƯỢC nhau trên cùng row — Postgres
+   * READ COMMITTED re-check WHERE sau row lock ⇒ đúng một bên thắng.
+   *
+   * Publish `OrderRevised` SAU commit, CHỈ nhánh mở-lại thật (NFR-1, AD-18) — audit ghi
+   * ai/khi nào/bản nào qua AuditSubscriber (before/after mang `currentVersionId` cũ→mới).
+   *
+   * KHÔNG nhận `vatRatePercent` — mở lại không ghi thuế; re-chốt qua `confirm()` hiện có mới
+   * đóng băng lại.
+   */
+  async revise(
+    actorAccountId: string,
+    orderId: string,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const before = await this.findOrThrow(orderId);
+    if (before.status === TRANG_THAI_BAO_GIA) {
+      // Đơn đang mở sẵn (retry mo-lai, hoặc đơn chưa từng chốt): no-op vô hại.
+      return this.viewOf(before, tieredPricingEnabled);
+    }
+    if (before.status !== TRANG_THAI_DA_CHOT) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ mở lại được đơn đang ở trạng thái Đã chốt.',
+      );
+    }
+
+    // Đọc versionNo bản hiệu lực + dòng của nó TRƯỚC tx — bản hiệu lực luôn mang versionNo
+    // lớn nhất (version chỉ sinh từ create() = 1 và revise() = +1; bên thua race rollback);
+    // `@@unique([orderId, versionNo])` là backstop ở DB.
+    const currentVersionId = this.currentVersionIdOrThrow(before);
+    const currentVersion = await this.prisma.orderVersion.findUnique({
+      where: { id: currentVersionId },
+    });
+    if (currentVersion === null) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Đơn chưa có bản hiệu lực.',
+      );
+    }
+    const lines = await this.prisma.orderLineItem.findMany({
+      where: { orderVersionId: currentVersionId },
+      orderBy: { displayOrder: 'asc' },
+    });
+
+    const newVersionId = randomUUID();
+    // Bảng copy (Dev Notes 4.6): field nghiệp vụ copy nguyên; snapshot cả 3 cột = null (dòng
+    // sống lại — re-chốt mới đóng băng; giá vốn thuộc sự kiện xuất kho trên version ĐÃ xuất);
+    // `warrantyStartAt` copy nguyên; id MỚI + orderVersionId = bản mới.
+    const copies = lines.map((line) => ({
+      id: randomUUID(),
+      orderVersionId: newVersionId,
+      productId: line.productId,
+      name: line.name,
+      unit: line.unit,
+      qty: line.qty,
+      unitPrice: line.unitPrice,
+      priceEditable: line.priceEditable,
+      isFlexible: line.isFlexible,
+      note: line.note,
+      warrantyMonths: line.warrantyMonths,
+      unitPriceSnapshot: null,
+      catalogPriceSnapshot: null,
+      costPriceSnapshot: null,
+      warrantyStartAt: line.warrantyStartAt,
+      displayOrder: line.displayOrder,
+    }));
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.order.updateMany({
+          where: { id: before.id, status: TRANG_THAI_DA_CHOT },
+          data: { status: TRANG_THAI_BAO_GIA },
+        });
+        if (count === 0) throw MO_LAI_GATE_THUA;
+        await tx.orderVersion.create({
+          data: {
+            id: newVersionId,
+            orderId: before.id,
+            versionNo: currentVersion.versionNo + 1,
+          },
+        });
+        // Đơn đã chốt luôn ≥ 1 dòng nên copies rỗng là logic-impossible — nhưng Prisma 7
+        // createMany mảng rỗng là gotcha đã biết, guard rẻ.
+        if (copies.length > 0) {
+          await tx.orderLineItem.createMany({ data: copies });
+        }
+        await tx.order.update({
+          where: { id: before.id },
+          data: { currentVersionId: newVersionId },
+        });
+      });
+    } catch (error) {
+      if (error !== MO_LAI_GATE_THUA) throw error;
+      // Thua cổng atomic (race 2 request đồng thời): đọc lại sự thật hiện tại.
+      const current = await this.findOrThrow(orderId);
+      if (current.status === TRANG_THAI_BAO_GIA) {
+        return this.viewOf(current, tieredPricingEnabled);
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ mở lại được đơn đang ở trạng thái Đã chốt.',
+      );
+    }
+
+    // Compose status + con trỏ mới lên object `before` trong bộ nhớ (updateMany/update không
+    // trả row) — `viewOf` đọc lines bản MỚI qua con trỏ; caveat `updatedAt` cũ (tiền lệ 4.5).
+    const after: Order = {
+      ...before,
+      status: TRANG_THAI_BAO_GIA,
+      currentVersionId: newVersionId,
+    };
+    await this.eventBus.publish(
+      new OrderRevised(
         actorAccountId,
         orderSnapshot(before),
         orderSnapshot(after),

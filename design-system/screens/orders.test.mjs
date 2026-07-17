@@ -115,7 +115,7 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder', 'reviseOrder']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -181,6 +181,10 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     // confirm dialog (UX-DR-19: the dialog states what freezing means).
     'Chốt báo giá',
     'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.',
+    // Mở lại (Story 4.6) — the button + the FULL consequence sentence of the
+    // confirm dialog (UX-DR-20: the dialog states what reopening means).
+    'Mở lại để sửa',
+    'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `web quote screen is missing the label "${label}"`);

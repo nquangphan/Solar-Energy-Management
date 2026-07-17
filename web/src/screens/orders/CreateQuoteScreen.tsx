@@ -30,8 +30,12 @@ import {
   Sheet,
   Table,
 } from '../../design-system/components';
-import { Gate, PERM } from '../../design-system/gating';
+// PERMISSION_KEYS (generated, đủ 21 khoá) chứ KHÔNG phải PERM (hand-block 7 khoá
+// nav): 4.5 tham chiếu PERM.ordersConfirm = undefined → Gate fail-closed → nút
+// Chốt không bao giờ render (bug 4.5, fix ở 4.6).
+import { Gate, PERMISSION_KEYS } from '../../design-system/gating';
 import { filterNav } from '../../design-system/gating/permissions';
+import { ORDER_STATUS_DACHOT } from '../../design-system/session/orders-port';
 import type {
   CatalogGroup,
   CatalogGroupDetail,
@@ -98,6 +102,10 @@ export function CreateQuoteScreen({
   // scopeBusy/metaBusy; thành công thì `editable` tự tắt vì status đổi.
   const [chotDialogOpen, setChotDialogOpen] = useState(false);
   const [chotBusy, setChotBusy] = useState(false);
+  // Dialog xác nhận Mở lại (Story 4.6) + busy — nghịch đảo nút Chốt: hiện khi
+  // 'dachot', thành công thì `editable` tự bật lại vì status về 'baogia'.
+  const [moLaiDialogOpen, setMoLaiDialogOpen] = useState(false);
+  const [moLaiBusy, setMoLaiBusy] = useState(false);
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -357,6 +365,28 @@ export function CreateQuoteScreen({
     }
   }
 
+  /**
+   * Mở lại Đơn đã chốt (Story 4.6, FR-6): BACKEND sinh bản update mới (bản cũ
+   * nằm nguyên trong lịch sử) và đưa status về 'baogia' — màn chỉ render Order
+   * trả về (`editable` tự bật lại, nút Chốt hiện lại thế chỗ). KHÔNG toast.
+   * Lỗi → Banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
+   */
+  async function handleReviseOrder() {
+    setMoLaiDialogOpen(false);
+    setMoLaiBusy(true);
+    try {
+      const revised = await ordersPort.reviseOrder(order!.id);
+      setOrder(revised);
+      syncMetaTexts(revised);
+      setError(null);
+      await refreshTotals(revised);
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setMoLaiBusy(false);
+    }
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -539,7 +569,7 @@ export function CreateQuoteScreen({
             BIẾN MẤT (Gate, UX-DR-22), không disabled xám; backend vẫn enforce
             (AD-4). Bấm mở dialog nêu hệ quả — Chốt là hành động có hệ quả. */}
         {editable && (
-          <Gate perms={perms} requires={PERM.ordersConfirm}>
+          <Gate perms={perms} requires={PERMISSION_KEYS.ordersConfirm}>
             <div className="quote-chot-row">
               <Button
                 variant="primary"
@@ -548,6 +578,25 @@ export function CreateQuoteScreen({
                 onClick={() => setChotDialogOpen(true)}
               >
                 Chốt báo giá
+              </Button>
+            </div>
+          </Gate>
+        )}
+
+        {/* Mở lại (Story 4.6): nghịch đảo nút Chốt — hiện khi đơn đã chốt (so
+            bằng HẰNG import từ port, không literal), quyền quotes.create_edit
+            (người khởi động việc sửa chính là người sẽ sửa); thiếu quyền thì
+            nút BIẾN MẤT (Gate, UX-DR-22); backend vẫn enforce (AD-4). */}
+        {order.status === ORDER_STATUS_DACHOT && (
+          <Gate perms={perms} requires={PERMISSION_KEYS.quotesCreateEdit}>
+            <div className="quote-chot-row">
+              <Button
+                variant="primary"
+                type="button"
+                disabled={moLaiBusy}
+                onClick={() => setMoLaiDialogOpen(true)}
+              >
+                Mở lại để sửa
               </Button>
             </div>
           </Gate>
@@ -661,6 +710,16 @@ export function CreateQuoteScreen({
         consequence="Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới."
         onConfirm={() => void handleConfirmOrder()}
         onCancel={() => setChotDialogOpen(false)}
+      />
+
+      {/* Huỷ = đóng dialog, KHÔNG gọi port — đơn ở nguyên dachot. Tone mặc định
+          (primary), KHÔNG destructive: không mất gì, bản cũ còn nguyên lịch sử. */}
+      <ConfirmDialog
+        open={moLaiDialogOpen}
+        title="Mở lại để sửa"
+        consequence="Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử."
+        onConfirm={() => void handleReviseOrder()}
+        onCancel={() => setMoLaiDialogOpen(false)}
       />
 
       <Sheet open={picker === 'free'} onClose={() => setPicker('none')} title="Dòng tự do">

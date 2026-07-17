@@ -2227,6 +2227,71 @@
         ]
       }
     },
+    "/orders/{id}/mo-lai": {
+      "post": {
+        "operationId": "OrdersController_revise",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đơn sau khi Mở lại: status 'baogia', version MỚI (versionNo + 1) với dòng copy từ bản đã chốt — snapshot null nên giá dòng catalog live-resolve lại theo danh mục hiện tại (FR-5); bản cũ + snapshot cũ giữ nguyên trong lịch sử (AD-6). Retry trên đơn đang 'baogia': 200 view hiện tại, không version mới, không audit thêm (idempotent, NFR-1).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit — orders.confirm KHÔNG thay thế được (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}/line-items": {
       "post": {
         "operationId": "OrdersController_addLine",

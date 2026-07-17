@@ -118,7 +118,7 @@ describe('/orders (e2e)', () => {
     create: jest.fn(),
     update: jest.fn(),
   };
-  const orderVersionRepo = { create: jest.fn() };
+  const orderVersionRepo = { create: jest.fn(), findUnique: jest.fn() };
   const lineRepo = {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
@@ -135,10 +135,10 @@ describe('/orders (e2e)', () => {
   const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   // Config hệ thống: vắng row = default 8% (preview-total resolve rate qua SettingsService).
   const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
-  // Interactive tx cho POST :id/chot: callback nhận bộ mock tx (kiểu array giữ nguyên).
-  const txOrderRepo = { updateMany: jest.fn() };
-  const txVersionRepo = { update: jest.fn() };
-  const txLineRepo = { update: jest.fn() };
+  // Interactive tx cho POST :id/chot + :id/mo-lai: callback nhận bộ mock tx (array giữ nguyên).
+  const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
+  const txVersionRepo = { update: jest.fn(), create: jest.fn() };
+  const txLineRepo = { update: jest.fn(), createMany: jest.fn() };
   const txMock = {
     order: txOrderRepo,
     orderVersion: txVersionRepo,
@@ -225,8 +225,12 @@ describe('/orders (e2e)', () => {
         : Promise.all(arg as Promise<unknown>[]),
     );
     txOrderRepo.updateMany.mockResolvedValue({ count: 1 });
+    txOrderRepo.update.mockResolvedValue({});
     txVersionRepo.update.mockResolvedValue({});
+    txVersionRepo.create.mockResolvedValue({});
     txLineRepo.update.mockResolvedValue({});
+    txLineRepo.createMany.mockResolvedValue({ count: 0 });
+    orderVersionRepo.findUnique.mockResolvedValue(null);
   });
 
   describe('authn/authz fail-closed trên MỌI route', () => {
@@ -257,6 +261,10 @@ describe('/orders (e2e)', () => {
       {
         name: 'POST /orders/preview-total',
         call: () => request(server()).post('/orders/preview-total'),
+      },
+      {
+        name: 'POST /orders/:id/mo-lai',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/mo-lai`),
       },
     ];
 
@@ -1002,6 +1010,344 @@ describe('/orders (e2e)', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+  });
+
+  describe('POST /orders/:id/mo-lai — Mở lại Đơn đã chốt (Story 4.6, FR-6)', () => {
+    it('không token ⇒ 401', async () => {
+      const res = await request(server()).post(`/orders/${ORDER_ID}/mo-lai`);
+
+      expect(res.status).toBe(401);
+    });
+
+    it('CHỈ có orders.confirm ⇒ 403 — quyền chốt KHÔNG thay được quotes.create_edit (nghịch đảo proof 4.5)', async () => {
+      givenPermissions(PERM.ordersConfirm);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('vòng đời FR-6 đầy đủ: tạo → thêm dòng → chốt → giá danh mục đổi → mở lại (giá SỐNG mới, bản cũ nguyên snapshot, audit) → sửa dòng → re-chốt (snapshot MỚI trên bản mới, bản cũ vẫn cũ)', async () => {
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersConfirm);
+
+      // ===== Mock STATEFUL: DB giả trong bộ nhớ — mọi op đọc/ghi cùng một sự thật. =====
+      let orderState: Record<string, unknown> | null = null;
+      const versions = new Map<string, Record<string, unknown>>();
+      const linesByVersion = new Map<
+        string,
+        Array<Record<string, unknown>>
+      >();
+      let lineSeq = 0;
+      const NOW = new Date('2026-07-17T00:00:00Z');
+
+      function allLines(): Array<Record<string, unknown>> {
+        return [...linesByVersion.values()].flat();
+      }
+
+      orderRepo.findUnique.mockImplementation(async () =>
+        orderState === null ? null : { ...orderState },
+      );
+      orderRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = {
+            ...DON_BAOGIA,
+            ...data,
+            currentVersionId: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+          };
+          return { ...orderState };
+        },
+      );
+      orderRepo.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = { ...orderState, ...data };
+          return { ...orderState };
+        },
+      );
+      orderVersionRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          versions.set(data.id as string, { ...data });
+          linesByVersion.set(data.id as string, []);
+          return { ...data };
+        },
+      );
+      orderVersionRepo.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) => {
+          const ver = versions.get(where.id);
+          return ver === undefined ? null : { ...ver };
+        },
+      );
+      lineRepo.findMany.mockImplementation(
+        async ({ where }: { where: { orderVersionId: string } }) =>
+          (linesByVersion.get(where.orderVersionId) ?? []).map((l) => ({
+            ...l,
+          })),
+      );
+      lineRepo.findFirst.mockImplementation(
+        async ({ where }: { where: { orderVersionId: string } }) => {
+          const lines = linesByVersion.get(where.orderVersionId) ?? [];
+          if (lines.length === 0) return null;
+          return lines.reduce((a, b) =>
+            (a.displayOrder as number) > (b.displayOrder as number) ? a : b,
+          );
+        },
+      );
+      lineRepo.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) =>
+          allLines().find((l) => l.id === where.id) ?? null,
+      );
+      lineRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          lineSeq += 1;
+          const row = {
+            id: `line-song-${lineSeq}`,
+            unitPriceSnapshot: null,
+            catalogPriceSnapshot: null,
+            costPriceSnapshot: null,
+            warrantyStartAt: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+            ...data,
+          };
+          linesByVersion.get(data.orderVersionId as string)?.push(row);
+          return { ...row };
+        },
+      );
+      lineRepo.update.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = allLines().find((l) => l.id === where.id);
+          if (row === undefined) throw new Error('line ma');
+          for (const [k, v] of Object.entries(data)) {
+            if (v !== undefined) row[k] = v;
+          }
+          return { ...row };
+        },
+      );
+      // Cổng atomic stateful: WHERE status khớp sự thật hiện tại mới được đổi (count 1).
+      txOrderRepo.updateMany.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { status: string };
+          data: { status: string };
+        }) => {
+          if (orderState !== null && orderState.status === where.status) {
+            orderState = { ...orderState, status: data.status };
+            return { count: 1 };
+          }
+          return { count: 0 };
+        },
+      );
+      txOrderRepo.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = { ...orderState, ...data };
+          return { ...orderState };
+        },
+      );
+      txVersionRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          versions.set(data.id as string, { ...data });
+          if (!linesByVersion.has(data.id as string)) {
+            linesByVersion.set(data.id as string, []);
+          }
+          return { ...data };
+        },
+      );
+      txVersionRepo.update.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          versions.set(where.id, {
+            ...(versions.get(where.id) ?? { id: where.id }),
+            ...data,
+          });
+          return {};
+        },
+      );
+      txLineRepo.update.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = allLines().find((l) => l.id === where.id);
+          if (row === undefined) throw new Error('line ma');
+          Object.assign(row, data);
+          return { ...row };
+        },
+      );
+      txLineRepo.createMany.mockImplementation(
+        async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          for (const row of data) {
+            const verId = row.orderVersionId as string;
+            if (!linesByVersion.has(verId)) linesByVersion.set(verId, []);
+            linesByVersion
+              .get(verId)
+              ?.push({ ...row, createdAt: NOW, updatedAt: NOW });
+          }
+          return { count: data.length };
+        },
+      );
+
+      // ===== 1. Tạo đơn =====
+      const tao = await request(server())
+        .post('/orders')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ customerSdt: '0912 345 678' });
+      expect(tao.status).toBe(201);
+      // create() trả order SAU op repoint — con trỏ đã trỏ version 1.
+      const verCu = tao.body.currentVersionId as string;
+
+      // ===== 2. Thêm dòng catalog (giá danh mục lúc này 2_450_000) =====
+      const themDong = await request(server())
+        .post(`/orders/${tao.body.id}/line-items`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ productId: PIN_580W.id, qty: 8 });
+      expect(themDong.status).toBe(201);
+
+      // ===== 3. Chốt — snapshot đóng băng 2_450_000 =====
+      const chot = await request(server())
+        .post(`/orders/${tao.body.id}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(chot.status).toBe(200);
+      expect(chot.body.status).toBe('dachot');
+      expect(chot.body.lineItems[0].unitPrice).toBe(2_450_000);
+
+      // ===== 4. Giá danh mục ĐỔI sau chốt =====
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 2_600_000 },
+      ]);
+
+      // ===== 5. Mở lại — 200 baogia, version MỚI, giá dòng = giá danh mục MỚI (live) =====
+      const moLai = await request(server())
+        .post(`/orders/${tao.body.id}/mo-lai`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(moLai.status).toBe(200);
+      expect(moLai.body.status).toBe('baogia');
+      const verMoi = moLai.body.currentVersionId as string;
+      expect(verMoi).not.toBe(verCu);
+      // Snapshot null trên bản mới ⇒ live-resolve giá HIỆN TẠI — không phải snapshot cũ.
+      expect(moLai.body.lineItems[0].unitPrice).toBe(2_600_000);
+      expect(moLai.body.lineItems[0].amount).toBe(2_600_000 * 8);
+      // Bản CŨ vẫn nguyên vẹn trong "DB": snapshot cũ + version cũ không bị chạm (FR-6).
+      const dongCu = linesByVersion.get(verCu) ?? [];
+      expect(dongCu).toHaveLength(1);
+      expect(dongCu[0].unitPriceSnapshot).toBe(2_450_000);
+      expect(versions.get(verCu)?.vatRate).toBe(8);
+      expect(versions.get(verCu)?.chotAt).toEqual(expect.any(Date));
+      // Version mới CHƯA đóng băng thuế.
+      expect(versions.get(verMoi)?.vatRate).toBeUndefined();
+      // Audit OrderRevised qua AuditSubscriber thật.
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'OrderRevised' }),
+        }),
+      );
+
+      // ===== 6. Sửa dòng trên bản MỚI (máy sửa hiện có hoạt động lại — AC #3) =====
+      const lineMoiId = moLai.body.lineItems[0].id as string;
+      const suaDong = await request(server())
+        .patch(`/orders/${tao.body.id}/line-items/${lineMoiId}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ qty: 12 });
+      expect(suaDong.status).toBe(200);
+      expect(suaDong.body.qty).toBe(12);
+
+      // ===== 7. Re-chốt qua /chot HIỆN CÓ — snapshot MỚI lên bản MỚI, bản cũ vẫn CŨ =====
+      const reChot = await request(server())
+        .post(`/orders/${tao.body.id}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(reChot.status).toBe(200);
+      expect(reChot.body.status).toBe('dachot');
+      expect(reChot.body.lineItems[0].unitPrice).toBe(2_600_000);
+      const dongMoi = linesByVersion.get(verMoi) ?? [];
+      expect(dongMoi[0].unitPriceSnapshot).toBe(2_600_000);
+      // Hai đợt đóng băng SONG SONG tồn tại: bản cũ giữ snapshot CŨ của nó.
+      expect(dongCu[0].unitPriceSnapshot).toBe(2_450_000);
+      expect(versions.get(verMoi)?.vatRate).toBe(8);
+      expect(versions.get(verMoi)?.chotAt).toEqual(expect.any(Date));
+
+      // ===== 8. Giá danh mục đổi TIẾP sau re-chốt — bản mới ĐÃ đóng băng, GET không đổi =====
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 2_800_000 },
+      ]);
+      const getSauReChot = await request(server())
+        .get(`/orders/${tao.body.id}`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(getSauReChot.status).toBe(200);
+      // Đường đọc snapshot-first: giá giữ 2_600_000 — KHÔNG ăn giá sống 2_800_000.
+      expect(getSauReChot.body.lineItems[0].unitPrice).toBe(2_600_000);
+      expect(getSauReChot.body.lineItems[0].amount).toBe(2_600_000 * 12);
+    });
+
+    it("retry mo-lai khi đơn ĐANG 'baogia' ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
+      lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
+
+      const retry = await request(server())
+        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .set('Authorization', `Bearer ${token()}`);
+      const get = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(get.body);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(txVersionRepo.create).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('đơn ma ⇒ 404 envelope chuẩn', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue(null);
+
+      const res = await request(server())
+        .post('/orders/khong-co/mo-lai')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it("đơn 'huy' ⇒ 409 CONFLICT envelope chuẩn qua exception filter, KHÔNG ghi, KHÔNG audit", async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'huy',
+      });
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+      expect(res.body.traceId).toEqual(expect.any(String));
+      expect(transaction).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
     });
   });
 

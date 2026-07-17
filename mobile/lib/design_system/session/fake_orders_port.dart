@@ -320,6 +320,41 @@ class FakeOrdersPort implements OrdersPort {
     return _copy(confirmed);
   }
 
+  @override
+  Future<Order> reviseOrder(String orderId) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // Already open = idempotent no-op, mirroring the backend retry path. The
+    // fake does NOT simulate the new version / line copy — the client never
+    // sees the version concept (4.1); the lines just come back as-is.
+    if (order.status == 'baogia') {
+      return _copy(order);
+    }
+    final Order revised = Order(
+      id: order.id,
+      status: 'baogia',
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      lineItems: order.lineItems,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = revised;
+    return _copy(revised);
+  }
+
   Order _copy(Order order) => Order(
         id: order.id,
         status: order.status,

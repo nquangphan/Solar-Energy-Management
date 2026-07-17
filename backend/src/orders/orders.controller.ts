@@ -232,6 +232,46 @@ export class OrdersController {
     )) as OrderResponseDto;
   }
 
+  // Mở lại đơn đã chốt để sửa (Story 4.6, FR-6) — action nghiệp vụ là sub-resource POST
+  // (khuôn `:id/chot`). Body rỗng, không DTO request; response giữ nguyên OrderResponseDto.
+  // Quyền = quotes.create_edit (mở lại chỉ có MỘT tác dụng là cho phép sửa — mọi endpoint sửa
+  // đều gate key này; re-chốt vẫn cần orders.confirm).
+  @Post(':id/mo-lai')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  // Transition trên resource có sẵn, không tạo resource mới theo nghĩa REST — 201 mặc định
+  // của @Post sai ngữ nghĩa (khuôn :id/chot).
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: OrderResponseDto,
+    description:
+      "Đơn sau khi Mở lại: status 'baogia', version MỚI (versionNo + 1) với dòng copy từ bản đã chốt — snapshot null nên giá dòng catalog live-resolve lại theo danh mục hiện tại (FR-5); bản cũ + snapshot cũ giữ nguyên trong lịch sử (AD-6). Retry trên đơn đang 'baogia': 200 view hiện tại, không version mới, không audit thêm (idempotent, NFR-1).",
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu quotes.create_edit — orders.confirm KHÔNG thay thế được (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT).",
+  })
+  async revise(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<OrderResponseDto> {
+    // KHÔNG resolve vatRate — mở lại không ghi thuế; re-chốt qua :id/chot mới đóng băng lại.
+    return (await this.orders.revise(
+      account.id,
+      id,
+      await this.tieredPricingEnabled(),
+    )) as OrderResponseDto;
+  }
+
   @Post(':id/line-items')
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiCreatedResponse({

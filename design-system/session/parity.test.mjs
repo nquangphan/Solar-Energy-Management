@@ -176,6 +176,23 @@ test('the orders port carries confirmOrder on BOTH platforms (Story 4.5 twin re-
   }
 });
 
+test('the orders port carries reviseOrder on BOTH platforms (Story 4.6 twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+  // The revise method exists on both twins — and takes ONLY the order id: the
+  // endpoint has an empty body (no DTO), so a revise input type on either twin
+  // would invent a payload the backend does not accept (same rule as confirm).
+  assert.match(webPort, /reviseOrder\(orderId: string\): Promise<Order>;/, 'web OrdersPort missing reviseOrder (Story 4.6)');
+  assert.match(mobPort, /Future<Order> reviseOrder\(String orderId\);/, 'mobile OrdersPort missing reviseOrder (Story 4.6)');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(!/ReviseOrderInput/.test(src), `${name} must not declare a ReviseOrderInput — POST :id/mo-lai carries no body`);
+  }
+  // The status constant the screens compare against lives in the PORT file on
+  // both twins — the guard forbids the literal inside screens (orders.test.mjs n).
+  assert.match(webPort, /export const ORDER_STATUS_DACHOT = 'dachot';/, 'web port must export ORDER_STATUS_DACHOT');
+  assert.match(mobPort, /const String kOrderStatusDachot = 'dachot';/, 'mobile port must declare kOrderStatusDachot');
+});
+
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
   // Same decision as customer-sources (Story 3.5): system config is desk work,
   // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen

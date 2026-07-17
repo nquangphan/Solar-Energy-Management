@@ -12,6 +12,11 @@
 // `'baogia'`-only mutation window, the `priceEditable` gate on unit prices, the
 // `Order.sourceId` snapshot. Nothing here is a security boundary.
 
+/// The confirmed order status — the ONE status literal screens compare against
+/// (Story 4.6). Screens import this constant; the guard forbids the raw literal
+/// inside screen files, so the string lives here in the port file only.
+const String kOrderStatusDachot = 'dachot';
+
 /// Mirrors the backend `OrderLineItemResponseDto` — [unitPrice]/[amount] are backend numbers.
 class OrderLine {
   const OrderLine({
@@ -292,4 +297,13 @@ abstract class OrdersPort {
   /// an already-confirmed order returns it unchanged. Throws 400 (empty
   /// quote), 403 (`orders.confirm` missing), 404, 409 (non-confirmable status).
   Future<Order> confirmOrder(String orderId);
+
+  /// Reopen ("Mở lại") a confirmed order for editing — `POST /orders/:id/mo-lai`
+  /// (Story 4.6, FR-6). The BACKEND creates a NEW version (copying the lines,
+  /// snapshots reset) and flips the status back to `'baogia'`; the old version
+  /// stays untouched in history. The screen just renders the returned order —
+  /// catalogue line prices are live again (FR-5). Idempotent on the server:
+  /// calling it on an order already `'baogia'` returns it unchanged. Throws
+  /// 403 (`quotes.create_edit` missing), 404, 409 (non-reopenable status).
+  Future<Order> reviseOrder(String orderId);
 }

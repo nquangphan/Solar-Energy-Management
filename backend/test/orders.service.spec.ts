@@ -10,6 +10,7 @@ import {
   OrderLineRemoved,
   OrderLineUpdated,
   OrderMetaChanged,
+  OrderRevised,
   OrderScopeChanged,
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
@@ -112,7 +113,7 @@ describe('OrdersService', () => {
     create: jest.fn(),
     update: jest.fn(),
   };
-  const orderVersionRepo = { create: jest.fn() };
+  const orderVersionRepo = { create: jest.fn(), findUnique: jest.fn() };
   const lineRepo = {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
@@ -124,10 +125,10 @@ describe('OrdersService', () => {
   const productRepo = { findUnique: jest.fn(), findMany: jest.fn() };
   const customerRepo = { findUnique: jest.fn() };
   const transaction = jest.fn();
-  // Interactive tx cho confirm(): callback nhận CHÍNH bộ mock này làm `tx`.
-  const txOrderRepo = { updateMany: jest.fn() };
-  const txVersionRepo = { update: jest.fn() };
-  const txLineRepo = { update: jest.fn() };
+  // Interactive tx cho confirm()/revise(): callback nhận CHÍNH bộ mock này làm `tx`.
+  const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
+  const txVersionRepo = { update: jest.fn(), create: jest.fn() };
+  const txLineRepo = { update: jest.fn(), createMany: jest.fn() };
   const txMock = {
     order: txOrderRepo,
     orderVersion: txVersionRepo,
@@ -179,8 +180,12 @@ describe('OrdersService', () => {
         : Promise.all(arg as Promise<unknown>[]),
     );
     txOrderRepo.updateMany.mockResolvedValue({ count: 1 });
+    txOrderRepo.update.mockResolvedValue({});
     txVersionRepo.update.mockResolvedValue({});
+    txVersionRepo.create.mockResolvedValue({});
     txLineRepo.update.mockResolvedValue({});
+    txLineRepo.createMany.mockResolvedValue({ count: 0 });
+    orderVersionRepo.findUnique.mockResolvedValue(null);
   });
 
   describe('AC-1/AC-4 — tạo đơn: một transaction 3 op, snapshot sourceId từ Customer', () => {
@@ -1371,6 +1376,335 @@ describe('OrdersService', () => {
       expect(productRepo.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: { in: [TU_DIEN.id] } } }),
       );
+    });
+  });
+
+  describe('revise — Mở lại Đơn đã chốt: version mới + lịch sử bất biến (Story 4.6, FR-6/AD-6)', () => {
+    const DON_DACHOT: Order = { ...DON_BAOGIA, status: 'dachot' };
+    /** Bản hiệu lực versionNo 3 — chứng minh versionNo mới = n + 1, KHÔNG hardcode 2. */
+    const VERSION_HIEU_LUC = {
+      id: VERSION_ID,
+      orderId: DON_BAOGIA.id,
+      versionNo: 3,
+      vatRate: 8,
+      vatMode: 'co_vat',
+      chotAt: new Date('2026-07-16T10:00:00Z'),
+      createdAt: new Date('2026-07-16T01:00:00Z'),
+      updatedAt: new Date('2026-07-16T10:00:00Z'),
+    };
+    /**
+     * 3 dòng ĐÃ ĐÓNG BĂNG với con số PHÂN BIỆT: snapshot 2_400_000 ≠ cache `unitPrice`
+     * 2_450_000 ≠ giá danh mục sống 2_600_000 — mutant nào lẫn lộn nguồn giá cũng lộ.
+     * `warrantyStartAt` non-null trên dòng catalog để chứng minh copy-as-is (AD-20).
+     */
+    const NGAY_BH = new Date('2026-07-10T00:00:00Z');
+    const DONG_CATALOG_DA_CHOT: OrderLineItem = {
+      ...DONG_CATALOG,
+      unitPriceSnapshot: 2_400_000,
+      catalogPriceSnapshot: 2_400_000,
+      warrantyStartAt: NGAY_BH,
+    };
+    const DONG_PHI_LAP_DA_CHOT: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-phi-lap',
+      productId: PHI_LAP_DAT.id,
+      name: PHI_LAP_DAT.name,
+      unit: PHI_LAP_DAT.unit,
+      qty: 1,
+      unitPrice: 4_000_000,
+      priceEditable: true,
+      warrantyMonths: null,
+      unitPriceSnapshot: 4_000_000,
+      catalogPriceSnapshot: 5_000_000,
+      displayOrder: 1,
+    };
+    const DONG_TU_DO_DA_CHOT: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-tu-do',
+      productId: null,
+      name: 'Combo phụ kiện',
+      unit: 'bộ',
+      qty: 2,
+      unitPrice: 350_000,
+      priceEditable: true,
+      isFlexible: true,
+      note: 'kèm jack MC4',
+      warrantyMonths: null,
+      unitPriceSnapshot: 350_000,
+      catalogPriceSnapshot: null,
+      displayOrder: 2,
+    };
+    const CAC_DONG_DA_CHOT = [
+      DONG_CATALOG_DA_CHOT,
+      DONG_PHI_LAP_DA_CHOT,
+      DONG_TU_DO_DA_CHOT,
+    ];
+
+    /** Version id MỚI mà revise() sinh — bắt từ payload create trong tx. */
+    function versionIdMoi(): string {
+      return (
+        txVersionRepo.create.mock.calls[0][0] as { data: { id: string } }
+      ).data.id;
+    }
+
+    beforeEach(() => {
+      orderRepo.findUnique.mockResolvedValue(DON_DACHOT);
+      orderVersionRepo.findUnique.mockResolvedValue(VERSION_HIEU_LUC);
+      // Đường đọc dòng theo con trỏ: version CŨ trả dòng đã đóng băng; version MỚI (bất kỳ
+      // id nào khác) trả bản copy snapshot-null — mô phỏng trạng thái DB sau tx.
+      lineRepo.findMany.mockImplementation(
+        async (arg: { where: { orderVersionId: string } }) =>
+          arg.where.orderVersionId === VERSION_ID
+            ? CAC_DONG_DA_CHOT
+            : (
+                (txLineRepo.createMany.mock.calls[0]?.[0] as {
+                  data: OrderLineItem[];
+                }) ?? { data: [] }
+              ).data,
+      );
+      // Giá danh mục pin ĐÃ ĐỔI sau khi chốt (2_450_000 cache → 2_600_000 sống): sau mở lại
+      // dòng catalog phải live-resolve ra giá MỚI (nghịch đảo test FR-5 của 4.5).
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, price: 2_600_000 },
+        PHI_LAP_DAT,
+      ]);
+    });
+
+    it('happy: payload từng op trong tx — cổng updateMany đúng where, version mới n+1, createMany copy đúng bảng, repoint con trỏ; KHÔNG op nào chạm row cũ', async () => {
+      const view = await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      // Op 1 — cổng atomic: UPDATE điều kiện status NGAY trong WHERE (nghịch đảo cổng chốt).
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'dachot' },
+        data: { status: 'baogia' },
+      });
+
+      // Op 2 — version MỚI: versionNo = 3 + 1 (đọc từ bản hiệu lực, không hardcode);
+      // KHÔNG ghi vatRate/vatMode/chotAt — bản đang sửa chưa đóng băng thuế.
+      expect(txVersionRepo.create).toHaveBeenCalledWith({
+        data: {
+          id: expect.any(String),
+          orderId: DON_BAOGIA.id,
+          versionNo: 4,
+        },
+      });
+      const verMoi = versionIdMoi();
+      expect(verMoi).not.toBe(VERSION_ID);
+
+      // Op 3 — copy TOÀN BỘ dòng theo bảng: field nghiệp vụ nguyên (unitPrice = CACHE
+      // 2_450_000, không phải snapshot 2_400_000), snapshot cả 3 cột null, warrantyStartAt
+      // copy nguyên, id MỚI + orderVersionId = version mới, displayOrder giữ nguyên.
+      expect(txLineRepo.createMany).toHaveBeenCalledTimes(1);
+      const copies = (
+        txLineRepo.createMany.mock.calls[0][0] as {
+          data: Array<Record<string, unknown>>;
+        }
+      ).data;
+      expect(copies).toHaveLength(3);
+      expect(copies[0]).toEqual({
+        id: expect.any(String),
+        orderVersionId: verMoi,
+        productId: PIN_580W.id,
+        name: PIN_580W.name,
+        unit: PIN_580W.unit,
+        qty: 8,
+        unitPrice: 2_450_000,
+        priceEditable: false,
+        isFlexible: false,
+        note: null,
+        warrantyMonths: 144,
+        unitPriceSnapshot: null,
+        catalogPriceSnapshot: null,
+        costPriceSnapshot: null,
+        warrantyStartAt: NGAY_BH,
+        displayOrder: 0,
+      });
+      expect(copies[0].id).not.toBe(DONG_CATALOG_DA_CHOT.id);
+      expect(copies[1]).toEqual({
+        id: expect.any(String),
+        orderVersionId: verMoi,
+        productId: PHI_LAP_DAT.id,
+        name: PHI_LAP_DAT.name,
+        unit: PHI_LAP_DAT.unit,
+        qty: 1,
+        unitPrice: 4_000_000,
+        priceEditable: true,
+        isFlexible: false,
+        note: null,
+        warrantyMonths: null,
+        unitPriceSnapshot: null,
+        catalogPriceSnapshot: null,
+        costPriceSnapshot: null,
+        warrantyStartAt: null,
+        displayOrder: 1,
+      });
+      expect(copies[2]).toEqual({
+        id: expect.any(String),
+        orderVersionId: verMoi,
+        productId: null,
+        name: 'Combo phụ kiện',
+        unit: 'bộ',
+        qty: 2,
+        unitPrice: 350_000,
+        priceEditable: true,
+        isFlexible: true,
+        note: 'kèm jack MC4',
+        warrantyMonths: null,
+        unitPriceSnapshot: null,
+        catalogPriceSnapshot: null,
+        costPriceSnapshot: null,
+        warrantyStartAt: null,
+        displayOrder: 2,
+      });
+
+      // Op 4 — repoint con trỏ bản hiệu lực sang version mới.
+      expect(txOrderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: { currentVersionId: verMoi },
+      });
+
+      // Lịch sử BẤT BIẾN: KHÔNG op update/delete nào nhắm version/dòng CŨ.
+      expect(txVersionRepo.update).not.toHaveBeenCalled();
+      expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(lineRepo.update).not.toHaveBeenCalled();
+      expect(lineRepo.delete).not.toHaveBeenCalled();
+
+      // Response: status baogia + con trỏ mới (compose trong bộ nhớ).
+      expect(view.status).toBe('baogia');
+      expect(view.currentVersionId).toBe(verMoi);
+    });
+
+    it("thứ tự ['write','publish'] — OrderRevised publish SAU commit, before dachot/con trỏ cũ → after baogia/con trỏ mới", async () => {
+      const thuTu: string[] = [];
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const ketQua = await callback(txMock);
+          thuTu.push('write');
+          return ketQua;
+        },
+      );
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+
+      await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      expect(thuTu).toEqual(['write', 'publish']);
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const event = eventBus.publish.mock.calls[0][0] as OrderRevised;
+      expect(event).toBeInstanceOf(OrderRevised);
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.before.status).toBe('dachot');
+      expect(event.before.currentVersionId).toBe(VERSION_ID);
+      expect(event.after.status).toBe('baogia');
+      expect(event.after.currentVersionId).toBe(versionIdMoi());
+      expect(event.target).toEqual({ type: 'Order', id: DON_BAOGIA.id });
+    });
+
+    it("retry trên đơn ĐANG 'baogia' ⇒ trả view hiện tại, KHÔNG transaction, KHÔNG version mới, KHÔNG event", async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
+
+      const view = await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      expect(view.status).toBe('baogia');
+      expect(view.currentVersionId).toBe(VERSION_ID);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(txVersionRepo.create).not.toHaveBeenCalled();
+      expect(txLineRepo.createMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it("race thua cổng atomic (count 0) → đọc lại thấy 'baogia' ⇒ idempotent: trả view, KHÔNG create gì, KHÔNG event", async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+      // Lần 1 (pre-check): còn dachot; lần 2 (đọc lại sau khi thua): bên kia đã mở.
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_DACHOT)
+        .mockResolvedValueOnce(DON_BAOGIA);
+
+      const view = await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      expect(view.status).toBe('baogia');
+      // Cổng đặt ĐẦU tx: bên thua abort TRƯỚC khi create version/dòng.
+      expect(txVersionRepo.create).not.toHaveBeenCalled();
+      expect(txLineRepo.createMany).not.toHaveBeenCalled();
+      expect(txOrderRepo.update).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('race thua cổng → đọc lại thấy trạng thái LẠ (huy) ⇒ 409 CONFLICT', async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_DACHOT)
+        .mockResolvedValueOnce({ ...DON_BAOGIA, status: 'huy' });
+
+      const err = await bat(service.revise(ACTOR, DON_BAOGIA.id, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it.each([['huy'], ['choduyet']])(
+      "trạng thái '%s' ⇒ 409 CONFLICT, KHÔNG transaction",
+      async (status) => {
+        orderRepo.findUnique.mockResolvedValue({ ...DON_BAOGIA, status });
+
+        const err = await bat(service.revise(ACTOR, DON_BAOGIA.id, true));
+
+        expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+        expect(err.getStatus()).toBe(409);
+        expect(transaction).not.toHaveBeenCalled();
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      },
+    );
+
+    it('view trả về đọc dòng bản MỚI + live-resolve giá danh mục HIỆN TẠI (snapshot null — nghịch đảo FR-5 của 4.5)', async () => {
+      const view = await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      // Đường đọc sau tx đi qua con trỏ MỚI, không phải version cũ.
+      const lanDocCuoi = lineRepo.findMany.mock.calls.at(-1)?.[0] as {
+        where: { orderVersionId: string };
+      };
+      expect(lanDocCuoi.where.orderVersionId).toBe(versionIdMoi());
+
+      // Dòng catalog sống lại: giá = danh mục HIỆN TẠI 2_600_000 — KHÔNG phải snapshot cũ
+      // 2_400_000, KHÔNG phải cache 2_450_000. Phí lắp/tự do giữ giá đã lưu.
+      expect(view.lineItems[0].unitPrice).toBe(2_600_000);
+      expect(view.lineItems[0].amount).toBe(lineAmount(2_600_000, 8));
+      expect(view.lineItems[1].unitPrice).toBe(4_000_000);
+      expect(view.lineItems[2].unitPrice).toBe(350_000);
+    });
+
+    it('con trỏ bản hiệu lực trỏ version KHÔNG tồn tại ⇒ 409 CONFLICT, KHÔNG transaction, KHÔNG event', async () => {
+      orderVersionRepo.findUnique.mockResolvedValue(null);
+
+      const err = await bat(service.revise(ACTOR, DON_BAOGIA.id, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('bản hiệu lực 0 dòng ⇒ tx vẫn trọn vẹn (version mới + repoint) nhưng KHÔNG gọi createMany rỗng (gotcha Prisma 7)', async () => {
+      lineRepo.findMany.mockResolvedValue([]);
+
+      const view = await service.revise(ACTOR, DON_BAOGIA.id, true);
+
+      expect(txVersionRepo.create).toHaveBeenCalledWith({
+        data: {
+          id: expect.any(String),
+          orderId: DON_BAOGIA.id,
+          versionNo: 4,
+        },
+      });
+      expect(txLineRepo.createMany).not.toHaveBeenCalled();
+      expect(txOrderRepo.update).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id },
+        data: { currentVersionId: versionIdMoi() },
+      });
+      expect(view.status).toBe('baogia');
+      expect(view.lineItems).toEqual([]);
     });
   });
 

@@ -158,6 +158,30 @@ class _RejectingConfirmPort extends FakeOrdersPort {
   Future<Order> confirmOrder(String orderId) async => throw error;
 }
 
+/// A port that RECORDS every revise call (Story 4.6) — proves the Mở lại dialog
+/// sends exactly one reviseOrder with the right order id, and none on cancel.
+class _RecordingRevisePort extends FakeOrdersPort {
+  final List<String> reviseCalls = <String>[];
+
+  @override
+  Future<Order> reviseOrder(String orderId) {
+    reviseCalls.add(orderId);
+    return super.reviseOrder(orderId);
+  }
+}
+
+/// A port whose REVISE is refused with the AD-5 envelope — proves a failed Mở
+/// lại surfaces the backend's sentence, keeps the frozen order state intact
+/// (Story 4.6, invariant k).
+class _RejectingRevisePort extends FakeOrdersPort {
+  _RejectingRevisePort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<Order> reviseOrder(String orderId) async => throw error;
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
 
 /// The rendered on/off state of the scope chip with [label].
@@ -180,6 +204,18 @@ Future<void> _pickDemoCustomer(WidgetTester tester) async {
   await tester.enterText(find.byType(TextField).first, '0903176968');
   await _tap(tester, 'Tra cứu');
   await _tap(tester, 'Dùng khách này');
+}
+
+/// Drive the order to `dachot` through the fake's own confirm flow (Story 4.6
+/// fixtures): add one catalogue line, then Chốt + xác nhận. Requires perms with
+/// `ordersConfirm` so the Chốt button renders.
+Future<void> _chotDonQuaFake(WidgetTester tester) async {
+  await _tap(tester, 'Chọn từ danh mục');
+  await _tap(tester, 'Thêm');
+  await tester.tapAt(const Offset(10.0, 10.0));
+  await tester.pumpAndSettle();
+  await _tap(tester, 'Chốt báo giá');
+  await _tap(tester, 'Xác nhận');
 }
 
 CreateQuoteScreen _screen({
@@ -913,6 +949,136 @@ void main() {
       // Đơn editable nhưng nút Chốt KHÔNG tồn tại trong cây widget.
       expect(find.widgetWithText(TextField, '1'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsNothing);
+    });
+
+    const String kMoLaiConsequence =
+        'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.';
+
+    testWidgets(
+        'Mở lại (4.6): đơn dachot + quotes.create_edit → nút hiện; bấm → dialog nêu hệ quả → xác nhận → fake nhận reviseOrder đúng 1 lần, màn editable lại, nút Chốt hiện lại',
+        (WidgetTester tester) async {
+      final _RecordingRevisePort port = _RecordingRevisePort();
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{
+          AppPermissionKeys.ordersConfirm,
+          AppPermissionKeys.quotesCreateEdit,
+        },
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await _chotDonQuaFake(tester);
+
+      // Đơn đã chốt: nút Chốt biến mất, nút Mở lại thế chỗ (nghịch đảo).
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsNothing);
+      await _tap(tester, 'Mở lại để sửa');
+
+      // Dialog nêu hệ quả — đúng nguyên văn nhãn chung 2 nền tảng.
+      expect(find.text(kMoLaiConsequence), findsOneWidget);
+
+      await _tap(tester, 'Xác nhận');
+
+      // Fake nhận ĐÚNG một lần với đúng orderId.
+      expect(port.reviseCalls, hasLength(1));
+      expect(port.reviseCalls.single, 'ord-demo-1');
+      // Status về 'baogia' → editable bật lại: ô SL là input, nút Chốt hiện
+      // lại (có ordersConfirm), nút Mở lại biến mất — KHÔNG toast.
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsNothing);
+      // Giỏ vẫn hiển thị đủ dòng.
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Mở lại (4.6): huỷ dialog → fake KHÔNG bị gọi, đơn ở nguyên dachot (read-only, nút còn đó)',
+        (WidgetTester tester) async {
+      final _RecordingRevisePort port = _RecordingRevisePort();
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{
+          AppPermissionKeys.ordersConfirm,
+          AppPermissionKeys.quotesCreateEdit,
+        },
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await _chotDonQuaFake(tester);
+
+      await _tap(tester, 'Mở lại để sửa');
+      expect(find.text(kMoLaiConsequence), findsOneWidget);
+
+      await _tap(tester, 'Huỷ');
+
+      // Không call nào bay đi; đơn ở nguyên dachot — vẫn read-only, nút còn đó.
+      expect(port.reviseCalls, isEmpty);
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Mở lại (4.6): port throw → banner message backend, state nguyên (vẫn dachot, giỏ còn, nút còn đó)',
+        (WidgetTester tester) async {
+      const String backendSentence =
+          'Chỉ mở lại được đơn đang ở trạng thái Đã chốt.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingRevisePort(
+          const OrderPortException(backendSentence),
+        ),
+        perms: const <PermissionKey>{
+          AppPermissionKeys.ordersConfirm,
+          AppPermissionKeys.quotesCreateEdit,
+        },
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await _chotDonQuaFake(tester);
+
+      await _tap(tester, 'Mở lại để sửa');
+      await _tap(tester, 'Xác nhận');
+
+      // Câu backend nguyên văn; giỏ KHÔNG mất dòng; đơn VẪN read-only (status
+      // không đổi) — nút Mở lại còn đó để thử lại.
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Mở lại (4.6): perms KHÔNG có quotes.create_edit → nút không render (gate biến mất, không disabled xám)',
+        (WidgetTester tester) async {
+      // Có quyền chốt nhưng KHÔNG có quyền sửa — orders.confirm không thay
+      // thế được quotes.create_edit (nghịch đảo proof 4.5).
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.ordersConfirm},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await _chotDonQuaFake(tester);
+
+      // Đơn đã chốt nhưng nút Mở lại KHÔNG tồn tại trong cây widget.
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsNothing);
+    });
+
+    testWidgets(
+        'Mở lại (4.6): đơn còn baogia → nút không render (chỉ hiện trên đơn đã chốt)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Đơn editable — nút Mở lại KHÔNG tồn tại (nghịch đảo điều kiện hiện).
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsNothing);
     });
   });
 }

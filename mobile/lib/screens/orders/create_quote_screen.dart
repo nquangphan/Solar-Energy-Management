@@ -87,6 +87,10 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// công thì `editable` tự tắt vì status đổi.
   bool _chotBusy = false;
 
+  /// Đang chờ port Mở lại (Story 4.6) — nghịch đảo _chotBusy; thành công thì
+  /// `editable` tự bật lại vì status về 'baogia'.
+  bool _moLaiBusy = false;
+
   // Text đang gõ của 2 input metadata — commit khi mất focus, prefill từ order;
   // lỗi port thì revert về giá trị order cũ (bất biến k).
   final TextEditingController _kWpCtl = TextEditingController();
@@ -400,6 +404,46 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.',
         confirmTone: AppButtonVariant.primary,
         onConfirm: _confirmOrder,
+      ),
+    );
+  }
+
+  /// Mở lại Đơn đã chốt (Story 4.6, FR-6): BACKEND sinh bản update mới (bản cũ
+  /// nằm nguyên trong lịch sử) và đưa status về 'baogia' — màn chỉ render Order
+  /// trả về (`editable` tự bật lại, nút Chốt hiện lại thế chỗ). KHÔNG toast.
+  /// Lỗi → banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
+  Future<void> _reviseOrder() async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _moLaiBusy = true);
+    try {
+      final Order revised = await widget.ordersPort.reviseOrder(order.id);
+      if (!mounted) return;
+      setState(() {
+        _order = revised;
+        _error = null;
+      });
+      _syncMetaTexts(revised);
+      await _refreshTotals(revised);
+    } catch (err) {
+      _showError(err);
+    } finally {
+      if (mounted) setState(() => _moLaiBusy = false);
+    }
+  }
+
+  /// Dialog xác nhận Mở lại — hành động có hệ quả (UX-DR-20), tone primary
+  /// (KHÔNG destructive: không mất gì, bản cũ còn nguyên lịch sử). Huỷ (nút, X,
+  /// barrier, back) = đóng dialog, KHÔNG gọi port — đơn ở nguyên dachot.
+  Future<void> _openMoLaiDialog() async {
+    await showAppDialog<void>(
+      context: context,
+      child: AppConfirmDialog(
+        title: 'Mở lại để sửa',
+        consequence:
+            'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.',
+        confirmTone: AppButtonVariant.primary,
+        onConfirm: _reviseOrder,
       ),
     );
   }
@@ -915,6 +959,24 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     label: 'Chốt báo giá',
                     variant: AppButtonVariant.primary,
                     onPressed: _chotBusy ? null : _openChotDialog,
+                  ),
+                ),
+              ),
+            // Mở lại (Story 4.6): nghịch đảo nút Chốt — hiện khi đơn đã chốt
+            // (so bằng HẰNG import từ port, không literal), quyền
+            // quotes.create_edit (người khởi động việc sửa chính là người sẽ
+            // sửa); thiếu quyền thì nút BIẾN MẤT (AppGate, UX-DR-22); backend
+            // vẫn enforce (AD-4).
+            if (order.status == kOrderStatusDachot)
+              AppGate(
+                perms: widget.perms,
+                requires: AppPermissionKeys.quotesCreateEdit,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space12),
+                  child: AppButton(
+                    label: 'Mở lại để sửa',
+                    variant: AppButtonVariant.primary,
+                    onPressed: _moLaiBusy ? null : _openMoLaiDialog,
                   ),
                 ),
               ),

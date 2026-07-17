@@ -240,6 +240,20 @@ export class FakeOrdersPort implements OrdersPort {
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
   }
 
+  reviseOrder(orderId: string): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    // Already open = idempotent no-op, mirroring the backend retry path. The
+    // fake does NOT simulate the new version / line copy — the client never
+    // sees the version concept (4.1); the lines just come back as-is.
+    if (order.status !== 'baogia') {
+      order.status = 'baogia';
+    }
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
   private buildLine(
     order: Order,
     fields: Omit<OrderLine, 'id' | 'displayOrder' | 'amount'>,

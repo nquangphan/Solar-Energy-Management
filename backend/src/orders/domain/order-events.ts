@@ -150,6 +150,27 @@ export class OrderConfirmed implements DomainEvent {
   }
 }
 
+/**
+ * Đơn đã chốt được MỞ LẠI để sửa (Story 4.6, FR-6) — status dachot → baogia, version MỚI
+ * được tạo và `currentVersionId` repoint sang nó; bản cũ + snapshot cũ giữ nguyên trong lịch
+ * sử (AD-6). before/after tự nói version cũ→mới + ai/khi nào (audit FR-6). CHỈ publish ở
+ * nhánh mở-lại THẬT — retry idempotent im lặng, không event thứ hai (NFR-1).
+ */
+export class OrderRevised implements DomainEvent {
+  readonly type = 'OrderRevised';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
 /** Một dòng bị XOÁ — chỉ có trạng thái "trước". */
 export class OrderLineRemoved implements DomainEvent {
   readonly type = 'OrderLineRemoved';
