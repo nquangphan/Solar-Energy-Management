@@ -170,6 +170,13 @@ class AddOrderLineInput {
   final bool? isFlexible;
 }
 
+/// Sentinel meaning "field not included in this PATCH" — Dart has no
+/// `undefined`, so [UpdateOrderLineInput.warrantyMonths] needs it to keep the
+/// tri-state the backend PATCH speaks: absent = keep, value = set, `null` = clear.
+/// (`qty`/`unitPrice`/`note`/`isFlexible` stay plain-nullable: none of them has a
+/// legitimate `null`-to-clear meaning on their NOT-NULL columns.)
+const Object kLineFieldAbsent = Object();
+
 /// Body of `PATCH /orders/:id/line-items/:lineId` — [unitPrice] only on `priceEditable` lines.
 class UpdateOrderLineInput {
   const UpdateOrderLineInput({
@@ -177,12 +184,22 @@ class UpdateOrderLineInput {
     this.unitPrice,
     this.note,
     this.isFlexible,
-  });
+    Object? warrantyMonths = kLineFieldAbsent,
+  }) : _warrantyMonths = warrantyMonths;
 
   final int? qty;
   final int? unitPrice;
   final String? note;
   final bool? isFlexible;
+  final Object? _warrantyMonths;
+
+  /// Whether the PATCH includes `warrantyMonths` at all (set OR clear). A plain
+  /// `int?` cannot express this — `null` alone would be ambiguous with "keep".
+  bool get hasWarrantyMonths => !identical(_warrantyMonths, kLineFieldAbsent);
+
+  /// The warranty value to write — meaningful only when [hasWarrantyMonths];
+  /// `null` = clear warranty (a valid business value).
+  int? get warrantyMonths => hasWarrantyMonths ? _warrantyMonths as int? : null;
 }
 
 /// Body of `PATCH /orders/:id` (Story 4.3) — partial toggle of the two MUTABLE

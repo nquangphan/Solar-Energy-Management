@@ -172,7 +172,9 @@ export class FakeOrdersPort implements OrdersPort {
         qty: input.qty,
         unitPrice,
         priceEditable: product.priceEditable,
-        warrantyMonths: product.warrantyMonths,
+        // Install/labour lines (priceEditable) never carry warranty — force null even
+        // if the catalogue product happens to have one (mirrors backend addLine).
+        warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
         note: input.note ?? null,
         isFlexible: input.isFlexible ?? false,
       });
@@ -210,6 +212,13 @@ export class FakeOrdersPort implements OrdersPort {
     }
     if (input.note !== undefined) line.note = input.note;
     if (input.isFlexible !== undefined) line.isFlexible = input.isFlexible;
+    // Warranty: catalogue install/labour lines (productId set + priceEditable) ignore the
+    // field silently; free lines (productId null) and normal catalogue lines write it,
+    // including `null` (= clear). Mirrors backend `warrantyLocked` guard.
+    if (input.warrantyMonths !== undefined) {
+      const warrantyLocked = line.productId !== null && line.priceEditable;
+      if (!warrantyLocked) line.warrantyMonths = input.warrantyMonths;
+    }
     line.amount = this.serverAmount(line.unitPrice, line.qty);
     return Promise.resolve({ ...line });
   }

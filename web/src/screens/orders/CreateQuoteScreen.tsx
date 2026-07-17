@@ -290,6 +290,20 @@ export function CreateQuoteScreen({
   }
 
   /**
+   * Sửa bảo hành theo dòng (Story 4.9): PATCH `warrantyMonths` (số tháng hoặc
+   * `null` = bỏ bảo hành). Lỗi → Banner, GIỮ nguyên giỏ (bất biến k) — KHÔNG
+   * refresh nên input hoàn về giá trị Đơn hiện tại. Không ảnh hưởng tiền.
+   */
+  async function handleWarrantyChange(lineId: string, warrantyMonths: number | null) {
+    try {
+      await ordersPort.updateLine(order!.id, lineId, { warrantyMonths });
+      await refresh();
+    } catch (err) {
+      setError(messageOf(err));
+    }
+  }
+
+  /**
    * Toggle cờ Thi công/Vận chuyển (Story 4.3): PATCH qua port → thay order bằng
    * response. KHÔNG gọi previewTotal — cờ không ảnh hưởng tiền (AD-16 nguyên vẹn).
    * Lỗi → Banner qua ErrorState, GIỮ nguyên giỏ + state cờ cũ (bất biến k).
@@ -625,6 +639,7 @@ export function CreateQuoteScreen({
                 <tr>
                   <th>Món</th>
                   <th className="num">SL</th>
+                  <th className="num">Bảo hành</th>
                   <th className="num">Đơn giá</th>
                   <th className="num">Thành tiền</th>
                   <th />
@@ -641,6 +656,20 @@ export function CreateQuoteScreen({
                     amount={line.amount}
                     editable={editable}
                     priceEditable={editable && line.priceEditable}
+                    warrantyMonths={line.warrantyMonths}
+                    // Install/labour catalogue line (productId set + priceEditable) → no
+                    // warranty; free line without one yet → the "+ Thêm bảo hành" link;
+                    // everything else → the input. Free lines carry priceEditable=true too,
+                    // so the 'none' test MUST also require productId !== null.
+                    warrantyMode={
+                      line.productId !== null && line.priceEditable
+                        ? 'none'
+                        : line.productId === null && line.warrantyMonths === null
+                          ? 'link'
+                          : 'input'
+                    }
+                    warrantyEditable={editable}
+                    onWarrantyChange={(months) => void handleWarrantyChange(line.id, months)}
                     flag={line.isFlexible ? FLAG_LINH_DONG : undefined}
                     zebra={index % 2 === 1}
                     onQtyChange={(qty) => void handleQtyChange(line.id, qty)}

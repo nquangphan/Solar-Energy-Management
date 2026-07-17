@@ -134,6 +134,23 @@ class _RejectingMetaPort extends FakeOrdersPort {
       throw error;
 }
 
+/// A port that RECORDS every line UPDATE (Story 4.9) — proves the warranty edit
+/// sends exactly the tri-state the user intended (a month value, or `null` to
+/// clear), and that install/labour lines never reach it from the UI.
+class _RecordingUpdatePort extends FakeOrdersPort {
+  final List<UpdateOrderLineInput> updateCalls = <UpdateOrderLineInput>[];
+
+  @override
+  Future<OrderLine> updateLine(
+    String orderId,
+    String lineId,
+    UpdateOrderLineInput input,
+  ) {
+    updateCalls.add(input);
+    return super.updateLine(orderId, lineId, input);
+  }
+}
+
 /// A port that RECORDS every confirm call (Story 4.5) — proves the Chốt dialog
 /// sends exactly one confirmOrder with the right order id, and none on cancel.
 class _RecordingConfirmPort extends FakeOrdersPort {
@@ -1432,6 +1449,194 @@ void main() {
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
       expect(find.widgetWithText(TextField, '1'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Chia sẻ báo giá'), findsOneWidget);
+    });
+  });
+
+  group('CreateQuoteScreen (Story 4.9 — bảo hành theo dòng)', () {
+    testWidgets(
+        'dòng catalog thường: có input bảo hành, nhập 24 rồi rời focus → port nhận warrantyMonths 24',
+        (WidgetTester tester) async {
+      final _RecordingUpdatePort port = _RecordingUpdatePort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // Tấm pin JA Solar 580W — warrantyMonths 144
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Ô bảo hành hiển thị sẵn 144 (12 năm ở read-only, số thô khi sửa được).
+      final Finder warrantyField = find.widgetWithText(TextField, '144');
+      await tester.ensureVisible(warrantyField);
+      await tester.pump();
+      await tester.enterText(warrantyField, '24');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      // Port nhận đúng tri-state: có gửi warrantyMonths, giá trị 24.
+      final UpdateOrderLineInput last = port.updateCalls.last;
+      expect(last.hasWarrantyMonths, isTrue);
+      expect(last.warrantyMonths, 24);
+    });
+
+    testWidgets(
+        'xoá bảo hành: ô đang 144, nhập rỗng rồi rời focus → port nhận CLEAR (hasWarrantyMonths true, warrantyMonths null)',
+        (WidgetTester tester) async {
+      // Nhánh cốt lõi của sentinel tri-state: ô rỗng KHÔNG phải "không gửi" mà là
+      // "bỏ bảo hành" (null-clear). Không có test này thì mutant khiến _commit bỏ
+      // qua ô rỗng vẫn xanh — mất chính năng lực mà kLineFieldAbsent sinh ra.
+      final _RecordingUpdatePort port = _RecordingUpdatePort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // Tấm pin JA Solar 580W — warrantyMonths 144
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      final Finder warrantyField = find.widgetWithText(TextField, '144');
+      await tester.ensureVisible(warrantyField);
+      await tester.pump();
+      await tester.enterText(warrantyField, '');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      // CLEAR: field CÓ mặt trong PATCH (phân biệt "không gửi") nhưng giá trị null.
+      final UpdateOrderLineInput last = port.updateCalls.last;
+      expect(last.hasWarrantyMonths, isTrue);
+      expect(last.warrantyMonths, isNull);
+    });
+
+    testWidgets(
+        'dòng công lắp (priceEditable): thấy "Không có", KHÔNG input bảo hành',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen()));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      // Sản phẩm thứ 3 trong danh mục = "Phí lắp đặt" (priceEditable=true).
+      final Finder themPhiLap = find
+          .descendant(
+            of: find.ancestor(
+                of: find.text('Phí lắp đặt'), matching: find.byType(Row)),
+            matching: find.widgetWithText(AppButton, 'Thêm'),
+          )
+          .first;
+      await tester.ensureVisible(themPhiLap);
+      await tester.pump();
+      await tester.tap(themPhiLap);
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Phí lắp đặt'), findsOneWidget);
+      // Cột bảo hành của dòng công lắp là chữ "Không có", không có ô nhập.
+      expect(find.text('Không có'), findsOneWidget);
+    });
+
+    testWidgets(
+        'dòng tự do: thấy "+ Thêm bảo hành", tap → input hiện, nhập 18 → port nhận 18',
+        (WidgetTester tester) async {
+      // Sheet dòng tự do cao hơn khung điện thoại — nới surface để nút "Thêm
+      // dòng" nằm trong tầm chạm, rồi trả lại sau test.
+      await tester.binding.setSurfaceSize(const Size(1400, 3200));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      final _RecordingUpdatePort port = _RecordingUpdatePort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Dòng tự do');
+      final Finder sheetFields = find.descendant(
+          of: find.byType(AppSheet), matching: find.byType(TextField));
+      await tester.enterText(sheetFields.at(0), 'Vệ sinh mái trước lắp'); // tên
+      await tester.enterText(sheetFields.at(1), 'lần'); // đơn vị
+      // Sheet body cuộn trong 260px — kéo nút "Thêm dòng" vào tầm nhìn trước tap.
+      final Finder themDong = find.widgetWithText(AppButton, 'Thêm dòng');
+      await tester.scrollUntilVisible(
+        themDong,
+        120.0,
+        scrollable: find
+            .descendant(
+                of: find.byType(AppSheet), matching: find.byType(Scrollable))
+            .first,
+      );
+      await tester.tap(themDong);
+      await tester.pumpAndSettle();
+
+      // Dòng tự do THỰC SỰ vào giỏ (không còn kẹt trong sheet).
+      expect(find.byType(AppCartLineRow), findsOneWidget);
+      // Chưa có bảo hành → link "+ Thêm bảo hành".
+      final Finder link = find.widgetWithText(AppButton, '+ Thêm bảo hành');
+      await tester.ensureVisible(link);
+      await tester.pump();
+      await tester.tap(link);
+      await tester.pumpAndSettle();
+
+      // Bấm link → input bảo hành hiện (phân biệt với ô SL/đơn giá qua nhãn a11y);
+      // nhập 18 rồi rời focus → port nhận 18.
+      final Finder warrantyField = find
+          .descendant(
+              of: find.bySemanticsLabel('Bảo hành (tháng)'),
+              matching: find.byType(TextField))
+          .first;
+      await tester.enterText(warrantyField, '18');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(port.updateCalls.last.hasWarrantyMonths, isTrue);
+      expect(port.updateCalls.last.warrantyMonths, 18);
+    });
+
+    testWidgets(
+        'lỗi port bảo hành: banner câu backend, giỏ còn nguyên (bất biến k)',
+        (WidgetTester tester) async {
+      const String backendSentence =
+          'Chỉ sửa được dòng khi đơn còn ở trạng thái Báo giá.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingUpdatePort(
+          const OrderPortException(backendSentence),
+        ),
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      final Finder warrantyField = find.widgetWithText(TextField, '144');
+      await tester.ensureVisible(warrantyField);
+      await tester.pump();
+      await tester.enterText(warrantyField, '24');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      // Câu backend nguyên văn; dòng giỏ KHÔNG mất.
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets(
+        'sau chốt (read-only): cột bảo hành là chữ "12 năm" (144 tháng), không input',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.ordersConfirm},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await _chotDonQuaFake(tester);
+
+      // Đơn 'dachot' → read-only: ô SL không còn input, bảo hành 144 tháng hiển
+      // thị dạng "12 năm" (định dạng năm/tháng), KHÔNG có ô nhập bảo hành.
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(TextField, '144'), findsNothing);
+      expect(find.text('12 năm'), findsOneWidget);
     });
   });
 }

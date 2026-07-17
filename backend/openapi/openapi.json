@@ -4543,6 +4543,11 @@
           "isFlexible": {
             "type": "boolean",
             "description": "Cờ \"linh động/dự kiến\" — chỉ hiển thị."
+          },
+          "warrantyMonths": {
+            "type": "number",
+            "nullable": true,
+            "description": "Bảo hành (tháng) — nguyên ≥ 1; gửi `null` để bỏ bảo hành (giá trị nghiệp vụ hợp lệ). Dòng catalog priceEditable = true (công lắp/phí lắp đặt): field bị bỏ qua im lặng, luôn giữ null."
           }
         }
       },

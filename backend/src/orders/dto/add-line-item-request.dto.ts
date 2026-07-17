@@ -15,10 +15,12 @@ import { IsOptionalNotNull } from '../../catalog/dto/is-optional-not-null.decora
 /**
  * Body của `POST /orders/:id/line-items` — MỘT DTO cho HAI dạng dòng (UX-DR-24):
  *
- *  - **Dòng catalog** (`productId` có mặt): backend copy `name`/`unit`/`priceEditable`/
- *    `warrantyMonths` từ Product và auto-điền `unitPrice` qua `resolveUnitPrice()` (FR-5/FR-14);
- *    `unitPrice` trong body CHỈ được nhận khi `Product.priceEditable = true` — luật đó cần bản
- *    ghi Product nên sống ở service (400), không ở đây.
+ *  - **Dòng catalog** (`productId` có mặt): backend copy `name`/`unit`/`priceEditable` từ
+ *    Product; `warrantyMonths` copy TRỪ khi `priceEditable = true` — công lắp/phí lắp đặt
+ *    không bao giờ mang bảo hành, backend ép null; auto-điền `unitPrice` qua
+ *    `resolveUnitPrice()` (FR-5/FR-14); `unitPrice` trong body CHỈ được nhận khi
+ *    `Product.priceEditable = true` — luật đó cần bản ghi Product nên sống ở service (400),
+ *    không ở đây.
  *  - **Dòng tự do** (`productId` vắng mặt): `name`/`unit`/`unitPrice` bắt buộc,
  *    `priceEditable = true` do server gán.
  *

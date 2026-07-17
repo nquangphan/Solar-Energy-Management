@@ -394,7 +394,9 @@ model OrderVersion {
 /// Tiền `Int` đồng (AD-10). `unitPrice` với dòng catalog `priceEditable=false` chỉ là CACHE lúc
 /// nhập — đường đọc trả giá SỐNG từ danh mục tới khi Chốt (FR-5/FR-14); `unitPriceSnapshot`/
 /// `catalogPriceSnapshot` null tới Chốt (4.5), `costPriceSnapshot` null tới xuất kho (6.4,
-/// AD-20), `warrantyStartAt` null tới 4.9. `isFlexible` = cờ "linh động/dự kiến" — CHỈ hiển thị.
+/// AD-20). `warrantyStartAt` = ngày dòng chốt LẦN ĐẦU (FR-36): đóng băng khi còn null lúc
+/// Chốt — ghi cho MỌI dòng kể cả không bảo hành; bản update copy as-is nên hàng cũ giữ ngày
+/// cũ, hàng mới nhận ngày mới. `isFlexible` = cờ "linh động/dự kiến" — CHỈ hiển thị.
 model OrderLineItem {
   id                   String       @id @default(uuid())
   orderVersionId       String       @map("order_version_id")

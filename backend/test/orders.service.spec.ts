@@ -363,6 +363,29 @@ describe('OrdersService', () => {
       expect(data.priceEditable).toBe(true);
     });
 
+    it('catalog priceEditable=true mà catalog LỠ có warrantyMonths ⇒ dòng ép warrantyMonths null (công lắp không bảo hành)', async () => {
+      // Form Sản phẩm cho nhập warrantyMonths với MỌI product; nếu công lắp lỡ có 12 tháng,
+      // dòng vẫn KHÔNG được mang bảo hành. Assert payload create ghi null, không phải 12.
+      productRepo.findUnique.mockResolvedValue({
+        ...PHI_LAP_DAT,
+        warrantyMonths: 12,
+      });
+
+      await service.addLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        { productId: PHI_LAP_DAT.id, qty: 1, unitPrice: 4_000_000 },
+        true,
+      );
+
+      const data = (
+        lineRepo.create.mock.calls[0][0] as {
+          data: { warrantyMonths: number | null };
+        }
+      ).data;
+      expect(data.warrantyMonths).toBeNull();
+    });
+
     it('productId không tồn tại ⇒ 400 fieldErrors productId', async () => {
       productRepo.findUnique.mockResolvedValue(null);
 
@@ -563,6 +586,126 @@ describe('OrdersService', () => {
         },
       });
       expect(view.note).toBeNull();
+    });
+
+    it('warrantyMonths: 24 trên dòng catalog thường ⇒ data ghi 24', async () => {
+      lineRepo.update.mockResolvedValue({ ...DONG_CATALOG, warrantyMonths: 24 });
+
+      await service.updateLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        DONG_CATALOG.id,
+        { warrantyMonths: 24 },
+        true,
+      );
+
+      const data = (
+        lineRepo.update.mock.calls[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      expect(data.warrantyMonths).toBe(24);
+    });
+
+    it('warrantyMonths: null (bỏ bảo hành) ⇒ null đi TỚI Prisma (giá trị nghiệp vụ, không phải undefined)', async () => {
+      lineRepo.update.mockResolvedValue({
+        ...DONG_CATALOG,
+        warrantyMonths: null,
+      });
+
+      await service.updateLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        DONG_CATALOG.id,
+        { warrantyMonths: null },
+        true,
+      );
+
+      const data = (
+        lineRepo.update.mock.calls[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      // Phân biệt "gửi null" (có key, value null) vs "không gửi" (key vắng mặt).
+      expect('warrantyMonths' in data).toBe(true);
+      expect(data.warrantyMonths).toBeNull();
+    });
+
+    it('không gửi warrantyMonths ⇒ data KHÔNG chứa key (PATCH giữ nguyên)', async () => {
+      lineRepo.update.mockResolvedValue({ ...DONG_CATALOG, qty: 5 });
+
+      await service.updateLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        DONG_CATALOG.id,
+        { qty: 5 },
+        true,
+      );
+
+      const data = (
+        lineRepo.update.mock.calls[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      expect('warrantyMonths' in data).toBe(false);
+    });
+
+    it('warrantyMonths gửi lên dòng CÔNG LẮP (catalog priceEditable=true) ⇒ BỎ QUA im lặng: data KHÔNG chứa key, KHÔNG 400', async () => {
+      // Dòng công lắp: productId non-null + priceEditable=true → khoá bảo hành.
+      const dongCongLap: OrderLineItem = {
+        ...DONG_CATALOG,
+        id: 'line-conglap',
+        productId: PHI_LAP_DAT.id,
+        priceEditable: true,
+        warrantyMonths: null,
+      };
+      lineRepo.findUnique.mockResolvedValue(dongCongLap);
+      lineRepo.update.mockResolvedValue(dongCongLap);
+
+      await service.updateLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        dongCongLap.id,
+        { warrantyMonths: 12 },
+        true,
+      );
+
+      const data = (
+        lineRepo.update.mock.calls[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      // Bỏ qua im lặng — key vắng mặt, dòng giữ null; KHÔNG ném lỗi.
+      expect('warrantyMonths' in data).toBe(false);
+    });
+
+    it('warrantyMonths: 18 trên DÒNG TỰ DO (productId null, priceEditable=true) ⇒ GHI được (khác công lắp)', async () => {
+      // Bẫy priceEditable: dòng tự do cũng priceEditable=true nhưng productId null ⇒ ĐƯỢC
+      // có bảo hành. Điều kiện khoá phải kèm `productId !== null`.
+      const dongTuDo: OrderLineItem = {
+        ...DONG_CATALOG,
+        id: 'line-tudo',
+        productId: null,
+        priceEditable: true,
+        warrantyMonths: null,
+      };
+      lineRepo.findUnique.mockResolvedValue(dongTuDo);
+      lineRepo.update.mockResolvedValue({ ...dongTuDo, warrantyMonths: 18 });
+
+      await service.updateLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        dongTuDo.id,
+        { warrantyMonths: 18 },
+        true,
+      );
+
+      const data = (
+        lineRepo.update.mock.calls[0][0] as {
+          data: Record<string, unknown>;
+        }
+      ).data;
+      expect(data.warrantyMonths).toBe(18);
     });
 
     it('dòng thuộc version KHÁC (không phải bản hiệu lực) ⇒ 404, không sửa được', async () => {
@@ -1206,12 +1349,14 @@ describe('OrdersService', () => {
 
       // 3 loại dòng — catalog thường: CẢ HAI cột = giá resolve SỐNG (2_600_000, không phải
       // cache 2_450_000); phí lắp: unitPrice ĐÃ SỬA ≠ catalog resolve; tự do: catalog null.
+      // MỌI dòng (cả 3 loại, kể cả không bảo hành) đóng băng warrantyStartAt lúc chốt lần đầu.
       expect(txLineRepo.update).toHaveBeenCalledTimes(3);
       expect(txLineRepo.update).toHaveBeenCalledWith({
         where: { id: DONG_CATALOG.id },
         data: {
           unitPriceSnapshot: 2_600_000,
           catalogPriceSnapshot: 2_600_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
       expect(txLineRepo.update).toHaveBeenCalledWith({
@@ -1219,12 +1364,28 @@ describe('OrdersService', () => {
         data: {
           unitPriceSnapshot: 4_000_000,
           catalogPriceSnapshot: 5_000_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
       expect(txLineRepo.update).toHaveBeenCalledWith({
         where: { id: DONG_TU_DO.id },
-        data: { unitPriceSnapshot: 350_000, catalogPriceSnapshot: null },
+        data: {
+          unitPriceSnapshot: 350_000,
+          catalogPriceSnapshot: null,
+          warrantyStartAt: expect.any(Date),
+        },
       });
+
+      // AC#3 — MỘT timestamp cho MỘT sự kiện: warrantyStartAt của MỌI dòng phải là ĐÚNG
+      // CÙNG instance Date đã ghi lên OrderVersion.chotAt, không phải `new Date()` thứ hai
+      // (bài học review 4.8). So sánh identity bằng `.toBe`.
+      const chotAtVersion = (
+        txVersionRepo.update.mock.calls[0][0] as { data: { chotAt: Date } }
+      ).data.chotAt;
+      for (const call of txLineRepo.update.mock.calls) {
+        const data = (call[0] as { data: { warrantyStartAt: Date } }).data;
+        expect(data.warrantyStartAt).toBe(chotAtVersion);
+      }
 
       // Response nói 'dachot' dù updateMany không trả row (compose trong bộ nhớ).
       expect(view.status).toBe('dachot');
@@ -1236,6 +1397,51 @@ describe('OrdersService', () => {
         }
       ).select;
       expect(select).not.toHaveProperty('costPrice');
+    });
+
+    it('re-chốt bản update: dòng ĐÃ có warrantyStartAt GIỮ NGUYÊN (không ghi lại), CHỈ dòng null nhận mốc mới', async () => {
+      // Kịch bản 4.6: bản update có dòng cũ (mốc từ lần chốt trước) + dòng mới thêm (null).
+      // Mutant "ghi đè warrantyStartAt mọi dòng" phải RED — dòng cũ payload KHÔNG chứa key.
+      const NGAY_CU = new Date('2026-07-10T00:00:00Z');
+      const DONG_DA_CO_MOC: OrderLineItem = {
+        ...DONG_CATALOG,
+        id: 'line-cu',
+        warrantyStartAt: NGAY_CU,
+      };
+      const DONG_MOI_NULL: OrderLineItem = {
+        ...DONG_CATALOG,
+        id: 'line-moi',
+        warrantyStartAt: null,
+        displayOrder: 1,
+      };
+      lineRepo.findMany.mockResolvedValue([DONG_DA_CO_MOC, DONG_MOI_NULL]);
+      productRepo.findMany.mockResolvedValue([{ ...PIN_580W, price: 2_600_000 }]);
+
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      // Dòng CŨ: payload KHÔNG chứa warrantyStartAt — chỉ 2 cột giá.
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_DA_CO_MOC.id },
+        data: {
+          unitPriceSnapshot: 2_600_000,
+          catalogPriceSnapshot: 2_600_000,
+        },
+      });
+      // Dòng MỚI: nhận warrantyStartAt = chotAt của version.
+      expect(txLineRepo.update).toHaveBeenCalledWith({
+        where: { id: DONG_MOI_NULL.id },
+        data: {
+          unitPriceSnapshot: 2_600_000,
+          catalogPriceSnapshot: 2_600_000,
+          warrantyStartAt: expect.any(Date),
+        },
+      });
+      // Chốt chặt: dòng cũ TUYỆT ĐỐI không mang key warrantyStartAt (mutant ghi đè lộ ở đây).
+      const callCu = txLineRepo.update.mock.calls.find(
+        (c) => (c[0] as { where: { id: string } }).where.id === DONG_DA_CO_MOC.id,
+      );
+      const dataCu = (callCu?.[0] as { data: Record<string, unknown> }).data;
+      expect('warrantyStartAt' in dataCu).toBe(false);
     });
 
     it("đơn vatMode 'khong_vat' ⇒ version snapshot giữ 'khong_vat' (giá trị hiệu lực, không ép co_vat)", async () => {
@@ -1386,6 +1592,7 @@ describe('OrdersService', () => {
         data: {
           unitPriceSnapshot: 2_300_000,
           catalogPriceSnapshot: 2_300_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
     });
@@ -1402,6 +1609,7 @@ describe('OrdersService', () => {
         data: {
           unitPriceSnapshot: 2_600_000,
           catalogPriceSnapshot: 2_600_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
     });
@@ -1419,6 +1627,7 @@ describe('OrdersService', () => {
         data: {
           unitPriceSnapshot: 2_450_000,
           catalogPriceSnapshot: 2_450_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
       expect(view.status).toBe('dachot');

@@ -214,6 +214,28 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
   assert.ok(!mobile.includes('Tải PDF'), 'mobile must NOT have a "Tải PDF" button — the OS share sheet already offers save/Drive');
 });
 
+// (e.2) PARITY — Story 4.9 warranty column labels. The column header lives on
+// the web screen (`<th>`); the mobile screen renders rows without a header row,
+// so the two runtime labels ("+ Thêm bảo hành", "Không có") are asserted where
+// they actually live: byte-identical in the two CartLineRow component twins.
+test('warranty labels byte-identical across CartLineRow twins (Story 4.9, FR-36)', () => {
+  // Strip comments FIRST — the labels appear in doc comments too, so a raw
+  // includes() would false-green if the real render string were changed while a
+  // comment kept the token (the "guard scans comments" trap).
+  const webRow = stripTsx(read('web/src/design-system/components/CartLineRow.tsx'));
+  const mobileRow = stripDart(read('mobile/lib/design_system/components/cart_line_row.dart'));
+  for (const label of ['+ Thêm bảo hành', 'Không có']) {
+    assert.ok(webRow.includes(label), `web CartLineRow render is missing "${label}"`);
+    assert.ok(mobileRow.includes(label), `mobile CartLineRow render is missing "${label}"`);
+  }
+  // The 'Bảo hành' column header is web-only (mobile has no header row); the a11y
+  // label 'Bảo hành (tháng)' carries the meaning on both component twins.
+  assert.ok(stripTsx(web).includes('Bảo hành'), 'web quote screen is missing the "Bảo hành" column header');
+  for (const [name, code] of [['web', webRow], ['mobile', mobileRow]]) {
+    assert.ok(code.includes('Bảo hành (tháng)'), `${name} CartLineRow render is missing the a11y label "Bảo hành (tháng)"`);
+  }
+});
+
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).
 test('no ad-hoc shadow/gradient/elevation, radius via tokens (Viền nét, UX-DR-4)', () => {
   assert.ok(!/box-shadow/i.test(css), 'orders.css must contain 0 box-shadow');

@@ -256,6 +256,38 @@ test('the orders port carries the Story 4.8 quote-export surface on BOTH platfor
   assert.ok(mobPort.includes("import 'dart:typed_data';"), 'mobile orders port must import dart:typed_data for Uint8List');
 });
 
+test('the orders port carries the Story 4.9 warranty surface on BOTH platforms (twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+
+  // `warrantyMonths` is a NEW field on the line-update input on both twins. Web
+  // uses `number | null` (TS distinguishes absent vs null natively); the Dart
+  // twin CANNOT use a plain `int?` — that conflates "not sent" with "clear", so
+  // it reuses the sentinel tri-state (kLineFieldAbsent) exactly like kWp's meta
+  // input, exposing hasWarrantyMonths so `null` can travel as "bỏ bảo hành".
+  assert.match(webPort, /warrantyMonths\?: number \| null/, 'web UpdateOrderLineInput must carry warrantyMonths?: number | null (Story 4.9)');
+  assert.ok(mobPort.includes('kLineFieldAbsent'), 'mobile UpdateOrderLineInput must use the sentinel tri-state kLineFieldAbsent for warrantyMonths (Story 4.9)');
+  assert.ok(mobPort.includes('hasWarrantyMonths'), 'mobile UpdateOrderLineInput must expose hasWarrantyMonths so null can travel as clear (Story 4.9)');
+  // The line-update input carries warrantyMonths on both twins.
+  const webUpdateInput = /interface UpdateOrderLineInput \{[\s\S]*?\n\}/.exec(webPort)?.[0] ?? '';
+  assert.ok(webUpdateInput.includes('warrantyMonths'), 'web UpdateOrderLineInput block must declare warrantyMonths');
+  const mobUpdateInput = /class UpdateOrderLineInput \{[\s\S]*?\n\}/.exec(mobPort)?.[0] ?? '';
+  assert.ok(mobUpdateInput.includes('warrantyMonths'), 'mobile UpdateOrderLineInput block must declare warrantyMonths');
+
+  // The warranty formatter is a twin helper on BOTH CartLineRow components —
+  // same NAME, same rule ("X năm"/"X tháng"/empty), pinned so the two never drift.
+  const webRow = readFileSync(resolve(repoRoot, 'web/src/design-system/components/CartLineRow.tsx'), 'utf8');
+  const mobRow = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/components/cart_line_row.dart'), 'utf8');
+  for (const token of ['formatWarrantyMonths', 'năm', 'tháng']) {
+    assert.ok(webRow.includes(token), `web CartLineRow missing warranty formatter token "${token}" (Story 4.9)`);
+    assert.ok(mobRow.includes(token), `mobile CartLineRow missing warranty formatter token "${token}" (Story 4.9)`);
+  }
+  // ⚠️ The Dart twin MUST use integer division for the years branch: `60 / 12`
+  // is `5.0` (double) → "5.0 năm". The web twin's `/ 12` is safe (already known
+  // divisible). Guarding the operator keeps the twins semantically identical.
+  assert.ok(mobRow.includes('~/ 12'), 'mobile formatWarrantyMonths must use integer division `~/ 12` (60/12==5.0 would render "5.0 năm")');
+});
+
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
   // Same decision as customer-sources (Story 3.5): system config is desk work,
   // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen

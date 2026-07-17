@@ -369,6 +369,21 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     }
   }
 
+  /// Sửa bảo hành theo dòng (Story 4.9): PATCH `warrantyMonths` (số tháng hoặc
+  /// `null` = bỏ bảo hành). Lỗi → banner, GIỮ nguyên giỏ (bất biến k). Không
+  /// ảnh hưởng tiền. Truyền `warrantyMonths` tường minh (tri-state sentinel).
+  Future<void> _updateWarranty(String lineId, int? warrantyMonths) async {
+    final Order? order = _order;
+    if (order == null) return;
+    try {
+      await widget.ordersPort.updateLine(
+          order.id, lineId, UpdateOrderLineInput(warrantyMonths: warrantyMonths));
+      await _refresh();
+    } catch (err) {
+      _showError(err);
+    }
+  }
+
   Future<void> _removeLine(String lineId) async {
     final Order? order = _order;
     if (order == null) return;
@@ -1035,6 +1050,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                           amount: line.amount,
                           editable: editable,
                           priceEditable: editable && line.priceEditable,
+                          warrantyMonths: line.warrantyMonths,
+                          // Install/labour catalogue line (productId set +
+                          // priceEditable) → no warranty; free line without one
+                          // yet → "+ Thêm bảo hành" link; else → input. Free lines
+                          // are priceEditable too, so 'none' MUST also check
+                          // productId != null.
+                          warrantyMode: line.productId != null &&
+                                  line.priceEditable
+                              ? AppWarrantyMode.none
+                              : line.productId == null &&
+                                      line.warrantyMonths == null
+                                  ? AppWarrantyMode.link
+                                  : AppWarrantyMode.input,
+                          warrantyEditable: editable,
+                          onWarrantyChange: (int? months) =>
+                              _updateWarranty(line.id, months),
                           flag: line.isFlexible ? kFlagLinhDong : null,
                           zebra: entry.key.isOdd,
                           onQtyChange: (num qty) => _updateQty(line.id, qty),

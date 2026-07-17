@@ -6,6 +6,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { IsOptionalNotNull } from '../../catalog/dto/is-optional-not-null.decorator';
 
@@ -15,6 +16,9 @@ import { IsOptionalNotNull } from '../../catalog/dto/is-optional-not-null.decora
  *
  * Sửa được: `qty`/`note`/`isFlexible` với MỌI dòng; `unitPrice` CHỈ khi dòng có
  * `priceEditable = true` — luật đó cần bản ghi dòng nên sống ở service (400 + fieldErrors).
+ * `warrantyMonths`: dòng catalog thường + dòng tự do ghi được (kể cả `null` = bỏ bảo hành);
+ * dòng catalog `priceEditable = true` (công lắp/phí lắp đặt) bị BỎ QUA im lặng ở service —
+ * giữ `null`, KHÔNG 400 (quyết định khách: không viết validation chặn).
  * `name`/`unit`/`productId` KHÔNG sửa được qua đây: đổi món = xoá dòng + thêm dòng mới.
  */
 export class UpdateLineItemRequestDto {
@@ -49,4 +53,18 @@ export class UpdateLineItemRequestDto {
   @IsOptionalNotNull()
   @IsBoolean()
   isFlexible?: boolean;
+
+  @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
+    description:
+      'Bảo hành (tháng) — nguyên ≥ 1; gửi `null` để bỏ bảo hành (giá trị nghiệp vụ hợp lệ). ' +
+      'Dòng catalog priceEditable = true (công lắp/phí lắp đặt): field bị bỏ qua im lặng, luôn giữ null.',
+  })
+  // KHÔNG dùng `IsOptionalNotNull`: null là GIÁ TRỊ hợp lệ ("bỏ bảo hành"), không phải lỗi.
+  @IsOptional()
+  @ValidateIf((o: UpdateLineItemRequestDto) => o.warrantyMonths !== null)
+  @IsInt()
+  @Min(1)
+  warrantyMonths?: number | null;
 }

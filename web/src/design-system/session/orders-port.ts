@@ -122,6 +122,9 @@ export interface UpdateOrderLineInput {
   unitPrice?: number;
   note?: string | null;
   isFlexible?: boolean;
+  // Absent = keep; a number (≥ 1) = set; `null` = clear warranty (a valid business value,
+  // NOT "keep"). Catalogue install lines (productId set + priceEditable) are ignored backend-side.
+  warrantyMonths?: number | null;
 }
 
 /**

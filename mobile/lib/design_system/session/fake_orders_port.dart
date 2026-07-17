@@ -210,7 +210,9 @@ class FakeOrdersPort implements OrdersPort {
         priceEditable: product.priceEditable,
         isFlexible: input.isFlexible ?? false,
         note: input.note,
-        warrantyMonths: product.warrantyMonths,
+        // Install/labour lines (priceEditable) never carry warranty — force null
+        // even if the catalogue product has one (mirrors backend addLine).
+        warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
         displayOrder: order.lineItems.length,
         amount: _serverAmount(unitPrice, input.qty),
       );
@@ -225,6 +227,9 @@ class FakeOrdersPort implements OrdersPort {
         priceEditable: true,
         isFlexible: input.isFlexible ?? false,
         note: input.note,
+        // Free lines start with no warranty (set later via the row link — AC #4),
+        // mirrors web `warrantyMonths: null`.
+        warrantyMonths: null,
         displayOrder: order.lineItems.length,
         amount: _serverAmount(unitPrice, input.qty),
       );
@@ -254,6 +259,15 @@ class FakeOrdersPort implements OrdersPort {
     final int unitPrice = before.priceEditable && input.unitPrice != null
         ? input.unitPrice!
         : before.unitPrice;
+    // Warranty tri-state: absent → keep; present → write (incl. null = clear), UNLESS the
+    // line is a catalogue install/labour line (productId set + priceEditable) — those ignore
+    // the field silently. Free lines (productId null) DO accept warranty. NO `?? before` —
+    // that would drop a legitimate null-clear. Mirrors backend `warrantyLocked` guard.
+    final bool warrantyLocked = before.productId != null && before.priceEditable;
+    final int? warrantyMonths =
+        input.hasWarrantyMonths && !warrantyLocked
+            ? input.warrantyMonths
+            : before.warrantyMonths;
     final OrderLine updated = OrderLine(
       id: before.id,
       productId: before.productId,
@@ -264,7 +278,7 @@ class FakeOrdersPort implements OrdersPort {
       priceEditable: before.priceEditable,
       isFlexible: input.isFlexible ?? before.isFlexible,
       note: input.note ?? before.note,
-      warrantyMonths: before.warrantyMonths,
+      warrantyMonths: warrantyMonths,
       displayOrder: before.displayOrder,
       amount: _serverAmount(unitPrice, qty),
     );

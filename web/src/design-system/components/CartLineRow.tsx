@@ -1,5 +1,23 @@
 // hand-authored — web-only design-system component (Story 1.6).
+import { useState } from 'react';
 import { Icon } from '../icons/Icon';
+
+/** How the warranty cell renders for this line (Story 4.9). */
+export type WarrantyMode = 'input' | 'none' | 'link';
+
+/**
+ * Format a warranty duration for display: whole years as "X năm", else "X tháng",
+ * `null` as empty. SAME rule as the backend `formatWarranty` (quote-template) and
+ * the Flutter twin — one rule in three places, pinned by the parity guard. This is
+ * a TIME-UNIT format, not money arithmetic (`%`/`/` only, no `*`/toFixed) so it
+ * does not touch the component's money invariant (AD-10/16).
+ */
+export function formatWarrantyMonths(months: number | null): string {
+  if (months === null) return '';
+  // `months % 12 === 0` guarantees `months / 12` is a whole number — safe on web
+  // (Dart twin must use integer division `~/`).
+  return months % 12 === 0 ? `${months / 12} năm` : `${months} tháng`;
+}
 
 export interface CartLineRowProps {
   name: string;
@@ -17,6 +35,15 @@ export interface CartLineRowProps {
   // (free line / Product.priceEditable). Defaults to `editable` so pre-4.1
   // callers keep their behavior.
   priceEditable?: boolean;
+  // Warranty column (Story 4.9). `warrantyMode` is derived by the SCREEN from the
+  // line type: install/labour catalogue line → 'none' (shows "Không có", no input);
+  // free line without a warranty yet → 'link' (a "+ Thêm bảo hành" control that
+  // reveals the input); every other line → 'input'. `warrantyEditable` gates the
+  // input vs read-only text (draft + permission). Empty input commits `null`.
+  warrantyMonths?: number | null;
+  warrantyMode?: WarrantyMode;
+  warrantyEditable?: boolean;
+  onWarrantyChange?: (months: number | null) => void;
   flag?: string; // display-only badge (e.g. "linh động"/"dự kiến") — never affects price
   zebra?: boolean;
   onQtyChange?: (qty: number) => void;
@@ -46,6 +73,10 @@ export function CartLineRow({
   amount,
   editable,
   priceEditable,
+  warrantyMonths = null,
+  warrantyMode = 'input',
+  warrantyEditable,
+  onWarrantyChange,
   flag,
   zebra,
   onQtyChange,
@@ -55,6 +86,57 @@ export function CartLineRow({
   const cls = ['', zebra && 'zebra'].filter(Boolean).join(' ').trim() || undefined;
   // Undefined = follow `editable` (back-compat); explicit false = read-only price.
   const priceInputOn = priceEditable ?? editable;
+  // Warranty input is editable only when the caller says so AND the mode allows it.
+  const warrantyInputOn = (warrantyEditable ?? false) && warrantyMode !== 'none';
+  // Local draft for the bare warranty input — commit-on-blur (empty = null). Local
+  // reveal state for 'link' mode (mockup: "+ Thêm bảo hành" flips to the input).
+  const [warrantyText, setWarrantyText] = useState(
+    warrantyMonths === null ? '' : String(warrantyMonths),
+  );
+  const [warrantyRevealed, setWarrantyRevealed] = useState(false);
+
+  function commitWarranty() {
+    const trimmed = warrantyText.trim();
+    if (trimmed === '') {
+      onWarrantyChange?.(null);
+      return;
+    }
+    const n = Number(trimmed);
+    // Guard against NaN / non-integer reaching the port; ignore invalid input.
+    if (Number.isInteger(n) && n >= 1) onWarrantyChange?.(n);
+  }
+
+  const warrantyInput = (
+    <input
+      className="field"
+      inputMode="numeric"
+      aria-label="Bảo hành (tháng)"
+      value={warrantyText}
+      autoFocus={warrantyRevealed}
+      onChange={(e) => setWarrantyText(e.target.value)}
+      onBlur={commitWarranty}
+    />
+  );
+
+  let warrantyCell;
+  if (warrantyMode === 'none') {
+    warrantyCell = <span className="micro muted">Không có</span>;
+  } else if (!warrantyInputOn) {
+    warrantyCell = <span className="num mono">{formatWarrantyMonths(warrantyMonths)}</span>;
+  } else if (warrantyMode === 'link' && !warrantyRevealed) {
+    warrantyCell = (
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        onClick={() => setWarrantyRevealed(true)}
+      >
+        + Thêm bảo hành
+      </button>
+    );
+  } else {
+    warrantyCell = warrantyInput;
+  }
+
   return (
     <tr className={cls}>
       <td>
@@ -89,6 +171,7 @@ export function CartLineRow({
           <span className="num mono">{qty}</span>
         )}
       </td>
+      <td className="num">{warrantyCell}</td>
       <td className="num">
         {priceInputOn ? (
           <input

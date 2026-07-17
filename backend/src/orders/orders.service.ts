@@ -607,6 +607,8 @@ export class OrdersService {
           })) as ProductQuoteView[]);
     const productById = new Map(products.map((p) => [p.id, p]));
 
+    // `warrantyStartAt` mang theo từng snapshot: cần biết dòng nào CHƯA có mốc bảo hành để
+    // chỉ ghi cho dòng đó trong tx (dòng đã có mốc — re-chốt bản update — giữ nguyên ngày cũ).
     const lineSnapshots = lines.map((line) => {
       if (line.productId === null) {
         // Dòng tự do: giá nhập tay đóng băng, không có giá danh mục để so.
@@ -614,6 +616,7 @@ export class OrdersService {
           id: line.id,
           unitPriceSnapshot: line.unitPrice,
           catalogPriceSnapshot: null,
+          warrantyStartAt: line.warrantyStartAt,
         };
       }
       const product = productById.get(line.productId);
@@ -634,12 +637,14 @@ export class OrdersService {
             id: line.id,
             unitPriceSnapshot: line.unitPrice,
             catalogPriceSnapshot: catalogPrice,
+            warrantyStartAt: line.warrantyStartAt,
           }
         : {
             // Catalog thường: giá SỐNG tại thời điểm chốt — cả hai cột cùng con số.
             id: line.id,
             unitPriceSnapshot: catalogPrice,
             catalogPriceSnapshot: catalogPrice,
+            warrantyStartAt: line.warrantyStartAt,
           };
     });
 
@@ -671,6 +676,13 @@ export class OrdersService {
             data: {
               unitPriceSnapshot: snap.unitPriceSnapshot,
               catalogPriceSnapshot: snap.catalogPriceSnapshot,
+              // Mốc bảo hành = ngày dòng chốt LẦN ĐẦU (FR-36), ghi cho MỌI dòng còn null
+              // (kể cả dòng không bảo hành — mốc là thuộc tính "dòng chốt lần đầu"). CÙNG
+              // hằng `chotAt` với `OrderVersion` — một sự kiện một timestamp. Dòng đã có
+              // mốc (re-chốt bản update) giữ nguyên — key vắng mặt, không ghi lại.
+              ...(snap.warrantyStartAt === null
+                ? { warrantyStartAt: chotAt }
+                : {}),
             },
           });
         }
@@ -1177,10 +1189,11 @@ export class OrdersService {
 
   /**
    * Thêm dòng — hai dạng (UX-DR-24):
-   *  - CATALOG (`productId`): copy `name`/`unit`/`priceEditable`/`warrantyMonths` từ Product;
-   *    `unitPrice` auto-điền qua `resolveUnitPrice()` — client CHỈ được gửi giá khi
-   *    `Product.priceEditable = true` (phí lắp đặt…), ngược lại 400 (sửa giá là cửa sau né
-   *    duyệt chiết khấu).
+   *  - CATALOG (`productId`): copy `name`/`unit`/`priceEditable` từ Product; `warrantyMonths`
+   *    copy TRỪ khi `priceEditable = true` (công lắp/phí lắp đặt không bao giờ mang bảo
+   *    hành — ép null); `unitPrice` auto-điền qua `resolveUnitPrice()` — client CHỈ được gửi
+   *    giá khi `Product.priceEditable = true` (phí lắp đặt…), ngược lại 400 (sửa giá là cửa
+   *    sau né duyệt chiết khấu).
    *  - TỰ DO (không `productId`): name/unit/qty/unitPrice nhập tay, `priceEditable = true`.
    */
   async addLine(
@@ -1256,7 +1269,10 @@ export class OrdersService {
           qty: dto.qty,
           unitPrice,
           priceEditable: product.priceEditable,
-          warrantyMonths: product.warrantyMonths,
+          // Công lắp/phí lắp đặt (`priceEditable = true`) KHÔNG BAO GIỜ mang bảo hành lên
+          // dòng — kể cả khi catalog lỡ có `warrantyMonths` (form Sản phẩm cho nhập với mọi
+          // product). Bảo hành của dòng đó luôn null, UI hiện "Không có".
+          warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
           isFlexible: dto.isFlexible ?? false,
           note: dto.note ?? null,
           displayOrder,
@@ -1293,7 +1309,12 @@ export class OrdersService {
     return view;
   }
 
-  /** Sửa `qty`/`note`/`isFlexible` mọi dòng; `unitPrice` CHỈ dòng `priceEditable = true`. */
+  /**
+   * Sửa `qty`/`note`/`isFlexible` mọi dòng; `unitPrice` CHỈ dòng `priceEditable = true`.
+   * `warrantyMonths` (kể cả `null` = bỏ bảo hành) ghi được với dòng catalog thường + dòng
+   * tự do; dòng catalog `priceEditable = true` (công lắp/phí lắp đặt) bị BỎ QUA im lặng —
+   * không 400 (quyết định khách: "KHÔNG viết validation chặn — chỉ để null, không hiện ô").
+   */
   async updateLine(
     actorAccountId: string,
     orderId: string,
@@ -1321,14 +1342,24 @@ export class OrdersService {
       );
     }
 
+    // Bảo hành: CHỈ catalog công lắp/phí lắp đặt (`productId` non-null + `priceEditable`)
+    // không mang bảo hành. Dòng TỰ DO cũng `priceEditable = true` (server ép lúc add) nhưng
+    // VẪN được có bảo hành — điều kiện phải kèm `productId !== null`.
+    const warrantyLocked = before.productId !== null && before.priceEditable;
+
     const updated = await this.prisma.orderLineItem.update({
       where: { id: lineId },
       // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `note: null` xoá ghi chú.
+      // `warrantyMonths` phân biệt "không gửi" (undefined — key vắng mặt) vs "gửi null" (bỏ
+      // bảo hành — ghi null thật); dòng công lắp bị khoá thì key vắng mặt luôn, kể cả khi gửi.
       data: {
         qty: dto.qty,
         unitPrice: dto.unitPrice,
         note: dto.note,
         isFlexible: dto.isFlexible,
+        ...(dto.warrantyMonths !== undefined && !warrantyLocked
+          ? { warrantyMonths: dto.warrantyMonths }
+          : {}),
       },
     });
 

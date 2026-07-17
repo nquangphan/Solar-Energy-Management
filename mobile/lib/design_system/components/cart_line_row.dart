@@ -18,6 +18,22 @@ import 'field.dart';
 
 const Color _zebraFill = Color(0xFFF7FBFA);
 
+/// How the warranty cell renders for this line (Story 4.9), mirror of the web
+/// `WarrantyMode` union: `input` (numeric months), `none` ("Không có", no input),
+/// `link` (a "+ Thêm bảo hành" control that reveals the input).
+enum AppWarrantyMode { input, none, link }
+
+/// Format a warranty duration for display: whole years as "X năm", else "X
+/// tháng", `null` as empty. SAME rule as the backend `formatWarranty` and the web
+/// twin `formatWarrantyMonths` — one rule in three places, pinned by parity.
+///
+/// ⚠️ MUST use integer division `~/`: `60 / 12` is `5.0` (double) → "5.0 năm".
+/// `%`/`~/` are TIME-UNIT math, not money — they do not touch the money invariant.
+String formatWarrantyMonths(int? months) {
+  if (months == null) return '';
+  return months % 12 == 0 ? '${months ~/ 12} năm' : '$months tháng';
+}
+
 class AppCartLineRow extends StatelessWidget {
   const AppCartLineRow({
     super.key,
@@ -30,6 +46,10 @@ class AppCartLineRow extends StatelessWidget {
     required this.amount,
     this.editable = false,
     this.priceEditable,
+    this.warrantyMonths,
+    this.warrantyMode = AppWarrantyMode.input,
+    this.warrantyEditable,
+    this.onWarrantyChange,
     this.flag,
     this.zebra = false,
     this.onQtyChange,
@@ -63,6 +83,14 @@ class AppCartLineRow extends StatelessWidget {
   /// callers keep their behavior.
   final bool? priceEditable;
 
+  /// Warranty column (Story 4.9). [warrantyMode] is derived by the SCREEN from
+  /// the line type; [warrantyEditable] gates the input vs read-only text (draft +
+  /// permission). Empty input commits `null` (= clear warranty).
+  final int? warrantyMonths;
+  final AppWarrantyMode warrantyMode;
+  final bool? warrantyEditable;
+  final ValueChanged<int?>? onWarrantyChange;
+
   /// Display-only badge (e.g. "linh động"/"dự kiến") — never affects price.
   final String? flag;
   final bool zebra;
@@ -86,6 +114,16 @@ class AppCartLineRow extends StatelessWidget {
               editable: editable,
               semanticsLabel: 'Số lượng',
               onChanged: onQtyChange,
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _WarrantyCell(
+              months: warrantyMonths,
+              mode: warrantyMode,
+              editable: (warrantyEditable ?? false) &&
+                  warrantyMode != AppWarrantyMode.none,
+              onChanged: onWarrantyChange,
             ),
           ),
           Expanded(
@@ -203,6 +241,114 @@ class AppCartLineRow extends StatelessWidget {
           fontWeight: FontWeight.w800,
           fontFeatures: [FontFeature.tabularFigures()],
         ),
+      ),
+    );
+  }
+}
+
+/// The warranty cell (Story 4.9). Stateful for the two local behaviours the web
+/// twin also keeps component-local: the commit-on-blur draft, and the 'link'
+/// reveal ("+ Thêm bảo hành" → input). Empty input commits `null` (= clear).
+class _WarrantyCell extends StatefulWidget {
+  const _WarrantyCell({
+    required this.months,
+    required this.mode,
+    required this.editable,
+    required this.onChanged,
+  });
+
+  final int? months;
+  final AppWarrantyMode mode;
+  final bool editable;
+  final ValueChanged<int?>? onChanged;
+
+  @override
+  State<_WarrantyCell> createState() => _WarrantyCellState();
+}
+
+class _WarrantyCellState extends State<_WarrantyCell> {
+  late final TextEditingController _ctl =
+      TextEditingController(text: widget.months?.toString() ?? '');
+  bool _revealed = false;
+
+  @override
+  void didUpdateWidget(_WarrantyCell old) {
+    super.didUpdateWidget(old);
+    // Controlled parity: reflect an externally-pushed value (e.g. after refresh),
+    // but never fight the user mid-typing (same guard as AppField).
+    final String next = widget.months?.toString() ?? '';
+    if (widget.months != old.months && next != _ctl.text) {
+      _ctl.text = next;
+      _ctl.selection = TextSelection.collapsed(offset: next.length);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _commit() {
+    final String trimmed = _ctl.text.trim();
+    if (trimmed.isEmpty) {
+      widget.onChanged?.call(null);
+      return;
+    }
+    final int? n = int.tryParse(trimmed);
+    if (n != null && n >= 1) widget.onChanged?.call(n);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.mode == AppWarrantyMode.none) {
+      return Align(alignment: Alignment.centerRight, child: _microMuted('Không có'));
+    }
+    if (!widget.editable) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Text(
+          formatWarrantyMonths(widget.months),
+          style: const TextStyle(
+            color: AppTokens.ink2,
+            fontFamily: AppTokens.fontFamily,
+            fontSize: 12.5,
+            fontFeatures: [FontFeature.tabularFigures()],
+          ),
+        ),
+      );
+    }
+    if (widget.mode == AppWarrantyMode.link && !_revealed) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: AppButton(
+          label: '+ Thêm bảo hành',
+          variant: AppButtonVariant.ghost,
+          size: AppButtonSize.sm,
+          onPressed: () => setState(() => _revealed = true),
+        ),
+      );
+    }
+    return Focus(
+      onFocusChange: (bool has) {
+        if (!has) _commit();
+      },
+      child: AppField(
+        controller: _ctl,
+        semanticsLabel: 'Bảo hành (tháng)',
+        keyboardType: const TextInputType.numberWithOptions(),
+      ),
+    );
+  }
+
+  Widget _microMuted(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppTokens.muted,
+        fontFamily: AppTokens.fontFamily,
+        fontSize: 10.0,
+        fontWeight: FontWeight.w600,
       ),
     );
   }

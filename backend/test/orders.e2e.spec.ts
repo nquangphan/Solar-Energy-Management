@@ -461,6 +461,132 @@ describe('/orders (e2e)', () => {
     });
   });
 
+  describe('Story 4.9 — bảo hành theo dòng vật tư (FR-36)', () => {
+    it('PATCH warrantyMonths: 24 ⇒ 200, response warrantyMonths 24', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      lineRepo.update.mockResolvedValue({ ...DONG_CATALOG, warrantyMonths: 24 });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}/line-items/line-1`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ warrantyMonths: 24 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warrantyMonths).toBe(24);
+    });
+
+    it('PATCH warrantyMonths: null (bỏ bảo hành) ⇒ 200, response null (giá trị nghiệp vụ hợp lệ)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      lineRepo.update.mockResolvedValue({
+        ...DONG_CATALOG,
+        warrantyMonths: null,
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}/line-items/line-1`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ warrantyMonths: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warrantyMonths).toBeNull();
+    });
+
+    it('PATCH warrantyMonths: 0 và -5 ⇒ 400 fieldErrors (nguyên ≥ 1 khi non-null)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      for (const bad of [0, -5]) {
+        const res = await request(server())
+          .patch(`/orders/${ORDER_ID}/line-items/line-1`)
+          .set('Authorization', `Bearer ${token()}`)
+          .send({ warrantyMonths: bad });
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        const fields = (res.body.fieldErrors as { field: string }[]).map(
+          (e) => e.field,
+        );
+        expect(fields).toContain('warrantyMonths');
+      }
+      expect(lineRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('PATCH warrantyMonths: 1.5 (không nguyên) ⇒ 400 fieldErrors (chặn số thập phân, không chỉ ≥ 1)', async () => {
+      // @Min(1) một mình vẫn nhận 1.5 — chỉ @IsInt mới chặn số thập phân. Gửi
+      // một giá trị ≥ 1 nhưng KHÔNG nguyên để pin riêng ràng buộc @IsInt.
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}/line-items/line-1`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ warrantyMonths: 1.5 });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      const fields = (res.body.fieldErrors as { field: string }[]).map(
+        (e) => e.field,
+      );
+      expect(fields).toContain('warrantyMonths');
+      expect(lineRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('PATCH dòng công lắp (catalog priceEditable=true) warrantyMonths: 12 ⇒ 200 nhưng warrantyMonths vẫn null (bỏ qua im lặng, KHÔNG 400)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const dongCongLap = {
+        ...DONG_CATALOG,
+        id: 'line-conglap',
+        productId: 'prod-lapdat',
+        priceEditable: true,
+        warrantyMonths: null,
+      };
+      lineRepo.findUnique.mockResolvedValue(dongCongLap);
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, id: 'prod-lapdat', priceEditable: true },
+      ]);
+      // Service bỏ qua field ⇒ Prisma update giữ null; mock trả bản null.
+      lineRepo.update.mockResolvedValue(dongCongLap);
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}/line-items/line-conglap`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ warrantyMonths: 12 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.warrantyMonths).toBeNull();
+    });
+
+    it('PATCH warrantyMonths sau khi Đơn đã chốt ⇒ 409 (đóng băng — assertMutable)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}/line-items/line-1`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ warrantyMonths: 24 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+    });
+
+    it('GET /orders/:id KHÔNG lộ warrantyStartAt (mốc nội bộ — 5.9 mới expose)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      // Dòng đã có mốc bảo hành nội bộ — response tuyệt đối không chứa field.
+      lineRepo.findMany.mockResolvedValue([
+        { ...DONG_CATALOG, warrantyStartAt: new Date('2026-07-10T00:00:00Z') },
+      ]);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.lineItems[0]).toHaveProperty('warrantyMonths');
+      expect(res.body.lineItems[0]).not.toHaveProperty('warrantyStartAt');
+    });
+  });
+
   describe('PATCH /orders/:id — toggle cờ phạm vi (Story 4.3)', () => {
     it('happy path ⇒ 200, cờ mới trong response, audit OrderScopeChanged qua EventBus', async () => {
       givenPermissions(PERM.quotesCreateEdit);
@@ -1009,11 +1135,13 @@ describe('/orders (e2e)', () => {
           discountAmount: null,
         },
       });
+      // Chốt lần đầu đóng băng warrantyStartAt cho dòng còn null (AC#3, Story 4.9).
       expect(txLineRepo.update).toHaveBeenCalledWith({
         where: { id: DONG_CATALOG.id },
         data: {
           unitPriceSnapshot: 2_450_000,
           catalogPriceSnapshot: 2_450_000,
+          warrantyStartAt: expect.any(Date),
         },
       });
       expect(auditRepo.create).toHaveBeenCalledWith(
