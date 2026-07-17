@@ -15,7 +15,8 @@
  * `mobile/…/app_permissions.dart`) để Story 2.6 chỉ đổi *nguồn* (stub → artifact), KHÔNG
  * đổi *chuỗi* — action item Epic 1 retro. Bộ key đầy đủ ánh xạ ma trận PRD FR-18 §4.6,
  * cộng 3 key nhóm tính năng mới từ PRD §5 (`settings.manage`, `system.feature_flags`,
- * `costs.view`) → tổng 20 key.
+ * `costs.view`), cộng `catalog.view` (quyền ĐỌC danh mục, tách khỏi `catalog.manage` để
+ * người dựng báo giá đọc được sản phẩm/gói mà không có quyền sửa danh mục) → tổng 21 key.
  */
 
 /**

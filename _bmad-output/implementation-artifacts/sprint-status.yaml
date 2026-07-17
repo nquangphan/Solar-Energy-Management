@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-17 (story 4.9 → review, dev-story)
+# last_updated: 2026-07-17 (epic-4 retrospective → done; 8 action item D-1..D-8 ghi nhận)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-17 (story 4.9 → review, dev-story)
+last_updated: 2026-07-17 (epic-4 retrospective → done; 8 action item D-1..D-8 ghi nhận)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -68,7 +68,7 @@ development_status:
   4-7-ap-chiet-khau-duyet-chiet-khau: done
   4-8-xuat-chia-se-bao-gia-pdf-anh: done
   4-9-bao-hanh-theo-dong-vat-tu: done
-  epic-4-retrospective: optional
+  epic-4-retrospective: done
   epic-5: backlog
   5-1-engine-applytransition-enum-bang-transition-guard-audit: backlog
   5-2-auto-transition-theo-su-kien-nghiep-vu: backlog
@@ -180,3 +180,43 @@ action_items:
     owner: "Amelia (Dev) + Đại Ca (copy)"
     status: done
     resolution: "C-9: cả hai nền tảng gửi `page` tới port (không phân trang trong bộ nhớ), footer 'Trước / Trang X/Y / Sau' (disable ở hai đầu), reset về trang 1 khi đổi tìm kiếm/lọc; tách state search-empty ('Không có khách phù hợp') khỏi 'Chưa có khách hàng nào'. Copy áp mặc định idiomatic (Đại Ca có thể veto). Guard customers.test.mjs +1 test; widget test mobile +1 (2 trang). design-system 251/251, mobile 14/14, flutter analyze sạch."
+  - epic: 4
+    action: "Story 5.1 nuốt 4 điểm ghi Order.status (confirm/revise/applyDiscount/resolveDiscount) vào applyTransition() + đóng TOCTOU bằng FOR UPDATE; source-guard: không call-site nào ngoài applyTransition ghi status; mutation lane DB: gỡ khoá dòng ⇒ ĐỎ"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "D-1 (retro Epic 4): nợ thiết kế có địa chỉ — 4 call-site tạm của 4.5/4.6/4.7 đều đánh dấu '5.1 nuốt block này'. Không phải viết engine mới, phải nuốt call-site đang chạy, giữ idempotency/audit/event từng cái."
+  - epic: 4
+    action: "Xác nhận một run CI Actions XANH thật với schema Epic 4 (3 migration mới: system_settings, discount_approvals, quote_exports); migrate deploy + test:db xanh trên Postgres CI"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "D-2 (retro Epic 4): C-3 dựng workflow 4 lane nhưng chưa có bằng chứng run xanh; 3 migration Epic 4 chưa deploy DB lần nào (Docker headless cục bộ). 'Có file CI' ≠ 'CI đang canh'."
+  - epic: 4
+    action: "Quyết ngữ nghĩa mốc bảo hành khi khách mua thêm bảo hành SAU lần chốt đầu (chặn Story 5.9). Mặc định tuyên bố trước: giữ ngày-chốt-đầu của dòng (bảo thủ) — im lặng đến hạn ⇒ mặc định thành quyết định"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "D-3 (retro Epic 4): warrantyStartAt đóng băng lần chốt đầu theo DÒNG; ngữ nghĩa post-chot chưa chốt."
+  - epic: 4
+    action: "Ghi số lane test SAU QA phase trong Dev Agent Record (lặp finding 4.2, 4.3 — số trong story lệch số npm test/flutter test thật)"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "D-4 (retro Epic 4): process. QA automation thêm test sau khi story ghi số ⇒ hồ sơ lệch."
+  - epic: 4
+    action: "Serialize/cô lập 4 flake backend (customer-sources.e2e, customers, me.e2e, error-envelope) trước khi CI thành cổng bắt buộc; full parallel 5 lần liên tiếp ⇒ 0 flake"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "D-5 (retro Epic 4): flake trên cổng bắt buộc = cổng bị bỏ qua ('cứ rerun' che lỗi thật)."
+  - epic: 4
+    action: "Quyết lại TD-1 cho Epic 5 (đến hạn lần 4; Epic 5 thêm ≥3 màn web: Danh sách/Chi tiết/Chuyển trạng thái). Mặc định tuyên bố trước: tái khẳng định chấp nhận text-guard-only web xuyên Epic 5, mobile bắt buộc widget test — im lặng ⇒ mặc định thành quyết định"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "D-6 (retro Epic 4): TD-1 web tooling trôi 3 epic, C-4 chấp nhận xuyên Epic 4; Epic 5 thêm màn ⇒ quyết lại hoặc dựng app-scaffold web đầu Epic 5."
+  - epic: 4
+    action: "Trả 4 câu hỏi sản phẩm mở của 4.8/4.9: file logo công ty, SĐT sales trên PDF, link chia sẻ công khai (đang hoãn), mốc bảo hành post-chot (= D-3)"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "D-7 (retro Epic 4): logo/SĐT PDF đang trống; chia sẻ hiện chỉ proxy-JWT streaming, chưa link công khai."
+  - epic: 4
+    action: "Đóng TD-25/TD-26 bằng endpoint đọc: Story 5.4 lộ danh sách version qua API; Story 5.9 lộ warrantyStartAt + warrantyMonths + hạn tính được"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "D-8 (retro Epic 4): dữ liệu sẵn (version rows + audit trỏ version; warranty snapshot theo dòng) nhưng chưa lộ API nào."

@@ -139,7 +139,7 @@ flowchart TD
 
 - **Binds:** FR-1, FR-3, FR-5
 - **Prevents:** tổng tiền client ≠ backend; lệch giữa làm-tròn-từng-dòng và làm-tròn-trên-tổng; đổi VAT hệ thống làm sai hồi tố đơn đã chốt.
-- **Rule:** ghim thuật toán tiền chính xác: `subtotal = Σ(unitPrice × qty)` theo **integer đồng**; `VAT = round-half-up(subtotal × vatRate)` ở mức **GRAND-SUBTOTAL** — **MỘT điểm làm tròn duy nhất**, `vatRate` phân giải **một lần**. Đây là **hàm pricing DUY NHẤT** trong `orders/domain`. Xem trước giỏ hàng realtime (FR-1) tính bằng **CHÍNH hàm backend đó** qua endpoint stateless `POST /orders/preview-total`; client **CẤM** làm số học tiền — chỉ hiển thị integer trả về. Lúc chốt, **snapshot `vatRate` (và `vatMode`) hiệu lực** lên `OrderVersion` để việc đổi rate hệ thống sau này không sửa hồi tố đơn đã chốt.
+- **Rule:** ghim thuật toán tiền chính xác: `subtotal = Σ(unitPrice × qty)` theo **integer đồng**; chiết khấu (nếu có) trừ thẳng subtotal thành `vatBase = subtotal − discountAmount` — thuế tính trên số tiền thực thu; `VAT = round-half-up(vatBase × vatRate)` ở mức **GRAND-SUBTOTAL** — **MỘT điểm làm tròn duy nhất**, `vatRate` phân giải **một lần**. Đây là **hàm pricing DUY NHẤT** trong `orders/domain`. Xem trước giỏ hàng realtime (FR-1) tính bằng **CHÍNH hàm backend đó** qua endpoint stateless `POST /orders/preview-total`; client **CẤM** làm số học tiền — chỉ hiển thị integer trả về. Lúc chốt, **snapshot `vatRate` (và `vatMode`) hiệu lực** lên `OrderVersion` để việc đổi rate hệ thống sau này không sửa hồi tố đơn đã chốt.
 
 ### AD-17 — Registry quyền chính tắc: một nguồn, ba bên tiêu thụ `[ADOPTED]`
 
@@ -259,7 +259,7 @@ erDiagram
         bool scopeThiCong
         bool scopeVanChuyen
         string custType
-        int kWp
+        float kWp
         string vatMode
     }
     ORDER_VERSION {
