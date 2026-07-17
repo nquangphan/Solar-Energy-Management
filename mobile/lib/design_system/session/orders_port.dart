@@ -17,6 +17,19 @@
 /// inside screen files, so the string lives here in the port file only.
 const String kOrderStatusDachot = 'dachot';
 
+/// The awaiting-discount-approval order status (Story 4.7, FR-18) — same rule
+/// as [kOrderStatusDachot]: screens import the constant, the guard forbids the
+/// raw literal inside screen files.
+const String kOrderStatusChoduyet = 'choduyet';
+
+/// Discount-approval statuses (Story 4.7) — the `Order.discount.status` values.
+/// Distinct from the ORDER status `'choduyet'`: these describe the approval
+/// record, underscore-keyed like `vatMode`. They live HERE so screens compare
+/// against constants, never ad-hoc literals.
+const String kDiscountChoDuyet = 'cho_duyet';
+const String kDiscountDongY = 'dong_y';
+const String kDiscountTuChoi = 'tu_choi';
+
 /// Mirrors the backend `OrderLineItemResponseDto` — [unitPrice]/[amount] are backend numbers.
 class OrderLine {
   const OrderLine({
@@ -70,6 +83,7 @@ class Order {
     this.vatMode,
     this.validityNote,
     required this.lineItems,
+    this.discount,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -94,8 +108,33 @@ class Order {
   /// Quote validity note — free text ≤ 200 chars, display-only in Phase 1.
   final String? validityNote;
   final List<OrderLine> lineItems;
+
+  /// The LATEST discount-approval record (Story 4.7) — null when the order
+  /// never had a discount applied.
+  final OrderDiscount? discount;
   final String createdAt;
   final String updatedAt;
+}
+
+/// The LATEST discount-approval record of the order (Story 4.7) — after a
+/// rejection the order is back to `'baogia'` but still carries
+/// `status: 'tu_choi'` + [resolveNote] so the screen can show the reason banner.
+class OrderDiscount {
+  const OrderDiscount({
+    required this.amount,
+    required this.status,
+    this.requestNote,
+    this.resolveNote,
+    required this.requestedAt,
+    this.resolvedAt,
+  });
+
+  final int amount;
+  final String status;
+  final String? requestNote;
+  final String? resolveNote;
+  final String requestedAt;
+  final String? resolvedAt;
 }
 
 /// Body of `POST /orders` — the customer phone, RAW or E.164 (backend normalises, AD-9).
@@ -197,6 +236,7 @@ class UpdateOrderMetaInput {
 class OrderTotals {
   const OrderTotals({
     required this.subtotal,
+    this.discountAmount = 0,
     required this.vatAmount,
     required this.total,
     required this.vatRate,
@@ -204,10 +244,78 @@ class OrderTotals {
   });
 
   final int subtotal;
+
+  /// The discount APPLIED to this computation — echoed back (Story 4.7).
+  final int discountAmount;
   final int vatAmount;
   final int total;
   final int vatRate;
   final bool applyVat;
+}
+
+/// Body of `POST /orders/:id/ap-chiet-khau` (Story 4.7) — one integer đồng
+/// amount on the ORDER.
+class ApplyDiscountInput {
+  const ApplyDiscountInput({required this.amount, this.note});
+
+  final int amount;
+  final String? note;
+}
+
+/// Body of `POST /orders/:id/duyet-chiet-khau` (Story 4.7) — [reason] REQUIRED
+/// when rejecting.
+class ResolveDiscountInput {
+  const ResolveDiscountInput({required this.approve, this.reason});
+
+  final bool approve;
+  final String? reason;
+}
+
+/// One line of a pending-discount item — [estimatedMarginPct] is a
+/// BACKEND-rounded integer percent (or null: free line, zero price, or caller
+/// lacks `costs.view`, FR-37). The screen renders it verbatim ("X%" / "—"),
+/// never computes it.
+class DiscountPendingLine {
+  const DiscountPendingLine({
+    required this.name,
+    required this.qty,
+    required this.unitPrice,
+    this.estimatedMarginPct,
+  });
+
+  final String name;
+  final int qty;
+  final int unitPrice;
+  final int? estimatedMarginPct;
+}
+
+/// One item of `GET /orders/cho-duyet-chiet-khau` (Story 4.7, FR-18/FR-37) —
+/// [subtotal]/[afterDiscount] are BACKEND numbers (AD-16), the screen displays
+/// them as-is.
+class DiscountPendingItem {
+  const DiscountPendingItem({
+    required this.orderId,
+    required this.customerSdt,
+    required this.amount,
+    this.requestNote,
+    required this.requestedByAccountId,
+    required this.requestedByDisplayName,
+    required this.requestedAt,
+    required this.subtotal,
+    required this.afterDiscount,
+    required this.lines,
+  });
+
+  final String orderId;
+  final String customerSdt;
+  final int amount;
+  final String? requestNote;
+  final String requestedByAccountId;
+  final String requestedByDisplayName;
+  final String requestedAt;
+  final int subtotal;
+  final int afterDiscount;
+  final List<DiscountPendingLine> lines;
 }
 
 /// Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
@@ -215,10 +323,14 @@ class OrderTotals {
 /// [vatMode] (Story 4.4) is echoed from `Order.vatMode` the same way — the
 /// client never sends a rate.
 class PreviewTotalInput {
-  const PreviewTotalInput({required this.lines, this.vatMode});
+  const PreviewTotalInput(
+      {required this.lines, this.vatMode, this.discountAmount});
 
   final List<PreviewTotalLine> lines;
   final String? vatMode;
+
+  /// Echoed from `Order.discount.amount` (Story 4.7) — never computed client-side.
+  final int? discountAmount;
 }
 
 /// One echoed line of a preview request.
@@ -306,4 +418,25 @@ abstract class OrdersPort {
   /// calling it on an order already `'baogia'` returns it unchanged. Throws
   /// 403 (`quotes.create_edit` missing), 404, 409 (non-reopenable status).
   Future<Order> reviseOrder(String orderId);
+
+  /// Apply a discount and send it for approval — `POST /orders/:id/ap-chiet-khau`
+  /// (Story 4.7, FR-18). The BACKEND flips the status to `'choduyet'` (content
+  /// frozen until resolved) and records the approval request. Throws 400 (amount
+  /// over subtotal / empty quote), 403 (`discounts.apply` missing), 404, 409
+  /// (non-`'baogia'` status — applying is NOT idempotent).
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input);
+
+  /// Approve or reject the pending discount — `POST /orders/:id/duyet-chiet-khau`
+  /// (Story 4.7, FR-18). Approve keeps the order `'choduyet'` (confirming is a
+  /// separate [confirmOrder] action); reject returns it to `'baogia'` with the
+  /// reason on `discount.resolveNote`. Throws 400 (missing reason on reject),
+  /// 403 (`discounts.approve` missing), 404, 409 (no pending approval / opposite
+  /// decision). Retrying the SAME decision is idempotent on the server.
+  Future<Order> resolveDiscount(String orderId, ResolveDiscountInput input);
+
+  /// List the orders awaiting discount approval — `GET /orders/cho-duyet-chiet-khau`
+  /// (Story 4.7, FR-18/FR-37). Every number (subtotal, afterDiscount, margins)
+  /// is backend-computed; margins are null when the caller lacks `costs.view`.
+  /// Throws 403 (`discounts.approve` missing).
+  Future<List<DiscountPendingItem>> listPendingDiscounts();
 }

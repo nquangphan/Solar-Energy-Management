@@ -11,6 +11,13 @@ export class PreviewTotalResponseDto {
 
   @ApiProperty({
     type: Number,
+    description:
+      'Chiết khấu ĐÃ ÁP cho lần tính này — echo từ request (0 khi vắng); VAT tính trên subtotal − discountAmount (Story 4.7).',
+  })
+  discountAmount!: number;
+
+  @ApiProperty({
+    type: Number,
     description: 'Tiền VAT — integer đồng, round-half-up một điểm.',
   })
   vatAmount!: number;

@@ -16,12 +16,15 @@ import { DEMO_CUSTOMERS } from './fake-customers-port';
 import type { Customer } from './customers-port';
 import type {
   AddOrderLineInput,
+  ApplyDiscountInput,
   CreateOrderInput,
+  DiscountPendingItem,
   Order,
   OrderLine,
   OrderTotals,
   OrdersPort,
   PreviewTotalInput,
+  ResolveDiscountInput,
   UpdateOrderLineInput,
   UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
@@ -84,6 +87,7 @@ export class FakeOrdersPort implements OrdersPort {
       vatMode: 'co_vat',
       validityNote: null,
       lineItems: [],
+      discount: null,
       createdAt: NOW,
       updatedAt: NOW,
     };
@@ -205,22 +209,26 @@ export class FakeOrdersPort implements OrdersPort {
 
   previewTotal(input: PreviewTotalInput): Promise<OrderTotals> {
     // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
-    // integer half-up at the grand subtotal, `vatMode` echo decides applyVat —
-    // Story 4.4), lives in the fake (the demo "server"), never in a screen
-    // (AD-16). Absent vatMode = pre-4.4 order = VAT applies.
+    // discount subtracted BEFORE VAT into vatBase — Story 4.7 —, integer
+    // half-up at the grand vatBase, `vatMode` echo decides applyVat — Story
+    // 4.4), lives in the fake (the demo "server"), never in a screen (AD-16).
+    // Absent vatMode = pre-4.4 order = VAT applies.
     const vatRate = 8;
     const applyVat = input.vatMode !== 'khong_vat';
     let subtotal = 0;
     for (const line of input.lines) {
       subtotal += this.serverAmount(line.unitPrice, line.qty);
     }
+    const discountAmount = input.discountAmount ?? 0;
+    const vatBase = subtotal - discountAmount;
     const vatAmount = applyVat
-      ? Math.floor((subtotal * vatRate + 50) / 100)
+      ? Math.floor((vatBase * vatRate + 50) / 100)
       : 0;
     return Promise.resolve({
       subtotal,
+      discountAmount,
       vatAmount,
-      total: subtotal + vatAmount,
+      total: vatBase + vatAmount,
       vatRate,
       applyVat,
     });
@@ -231,6 +239,11 @@ export class FakeOrdersPort implements OrdersPort {
     if (order === undefined) {
       return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
     }
+    // Confirming from 'choduyet' needs the discount APPROVED first (Story 4.7)
+    // — the fake mirrors the backend's 409.
+    if (order.status === 'choduyet' && order.discount?.status !== 'dong_y') {
+      return Promise.reject(new Error('Chiết khấu chưa được duyệt.'));
+    }
     // Already confirmed = idempotent no-op, mirroring the backend retry path.
     // The fake does NOT simulate the price freeze — the client never computes
     // money and never reads snapshots; the returned numbers just stay as-is.
@@ -238,6 +251,95 @@ export class FakeOrdersPort implements OrdersPort {
       order.status = 'dachot';
     }
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  applyDiscount(orderId: string, input: ApplyDiscountInput): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    // Only a draft can be sent for approval — mirroring the backend's 409
+    // (applying is NOT idempotent: two taps carry different amounts).
+    if (order.status !== 'baogia') {
+      return Promise.reject(
+        new Error('Chỉ áp được chiết khấu khi đơn đang ở trạng thái Báo giá.'),
+      );
+    }
+    order.status = 'choduyet';
+    order.discount = {
+      amount: input.amount,
+      status: 'cho_duyet',
+      requestNote: input.note ?? null,
+      resolveNote: null,
+      requestedAt: NOW,
+      resolvedAt: null,
+    };
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  resolveDiscount(orderId: string, input: ResolveDiscountInput): Promise<Order> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    if (order.discount?.status !== 'cho_duyet') {
+      return Promise.reject(new Error('Đơn không có chiết khấu chờ duyệt.'));
+    }
+    if (input.approve) {
+      // Approving keeps the order 'choduyet' — confirming is a SEPARATE action.
+      order.discount = {
+        ...order.discount,
+        status: 'dong_y',
+        resolveNote: input.reason ?? null,
+        resolvedAt: NOW,
+      };
+    } else {
+      // Rejecting returns the order to draft with the reason on the record.
+      order.status = 'baogia';
+      order.discount = {
+        ...order.discount,
+        status: 'tu_choi',
+        resolveNote: input.reason ?? null,
+        resolvedAt: NOW,
+      };
+    }
+    return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  listPendingDiscounts(): Promise<DiscountPendingItem[]> {
+    // Derived from the in-memory store: every order whose LATEST discount is
+    // still pending. All numbers computed HERE (the demo "server") — subtotal,
+    // afterDiscount, and a STATIC demo margin per catalogue line (the real
+    // backend reads Product.costPrice; the demo has no cost data).
+    const items: DiscountPendingItem[] = [];
+    for (const order of this.orders.values()) {
+      if (order.discount?.status !== 'cho_duyet') continue;
+      let subtotal = 0;
+      for (const line of order.lineItems) {
+        subtotal += this.serverAmount(line.unitPrice, line.qty);
+      }
+      items.push({
+        orderId: order.id,
+        customerSdt: order.customerSdt,
+        amount: order.discount.amount,
+        requestNote: order.discount.requestNote,
+        requestedByAccountId: order.ownerAccountId,
+        requestedByDisplayName: 'Nhân viên demo',
+        requestedAt: order.discount.requestedAt,
+        subtotal,
+        afterDiscount: subtotal - order.discount.amount,
+        lines: order.lineItems.map((line) => ({
+          name: line.name,
+          qty: line.qty,
+          unitPrice: line.unitPrice,
+          // Static demo margin: catalogue lines show 20%, free/zero-price
+          // lines show null ("—") — same nullability contract as the backend.
+          estimatedMarginPct:
+            line.productId !== null && line.unitPrice !== 0 ? 20 : null,
+        })),
+      });
+    }
+    return Promise.resolve(items);
   }
 
   reviseOrder(orderId: string): Promise<Order> {

@@ -171,6 +171,52 @@ export class OrderRevised implements DomainEvent {
   }
 }
 
+/**
+ * Chiết khấu được ÁP và gửi duyệt (Story 4.7, FR-18) — status baogia → choduyet. `amount`/
+ * `note` nằm trên event cho Epic 9 (push tới người duyệt); `OrderSnapshot` KHÔNG mở rộng —
+ * status đổi tự kể chuyện, chi tiết nằm ở row `DiscountApproval`. CHỈ publish ở nhánh áp
+ * THẬT sau commit (AD-18) — retry trên đơn đã `choduyet` là 409, không event.
+ */
+export class DiscountRequested implements DomainEvent {
+  readonly type = 'DiscountRequested';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly amount: number,
+    readonly note: string | null,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
+/**
+ * Chiết khấu được DUYỆT hoặc TỪ CHỐI (Story 4.7, FR-18). `approved` + `reason` cho Epic 9;
+ * đồng ý: đơn Ở NGUYÊN `choduyet` (before/after cùng status — Chốt là hành động riêng);
+ * từ chối: choduyet → baogia. CHỈ publish ở nhánh resolve THẬT sau commit — retry cùng
+ * decision là idempotent-return, không event thứ hai (NFR-1).
+ */
+export class DiscountResolved implements DomainEvent {
+  readonly type = 'DiscountResolved';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly approved: boolean,
+    readonly reason: string | null,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
 /** Một dòng bị XOÁ — chỉ có trạng thái "trước". */
 export class OrderLineRemoved implements DomainEvent {
   readonly type = 'OrderLineRemoved';

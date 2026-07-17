@@ -41,6 +41,8 @@ model Account {
   passwordResetCodes PasswordResetCode[]
   ownedOrders    Order[] @relation("OrderOwner")
   assignedOrders Order[] @relation("OrderAssignee")
+  discountRequests    DiscountApproval[] @relation("DiscountRequestedBy")
+  discountResolutions DiscountApproval[] @relation("DiscountResolvedBy")
 
   @@map("accounts")
 }
@@ -347,6 +349,7 @@ model Order {
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
   versions          OrderVersion[]  @relation("OrderVersions")
+  discountApprovals DiscountApproval[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -357,18 +360,22 @@ model Order {
 /// Một BẢN của đơn — chủ sở hữu DUY NHẤT của line item (AD-6). 4.1 luôn tạo `versionNo = 1`;
 /// sửa-sau-chốt đẻ version mới (4.6). `vatRate`/`vatMode`/`chotAt` null tới 4.4/4.5 —
 /// `updatedAt` cần vì 4.5/4.6 sẽ ghi `chotAt`/`vatRate` lên row này.
+/// `discountAmount` = snapshot chiết khấu ĐÃ DUYỆT ghi lúc Chốt (null = không chiết khấu);
+/// version mới từ mở-lại KHÔNG mang chiết khấu — muốn giảm tiếp phải áp + duyệt lại.
 model OrderVersion {
-  id        String          @id @default(uuid())
-  orderId   String          @map("order_id")
-  order     Order           @relation("OrderVersions", fields: [orderId], references: [id])
-  versionNo Int             @map("version_no")
-  vatRate   Int?            @map("vat_rate")
-  vatMode   String?         @map("vat_mode")
-  chotAt    DateTime?       @map("chot_at")
-  createdAt DateTime        @default(now()) @map("created_at")
-  updatedAt DateTime        @updatedAt @map("updated_at")
-  lineItems OrderLineItem[]
-  currentOf Order?          @relation("OrderCurrentVersion")
+  id             String          @id @default(uuid())
+  orderId        String          @map("order_id")
+  order          Order           @relation("OrderVersions", fields: [orderId], references: [id])
+  versionNo      Int             @map("version_no")
+  vatRate        Int?            @map("vat_rate")
+  vatMode        String?         @map("vat_mode")
+  chotAt         DateTime?       @map("chot_at")
+  discountAmount Int?            @map("discount_amount")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  lineItems      OrderLineItem[]
+  currentOf      Order?          @relation("OrderCurrentVersion")
+  discountApprovals DiscountApproval[]
 
   @@unique([orderId, versionNo])
   @@map("order_versions")
@@ -410,6 +417,39 @@ model OrderLineItem {
   @@index([orderVersionId])
   @@index([productId])
   @@map("order_line_items")
+}
+
+/// Hồ sơ duyệt chiết khấu (FR-18, AD-18) — sống trong module orders vì áp/từ chối là hai
+/// transition ghi `Order.status` (AD-11: mọi đường ghi status hội tụ về orders/domain).
+///
+/// `status` lưu **String** validate tầng app (`cho_duyet`/`dong_y`/`tu_choi` — khuôn
+/// underscore của `vatMode`). Bất biến "một pending mỗi đơn" enforce bằng CỔNG STATUS
+/// (áp chỉ đi từ `baogia` → `choduyet` atomic) — KHÔNG cần partial unique index.
+///
+/// `amount` là MỘT khoản Int đồng trên Đơn (AD-10, không per-line, không %).
+/// `orderVersionId` = bản hiệu lực lúc áp — nội dung được duyệt chính là nội dung được chốt
+/// (`assertMutable` đóng băng đơn suốt kỳ duyệt). Approval đã resolve nằm lại làm hồ sơ.
+model DiscountApproval {
+  id                   String       @id @default(uuid())
+  orderId              String       @map("order_id")
+  order                Order        @relation(fields: [orderId], references: [id])
+  orderVersionId       String       @map("order_version_id")
+  orderVersion         OrderVersion @relation(fields: [orderVersionId], references: [id])
+  amount               Int
+  status               String
+  requestNote          String?      @map("request_note")
+  resolveNote          String?      @map("resolve_note")
+  requestedByAccountId String       @map("requested_by_account_id")
+  requestedBy          Account      @relation("DiscountRequestedBy", fields: [requestedByAccountId], references: [id])
+  resolvedByAccountId  String?      @map("resolved_by_account_id")
+  resolvedBy           Account?     @relation("DiscountResolvedBy", fields: [resolvedByAccountId], references: [id])
+  resolvedAt           DateTime?    @map("resolved_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([orderId])
+  @@map("discount_approvals")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

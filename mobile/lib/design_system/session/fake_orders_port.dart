@@ -106,6 +106,7 @@ class FakeOrdersPort implements OrdersPort {
       vatMode: order.vatMode,
       validityNote: order.validityNote,
       lineItems: order.lineItems,
+      discount: order.discount,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     );
@@ -141,6 +142,7 @@ class FakeOrdersPort implements OrdersPort {
       validityNote:
           input.hasValidityNote ? input.validityNote : order.validityNote,
       lineItems: order.lineItems,
+      discount: order.discount,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     );
@@ -266,20 +268,24 @@ class FakeOrdersPort implements OrdersPort {
   @override
   Future<OrderTotals> previewTotal(PreviewTotalInput input) async {
     // The backend's computeOrderTotals() stand-in — SAME formula (8% VAT,
-    // integer half-up at the grand subtotal, `vatMode` echo decides applyVat —
-    // Story 4.4), lives in the fake (the demo "server"), never in a screen
-    // (AD-16). Absent vatMode = pre-4.4 order = VAT applies.
+    // discount subtracted BEFORE VAT into vatBase — Story 4.7 —, integer
+    // half-up at the grand vatBase, `vatMode` echo decides applyVat — Story
+    // 4.4), lives in the fake (the demo "server"), never in a screen (AD-16).
+    // Absent vatMode = pre-4.4 order = VAT applies.
     const int vatRate = 8;
     final bool applyVat = input.vatMode != 'khong_vat';
     int subtotal = 0;
     for (final PreviewTotalLine line in input.lines) {
       subtotal += _serverAmount(line.unitPrice, line.qty);
     }
-    final int vatAmount = applyVat ? (subtotal * vatRate + 50) ~/ 100 : 0;
+    final int discountAmount = input.discountAmount ?? 0;
+    final int vatBase = subtotal - discountAmount;
+    final int vatAmount = applyVat ? (vatBase * vatRate + 50) ~/ 100 : 0;
     return OrderTotals(
       subtotal: subtotal,
+      discountAmount: discountAmount,
       vatAmount: vatAmount,
-      total: subtotal + vatAmount,
+      total: vatBase + vatAmount,
       vatRate: vatRate,
       applyVat: applyVat,
     );
@@ -290,6 +296,11 @@ class FakeOrdersPort implements OrdersPort {
     final Order? order = _orders[orderId];
     if (order == null) {
       throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // Confirming from 'choduyet' needs the discount APPROVED first (Story 4.7)
+    // — the fake mirrors the backend's 409.
+    if (order.status == 'choduyet' && order.discount?.status != 'dong_y') {
+      throw const OrderPortException('Chiết khấu chưa được duyệt.');
     }
     // Already confirmed = idempotent no-op, mirroring the backend retry path.
     // The fake does NOT simulate the price freeze — the client never computes
@@ -313,11 +324,145 @@ class FakeOrdersPort implements OrdersPort {
       vatMode: order.vatMode,
       validityNote: order.validityNote,
       lineItems: order.lineItems,
+      discount: order.discount,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     );
     _orders[orderId] = confirmed;
     return _copy(confirmed);
+  }
+
+  @override
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // Only a draft can be sent for approval — mirroring the backend's 409
+    // (applying is NOT idempotent: two taps carry different amounts).
+    if (order.status != 'baogia') {
+      throw const OrderPortException(
+        'Chỉ áp được chiết khấu khi đơn đang ở trạng thái Báo giá.',
+      );
+    }
+    final Order applied = Order(
+      id: order.id,
+      status: 'choduyet',
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      lineItems: order.lineItems,
+      discount: OrderDiscount(
+        amount: input.amount,
+        status: 'cho_duyet',
+        requestNote: input.note,
+        requestedAt: _now,
+      ),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = applied;
+    return _copy(applied);
+  }
+
+  @override
+  Future<Order> resolveDiscount(
+    String orderId,
+    ResolveDiscountInput input,
+  ) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    final OrderDiscount? discount = order.discount;
+    if (discount == null || discount.status != 'cho_duyet') {
+      throw const OrderPortException('Đơn không có chiết khấu chờ duyệt.');
+    }
+    // Approving keeps the order 'choduyet' — confirming is a SEPARATE action;
+    // rejecting returns it to draft with the reason on the record.
+    final Order resolved = Order(
+      id: order.id,
+      status: input.approve ? order.status : 'baogia',
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      lineItems: order.lineItems,
+      discount: OrderDiscount(
+        amount: discount.amount,
+        status: input.approve ? 'dong_y' : 'tu_choi',
+        requestNote: discount.requestNote,
+        resolveNote: input.reason,
+        requestedAt: discount.requestedAt,
+        resolvedAt: _now,
+      ),
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+    );
+    _orders[orderId] = resolved;
+    return _copy(resolved);
+  }
+
+  @override
+  Future<List<DiscountPendingItem>> listPendingDiscounts() async {
+    // Derived from the in-memory store: every order whose LATEST discount is
+    // still pending. All numbers computed HERE (the demo "server") — subtotal,
+    // afterDiscount, and a STATIC demo margin per catalogue line (the real
+    // backend reads Product.costPrice; the demo has no cost data).
+    final List<DiscountPendingItem> items = <DiscountPendingItem>[];
+    for (final Order order in _orders.values) {
+      final OrderDiscount? discount = order.discount;
+      if (discount == null || discount.status != 'cho_duyet') continue;
+      int subtotal = 0;
+      for (final OrderLine line in order.lineItems) {
+        subtotal += _serverAmount(line.unitPrice, line.qty);
+      }
+      items.add(
+        DiscountPendingItem(
+          orderId: order.id,
+          customerSdt: order.customerSdt,
+          amount: discount.amount,
+          requestNote: discount.requestNote,
+          requestedByAccountId: order.ownerAccountId,
+          requestedByDisplayName: 'Nhân viên demo',
+          requestedAt: discount.requestedAt,
+          subtotal: subtotal,
+          afterDiscount: subtotal - discount.amount,
+          lines: order.lineItems
+              .map(
+                (OrderLine line) => DiscountPendingLine(
+                  name: line.name,
+                  qty: line.qty,
+                  unitPrice: line.unitPrice,
+                  // Static demo margin: catalogue lines show 20%, free/zero-
+                  // price lines show null ("—") — same nullability contract
+                  // as the backend.
+                  estimatedMarginPct:
+                      line.productId != null && line.unitPrice != 0 ? 20 : null,
+                ),
+              )
+              .toList(),
+        ),
+      );
+    }
+    return items;
   }
 
   @override
@@ -348,6 +493,7 @@ class FakeOrdersPort implements OrdersPort {
       vatMode: order.vatMode,
       validityNote: order.validityNote,
       lineItems: order.lineItems,
+      discount: order.discount,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
     );
@@ -371,6 +517,7 @@ class FakeOrdersPort implements OrdersPort {
         vatMode: order.vatMode,
         validityNote: order.validityNote,
         lineItems: List<OrderLine>.of(order.lineItems),
+        discount: order.discount,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
       );

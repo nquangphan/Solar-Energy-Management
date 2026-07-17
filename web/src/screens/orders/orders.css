@@ -163,8 +163,10 @@
   margin-bottom: 8px;
 }
 
-/* Nút Chốt báo giá (Story 4.5) — dưới khối Tổng kết, đẩy về phải theo mockup. */
+/* Nút Chốt báo giá (Story 4.5) — dưới khối Tổng kết, đẩy về phải theo mockup.
+   4.7 thêm nút Áp chiết khấu đứng cạnh — cùng hàng, cách nhau 8px. */
 .quote-chot-row {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccountsModule } from '../accounts/accounts.module';
 import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 import { SettingsModule } from '../settings/settings.module';
 import { OrdersController } from './orders.controller';
@@ -13,13 +14,14 @@ import { OrdersService } from './orders.service';
  *    boolean xuống service (khuôn `catalog.module.ts`; module này KHÔNG `@Global`).
  *  - `SettingsModule` — controller resolve thuế suất VAT tươi mỗi request cho `preview-total`
  *    rồi truyền số xuống service (cùng khuôn — service giữ đúng 2 dep).
+ *  - `AccountsModule` — controller resolve `costs.view` tươi mỗi request cho danh sách chờ
+ *    duyệt chiết khấu (Story 4.7, FR-37: biên ước tính lộ ngược costPrice nên đi theo fence).
  *
- * KHÔNG import `PrismaModule`/`EventsModule` (cả hai `@Global`), KHÔNG import `AccountsModule`
- * (không có quyền phụ nào cần resolve tại chỗ — giá vốn không đi qua đường báo giá), KHÔNG
- * re-register guard (`APP_GUARD` đã có ở `AuthModule`).
+ * KHÔNG import `PrismaModule`/`EventsModule` (cả hai `@Global`), KHÔNG re-register guard
+ * (`APP_GUARD` đã có ở `AuthModule`).
  */
 @Module({
-  imports: [FeatureFlagsModule, SettingsModule],
+  imports: [FeatureFlagsModule, SettingsModule, AccountsModule],
   controllers: [OrdersController],
   providers: [OrdersService],
 })

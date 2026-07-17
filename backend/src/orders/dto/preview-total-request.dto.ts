@@ -51,9 +51,19 @@ export class PreviewTotalRequestDto {
   @ApiPropertyOptional({
     enum: [...VAT_MODES],
     description:
-      "Tick áp VAT — client ECHO từ `Order.vatMode` (như đã echo unitPrice), KHÔNG BAO GIỜ gửi rate. Vắng field = đơn cũ vatMode null ⇒ tính như có VAT.",
+      'Tick áp VAT — client ECHO từ `Order.vatMode` (như đã echo unitPrice), KHÔNG BAO GIỜ gửi rate. Vắng field = đơn cũ vatMode null ⇒ tính như có VAT.',
   })
   @IsOptionalNotNull()
   @IsIn(VAT_MODES)
   vatMode?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Chiết khấu — client ECHO từ `Order.discount.amount` (Story 4.7), KHÔNG tự tính. Int ≥ 0; vượt subtotal ⇒ 400. Vắng field = không chiết khấu.',
+    example: 2_000_000,
+  })
+  @IsOptionalNotNull()
+  @IsInt()
+  @Min(0)
+  discountAmount?: number;
 }

@@ -19,6 +19,23 @@
  */
 export const ORDER_STATUS_DACHOT = 'dachot';
 
+/**
+ * The awaiting-discount-approval order status (Story 4.7, FR-18) — same rule as
+ * `ORDER_STATUS_DACHOT`: screens import the constant, the guard forbids the raw
+ * literal inside screen files.
+ */
+export const ORDER_STATUS_CHODUYET = 'choduyet';
+
+/**
+ * Discount-approval statuses (Story 4.7) — the `Order.discount.status` values.
+ * Distinct from the ORDER status `'choduyet'`: these describe the approval
+ * record, underscore-keyed like `vatMode`. They live HERE so screens compare
+ * against constants, never ad-hoc literals.
+ */
+export const DISCOUNT_CHO_DUYET = 'cho_duyet';
+export const DISCOUNT_DONG_Y = 'dong_y';
+export const DISCOUNT_TU_CHOI = 'tu_choi';
+
 /** Mirrors the backend `OrderLineItemResponseDto` — `unitPrice`/`amount` are backend numbers. */
 export interface OrderLine {
   id: string;
@@ -58,8 +75,24 @@ export interface Order {
   vatMode: string | null;
   validityNote: string | null;
   lineItems: OrderLine[];
+  discount: OrderDiscount | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * The LATEST discount-approval record of the order (Story 4.7) — null when the
+ * order never had a discount applied. After a rejection the order is back to
+ * `'baogia'` but still carries `status: 'tu_choi'` + `resolveNote` so the screen
+ * can show the reason banner.
+ */
+export interface OrderDiscount {
+  amount: number;
+  status: string;
+  requestNote: string | null;
+  resolveNote: string | null;
+  requestedAt: string;
+  resolvedAt: string | null;
 }
 
 /** Body of `POST /orders` — the customer phone, RAW or E.164 (backend normalises, AD-9). */
@@ -123,10 +156,53 @@ export interface UpdateOrderMetaInput {
  */
 export interface OrderTotals {
   subtotal: number;
+  discountAmount: number;
   vatAmount: number;
   total: number;
   vatRate: number;
   applyVat: boolean;
+}
+
+/** Body of `POST /orders/:id/ap-chiet-khau` (Story 4.7) — one integer đồng amount on the ORDER. */
+export interface ApplyDiscountInput {
+  amount: number;
+  note?: string;
+}
+
+/** Body of `POST /orders/:id/duyet-chiet-khau` (Story 4.7) — `reason` REQUIRED when rejecting. */
+export interface ResolveDiscountInput {
+  approve: boolean;
+  reason?: string;
+}
+
+/**
+ * One line of a pending-discount item — `estimatedMarginPct` is a BACKEND-rounded
+ * integer percent (or null: free line, zero price, or caller lacks `costs.view`,
+ * FR-37). The screen renders it verbatim ("X%" / "—"), never computes it.
+ */
+export interface DiscountPendingLine {
+  name: string;
+  qty: number;
+  unitPrice: number;
+  estimatedMarginPct: number | null;
+}
+
+/**
+ * One item of `GET /orders/cho-duyet-chiet-khau` (Story 4.7, FR-18/FR-37) —
+ * `subtotal`/`afterDiscount` are BACKEND numbers (AD-16), the screen displays
+ * them as-is.
+ */
+export interface DiscountPendingItem {
+  orderId: string;
+  customerSdt: string;
+  amount: number;
+  requestNote: string | null;
+  requestedByAccountId: string;
+  requestedByDisplayName: string;
+  requestedAt: string;
+  subtotal: number;
+  afterDiscount: number;
+  lines: DiscountPendingLine[];
 }
 
 /**
@@ -138,6 +214,8 @@ export interface OrderTotals {
 export interface PreviewTotalInput {
   lines: Array<{ unitPrice: number; qty: number }>;
   vatMode?: string;
+  /** Echoed from `Order.discount.amount` (Story 4.7) — never computed client-side. */
+  discountAmount?: number;
 }
 
 /**
@@ -222,4 +300,31 @@ export interface OrdersPort {
    * 403 (`quotes.create_edit` missing), 404, 409 (non-reopenable status).
    */
   reviseOrder(orderId: string): Promise<Order>;
+
+  /**
+   * Apply a discount and send it for approval — `POST /orders/:id/ap-chiet-khau`
+   * (Story 4.7, FR-18). The BACKEND flips the status to `'choduyet'` (content
+   * frozen until resolved) and records the approval request. Rejects 400 (amount
+   * over subtotal / empty quote), 403 (`discounts.apply` missing), 404, 409
+   * (non-`'baogia'` status — applying is NOT idempotent).
+   */
+  applyDiscount(orderId: string, input: ApplyDiscountInput): Promise<Order>;
+
+  /**
+   * Approve or reject the pending discount — `POST /orders/:id/duyet-chiet-khau`
+   * (Story 4.7, FR-18). Approve keeps the order `'choduyet'` (confirming is a
+   * separate `confirmOrder` action); reject returns it to `'baogia'` with the
+   * reason on `discount.resolveNote`. Rejects 400 (missing reason on reject),
+   * 403 (`discounts.approve` missing), 404, 409 (no pending approval / opposite
+   * decision). Retrying the SAME decision is idempotent on the server.
+   */
+  resolveDiscount(orderId: string, input: ResolveDiscountInput): Promise<Order>;
+
+  /**
+   * List the orders awaiting discount approval — `GET /orders/cho-duyet-chiet-khau`
+   * (Story 4.7, FR-18/FR-37). Every number (subtotal, afterDiscount, margins) is
+   * backend-computed; margins are null when the caller lacks `costs.view`.
+   * Rejects 403 (`discounts.approve` missing).
+   */
+  listPendingDiscounts(): Promise<DiscountPendingItem[]>;
 }

@@ -16,7 +16,7 @@ describe('computeOrderTotals (AD-10/AD-16)', () => {
   it('mảng rỗng ⇒ {0,0,0} — giỏ vừa xoá sạch vẫn có tổng hợp lệ', () => {
     expect(
       computeOrderTotals({ lines: [], vatRate: 8, applyVat: true }),
-    ).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+    ).toEqual({ subtotal: 0, discountAmount: 0, vatAmount: 0, total: 0 });
   });
 
   it('nhiều dòng cộng dồn đúng qua lineAmount: 2_450_000×8 + 500_000×1, VAT 8%', () => {
@@ -32,6 +32,7 @@ describe('computeOrderTotals (AD-10/AD-16)', () => {
     // 19_600_000 + 500_000 = 20_100_000; VAT 8% = 1_608_000 (chẵn, không làm tròn).
     expect(result).toEqual({
       subtotal: 20_100_000,
+      discountAmount: 0,
       vatAmount: 1_608_000,
       total: 21_708_000,
     });
@@ -79,7 +80,65 @@ describe('computeOrderTotals (AD-10/AD-16)', () => {
       applyVat: false,
     });
 
-    expect(result).toEqual({ subtotal: 3030, vatAmount: 0, total: 3030 });
+    expect(result).toEqual({
+      subtotal: 3030,
+      discountAmount: 0,
+      vatAmount: 0,
+      total: 3030,
+    });
+  });
+
+  it('discountAmount trừ TRƯỚC VAT thành vatBase; total = vatBase + VAT (Story 4.7, FR-18)', () => {
+    // vatBase = 10_000_000 − 1_000_000 = 9_000_000; VAT 8% = 720_000 — mutant tính VAT
+    // trên subtotal sẽ ra 800_000, lộ ngay (con số phân biệt).
+    const result = computeOrderTotals({
+      lines: [{ unitPrice: 10_000_000, qty: 1 }],
+      vatRate: 8,
+      applyVat: true,
+      discountAmount: 1_000_000,
+    });
+
+    expect(result).toEqual({
+      subtotal: 10_000_000,
+      discountAmount: 1_000_000,
+      vatAmount: 720_000,
+      total: 9_720_000,
+    });
+  });
+
+  it('discountAmount vắng mặt và = 0 cho CÙNG kết quả — hành vi cũ nguyên vẹn (regression 4.2)', () => {
+    const vang = computeOrderTotals({
+      lines: [{ unitPrice: 1010, qty: 1 }],
+      vatRate: 5,
+      applyVat: true,
+    });
+    const soKhong = computeOrderTotals({
+      lines: [{ unitPrice: 1010, qty: 1 }],
+      vatRate: 5,
+      applyVat: true,
+      discountAmount: 0,
+    });
+
+    expect(vang).toEqual(soKhong);
+    expect(vang.vatAmount).toBe(51);
+  });
+
+  it('discountAmount ĐÚNG BẰNG subtotal (biên trên service cho phép) ⇒ vatBase 0, VAT 0, total 0', () => {
+    // Biên triệt tiêu: chiết khấu toàn phần hợp lệ ở tầng service (amount ≤ subtotal) —
+    // totals phải ra 0 tròn trịa, không VAT âm/lệch làm tròn trên vatBase 0.
+    const result = computeOrderTotals({
+      lines: [{ unitPrice: 19_600_000, qty: 1 }],
+      vatRate: 8,
+      applyVat: true,
+      discountAmount: 19_600_000,
+    });
+
+    expect(result).toEqual({
+      subtotal: 19_600_000,
+      discountAmount: 19_600_000,
+      vatAmount: 0,
+      total: 0,
+    });
   });
 
   it('MỘT điểm làm tròn — VAT tính trên GRAND-SUBTOTAL, không per-line', () => {

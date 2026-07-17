@@ -2014,6 +2014,45 @@
         ]
       }
     },
+    "/orders/cho-duyet-chiet-khau": {
+      "get": {
+        "operationId": "OrdersController_listPendingDiscounts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Danh sách đơn chờ duyệt chiết khấu — subtotal/afterDiscount backend tính (AD-16); `estimatedMarginPct` per-line CHỈ có giá trị khi caller có THÊM costs.view (FR-37), thiếu ⇒ null toàn bộ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DiscountPendingItemDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu discounts.approve — discounts.apply KHÔNG thay thế được (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}": {
       "get": {
         "operationId": "OrdersController_findOne",
@@ -2273,6 +2312,176 @@
           },
           "409": {
             "description": "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/ap-chiet-khau": {
+      "post": {
+        "operationId": "OrdersController_applyDiscount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplyDiscountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /duyet-chiet-khau.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "amount < 1, vượt subtotal hiện hành, hoặc báo giá chưa có dòng nào (VALIDATION_ERROR — kèm fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu discounts.apply — quotes.create_edit KHÔNG thay thế được (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn ở trạng thái khác 'baogia' — kể cả retry khi đã 'choduyet' (áp KHÔNG idempotent: body mang amount) (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/duyet-chiet-khau": {
+      "post": {
+        "operationId": "OrdersController_resolveDiscount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDiscountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /chot); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thiếu `reason` khi từ chối (VALIDATION_ERROR — kèm fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu discounts.approve — discounts.apply KHÔNG thay thế được (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Không có approval chờ duyệt, hoặc decision NGƯỢC với approval đã resolve (CONFLICT).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3716,6 +3925,44 @@
           "amount"
         ]
       },
+      "OrderDiscountDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Mức chiết khấu đề xuất — integer đồng."
+          },
+          "status": {
+            "type": "string",
+            "description": "Trạng thái hồ sơ duyệt: 'cho_duyet' | 'dong_y' | 'tu_choi' (phân biệt với Order.status 'choduyet').",
+            "example": "cho_duyet"
+          },
+          "requestNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolveNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do duyệt / từ chối — null khi chưa resolve."
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm gửi duyệt."
+          },
+          "resolvedAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "amount",
+          "status",
+          "requestedAt"
+        ]
+      },
       "OrderResponseDto": {
         "type": "object",
         "properties": {
@@ -3786,6 +4033,16 @@
               "$ref": "#/components/schemas/OrderLineItemResponseDto"
             }
           },
+          "discount": {
+            "nullable": true,
+            "description": "Trạng thái chiết khấu — approval MỚI NHẤT (Story 4.7); null = đơn chưa từng áp chiết khấu.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/OrderDiscountDto"
+              }
+            ]
+          },
           "createdAt": {
             "format": "date-time",
             "type": "string"
@@ -3846,6 +4103,11 @@
               "khong_vat"
             ],
             "description": "Tick áp VAT — client ECHO từ `Order.vatMode` (như đã echo unitPrice), KHÔNG BAO GIỜ gửi rate. Vắng field = đơn cũ vatMode null ⇒ tính như có VAT."
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "Chiết khấu — client ECHO từ `Order.discount.amount` (Story 4.7), KHÔNG tự tính. Int ≥ 0; vượt subtotal ⇒ 400. Vắng field = không chiết khấu.",
+            "example": 2000000
           }
         },
         "required": [
@@ -3858,6 +4120,10 @@
           "subtotal": {
             "type": "number",
             "description": "Tổng trước VAT — integer đồng."
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "Chiết khấu ĐÃ ÁP cho lần tính này — echo từ request (0 khi vắng); VAT tính trên subtotal − discountAmount (Story 4.7)."
           },
           "vatAmount": {
             "type": "number",
@@ -3878,10 +4144,99 @@
         },
         "required": [
           "subtotal",
+          "discountAmount",
           "vatAmount",
           "total",
           "vatRate",
           "applyVat"
+        ]
+      },
+      "DiscountPendingLineDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Tên dòng báo giá."
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng."
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá HIỆU LỰC hiện tại — integer đồng."
+          },
+          "estimatedMarginPct": {
+            "type": "number",
+            "nullable": true,
+            "description": "Biên ƯỚC TÍNH (%) theo Product.costPrice HIỆN HÀNH — integer half-up; null khi dòng tự do, unitPrice = 0, hoặc actor thiếu costs.view (FR-37)."
+          }
+        },
+        "required": [
+          "name",
+          "qty",
+          "unitPrice"
+        ]
+      },
+      "DiscountPendingItemDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Id đơn hàng chờ duyệt chiết khấu."
+          },
+          "customerSdt": {
+            "type": "string",
+            "description": "SĐT khách (E.164)."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Mức chiết khấu đề xuất — integer đồng."
+          },
+          "requestNote": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do đề xuất — nullable."
+          },
+          "requestedByAccountId": {
+            "type": "string",
+            "description": "Id người đề xuất."
+          },
+          "requestedByDisplayName": {
+            "type": "string",
+            "description": "Tên hiển thị người đề xuất."
+          },
+          "requestedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm gửi duyệt."
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Giá gốc (tổng tiền hàng trước chiết khấu) — backend tính."
+          },
+          "afterDiscount": {
+            "type": "number",
+            "description": "Sau chiết khấu (subtotal − amount) — backend tính."
+          },
+          "lines": {
+            "description": "Dòng của bản hiệu lực kèm biên ước tính per-line.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DiscountPendingLineDto"
+            }
+          }
+        },
+        "required": [
+          "orderId",
+          "customerSdt",
+          "amount",
+          "requestedByAccountId",
+          "requestedByDisplayName",
+          "requestedAt",
+          "subtotal",
+          "afterDiscount",
+          "lines"
         ]
       },
       "UpdateOrderRequestDto": {
@@ -3914,6 +4269,41 @@
             "description": "Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự (vd \"48h kể từ ngày lên PO\"), Phase 1 chỉ hiển thị. Gửi null để xoá."
           }
         }
+      },
+      "ApplyDiscountRequestDto": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "description": "Mức chiết khấu — số nguyên ĐỒNG trên Đơn, tối thiểu 1; vượt subtotal hiện hành ⇒ 400.",
+            "example": 2000000
+          },
+          "note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do đề xuất chiết khấu — optional, hiện trên màn duyệt."
+          }
+        },
+        "required": [
+          "amount"
+        ]
+      },
+      "ResolveDiscountRequestDto": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean",
+            "description": "true = đồng ý (đơn Ở NGUYÊN choduyet — được Chốt qua /chot); false = từ chối (đơn về baogia)."
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do duyệt / từ chối — BẮT BUỘC khi từ chối (thiếu ⇒ 400), optional khi đồng ý; ghi Audit log."
+          }
+        },
+        "required": [
+          "approve"
+        ]
       },
       "AddLineItemRequestDto": {
         "type": "object",

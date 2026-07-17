@@ -22,6 +22,7 @@ import {
   Checkbox,
   ConfirmDialog,
   CustomerTypeChip,
+  Dialog,
   EmptyState,
   ErrorState,
   Field,
@@ -35,7 +36,13 @@ import {
 // Chốt không bao giờ render (bug 4.5, fix ở 4.6).
 import { Gate, PERMISSION_KEYS } from '../../design-system/gating';
 import { filterNav } from '../../design-system/gating/permissions';
-import { ORDER_STATUS_DACHOT } from '../../design-system/session/orders-port';
+import {
+  DISCOUNT_CHO_DUYET,
+  DISCOUNT_DONG_Y,
+  DISCOUNT_TU_CHOI,
+  ORDER_STATUS_CHODUYET,
+  ORDER_STATUS_DACHOT,
+} from '../../design-system/session/orders-port';
 import type {
   CatalogGroup,
   CatalogGroupDetail,
@@ -106,6 +113,13 @@ export function CreateQuoteScreen({
   // 'dachot', thành công thì `editable` tự bật lại vì status về 'baogia'.
   const [moLaiDialogOpen, setMoLaiDialogOpen] = useState(false);
   const [moLaiBusy, setMoLaiBusy] = useState(false);
+  // Dialog Áp chiết khấu (Story 4.7) + busy — cùng khuôn chotBusy; thành công
+  // thì màn tự khoá sửa vì status sang 'choduyet'. Amount là số nguyên đồng
+  // nhập tay (pattern freeUnitPrice — chuyển đổi input, không phải số học tiền).
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [discountBusy, setDiscountBusy] = useState(false);
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountNote, setDiscountNote] = useState('');
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -149,12 +163,22 @@ export function CreateQuoteScreen({
    */
   async function refreshTotals(fetched: Order) {
     const ticket = ++latestTotals.current;
+    // Chiết khấu HIỆU LỰC (Story 4.7): đơn đang chờ duyệt hoặc đã chốt với
+    // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc sau
+    // mở-lại, bản đang sửa không mang chiết khấu (muốn giảm phải áp + duyệt lại).
+    const discountActive =
+      fetched.discount !== null &&
+      fetched.status !== 'baogia' &&
+      (fetched.discount.status === DISCOUNT_CHO_DUYET ||
+        fetched.discount.status === DISCOUNT_DONG_Y);
     try {
       const fresh = await ordersPort.previewTotal({
         lines: fetched.lineItems.map((l) => ({ unitPrice: l.unitPrice, qty: l.qty })),
         // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
         // vatMode null thì bỏ qua field (backend coi như có VAT).
         vatMode: fetched.vatMode ?? undefined,
+        // Echo chiết khấu của Đơn (Story 4.7) — con số backend đã trả, không tự tính.
+        discountAmount: discountActive ? fetched.discount!.amount : undefined,
       });
       if (ticket !== latestTotals.current) return;
       setTotals(fresh);
@@ -387,6 +411,34 @@ export function CreateQuoteScreen({
     }
   }
 
+  /**
+   * Áp chiết khấu + gửi duyệt (Story 4.7, FR-18): BACKEND chuyển đơn sang
+   * 'choduyet' và ghi hồ sơ duyệt — màn chỉ render Order trả về (`editable` tự
+   * tắt, banner chờ duyệt hiện). KHÔNG toast. Lỗi → Banner + giỏ + state cũ
+   * NGUYÊN VẸN (bất biến k).
+   */
+  async function handleApplyDiscount() {
+    setDiscountDialogOpen(false);
+    setDiscountBusy(true);
+    // Reset lỗi field của lần gửi trước (khuôn handleFreeLineSubmit) — không
+    // reset thì banner lỗi amount cũ hiện lại khi mở dialog ở lần áp sau.
+    setFieldErrors({});
+    try {
+      const applied = await ordersPort.applyDiscount(order!.id, {
+        amount: discountAmount,
+        note: discountNote === '' ? undefined : discountNote,
+      });
+      setOrder(applied);
+      setError(null);
+      await refreshTotals(applied);
+    } catch (err) {
+      setError(messageOf(err));
+      setFieldErrors(fieldErrorsOf(err));
+    } finally {
+      setDiscountBusy(false);
+    }
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -487,6 +539,25 @@ export function CreateQuoteScreen({
           <ErrorState message={error} onRetry={() => void refresh()} />
         )}
 
+        {/* Banner trạng thái chiết khấu (Story 4.7): trong 'choduyet' màn
+            read-only (editable tắt) — banner nói rõ đang chờ ai; sau từ chối
+            đơn về 'baogia' sửa được, banner mang lý do từ backend. */}
+        {order.status === ORDER_STATUS_CHODUYET &&
+          order.discount?.status === DISCOUNT_CHO_DUYET && (
+            <Banner tone="warn">
+              {'Chờ duyệt chiết khấu — chiết khấu đang chờ người có quyền duyệt.'}
+            </Banner>
+          )}
+        {order.status === ORDER_STATUS_CHODUYET &&
+          order.discount?.status === DISCOUNT_DONG_Y && (
+            <Banner tone="info">Chiết khấu đã được duyệt — có thể chốt đơn.</Banner>
+          )}
+        {editable && order.discount?.status === DISCOUNT_TU_CHOI && (
+          <Banner tone="warn">
+            {`Chiết khấu bị từ chối — ${order.discount.resolveNote ?? ''}`}
+          </Banner>
+        )}
+
         <Frame label="Giỏ hàng">
           {lines.length === 0 ? (
             <EmptyState
@@ -558,6 +629,13 @@ export function CreateQuoteScreen({
           <dl className="quote-totals">
             <dt>Tổng trước VAT</dt>
             <dd className="num mono">{totals ? String(totals.subtotal) : '—'}</dd>
+            {/* Dòng chiết khấu (Story 4.7): CHỈ hiện khi có — số backend echo. */}
+            {totals !== null && totals.discountAmount > 0 && (
+              <>
+                <dt>Chiết khấu</dt>
+                <dd className="num mono">{String(totals.discountAmount)}</dd>
+              </>
+            )}
             <dt>Tiền VAT</dt>
             <dd className="num mono">{totals ? String(totals.vatAmount) : '—'}</dd>
             <dt>Tổng sau VAT</dt>
@@ -565,12 +643,22 @@ export function CreateQuoteScreen({
           </dl>
         </Frame>
 
-        {/* Chốt (Story 4.5): quyền riêng `orders.confirm` — thiếu quyền thì nút
-            BIẾN MẤT (Gate, UX-DR-22), không disabled xám; backend vẫn enforce
-            (AD-4). Bấm mở dialog nêu hệ quả — Chốt là hành động có hệ quả. */}
+        {/* Chốt (Story 4.5) + Áp chiết khấu (Story 4.7): mỗi nút Gate quyền
+            RIÊNG — thiếu quyền thì nút BIẾN MẤT (Gate, UX-DR-22), không
+            disabled xám; backend vẫn enforce (AD-4). Bấm mở dialog nêu hệ quả. */}
         {editable && (
-          <Gate perms={perms} requires={PERMISSION_KEYS.ordersConfirm}>
-            <div className="quote-chot-row">
+          <div className="quote-chot-row">
+            <Gate perms={perms} requires={PERMISSION_KEYS.discountsApply}>
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={discountBusy}
+                onClick={() => setDiscountDialogOpen(true)}
+              >
+                Áp chiết khấu
+              </Button>
+            </Gate>
+            <Gate perms={perms} requires={PERMISSION_KEYS.ordersConfirm}>
               <Button
                 variant="primary"
                 type="button"
@@ -579,9 +667,28 @@ export function CreateQuoteScreen({
               >
                 Chốt báo giá
               </Button>
-            </div>
-          </Gate>
+            </Gate>
+          </div>
         )}
+
+        {/* Chốt SAU DUYỆT (Story 4.7): đơn 'choduyet' với chiết khấu đã đồng ý
+            — nút Chốt hiện lại (spine ChoDuyet→DaChot "duyệt then Chốt"); vẫn
+            quyền orders.confirm, vẫn dialog hệ quả. */}
+        {order.status === ORDER_STATUS_CHODUYET &&
+          order.discount?.status === DISCOUNT_DONG_Y && (
+            <Gate perms={perms} requires={PERMISSION_KEYS.ordersConfirm}>
+              <div className="quote-chot-row">
+                <Button
+                  variant="primary"
+                  type="button"
+                  disabled={chotBusy}
+                  onClick={() => setChotDialogOpen(true)}
+                >
+                  Chốt báo giá
+                </Button>
+              </div>
+            </Gate>
+          )}
 
         {/* Mở lại (Story 4.6): nghịch đảo nút Chốt — hiện khi đơn đã chốt (so
             bằng HẰNG import từ port, không literal), quyền quotes.create_edit
@@ -702,6 +809,55 @@ export function CreateQuoteScreen({
           </Button>
         </div>
       </Sheet>
+
+      {/* Áp chiết khấu (Story 4.7): MỘT dialog duy nhất (không chồng 2 tầng
+          overlay — UX-DR-20) gồm 2 Field + câu hệ quả + Gửi duyệt/Huỷ. Huỷ =
+          đóng, KHÔNG gọi port — đơn ở nguyên baogia. */}
+      <Dialog
+        open={discountDialogOpen}
+        title="Áp chiết khấu"
+        onClose={() => setDiscountDialogOpen(false)}
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setDiscountDialogOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              variant="primary"
+              type="button"
+              disabled={discountBusy}
+              onClick={() => void handleApplyDiscount()}
+            >
+              Gửi duyệt
+            </Button>
+          </>
+        }
+      >
+        <div className="quote-picker">
+          <Field
+            label="Mức chiết khấu (đ)"
+            inputMode="numeric"
+            value={discountAmount}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n)) setDiscountAmount(n);
+            }}
+          />
+          {fieldErrors.amount && <Banner tone="danger">{fieldErrors.amount}</Banner>}
+          <Field
+            label="Lý do đề xuất"
+            value={discountNote}
+            onChange={(e) => setDiscountNote(e.target.value)}
+          />
+          <p className="micro muted">
+            {'Gửi duyệt sẽ chuyển đơn sang Chờ duyệt chiết khấu — đơn khoá sửa cho tới khi được duyệt hoặc bị từ chối.'}
+          </p>
+        </div>
+      </Dialog>
 
       {/* Huỷ = đóng dialog, KHÔNG gọi port — đơn ở nguyên baogia. */}
       <ConfirmDialog

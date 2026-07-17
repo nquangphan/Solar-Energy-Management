@@ -193,6 +193,45 @@ test('the orders port carries reviseOrder on BOTH platforms (Story 4.6 twin re-c
   assert.match(mobPort, /const String kOrderStatusDachot = 'dachot';/, 'mobile port must declare kOrderStatusDachot');
 });
 
+test('the orders port carries the Story 4.7 discount surface on BOTH platforms (twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+
+  // The THREE method signatures exist on both twins, byte-for-byte per platform
+  // convention — applyDiscount/resolveDiscount return the fresh Order (the
+  // screen renders it), listPendingDiscounts returns the pending items.
+  assert.match(webPort, /applyDiscount\(orderId: string, input: ApplyDiscountInput\): Promise<Order>;/, 'web OrdersPort missing applyDiscount (Story 4.7)');
+  assert.match(mobPort, /Future<Order> applyDiscount\(String orderId, ApplyDiscountInput input\);/, 'mobile OrdersPort missing applyDiscount (Story 4.7)');
+  assert.match(webPort, /resolveDiscount\(orderId: string, input: ResolveDiscountInput\): Promise<Order>;/, 'web OrdersPort missing resolveDiscount (Story 4.7)');
+  assert.match(mobPort, /Future<Order> resolveDiscount\(String orderId, ResolveDiscountInput input\);/, 'mobile OrdersPort missing resolveDiscount (Story 4.7)');
+  assert.match(webPort, /listPendingDiscounts\(\): Promise<DiscountPendingItem\[\]>;/, 'web OrdersPort missing listPendingDiscounts (Story 4.7)');
+  assert.match(mobPort, /Future<List<DiscountPendingItem>> listPendingDiscounts\(\);/, 'mobile OrdersPort missing listPendingDiscounts (Story 4.7)');
+
+  // Twin type tokens: inputs, the pending item + per-line BACKEND margin, the
+  // latest-approval record on Order, and the discount echo on the totals path.
+  for (const token of ['ApplyDiscountInput', 'ResolveDiscountInput', 'DiscountPendingItem', 'DiscountPendingLine', 'estimatedMarginPct', 'OrderDiscount', 'discountAmount']) {
+    assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 4.7)`);
+    assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 4.7)`);
+  }
+
+  // The status constants live in the PORT file on both twins (the screen guard
+  // forbids the literals inside screens): the ORDER status 'choduyet' + the
+  // THREE approval statuses (underscore-keyed, distinct from the order status).
+  assert.match(webPort, /export const ORDER_STATUS_CHODUYET = 'choduyet';/, 'web port must export ORDER_STATUS_CHODUYET');
+  assert.match(mobPort, /const String kOrderStatusChoduyet = 'choduyet';/, 'mobile port must declare kOrderStatusChoduyet');
+  assert.match(webPort, /export const DISCOUNT_CHO_DUYET = 'cho_duyet';/, 'web port must export DISCOUNT_CHO_DUYET');
+  assert.match(webPort, /export const DISCOUNT_DONG_Y = 'dong_y';/, 'web port must export DISCOUNT_DONG_Y');
+  assert.match(webPort, /export const DISCOUNT_TU_CHOI = 'tu_choi';/, 'web port must export DISCOUNT_TU_CHOI');
+  assert.match(mobPort, /const String kDiscountChoDuyet = 'cho_duyet';/, 'mobile port must declare kDiscountChoDuyet');
+  assert.match(mobPort, /const String kDiscountDongY = 'dong_y';/, 'mobile port must declare kDiscountDongY');
+  assert.match(mobPort, /const String kDiscountTuChoi = 'tu_choi';/, 'mobile port must declare kDiscountTuChoi');
+
+  // The approval screen ships on BOTH platforms (UX-DR-27) — the new twin pair
+  // this story adds outside the session dir.
+  assert.ok(existsSync(resolve(repoRoot, 'web/src/screens/orders/DiscountApprovalScreen.tsx')), 'web DiscountApprovalScreen missing (Story 4.7)');
+  assert.ok(existsSync(resolve(repoRoot, 'mobile/lib/screens/orders/discount_approval_screen.dart')), 'mobile discount_approval_screen missing (Story 4.7)');
+});
+
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
   // Same decision as customer-sources (Story 3.5): system config is desk work,
   // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen

@@ -20,6 +20,7 @@ import {
   ApiOkResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { AccountPermissionsService } from '../accounts/account-permissions.service';
 import { PERM } from '../accounts/domain/permission-registry';
 import {
   CurrentAccount,
@@ -32,11 +33,14 @@ import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { SettingsService } from '../settings/settings.service';
 import { vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
+import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
+import { DiscountPendingItemDto } from './dto/discount-pending-item.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
+import { ResolveDiscountRequestDto } from './dto/resolve-discount-request.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 import { OrdersService } from './orders.service';
@@ -62,6 +66,7 @@ export class OrdersController {
     private readonly orders: OrdersService,
     private readonly featureFlags: FeatureFlagsService,
     private readonly settings: SettingsService,
+    private readonly accountPermissions: AccountPermissionsService,
   ) {}
 
   private async tieredPricingEnabled(): Promise<boolean> {
@@ -124,6 +129,33 @@ export class OrdersController {
       vatRate,
       applyVat: vatApplies(body.vatMode ?? null),
     } as PreviewTotalResponseDto;
+  }
+
+  // Route TĨNH khai TRƯỚC `:id` (kỷ luật 3.4 — GET này CÓ collision thật với `GET /orders/:id`).
+  @Get('cho-duyet-chiet-khau')
+  @RequirePermissions(PERM.discountsApprove)
+  @ApiOkResponse({
+    type: [DiscountPendingItemDto],
+    description:
+      'Danh sách đơn chờ duyệt chiết khấu — subtotal/afterDiscount backend tính (AD-16); `estimatedMarginPct` per-line CHỈ có giá trị khi caller có THÊM costs.view (FR-37), thiếu ⇒ null toàn bộ.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu discounts.approve — discounts.apply KHÔNG thay thế được (FORBIDDEN).',
+  })
+  async listPendingDiscounts(
+    @CurrentAccount() account: AuthenticatedAccount,
+  ): Promise<DiscountPendingItemDto[]> {
+    // `costs.view` resolve TƯƠI từ DB mỗi request (khuôn `ProductsController.canViewCosts`)
+    // — KHÔNG suy từ JWT; margin lộ ngược costPrice nên đi theo fence FR-37.
+    const permissions = await this.accountPermissions.listForAccount(
+      account.id,
+    );
+    return (await this.orders.listPendingDiscounts(
+      permissions.has(PERM.costsView),
+      await this.tieredPricingEnabled(),
+    )) as DiscountPendingItemDto[];
   }
 
   @Get(':id')
@@ -268,6 +300,93 @@ export class OrdersController {
     return (await this.orders.revise(
       account.id,
       id,
+      await this.tieredPricingEnabled(),
+    )) as OrderResponseDto;
+  }
+
+  // Áp chiết khấu + gửi duyệt (Story 4.7, FR-18) — action nghiệp vụ là sub-resource POST
+  // (khuôn `:id/chot`). Trong 'choduyet' mọi mutation dòng/meta/scope bị assertMutable chặn.
+  @Post(':id/ap-chiet-khau')
+  @RequirePermissions(PERM.discountsApply)
+  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/chot).
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: OrderResponseDto,
+    description:
+      "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /duyet-chiet-khau.",
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'amount < 1, vượt subtotal hiện hành, hoặc báo giá chưa có dòng nào (VALIDATION_ERROR — kèm fieldErrors).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu discounts.apply — quotes.create_edit KHÔNG thay thế được (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      "Đơn ở trạng thái khác 'baogia' — kể cả retry khi đã 'choduyet' (áp KHÔNG idempotent: body mang amount) (CONFLICT).",
+  })
+  async applyDiscount(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Body() body: ApplyDiscountRequestDto,
+  ): Promise<OrderResponseDto> {
+    return (await this.orders.applyDiscount(
+      account.id,
+      id,
+      body.amount,
+      body.note ?? null,
+      await this.tieredPricingEnabled(),
+    )) as OrderResponseDto;
+  }
+
+  // Duyệt / từ chối chiết khấu (Story 4.7, FR-18) — sub-resource POST (khuôn `:id/chot`).
+  @Post(':id/duyet-chiet-khau')
+  @RequirePermissions(PERM.discountsApprove)
+  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/chot).
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: OrderResponseDto,
+    description:
+      "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /chot); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu `reason` khi từ chối (VALIDATION_ERROR — kèm fieldErrors).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu discounts.approve — discounts.apply KHÔNG thay thế được (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Không có approval chờ duyệt, hoặc decision NGƯỢC với approval đã resolve (CONFLICT).',
+  })
+  async resolveDiscount(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Body() body: ResolveDiscountRequestDto,
+  ): Promise<OrderResponseDto> {
+    return (await this.orders.resolveDiscount(
+      account.id,
+      id,
+      body.approve,
+      body.reason ?? null,
       await this.tieredPricingEnabled(),
     )) as OrderResponseDto;
   }

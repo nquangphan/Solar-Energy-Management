@@ -182,6 +182,57 @@ class _RejectingRevisePort extends FakeOrdersPort {
   Future<Order> reviseOrder(String orderId) async => throw error;
 }
 
+/// A port that RECORDS every applyDiscount call (Story 4.7) — proves the Áp
+/// chiết khấu dialog sends exactly one call with the entered amount/note.
+class _RecordingApplyDiscountPort extends FakeOrdersPort {
+  final List<ApplyDiscountInput> applyCalls = <ApplyDiscountInput>[];
+
+  @override
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input) {
+    applyCalls.add(input);
+    return super.applyDiscount(orderId, input);
+  }
+}
+
+/// A port whose APPLY DISCOUNT is refused with the AD-5 envelope — proves a
+/// failed Áp chiết khấu surfaces the backend's sentence, keeps the cart AND
+/// the editable state intact (Story 4.7, invariant k).
+class _RejectingApplyDiscountPort extends FakeOrdersPort {
+  _RejectingApplyDiscountPort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input) async =>
+      throw error;
+}
+
+/// A port that plays the APPROVER acting instantly (Story 4.7): applying comes
+/// back already `dong_y` — the only way this screen (which owns no approve UI)
+/// can be driven into the "được Chốt từ choduyet" state.
+class _AutoApprovePort extends FakeOrdersPort {
+  @override
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input) async {
+    await super.applyDiscount(orderId, input);
+    return super
+        .resolveDiscount(orderId, const ResolveDiscountInput(approve: true));
+  }
+}
+
+/// A port that plays the APPROVER rejecting instantly (Story 4.7): applying
+/// comes back `tu_choi` + the reason — drives the "về baogia + banner lý do"
+/// state without an approve UI on this screen.
+class _AutoRejectPort extends FakeOrdersPort {
+  @override
+  Future<Order> applyDiscount(String orderId, ApplyDiscountInput input) async {
+    await super.applyDiscount(orderId, input);
+    return super.resolveDiscount(
+      orderId,
+      const ResolveDiscountInput(approve: false, reason: 'Biên quá mỏng'),
+    );
+  }
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
 
 /// The rendered on/off state of the scope chip with [label].
@@ -1079,6 +1130,164 @@ void main() {
       // Đơn editable — nút Mở lại KHÔNG tồn tại (nghịch đảo điều kiện hiện).
       expect(find.widgetWithText(TextField, '1'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Mở lại để sửa'), findsNothing);
+    });
+
+    /// Drive tới giỏ có 1 dòng catalog rồi mở dialog Áp chiết khấu và gửi.
+    Future<void> apChietKhauQuaDialog(
+      WidgetTester tester, {
+      String amount = '500000',
+    }) async {
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm'); // Tấm pin JA Solar 580W — 2_450_000
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      await _tap(tester, 'Áp chiết khấu');
+      // Field đầu trong dialog = "Mức chiết khấu (đ)" (field 2 là lý do).
+      await tester.enterText(
+        find
+            .descendant(
+                of: find.byType(AppDialog), matching: find.byType(TextField))
+            .first,
+        amount,
+      );
+      await _tap(tester, 'Gửi duyệt');
+    }
+
+    testWidgets(
+        'Áp chiết khấu (4.7): baogia + discounts.apply → nút hiện, dialog nhập mức → fake nhận applyDiscount đúng 1 lần, màn khoá sửa + banner chờ duyệt + dòng Chiết khấu',
+        (WidgetTester tester) async {
+      final _RecordingApplyDiscountPort port = _RecordingApplyDiscountPort();
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{AppPermissionKeys.discountsApply},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await apChietKhauQuaDialog(tester);
+
+      // Fake nhận ĐÚNG một lần với đúng amount (số nguyên đồng nhập tay).
+      expect(port.applyCalls, hasLength(1));
+      expect(port.applyCalls.single.amount, 500000);
+      // Status 'choduyet' → editable tắt: ô SL không còn input, nút Áp biến
+      // mất, banner chờ duyệt hiện đúng nguyên văn.
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsNothing);
+      expect(
+        find.text(
+            'Chờ duyệt chiết khấu — chiết khấu đang chờ người có quyền duyệt.'),
+        findsOneWidget,
+      );
+      // Tổng kết thêm dòng Chiết khấu — SỐ FAKE-BACKEND echo (2_450_000 −
+      // 500_000 = vatBase 1_950_000; VAT 8% = 156_000; total 2_106_000).
+      expect(find.text('Chiết khấu'), findsOneWidget);
+      expect(find.text('500000'), findsOneWidget);
+      expect(find.text('156000'), findsOneWidget);
+      expect(find.text('2106000'), findsOneWidget);
+      // Giỏ vẫn hiển thị đủ dòng ở chế độ read-only.
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Áp chiết khấu (4.7): perms KHÔNG có discounts.apply → nút không render (gate biến mất)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+
+      // Đơn editable nhưng nút Áp chiết khấu KHÔNG tồn tại trong cây widget.
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsNothing);
+    });
+
+    testWidgets(
+        'Áp chiết khấu (4.7): port throw → banner message backend, giỏ còn nguyên, VẪN editable',
+        (WidgetTester tester) async {
+      const String backendSentence = 'Mức chiết khấu vượt quá tổng tiền hàng.';
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingApplyDiscountPort(
+          const OrderPortException(backendSentence),
+        ),
+        perms: const <PermissionKey>{AppPermissionKeys.discountsApply},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await apChietKhauQuaDialog(tester);
+
+      // Câu backend nguyên văn; dòng giỏ KHÔNG mất; đơn VẪN sửa được (status
+      // không đổi) — nút Áp còn đó để thử lại.
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Chốt sau duyệt (4.7): approve dựng qua fake → banner đã duyệt + nút Chốt hiện (ordersConfirm) → chốt được từ choduyet',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _AutoApprovePort(),
+        perms: const <PermissionKey>{
+          AppPermissionKeys.discountsApply,
+          AppPermissionKeys.ordersConfirm,
+        },
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await apChietKhauQuaDialog(tester);
+
+      // Approver (fake) đã đồng ý: đơn Ở NGUYÊN choduyet — banner đã duyệt +
+      // nút Chốt hiện LẠI dù màn không editable.
+      expect(
+        find.text('Chiết khấu đã được duyệt — có thể chốt đơn.'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(TextField, '1'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsOneWidget);
+
+      await _tap(tester, 'Chốt báo giá');
+      await _tap(tester, 'Xác nhận');
+
+      // Chốt từ choduyet thành công: status 'dachot' — nút Chốt biến mất,
+      // banner duyệt biến mất (đơn không còn choduyet).
+      expect(find.widgetWithText(AppButton, 'Chốt báo giá'), findsNothing);
+      expect(
+        find.text('Chiết khấu đã được duyệt — có thể chốt đơn.'),
+        findsNothing,
+      );
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+    });
+
+    testWidgets(
+        'Từ chối (4.7): reject dựng qua fake → đơn editable lại + banner lý do từ backend',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _AutoRejectPort(),
+        perms: const <PermissionKey>{AppPermissionKeys.discountsApply},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      await apChietKhauQuaDialog(tester);
+
+      // Approver (fake) đã từ chối: đơn VỀ baogia — sửa lại được, banner mang
+      // lý do backend, KHÔNG còn dòng Chiết khấu trong Tổng kết (bản đang sửa
+      // không mang chiết khấu).
+      expect(
+          find.text('Chiết khấu bị từ chối — Biên quá mỏng'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsOneWidget);
+      expect(find.text('Chiết khấu'), findsNothing);
     });
   });
 }

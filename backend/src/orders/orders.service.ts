@@ -11,9 +11,16 @@ import type { CustType } from '../customers/domain/customer-type';
 import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  CHIET_KHAU_CHO_DUYET,
+  CHIET_KHAU_DONG_Y,
+  CHIET_KHAU_TU_CHOI,
+} from './domain/discount-approval-status';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
+  DiscountRequested,
+  DiscountResolved,
   OrderConfirmed,
   OrderCreated,
   OrderLineAdded,
@@ -27,6 +34,7 @@ import {
 } from './domain/order-events';
 import {
   TRANG_THAI_BAO_GIA,
+  TRANG_THAI_CHO_DUYET,
   TRANG_THAI_DA_CHOT,
 } from './domain/order-status';
 import { scopePresetFor } from './domain/scope-preset';
@@ -60,9 +68,10 @@ import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
  * MUTATION DÒNG chỉ khi `status === 'baogia'` (khác ⇒ 409) — sửa sau chốt là luồng version
  * mới (Story 4.6).
  *
- * GHI STATUS (AD-11): `confirm()` + `revise()` là HAI điểm ghi `Order.status` tạm thời trong
- * codebase — cùng khuôn transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt cả
- * hai block vào `applyTransition()`; ngoài chúng không đường nào ĐỔI status.
+ * GHI STATUS (AD-11): `confirm()` + `revise()` + `applyDiscount()` + `resolveDiscount()`
+ * (nhánh từ chối) là BỐN điểm ghi `Order.status` tạm thời trong codebase — cùng khuôn
+ * transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt cả bốn block vào
+ * `applyTransition()`; ngoài chúng không đường nào ĐỔI status.
  */
 
 /**
@@ -107,8 +116,47 @@ export interface OrderLineView {
   readonly amount: number;
 }
 
+/**
+ * Trạng thái chiết khấu của Đơn trong response — approval MỚI NHẤT, nullable (Story 4.7).
+ * Client cần biết để render banner/nút mà KHÔNG thấy khái niệm version/approval-list
+ * (khuôn 4.1 "client không thấy version").
+ */
+export interface OrderDiscountView {
+  readonly amount: number;
+  readonly status: string;
+  readonly requestNote: string | null;
+  readonly resolveNote: string | null;
+  readonly requestedAt: Date;
+  readonly resolvedAt: Date | null;
+}
+
 /** Shape Đơn trong response — dòng đã phân giải qua `currentVersionId`. */
-export type OrderView = Order & { lineItems: OrderLineView[] };
+export type OrderView = Order & {
+  lineItems: OrderLineView[];
+  discount: OrderDiscountView | null;
+};
+
+/** Một dòng trong item chờ duyệt — biên ƯỚC TÍNH theo `Product.costPrice` hiện hành. */
+export interface DiscountPendingLineView {
+  readonly name: string;
+  readonly qty: number;
+  readonly unitPrice: number;
+  readonly estimatedMarginPct: number | null;
+}
+
+/** Một item danh sách chờ duyệt chiết khấu (FR-18/FR-37) — số backend tính (AD-16). */
+export interface DiscountPendingView {
+  readonly orderId: string;
+  readonly customerSdt: string;
+  readonly amount: number;
+  readonly requestNote: string | null;
+  readonly requestedByAccountId: string;
+  readonly requestedByDisplayName: string;
+  readonly requestedAt: Date;
+  readonly subtotal: number;
+  readonly afterDiscount: number;
+  readonly lines: DiscountPendingLineView[];
+}
 
 /** Ảnh chụp Đơn cho event/audit — audit ghi sự thật đầy đủ, không lọc theo quyền người xem. */
 function orderSnapshot(order: Order): OrderSnapshot {
@@ -143,6 +191,21 @@ const CHOT_GATE_THUA = new Error('chot-gate-thua');
  * quyết idempotent hay 409.
  */
 const MO_LAI_GATE_THUA = new Error('mo-lai-gate-thua');
+
+/**
+ * Sentinel abort transaction Áp chiết khấu (Story 4.7) — cùng khuôn `CHOT_GATE_THUA`: thua
+ * cổng atomic `baogia → choduyet` rollback toàn tx (kể cả approval đã create), caller đọc lại
+ * rồi trả 409 (áp KHÔNG idempotent-return — body mang amount, hai lần bấm khác nhau không
+ * được im lặng nuốt).
+ */
+const AP_CK_GATE_THUA = new Error('ap-ck-gate-thua');
+
+/**
+ * Sentinel abort transaction Duyệt chiết khấu (Story 4.7) — cổng atomic nằm trên CHÍNH row
+ * approval (`cho_duyet` → resolved): 2 người duyệt đồng thời đúng MỘT bên thắng; bên thua
+ * đọc lại — cùng decision trả idempotent, ngược decision 409.
+ */
+const DUYET_CK_GATE_THUA = new Error('duyet-ck-gate-thua');
 
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
@@ -288,7 +351,8 @@ export class OrdersService {
     await this.eventBus.publish(
       new OrderCreated(actorAccountId, orderSnapshot(order), new Date()),
     );
-    return { ...order, lineItems: [] };
+    // Đơn vừa tạo trong chính tx này chưa thể có approval nào — không cần query.
+    return { ...order, lineItems: [], discount: null };
   }
 
   /**
@@ -305,11 +369,29 @@ export class OrdersService {
     dto: PreviewTotalRequestDto,
     vatRatePercent: number,
   ): OrderTotals {
-    return computeOrderTotals({
+    const totals = computeOrderTotals({
       lines: dto.lines,
       vatRate: vatRatePercent,
       applyVat: vatApplies(dto.vatMode ?? null),
+      // Chiết khấu echo (Story 4.7) — client gửi lại con số backend đã trả trên
+      // `order.discount`, KHÔNG tự tính; vắng field = không chiết khấu.
+      discountAmount: dto.discountAmount ?? 0,
     });
+    if (totals.discountAmount > totals.subtotal) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Mức chiết khấu vượt quá tổng tiền hàng.',
+        [
+          {
+            field: 'discountAmount',
+            code: 'max',
+            message: 'Mức chiết khấu không được vượt quá tổng tiền hàng.',
+          },
+        ],
+      );
+    }
+    return totals;
   }
 
   /** Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính. */
@@ -333,6 +415,30 @@ export class OrdersService {
     return {
       ...order,
       lineItems: await this.toViews(lines, tieredPricingEnabled),
+      discount: await this.latestDiscountViewOf(order.id),
+    };
+  }
+
+  /**
+   * Approval MỚI NHẤT của đơn ⇒ `OrderDiscountView` nullable — sau từ chối, đơn `baogia`
+   * vẫn mang `status: 'tu_choi'` + `resolveNote` cho banner lý do; áp lại thì approval mới
+   * đè vai trò "mới nhất" (row cũ nằm lại làm hồ sơ).
+   */
+  private async latestDiscountViewOf(
+    orderId: string,
+  ): Promise<OrderDiscountView | null> {
+    const approval = await this.prisma.discountApproval.findFirst({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (approval === null) return null;
+    return {
+      amount: approval.amount,
+      status: approval.status,
+      requestNote: approval.requestNote,
+      resolveNote: approval.resolveNote,
+      requestedAt: approval.createdAt,
+      resolvedAt: approval.resolvedAt,
     };
   }
 
@@ -427,6 +533,12 @@ export class OrdersService {
    * `OrderVersion` hiệu lực ghi `vatRate` (config resolve ở controller) + `vatMode` GIÁ TRỊ
    * HIỆU LỰC (`order.vatMode ?? 'co_vat'` — sau chốt không bao giờ null) + `chotAt`.
    *
+   * CHỐT TỪ `choduyet` (Story 4.7, spine "duyệt then Chốt"): approval mới nhất PHẢI `dong_y`
+   * (chưa duyệt/`tu_choi` ⇒ 409); snapshot thêm `OrderVersion.discountAmount` = amount đã
+   * duyệt. Đường `baogia` giữ NGUYÊN hành vi cũ (`discountAmount` null). Cổng atomic dùng
+   * status QUAN SÁT ĐƯỢC — race reject-giữa-chừng tự an toàn: reject đổi status về `baogia`
+   * ⇒ cổng `choduyet` count 0 ⇒ sentinel ⇒ đọc lại.
+   *
    * Publish `OrderConfirmed` SAU commit, CHỈ ở nhánh chốt thật — retry im lặng (NFR-1, AD-18).
    */
   async confirm(
@@ -440,7 +552,21 @@ export class OrdersService {
       // Retry sau khi đã chốt: 200 view hiện tại — KHÔNG ghi lại snapshot, KHÔNG event.
       return this.viewOf(before, tieredPricingEnabled);
     }
-    if (before.status !== TRANG_THAI_BAO_GIA) {
+    let discountAmount: number | null = null;
+    if (before.status === TRANG_THAI_CHO_DUYET) {
+      const approval = await this.prisma.discountApproval.findFirst({
+        where: { orderId: before.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (approval === null || approval.status !== CHIET_KHAU_DONG_Y) {
+        throw new AppException(
+          ErrorCode.CONFLICT,
+          409,
+          'Chiết khấu chưa được duyệt.',
+        );
+      }
+      discountAmount = approval.amount;
+    } else if (before.status !== TRANG_THAI_BAO_GIA) {
       throw new AppException(
         ErrorCode.CONFLICT,
         409,
@@ -521,7 +647,9 @@ export class OrdersService {
     try {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.order.updateMany({
-          where: { id: before.id, status: TRANG_THAI_BAO_GIA },
+          // Status QUAN SÁT ĐƯỢC (`baogia` hoặc `choduyet`) — bên nào đổi status giữa chừng
+          // (reject/chốt đôi) làm WHERE trượt ⇒ count 0 ⇒ sentinel.
+          where: { id: before.id, status: before.status },
           data: { status: TRANG_THAI_DA_CHOT },
         });
         if (count === 0) throw CHOT_GATE_THUA;
@@ -533,6 +661,8 @@ export class OrdersService {
             // xong phải tường minh 'co_vat': quyết định thuế đã đóng băng không được mập mờ.
             vatMode: before.vatMode ?? VAT_MODE.coVat,
             chotAt,
+            // Chiết khấu ĐÃ DUYỆT đóng băng lên version (4.7) — null ở đường `baogia`.
+            discountAmount,
           },
         });
         for (const snap of lineSnapshots) {
@@ -712,6 +842,337 @@ export class OrdersService {
       ),
     );
     return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
+   * ÁP CHIẾT KHẤU + gửi duyệt (Story 4.7, FR-18/AD-18): baogia → choduyet + tạo hồ sơ
+   * `DiscountApproval` `cho_duyet` trong MỘT interactive transaction. ⚠️ Điểm ghi
+   * `Order.status` tạm thời thứ BA — 5.1 nuốt block này vào `applyTransition()`.
+   *
+   * Cổng atomic `updateMany({id, status: 'baogia'} → 'choduyet')` + `count === 1` cũng là
+   * bất biến "một pending mỗi đơn": không bao giờ sinh 2 approval `cho_duyet` cùng đơn.
+   * Thua cổng ⇒ 409 (KHÔNG idempotent-return — body mang amount, hai lần bấm khác nhau
+   * không được im lặng nuốt). Validate TRƯỚC tx: `amount ≤ subtotal` hiện hành (qua
+   * `computeOrderTotals` — hàm pricing duy nhất), đơn 0 dòng ⇒ 400 (khuôn `confirm`).
+   *
+   * Trong `choduyet`, `assertMutable` tự đóng băng nội dung đơn — thứ được duyệt chính là
+   * thứ được chốt. Publish `DiscountRequested` SAU commit, CHỈ nhánh áp thật (AD-18).
+   */
+  async applyDiscount(
+    actorAccountId: string,
+    orderId: string,
+    amount: number,
+    note: string | null,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const before = await this.findOrThrow(orderId);
+    if (before.status !== TRANG_THAI_BAO_GIA) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ áp được chiết khấu khi đơn đang ở trạng thái Báo giá.',
+      );
+    }
+    const versionId = this.currentVersionIdOrThrow(before);
+
+    const view = await this.viewOf(before, tieredPricingEnabled);
+    if (view.lineItems.length === 0) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Không thể áp chiết khấu cho báo giá chưa có dòng nào.',
+      );
+    }
+    // Subtotal HIỆN HÀNH (giá sống đã resolve trong view) — chiết khấu không được vượt.
+    const totals = computeOrderTotals({
+      lines: view.lineItems,
+      vatRate: 0,
+      applyVat: false,
+    });
+    if (amount > totals.subtotal) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Mức chiết khấu vượt quá tổng tiền hàng.',
+        [
+          {
+            field: 'amount',
+            code: 'max',
+            message: 'Mức chiết khấu không được vượt quá tổng tiền hàng.',
+          },
+        ],
+      );
+    }
+
+    const approvalId = randomUUID();
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.order.updateMany({
+          where: { id: before.id, status: TRANG_THAI_BAO_GIA },
+          data: { status: TRANG_THAI_CHO_DUYET },
+        });
+        if (count === 0) throw AP_CK_GATE_THUA;
+        await tx.discountApproval.create({
+          data: {
+            id: approvalId,
+            orderId: before.id,
+            orderVersionId: versionId,
+            amount,
+            status: CHIET_KHAU_CHO_DUYET,
+            requestNote: note,
+            requestedByAccountId: actorAccountId,
+          },
+        });
+      });
+    } catch (error) {
+      if (error !== AP_CK_GATE_THUA) throw error;
+      // Thua cổng atomic (race 2 request đồng thời): đọc lại rồi 409 — áp không idempotent.
+      await this.findOrThrow(orderId);
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chỉ áp được chiết khấu khi đơn đang ở trạng thái Báo giá.',
+      );
+    }
+
+    const after: Order = { ...before, status: TRANG_THAI_CHO_DUYET };
+    await this.eventBus.publish(
+      new DiscountRequested(
+        actorAccountId,
+        orderSnapshot(before),
+        orderSnapshot(after),
+        amount,
+        note,
+        new Date(),
+      ),
+    );
+    return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
+   * DUYỆT / TỪ CHỐI chiết khấu (Story 4.7, FR-18/AD-18). Cổng atomic nằm trên CHÍNH row
+   * approval (`cho_duyet` → resolved) — 2 người duyệt đồng thời đúng MỘT bên thắng.
+   * ⚠️ Nhánh TỪ CHỐI là điểm ghi `Order.status` tạm thời thứ TƯ (choduyet → baogia, đơn
+   * sửa lại được) — 5.1 nuốt vào `applyTransition()`. Nhánh ĐỒNG Ý KHÔNG đổi status đơn
+   * (vẫn `choduyet` — "được Chốt", Chốt là hành động riêng qua `confirm()`).
+   *
+   * Idempotency (NFR SM-1): retry CÙNG decision trên approval đã resolve ⇒ 200 view hiện
+   * tại KHÔNG event; decision NGƯỢC ⇒ 409. `reason` BẮT BUỘC khi từ chối (400 fieldErrors),
+   * optional khi đồng ý. Publish `DiscountResolved` (mang `approved` + `reason` cho Epic 9)
+   * SAU commit, CHỈ nhánh resolve thật.
+   */
+  async resolveDiscount(
+    actorAccountId: string,
+    orderId: string,
+    approve: boolean,
+    reason: string | null,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const before = await this.findOrThrow(orderId);
+    const approval = await this.prisma.discountApproval.findFirst({
+      where: { orderId: before.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (approval === null) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Đơn không có chiết khấu chờ duyệt.',
+      );
+    }
+    if (approval.status !== CHIET_KHAU_CHO_DUYET) {
+      const sameDecision = approve
+        ? approval.status === CHIET_KHAU_DONG_Y
+        : approval.status === CHIET_KHAU_TU_CHOI;
+      if (sameDecision) {
+        // Retry cùng decision: 200 view hiện tại — KHÔNG ghi, KHÔNG event (NFR SM-1).
+        return this.viewOf(before, tieredPricingEnabled);
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chiết khấu đã được quyết theo hướng ngược lại.',
+      );
+    }
+    if (!approve && (reason === null || reason.trim() === '')) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Cần lý do khi từ chối chiết khấu.',
+        [
+          {
+            field: 'reason',
+            code: 'required',
+            message: 'Lý do là bắt buộc khi từ chối chiết khấu.',
+          },
+        ],
+      );
+    }
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.discountApproval.updateMany({
+          where: { id: approval.id, status: CHIET_KHAU_CHO_DUYET },
+          data: {
+            status: approve ? CHIET_KHAU_DONG_Y : CHIET_KHAU_TU_CHOI,
+            resolvedByAccountId: actorAccountId,
+            resolveNote: reason,
+            resolvedAt: new Date(),
+          },
+        });
+        if (count === 0) throw DUYET_CK_GATE_THUA;
+        if (!approve) {
+          // Từ chối trả đơn về Báo giá — approval `cho_duyet` ⇒ đơn PHẢI `choduyet` (cổng
+          // áp bảo đảm); count khác 1 là bất biến gãy ⇒ throw để rollback TOÀN tx.
+          const gate = await tx.order.updateMany({
+            where: { id: before.id, status: TRANG_THAI_CHO_DUYET },
+            data: { status: TRANG_THAI_BAO_GIA },
+          });
+          if (gate.count !== 1) {
+            throw new Error(
+              `Bất biến gãy: approval cho_duyet nhưng đơn ${before.id} không ở choduyet.`,
+            );
+          }
+        }
+      });
+    } catch (error) {
+      if (error !== DUYET_CK_GATE_THUA) throw error;
+      // Thua cổng atomic (2 người duyệt đồng thời): đọc lại — cùng decision idempotent.
+      const currentOrder = await this.findOrThrow(orderId);
+      const current = await this.prisma.discountApproval.findFirst({
+        where: { orderId: before.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const sameDecision =
+        current !== null &&
+        (approve
+          ? current.status === CHIET_KHAU_DONG_Y
+          : current.status === CHIET_KHAU_TU_CHOI);
+      if (sameDecision) {
+        return this.viewOf(currentOrder, tieredPricingEnabled);
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Chiết khấu đã được quyết theo hướng ngược lại.',
+      );
+    }
+
+    const after: Order = approve
+      ? before
+      : { ...before, status: TRANG_THAI_BAO_GIA };
+    await this.eventBus.publish(
+      new DiscountResolved(
+        actorAccountId,
+        orderSnapshot(before),
+        orderSnapshot(after),
+        approve,
+        reason,
+        new Date(),
+      ),
+    );
+    return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
+   * DANH SÁCH chờ duyệt chiết khấu + biên ước tính (Story 4.7, FR-18/FR-37/AD-4).
+   *
+   * Tiền qua `computeOrderTotals({applyVat: false, discountAmount})` — KHÔNG máy tính thứ
+   * hai; `afterDiscount` = `total` khi không VAT. Biên ƯỚC TÍNH per-line đọc
+   * `Product.costPrice` HIỆN HÀNH (chưa xuất kho chưa biết giá vốn thật — nhãn ước tính là
+   * chữ bắt buộc trên UI): integer percent half-up của `(unitPrice − costPrice) / unitPrice`,
+   * null khi dòng tự do hoặc `unitPrice = 0`.
+   *
+   * FENCE `costs.view` (FR-37): margin lộ ngược costPrice (`costPrice = unitPrice×(1−margin)`)
+   * nên đi theo fence — `hasCostsView === false` ⇒ mọi `estimatedMarginPct` null và KHÔNG
+   * query costPrice. Select costPrice là SELECT RIÊNG chỉ trong path này — KHÔNG nới
+   * `PRODUCT_QUOTE_SELECT` (fence của nó giữ nguyên cho mọi đường khác).
+   *
+   * Danh sách pending thực tế nhỏ (cổng áp giữ ≤ 1 pending mỗi đơn) — loop per-approval
+   * chấp nhận được, không cần batch.
+   */
+  async listPendingDiscounts(
+    hasCostsView: boolean,
+    tieredPricingEnabled: boolean,
+  ): Promise<DiscountPendingView[]> {
+    const approvals = await this.prisma.discountApproval.findMany({
+      where: { status: CHIET_KHAU_CHO_DUYET },
+      orderBy: { createdAt: 'asc' },
+      include: {
+        order: true,
+        requestedBy: { select: { displayName: true } },
+      },
+    });
+
+    const items: DiscountPendingView[] = [];
+    for (const approval of approvals) {
+      const order = approval.order;
+      const lines =
+        order.currentVersionId === null
+          ? []
+          : await this.prisma.orderLineItem.findMany({
+              where: { orderVersionId: order.currentVersionId },
+              orderBy: { displayOrder: 'asc' },
+            });
+      const views = await this.toViews(lines, tieredPricingEnabled);
+      const totals = computeOrderTotals({
+        lines: views,
+        vatRate: 0,
+        applyVat: false,
+        discountAmount: approval.amount,
+      });
+
+      const costById = new Map<string, number>();
+      if (hasCostsView) {
+        const productIds = [
+          ...new Set(
+            lines
+              .filter((line) => line.productId !== null)
+              .map((line) => line.productId as string),
+          ),
+        ];
+        if (productIds.length > 0) {
+          const rows = await this.prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, costPrice: true },
+          });
+          for (const row of rows) costById.set(row.id, row.costPrice);
+        }
+      }
+
+      items.push({
+        orderId: order.id,
+        customerSdt: order.customerSdt,
+        amount: approval.amount,
+        requestNote: approval.requestNote,
+        requestedByAccountId: approval.requestedByAccountId,
+        requestedByDisplayName: approval.requestedBy.displayName,
+        requestedAt: approval.createdAt,
+        subtotal: totals.subtotal,
+        afterDiscount: totals.total,
+        lines: views.map((view) => {
+          const costPrice =
+            view.productId === null ? undefined : costById.get(view.productId);
+          // Half-up thuần integer trên phần trăm (khuôn VAT AD-16) — tỷ lệ không phải tiền
+          // nên không phạm AD-10, nhưng làm tròn ở BACKEND để client hiển thị nguyên văn.
+          const estimatedMarginPct =
+            !hasCostsView || costPrice === undefined || view.unitPrice === 0
+              ? null
+              : Math.floor(
+                  ((view.unitPrice - costPrice) * 100 +
+                    Math.floor(view.unitPrice / 2)) /
+                    view.unitPrice,
+                );
+          return {
+            name: view.name,
+            qty: view.qty,
+            unitPrice: view.unitPrice,
+            estimatedMarginPct,
+          };
+        }),
+      });
+    }
+    return items;
   }
 
   /**

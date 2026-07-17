@@ -322,11 +322,12 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(schemas.PreviewTotalLineDto).toBeDefined();
     expect(schemas.PreviewTotalResponseDto).toBeDefined();
 
-    // Response ĐỦ 5 field bắt buộc — 3 số tiền + vatRate/applyVat (4.4) để client hiển thị
-    // nhãn thuế suất; client chỉ hiển thị, không suy diễn field nào (AD-16).
+    // Response ĐỦ 6 field bắt buộc — 3 số tiền + discountAmount echo (4.7) + vatRate/applyVat
+    // (4.4) để client hiển thị nhãn thuế suất; client chỉ hiển thị, không suy diễn (AD-16).
     const response = schemas.PreviewTotalResponseDto as { required?: string[] };
     expect([...(response.required ?? [])].sort()).toEqual([
       'applyVat',
+      'discountAmount',
       'subtotal',
       'total',
       'vatAmount',

@@ -135,14 +135,18 @@ describe('/orders (e2e)', () => {
   const featureFlagRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   // Config hệ thống: vắng row = default 8% (preview-total resolve rate qua SettingsService).
   const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
-  // Interactive tx cho POST :id/chot + :id/mo-lai: callback nhận bộ mock tx (array giữ nguyên).
+  // Hồ sơ duyệt chiết khấu (4.7): findFirst = approval mới nhất cho view; findMany = list chờ duyệt.
+  const discountApprovalRepo = { findFirst: jest.fn(), findMany: jest.fn() };
+  // Interactive tx cho POST :id/chot + :id/mo-lai + :id/ap-chiet-khau + :id/duyet-chiet-khau.
   const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
   const txVersionRepo = { update: jest.fn(), create: jest.fn() };
   const txLineRepo = { update: jest.fn(), createMany: jest.fn() };
+  const txDiscountRepo = { create: jest.fn(), updateMany: jest.fn() };
   const txMock = {
     order: txOrderRepo,
     orderVersion: txVersionRepo,
     orderLineItem: txLineRepo,
+    discountApproval: txDiscountRepo,
   };
   const transaction = jest.fn(async (arg: unknown) =>
     typeof arg === 'function'
@@ -158,6 +162,7 @@ describe('/orders (e2e)', () => {
     auditLog: auditRepo,
     featureFlag: featureFlagRepo,
     systemSetting: systemSettingRepo,
+    discountApproval: discountApprovalRepo,
     $transaction: transaction,
   };
   const accountsMock = {
@@ -231,6 +236,11 @@ describe('/orders (e2e)', () => {
     txLineRepo.update.mockResolvedValue({});
     txLineRepo.createMany.mockResolvedValue({ count: 0 });
     orderVersionRepo.findUnique.mockResolvedValue(null);
+    // Mặc định: đơn chưa từng áp chiết khấu.
+    discountApprovalRepo.findFirst.mockResolvedValue(null);
+    discountApprovalRepo.findMany.mockResolvedValue([]);
+    txDiscountRepo.create.mockResolvedValue({});
+    txDiscountRepo.updateMany.mockResolvedValue({ count: 1 });
   });
 
   describe('authn/authz fail-closed trên MỌI route', () => {
@@ -266,6 +276,19 @@ describe('/orders (e2e)', () => {
         name: 'POST /orders/:id/mo-lai',
         call: () => request(server()).post(`/orders/${ORDER_ID}/mo-lai`),
       },
+      {
+        name: 'POST /orders/:id/ap-chiet-khau',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/ap-chiet-khau`),
+      },
+      {
+        name: 'POST /orders/:id/duyet-chiet-khau',
+        call: () =>
+          request(server()).post(`/orders/${ORDER_ID}/duyet-chiet-khau`),
+      },
+      {
+        name: 'GET /orders/cho-duyet-chiet-khau',
+        call: () => request(server()).get('/orders/cho-duyet-chiet-khau'),
+      },
     ];
 
     for (const route of routes) {
@@ -275,8 +298,9 @@ describe('/orders (e2e)', () => {
         expect(res.status).toBe(401);
       });
 
-      it(`${route.name} thiếu quotes.create_edit ⇒ 403`, async () => {
-        // Có quyền KHÁC (kể cả catalog.view của THO_KS) nhưng không có quotes.create_edit.
+      it(`${route.name} thiếu quyền cần thiết ⇒ 403`, async () => {
+        // Có quyền KHÁC (kể cả catalog.view của THO_KS) nhưng không có key mà route đòi
+        // (quotes.create_edit / discounts.apply / discounts.approve).
         givenPermissions(PERM.catalogView, PERM.customersManage);
 
         const res = await route
@@ -542,9 +566,7 @@ describe('/orders (e2e)', () => {
       const fields = (res.body.fieldErrors as { field: string }[]).map(
         (e) => e.field,
       );
-      expect(fields).toEqual(
-        expect.arrayContaining(['kWp', 'validityNote']),
-      );
+      expect(fields).toEqual(expect.arrayContaining(['kWp', 'validityNote']));
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 
@@ -632,6 +654,7 @@ describe('/orders (e2e)', () => {
       // `vatRate`/`applyVat` (4.4) để client hiển thị nhãn thuế suất — giá trị backend.
       expect(res.body).toEqual({
         subtotal: 20_100_000,
+        discountAmount: 0,
         vatAmount: 1_608_000,
         total: 21_708_000,
         vatRate: 8,
@@ -658,6 +681,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 19_600_000,
+        discountAmount: 0,
         vatAmount: 0,
         total: 19_600_000,
         vatRate: 8,
@@ -696,6 +720,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 1_000_000,
+        discountAmount: 0,
         vatAmount: 100_000,
         total: 1_100_000,
         vatRate: 10,
@@ -718,6 +743,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 1_000_000,
+        discountAmount: 0,
         vatAmount: 80_000,
         total: 1_080_000,
         vatRate: 8,
@@ -737,6 +763,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 1_000_000,
+        discountAmount: 0,
         vatAmount: 80_000,
         total: 1_080_000,
         vatRate: 8,
@@ -755,6 +782,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 0,
+        discountAmount: 0,
         vatAmount: 0,
         total: 0,
         vatRate: 8,
@@ -789,6 +817,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         subtotal: 0,
+        discountAmount: 0,
         vatAmount: 0,
         total: 0,
         vatRate: 8,
@@ -830,6 +859,7 @@ describe('/orders (e2e)', () => {
       // subtotal 500×1 = 500; VAT 8%: floor((500×8 + 50)/100) = floor(40.5) = 40.
       expect(dung500.body).toEqual({
         subtotal: 500,
+        discountAmount: 0,
         vatAmount: 40,
         total: 540,
         vatRate: 8,
@@ -870,7 +900,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(401);
     });
 
-    it("CHỈ có quotes.create_edit ⇒ 403 — quyền dựng báo giá KHÔNG thay được orders.confirm", async () => {
+    it('CHỈ có quotes.create_edit ⇒ 403 — quyền dựng báo giá KHÔNG thay được orders.confirm', async () => {
       givenPermissions(PERM.quotesCreateEdit);
 
       const res = await request(server())
@@ -895,10 +925,16 @@ describe('/orders (e2e)', () => {
         where: { id: ORDER_ID, status: 'baogia' },
         data: { status: 'dachot' },
       });
-      // vatRate 8 = default config (systemSetting vắng row); vatMode null ⇒ 'co_vat'.
+      // vatRate 8 = default config (systemSetting vắng row); vatMode null ⇒ 'co_vat';
+      // đường baogia KHÔNG mang chiết khấu ⇒ discountAmount null (4.7).
       expect(txVersionRepo.update).toHaveBeenCalledWith({
         where: { id: VERSION_ID },
-        data: { vatRate: 8, vatMode: 'co_vat', chotAt: expect.any(Date) },
+        data: {
+          vatRate: 8,
+          vatMode: 'co_vat',
+          chotAt: expect.any(Date),
+          discountAmount: null,
+        },
       });
       expect(txLineRepo.update).toHaveBeenCalledWith({
         where: { id: DONG_CATALOG.id },
@@ -931,7 +967,12 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(txVersionRepo.update).toHaveBeenCalledWith({
         where: { id: VERSION_ID },
-        data: { vatRate: 10, vatMode: 'co_vat', chotAt: expect.any(Date) },
+        data: {
+          vatRate: 10,
+          vatMode: 'co_vat',
+          chotAt: expect.any(Date),
+          discountAmount: null,
+        },
       });
     });
 
@@ -1038,10 +1079,7 @@ describe('/orders (e2e)', () => {
       // ===== Mock STATEFUL: DB giả trong bộ nhớ — mọi op đọc/ghi cùng một sự thật. =====
       let orderState: Record<string, unknown> | null = null;
       const versions = new Map<string, Record<string, unknown>>();
-      const linesByVersion = new Map<
-        string,
-        Array<Record<string, unknown>>
-      >();
+      const linesByVersion = new Map<string, Array<Record<string, unknown>>>();
       let lineSeq = 0;
       const NOW = new Date('2026-07-17T00:00:00Z');
 
@@ -1348,6 +1386,532 @@ describe('/orders (e2e)', () => {
       expect(transaction).not.toHaveBeenCalled();
       expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
       expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Story 4.7 — áp/duyệt chiết khấu + chốt sau duyệt (FR-18/FR-37)', () => {
+    it('403 chéo: áp với CHỈ quotes.create_edit; duyệt + list với CHỈ discounts.apply (nghịch đảo proof)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const ap = await request(server())
+        .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ amount: 1_000_000 });
+      expect(ap.status).toBe(403);
+      expect(ap.body.code).toBe(ErrorCode.FORBIDDEN);
+
+      givenPermissions(PERM.discountsApply);
+      const duyet = await request(server())
+        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: true });
+      expect(duyet.status).toBe(403);
+      const list = await request(server())
+        .get('/orders/cho-duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`);
+      expect(list.status).toBe(403);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('vòng đời ĐỒNG Ý đầy đủ: tạo → thêm dòng → áp (audit) → khoá sửa lúc choduyet → list (margin theo fence costs.view) → duyệt → chốt (snapshot discount) → preview echo → mở lại (version mới KHÔNG mang chiết khấu)', async () => {
+      givenPermissions(
+        PERM.quotesCreateEdit,
+        PERM.discountsApply,
+        PERM.discountsApprove,
+        PERM.ordersConfirm,
+        PERM.costsView,
+      );
+
+      // ===== Mock STATEFUL (khuôn vòng đời FR-6): DB giả trong bộ nhớ. =====
+      let orderState: Record<string, unknown> | null = null;
+      const versions = new Map<string, Record<string, unknown>>();
+      const linesByVersion = new Map<string, Array<Record<string, unknown>>>();
+      const approvals: Array<Record<string, unknown>> = [];
+      let lineSeq = 0;
+      let approvalSeq = 0;
+      const NOW = new Date('2026-07-17T00:00:00Z');
+
+      function allLines(): Array<Record<string, unknown>> {
+        return [...linesByVersion.values()].flat();
+      }
+
+      orderRepo.findUnique.mockImplementation(async () =>
+        orderState === null ? null : { ...orderState },
+      );
+      orderRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = {
+            ...DON_BAOGIA,
+            ...data,
+            currentVersionId: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+          };
+          return { ...orderState };
+        },
+      );
+      orderRepo.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = { ...orderState, ...data };
+          return { ...orderState };
+        },
+      );
+      orderVersionRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          versions.set(data.id as string, { ...data });
+          linesByVersion.set(data.id as string, []);
+          return { ...data };
+        },
+      );
+      orderVersionRepo.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) => {
+          const ver = versions.get(where.id);
+          return ver === undefined ? null : { ...ver };
+        },
+      );
+      lineRepo.findMany.mockImplementation(
+        async ({ where }: { where: { orderVersionId: string } }) =>
+          (linesByVersion.get(where.orderVersionId) ?? []).map((l) => ({
+            ...l,
+          })),
+      );
+      lineRepo.findFirst.mockImplementation(
+        async ({ where }: { where: { orderVersionId: string } }) => {
+          const lines = linesByVersion.get(where.orderVersionId) ?? [];
+          if (lines.length === 0) return null;
+          return lines.reduce((a, b) =>
+            (a.displayOrder as number) > (b.displayOrder as number) ? a : b,
+          );
+        },
+      );
+      lineRepo.findUnique.mockImplementation(
+        async ({ where }: { where: { id: string } }) =>
+          allLines().find((l) => l.id === where.id) ?? null,
+      );
+      lineRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          lineSeq += 1;
+          const row = {
+            id: `line-song-${lineSeq}`,
+            unitPriceSnapshot: null,
+            catalogPriceSnapshot: null,
+            costPriceSnapshot: null,
+            warrantyStartAt: null,
+            createdAt: NOW,
+            updatedAt: NOW,
+            ...data,
+          };
+          linesByVersion.get(data.orderVersionId as string)?.push(row);
+          return { ...row };
+        },
+      );
+      txOrderRepo.updateMany.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { status: string };
+          data: { status: string };
+        }) => {
+          if (orderState !== null && orderState.status === where.status) {
+            orderState = { ...orderState, status: data.status };
+            return { count: 1 };
+          }
+          return { count: 0 };
+        },
+      );
+      txOrderRepo.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          orderState = { ...orderState, ...data };
+          return { ...orderState };
+        },
+      );
+      txVersionRepo.update.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          versions.set(where.id, {
+            ...(versions.get(where.id) ?? { id: where.id }),
+            ...data,
+          });
+          return {};
+        },
+      );
+      txVersionRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          versions.set(data.id as string, { ...data });
+          if (!linesByVersion.has(data.id as string)) {
+            linesByVersion.set(data.id as string, []);
+          }
+          return { ...data };
+        },
+      );
+      txLineRepo.update.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = allLines().find((l) => l.id === where.id);
+          if (row === undefined) throw new Error('line ma');
+          Object.assign(row, data);
+          return { ...row };
+        },
+      );
+      txLineRepo.createMany.mockImplementation(
+        async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          for (const row of data) {
+            const verId = row.orderVersionId as string;
+            if (!linesByVersion.has(verId)) linesByVersion.set(verId, []);
+            linesByVersion
+              .get(verId)
+              ?.push({ ...row, createdAt: NOW, updatedAt: NOW });
+          }
+          return { count: data.length };
+        },
+      );
+      // Hồ sơ duyệt stateful: create push; updateMany là cổng atomic trên row; findFirst =
+      // MỚI NHẤT (đơn duy nhất trong test — phần tử cuối); findMany = pending kèm include.
+      txDiscountRepo.create.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => {
+          approvalSeq += 1;
+          const row = {
+            resolveNote: null,
+            resolvedByAccountId: null,
+            resolvedAt: null,
+            createdAt: new Date(NOW.getTime() + approvalSeq * 1000),
+            updatedAt: NOW,
+            ...data,
+          };
+          approvals.push(row);
+          return { ...row };
+        },
+      );
+      txDiscountRepo.updateMany.mockImplementation(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string; status: string };
+          data: Record<string, unknown>;
+        }) => {
+          const row = approvals.find(
+            (a) => a.id === where.id && a.status === where.status,
+          );
+          if (row === undefined) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        },
+      );
+      discountApprovalRepo.findFirst.mockImplementation(async () =>
+        approvals.length === 0 ? null : { ...approvals[approvals.length - 1] },
+      );
+      discountApprovalRepo.findMany.mockImplementation(async () =>
+        approvals
+          .filter((a) => a.status === 'cho_duyet')
+          .map((a) => ({
+            ...a,
+            order: { ...orderState },
+            requestedBy: { displayName: account.displayName },
+          })),
+      );
+      // HAI đường tra product: quote select (KHÔNG costPrice) vs margin select riêng
+      // {id, costPrice} — costPrice 1_960_000 ⇒ biên (2_450_000−1_960_000)/2_450_000 = 20%.
+      productRepo.findMany.mockImplementation(
+        async (args: { select: Record<string, unknown> }) =>
+          args.select.costPrice === true
+            ? [{ id: PIN_580W.id, costPrice: 1_960_000 }]
+            : [PIN_580W],
+      );
+
+      // ===== 1. Tạo đơn + thêm dòng (subtotal 19_600_000) =====
+      const tao = await request(server())
+        .post('/orders')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ customerSdt: '0912 345 678' });
+      expect(tao.status).toBe(201);
+      expect(tao.body.discount).toBeNull();
+      const verCu = tao.body.currentVersionId as string;
+      const themDong = await request(server())
+        .post(`/orders/${tao.body.id}/line-items`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ productId: PIN_580W.id, qty: 8 });
+      expect(themDong.status).toBe(201);
+
+      // ===== 2. Áp vượt subtotal ⇒ 400 fieldErrors amount =====
+      const apVuot = await request(server())
+        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ amount: 19_600_001 });
+      expect(apVuot.status).toBe(400);
+      expect(apVuot.body.fieldErrors).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'amount' })]),
+      );
+
+      // ===== 3. Áp 1_000_000 ⇒ 200 choduyet + discount cho_duyet + audit =====
+      const ap = await request(server())
+        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ amount: 1_000_000, note: 'Khách quen' });
+      expect(ap.status).toBe(200);
+      expect(ap.body.status).toBe('choduyet');
+      expect(ap.body.discount).toMatchObject({
+        amount: 1_000_000,
+        status: 'cho_duyet',
+        requestNote: 'Khách quen',
+      });
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'DiscountRequested' }),
+        }),
+      );
+
+      // ===== 4. choduyet đóng băng nội dung: PATCH meta + PATCH dòng ⇒ 409 =====
+      const patchMeta = await request(server())
+        .patch(`/orders/${tao.body.id}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ kWp: 5.5 });
+      expect(patchMeta.status).toBe(409);
+      const lineId = ap.body.lineItems[0].id as string;
+      const patchLine = await request(server())
+        .patch(`/orders/${tao.body.id}/line-items/${lineId}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ qty: 12 });
+      expect(patchLine.status).toBe(409);
+
+      // ===== 5. Áp LẦN HAI khi đang choduyet ⇒ 409 (áp KHÔNG idempotent) =====
+      const apLan2 = await request(server())
+        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ amount: 2_000_000 });
+      expect(apLan2.status).toBe(409);
+
+      // ===== 6. List chờ duyệt — CÓ costs.view: margin đúng số =====
+      const listCo = await request(server())
+        .get('/orders/cho-duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`);
+      expect(listCo.status).toBe(200);
+      expect(listCo.body).toHaveLength(1);
+      expect(listCo.body[0]).toMatchObject({
+        orderId: tao.body.id,
+        customerSdt: SDT_E164,
+        amount: 1_000_000,
+        requestNote: 'Khách quen',
+        requestedByAccountId: ACCOUNT_ID,
+        requestedByDisplayName: account.displayName,
+        subtotal: 19_600_000,
+        afterDiscount: 18_600_000,
+      });
+      expect(listCo.body[0].lines[0].estimatedMarginPct).toBe(20);
+      expect(JSON.stringify(listCo.body)).not.toContain('costPrice');
+
+      // ===== 7. List — KHÔNG costs.view: margin null toàn bộ, body sạch costPrice (FR-37) =====
+      givenPermissions(PERM.quotesCreateEdit, PERM.discountsApprove);
+      const listKhong = await request(server())
+        .get('/orders/cho-duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`);
+      expect(listKhong.status).toBe(200);
+      expect(listKhong.body[0].lines[0].estimatedMarginPct).toBeNull();
+      expect(JSON.stringify(listKhong.body)).not.toContain('costPrice');
+      givenPermissions(
+        PERM.quotesCreateEdit,
+        PERM.discountsApply,
+        PERM.discountsApprove,
+        PERM.ordersConfirm,
+        PERM.costsView,
+      );
+
+      // ===== 8. Duyệt đồng ý ⇒ 200 VẪN choduyet + discount dong_y + audit =====
+      const duyet = await request(server())
+        .post(`/orders/${tao.body.id}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: true });
+      expect(duyet.status).toBe(200);
+      expect(duyet.body.status).toBe('choduyet');
+      expect(duyet.body.discount.status).toBe('dong_y');
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'DiscountResolved' }),
+        }),
+      );
+
+      // ===== 9. Chốt từ choduyet ⇒ 200 dachot; version snapshot mang discountAmount =====
+      const chot = await request(server())
+        .post(`/orders/${tao.body.id}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(chot.status).toBe(200);
+      expect(chot.body.status).toBe('dachot');
+      expect(versions.get(verCu)?.discountAmount).toBe(1_000_000);
+      expect(versions.get(verCu)?.vatRate).toBe(8);
+
+      // ===== 10. Preview echo discount ⇒ VAT trên vatBase (con số phân biệt) =====
+      const preview = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({
+          lines: [{ unitPrice: 2_450_000, qty: 8 }],
+          discountAmount: 1_000_000,
+        });
+      expect(preview.status).toBe(200);
+      // vatBase = 18_600_000; VAT 8% half-up = 1_488_000 (KHÔNG phải 1_568_000 trên subtotal).
+      expect(preview.body).toEqual({
+        subtotal: 19_600_000,
+        discountAmount: 1_000_000,
+        vatAmount: 1_488_000,
+        total: 20_088_000,
+        vatRate: 8,
+        applyVat: true,
+      });
+
+      // ===== 11. Mở lại ⇒ version MỚI KHÔNG mang chiết khấu =====
+      const moLai = await request(server())
+        .post(`/orders/${tao.body.id}/mo-lai`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(moLai.status).toBe(200);
+      expect(moLai.body.status).toBe('baogia');
+      const verMoi = moLai.body.currentVersionId as string;
+      expect(verMoi).not.toBe(verCu);
+      expect(versions.get(verMoi)?.discountAmount).toBeUndefined();
+      // Bản cũ giữ nguyên chiết khấu đã đóng băng trong lịch sử.
+      expect(versions.get(verCu)?.discountAmount).toBe(1_000_000);
+    });
+
+    it('nhánh TỪ CHỐI: thiếu reason ⇒ 400; có reason ⇒ 200 baogia + resolveNote + audit', async () => {
+      givenPermissions(PERM.discountsApprove, PERM.quotesCreateEdit);
+      const DON_CHODUYET = { ...DON_BAOGIA, status: 'choduyet' };
+      const APPROVAL_PENDING = {
+        id: 'apr-e2e-1',
+        orderId: ORDER_ID,
+        orderVersionId: VERSION_ID,
+        amount: 1_000_000,
+        status: 'cho_duyet',
+        requestNote: 'Khách quen',
+        resolveNote: null,
+        requestedByAccountId: ACCOUNT_ID,
+        resolvedByAccountId: null,
+        resolvedAt: null,
+        createdAt: new Date('2026-07-17T03:00:00Z'),
+        updatedAt: new Date('2026-07-17T03:00:00Z'),
+      };
+      orderRepo.findUnique.mockResolvedValue(DON_CHODUYET);
+      discountApprovalRepo.findFirst.mockResolvedValue(APPROVAL_PENDING);
+
+      const thieuReason = await request(server())
+        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: false });
+      expect(thieuReason.status).toBe(400);
+      expect(thieuReason.body.fieldErrors).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'reason' })]),
+      );
+      expect(transaction).not.toHaveBeenCalled();
+
+      // Có reason: sau tx, view compose approval ĐÃ resolve (findFirst trả bản mới).
+      discountApprovalRepo.findFirst
+        .mockResolvedValueOnce(APPROVAL_PENDING)
+        .mockResolvedValue({
+          ...APPROVAL_PENDING,
+          status: 'tu_choi',
+          resolveNote: 'Biên quá mỏng',
+          resolvedByAccountId: ACCOUNT_ID,
+          resolvedAt: new Date('2026-07-17T04:00:00Z'),
+        });
+      const tuChoi = await request(server())
+        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: false, reason: 'Biên quá mỏng' });
+      expect(tuChoi.status).toBe(200);
+      expect(tuChoi.body.status).toBe('baogia');
+      expect(tuChoi.body.discount).toMatchObject({
+        status: 'tu_choi',
+        resolveNote: 'Biên quá mỏng',
+      });
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ eventType: 'DiscountResolved' }),
+        }),
+      );
+    });
+
+    it('retry duyệt CÙNG decision trên approval đã dong_y ⇒ 200 body y hệt GET, KHÔNG audit thêm', async () => {
+      givenPermissions(PERM.discountsApprove, PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'choduyet',
+      });
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        id: 'apr-e2e-2',
+        orderId: ORDER_ID,
+        orderVersionId: VERSION_ID,
+        amount: 1_000_000,
+        status: 'dong_y',
+        requestNote: null,
+        resolveNote: null,
+        requestedByAccountId: ACCOUNT_ID,
+        resolvedByAccountId: ACCOUNT_ID,
+        resolvedAt: new Date('2026-07-17T04:00:00Z'),
+        createdAt: new Date('2026-07-17T03:00:00Z'),
+        updatedAt: new Date('2026-07-17T04:00:00Z'),
+      });
+
+      const retry = await request(server())
+        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: true });
+      const get = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(get.body);
+      expect(retry.body.discount.status).toBe('dong_y');
+      expect(transaction).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('đơn ma ⇒ 404 envelope chuẩn cho cả áp lẫn duyệt', async () => {
+      givenPermissions(PERM.discountsApply, PERM.discountsApprove);
+      orderRepo.findUnique.mockResolvedValue(null);
+
+      const ap = await request(server())
+        .post('/orders/khong-co/ap-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ amount: 1 });
+      expect(ap.status).toBe(404);
+      expect(ap.body.code).toBe(ErrorCode.NOT_FOUND);
+
+      const duyet = await request(server())
+        .post('/orders/khong-co/duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: true });
+      expect(duyet.status).toBe(404);
+      expect(duyet.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it('ValidationPipe: amount 0 / float / vắng ⇒ 400; preview discountAmount âm ⇒ 400', async () => {
+      givenPermissions(PERM.discountsApply, PERM.quotesCreateEdit);
+
+      for (const body of [{ amount: 0 }, { amount: 100.5 }, {}]) {
+        const res = await request(server())
+          .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+          .set('Authorization', `Bearer ${token()}`)
+          .send(body);
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      }
+
+      const previewAm = await request(server())
+        .post('/orders/preview-total')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ lines: [{ unitPrice: 100, qty: 1 }], discountAmount: -1 });
+      expect(previewAm.status).toBe(400);
+      expect(transaction).not.toHaveBeenCalled();
     });
   });
 

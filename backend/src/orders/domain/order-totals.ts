@@ -23,10 +23,13 @@ export interface OrderTotalsInput {
   /** Phần trăm nguyên (8 = 8%). */
   readonly vatRate: number;
   readonly applyVat: boolean;
+  /** Chiết khấu int đồng trên Đơn (FR-18) — trừ TRƯỚC VAT; mặc định 0 = không chiết khấu. */
+  readonly discountAmount?: number;
 }
 
 export interface OrderTotals {
   readonly subtotal: number;
+  readonly discountAmount: number;
   readonly vatAmount: number;
   readonly total: number;
 }
@@ -36,8 +39,12 @@ export function computeOrderTotals(input: OrderTotalsInput): OrderTotals {
   for (const line of input.lines) {
     subtotal += lineAmount(line.unitPrice, line.qty);
   }
+  // Chiết khấu trừ thẳng subtotal thành vatBase — thuế tính trên số tiền thực thu (4.7).
+  // VẪN MỘT hàm pricing, VẪN MỘT điểm làm tròn (AD-16): half-up trên vatBase.
+  const discountAmount = input.discountAmount ?? 0;
+  const vatBase = subtotal - discountAmount;
   const vatAmount = input.applyVat
-    ? Math.floor((subtotal * input.vatRate + 50) / 100)
+    ? Math.floor((vatBase * input.vatRate + 50) / 100)
     : 0;
-  return { subtotal, vatAmount, total: subtotal + vatAmount };
+  return { subtotal, discountAmount, vatAmount, total: vatBase + vatAmount };
 }

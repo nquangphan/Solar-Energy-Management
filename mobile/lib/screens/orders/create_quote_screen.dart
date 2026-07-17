@@ -91,6 +91,16 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// `editable` tự bật lại vì status về 'baogia'.
   bool _moLaiBusy = false;
 
+  /// Đang chờ port Áp chiết khấu (Story 4.7) — cùng khuôn _chotBusy; thành
+  /// công thì màn tự khoá sửa vì status sang 'choduyet'.
+  bool _discountBusy = false;
+
+  // Dialog Áp chiết khấu (Story 4.7): amount là số nguyên đồng nhập tay
+  // (CHUYỂN ĐỔI input — pattern _freeUnitPrice, không phải số học tiền) + lý
+  // do đề xuất optional.
+  final TextEditingController _discountAmountCtl = TextEditingController();
+  final TextEditingController _discountNoteCtl = TextEditingController();
+
   // Text đang gõ của 2 input metadata — commit khi mất focus, prefill từ order;
   // lỗi port thì revert về giá trị order cũ (bất biến k).
   final TextEditingController _kWpCtl = TextEditingController();
@@ -120,6 +130,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     _freeNote.dispose();
     _kWpCtl.dispose();
     _validityCtl.dispose();
+    _discountAmountCtl.dispose();
+    _discountNoteCtl.dispose();
     super.dispose();
   }
 
@@ -142,6 +154,15 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// totals về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp.
   Future<void> _refreshTotals(Order fetched) async {
     final int ticket = ++_latestTotals;
+    // Chiết khấu HIỆU LỰC (Story 4.7): đơn đang chờ duyệt hoặc đã chốt với
+    // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc
+    // sau mở-lại, bản đang sửa không mang chiết khấu (muốn giảm phải áp +
+    // duyệt lại).
+    final OrderDiscount? discount = fetched.discount;
+    final bool discountActive = discount != null &&
+        fetched.status != 'baogia' &&
+        (discount.status == kDiscountChoDuyet ||
+            discount.status == kDiscountDongY);
     try {
       final OrderTotals fresh = await widget.ordersPort.previewTotal(
         PreviewTotalInput(
@@ -152,6 +173,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
           // vatMode null thì bỏ qua field (backend coi như có VAT).
           vatMode: fetched.vatMode,
+          // Echo chiết khấu của Đơn (Story 4.7) — con số backend đã trả.
+          discountAmount: discountActive ? discount.amount : null,
         ),
       );
       if (!mounted || ticket != _latestTotals) return;
@@ -444,6 +467,81 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.',
         confirmTone: AppButtonVariant.primary,
         onConfirm: _reviseOrder,
+      ),
+    );
+  }
+
+  /// Áp chiết khấu + gửi duyệt (Story 4.7, FR-18): BACKEND chuyển đơn sang
+  /// 'choduyet' và ghi hồ sơ duyệt — màn chỉ render Order trả về (`editable`
+  /// tự tắt, banner chờ duyệt hiện). KHÔNG toast. Lỗi → banner + giỏ + state
+  /// cũ NGUYÊN VẸN (bất biến k).
+  Future<void> _applyDiscount() async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _discountBusy = true);
+    try {
+      final Order applied = await widget.ordersPort.applyDiscount(
+        order.id,
+        ApplyDiscountInput(
+          amount: int.tryParse(_discountAmountCtl.text) ?? 0,
+          note: _discountNoteCtl.text.isNotEmpty ? _discountNoteCtl.text : null,
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _order = applied;
+        _error = null;
+      });
+      await _refreshTotals(applied);
+    } catch (err) {
+      _showError(err);
+    } finally {
+      if (mounted) setState(() => _discountBusy = false);
+    }
+  }
+
+  /// Dialog Áp chiết khấu (Story 4.7): MỘT dialog duy nhất (không chồng 2 tầng
+  /// overlay — UX-DR-20) gồm 2 field + câu hệ quả + Gửi duyệt/Huỷ. Huỷ (nút,
+  /// X, barrier, back) = đóng dialog, KHÔNG gọi port — đơn ở nguyên baogia.
+  Future<void> _openDiscountDialog() async {
+    await showAppDialog<void>(
+      context: context,
+      child: AppDialog(
+        title: 'Áp chiết khấu',
+        onClose: () => Navigator.of(context).pop(),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppField(
+              label: 'Mức chiết khấu (đ)',
+              controller: _discountAmountCtl,
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: AppTokens.space8),
+            AppField(label: 'Lý do đề xuất', controller: _discountNoteCtl),
+            const SizedBox(height: AppTokens.space8),
+            const Text(
+              'Gửi duyệt sẽ chuyển đơn sang Chờ duyệt chiết khấu — đơn khoá sửa cho tới khi được duyệt hoặc bị từ chối.',
+              style: _microMuted,
+            ),
+          ],
+        ),
+        footer: [
+          AppButton(
+            label: 'Huỷ',
+            variant: AppButtonVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          AppButton(
+            label: 'Gửi duyệt',
+            variant: AppButtonVariant.primary,
+            onPressed: () {
+              Navigator.of(context).pop();
+              _applyDiscount();
+            },
+          ),
+        ],
       ),
     );
   }
@@ -839,6 +937,34 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
               const SizedBox(height: AppTokens.space8),
               AppErrorState(message: _error!, onRetry: _refresh),
             ],
+            // Banner trạng thái chiết khấu (Story 4.7): trong 'choduyet' màn
+            // read-only (editable tắt) — banner nói rõ đang chờ ai; sau từ
+            // chối đơn về 'baogia' sửa được, banner mang lý do từ backend.
+            if (order.status == kOrderStatusChoduyet &&
+                order.discount?.status == kDiscountChoDuyet) ...[
+              const SizedBox(height: AppTokens.space8),
+              const AppBanner(
+                tone: AppBannerTone.warn,
+                message:
+                    'Chờ duyệt chiết khấu — chiết khấu đang chờ người có quyền duyệt.',
+              ),
+            ],
+            if (order.status == kOrderStatusChoduyet &&
+                order.discount?.status == kDiscountDongY) ...[
+              const SizedBox(height: AppTokens.space8),
+              const AppBanner(
+                tone: AppBannerTone.info,
+                message: 'Chiết khấu đã được duyệt — có thể chốt đơn.',
+              ),
+            ],
+            if (editable && order.discount?.status == kDiscountTuChoi) ...[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(
+                tone: AppBannerTone.warn,
+                message:
+                    'Chiết khấu bị từ chối — ${order.discount!.resolveNote ?? ''}',
+              ),
+            ],
             const SizedBox(height: AppTokens.space12),
             AppFrame(
               label: 'Giỏ hàng',
@@ -934,6 +1060,12 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     label: 'Tổng trước VAT',
                     value: _totals == null ? '—' : '${_totals!.subtotal}',
                   ),
+                  // Dòng chiết khấu (Story 4.7): CHỈ hiện khi có — số backend echo.
+                  if (_totals != null && _totals!.discountAmount > 0)
+                    _TotalRow(
+                      label: 'Chiết khấu',
+                      value: '${_totals!.discountAmount}',
+                    ),
                   _TotalRow(
                     label: 'Tiền VAT',
                     value: _totals == null ? '—' : '${_totals!.vatAmount}',
@@ -946,10 +1078,43 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                 ],
               ),
             ),
+            // Áp chiết khấu (Story 4.7): quyền riêng `discounts.apply` — thiếu
+            // quyền thì nút BIẾN MẤT (AppGate, UX-DR-22); backend vẫn enforce
+            // (AD-4). Bấm mở dialog nhập mức + lý do kèm câu hệ quả.
+            if (editable)
+              AppGate(
+                perms: widget.perms,
+                requires: AppPermissionKeys.discountsApply,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space12),
+                  child: AppButton(
+                    label: 'Áp chiết khấu',
+                    variant: AppButtonVariant.ghost,
+                    onPressed: _discountBusy ? null : _openDiscountDialog,
+                  ),
+                ),
+              ),
             // Chốt (Story 4.5): quyền riêng `orders.confirm` — thiếu quyền thì
             // nút BIẾN MẤT (AppGate, UX-DR-22), không disabled xám; backend vẫn
             // enforce (AD-4). Bấm mở dialog nêu hệ quả.
             if (editable)
+              AppGate(
+                perms: widget.perms,
+                requires: AppPermissionKeys.ordersConfirm,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space12),
+                  child: AppButton(
+                    label: 'Chốt báo giá',
+                    variant: AppButtonVariant.primary,
+                    onPressed: _chotBusy ? null : _openChotDialog,
+                  ),
+                ),
+              ),
+            // Chốt SAU DUYỆT (Story 4.7): đơn 'choduyet' với chiết khấu đã
+            // đồng ý — nút Chốt hiện lại (spine ChoDuyet→DaChot "duyệt then
+            // Chốt"); vẫn quyền orders.confirm, vẫn dialog hệ quả.
+            if (order.status == kOrderStatusChoduyet &&
+                order.discount?.status == kDiscountDongY)
               AppGate(
                 perms: widget.perms,
                 requires: AppPermissionKeys.ordersConfirm,

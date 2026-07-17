@@ -9,7 +9,7 @@
 // Intent-only (AD-11): onConfirm collects the user's intent and calls back — it
 // NEVER mutates Order.status. The transition is a backend applyTransition().
 
-import 'package:flutter/material.dart' show showDialog;
+import 'package:flutter/material.dart' show Material, MaterialType, showDialog;
 import 'package:flutter/widgets.dart';
 
 import '../tokens/app_tokens.dart';
@@ -27,9 +27,15 @@ Future<T?> showAppDialog<T>({
     context: context,
     barrierDismissible: barrierDismissible,
     barrierColor: AppTokens.ink.withValues(alpha: 0.32),
-    builder: (_) => Padding(
-      padding: const EdgeInsets.all(AppTokens.space22),
-      child: Center(child: child),
+    // Material TRONG SUỐT (không đổi nền/viền nào của .modal): dialog route —
+    // khác bottom-sheet — không tự cấp Material ancestor, mà TextField của
+    // AppField đòi nó (dialog Áp chiết khấu 4.7 là dialog đầu tiên mang input).
+    builder: (_) => Material(
+      type: MaterialType.transparency,
+      child: Padding(
+        padding: const EdgeInsets.all(AppTokens.space22),
+        child: Center(child: child),
+      ),
     ),
   );
 }

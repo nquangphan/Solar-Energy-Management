@@ -2,6 +2,39 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderLineItemResponseDto } from './order-line-item-response.dto';
 
 /**
+ * Trạng thái chiết khấu của Đơn — approval MỚI NHẤT (Story 4.7, FR-18). Client cần nó để
+ * render banner/nút mà KHÔNG thấy khái niệm version/approval-list. Sau từ chối, đơn
+ * `baogia` vẫn mang `status: 'tu_choi'` + `resolveNote` cho banner lý do.
+ */
+export class OrderDiscountDto {
+  @ApiProperty({ description: 'Mức chiết khấu đề xuất — integer đồng.' })
+  amount!: number;
+
+  @ApiProperty({
+    description:
+      "Trạng thái hồ sơ duyệt: 'cho_duyet' | 'dong_y' | 'tu_choi' (phân biệt với Order.status 'choduyet').",
+    example: 'cho_duyet',
+  })
+  status!: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true })
+  requestNote!: string | null;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Lý do duyệt / từ chối — null khi chưa resolve.',
+  })
+  resolveNote!: string | null;
+
+  @ApiProperty({ description: 'Thời điểm gửi duyệt.' })
+  requestedAt!: Date;
+
+  @ApiPropertyOptional({ type: Date, nullable: true })
+  resolvedAt!: Date | null;
+}
+
+/**
  * Response của `POST /orders` và `GET /orders/:id`. Dòng LUÔN phân giải qua
  * `currentVersionId` (AD-6) — response phẳng hoá chúng vào `lineItems`, client không cần
  * biết tới khái niệm version ở story này.
@@ -92,6 +125,14 @@ export class OrderResponseDto {
       'Dòng của BẢN HIỆU LỰC (qua currentVersionId), sắp theo displayOrder tăng dần. Rỗng = đơn mới tạo.',
   })
   lineItems!: OrderLineItemResponseDto[];
+
+  @ApiPropertyOptional({
+    type: OrderDiscountDto,
+    nullable: true,
+    description:
+      'Trạng thái chiết khấu — approval MỚI NHẤT (Story 4.7); null = đơn chưa từng áp chiết khấu.',
+  })
+  discount!: OrderDiscountDto | null;
 
   @ApiProperty()
   createdAt!: Date;

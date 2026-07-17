@@ -4,6 +4,8 @@ import { ErrorCode } from '../src/common/errors/error-code';
 import type { EventBus } from '../src/events/event-bus';
 import { lineAmount } from '../src/orders/domain/line-amount';
 import {
+  DiscountRequested,
+  DiscountResolved,
   OrderConfirmed,
   OrderCreated,
   OrderLineAdded,
@@ -124,15 +126,19 @@ describe('OrdersService', () => {
   };
   const productRepo = { findUnique: jest.fn(), findMany: jest.fn() };
   const customerRepo = { findUnique: jest.fn() };
+  const discountApprovalRepo = { findFirst: jest.fn(), findMany: jest.fn() };
   const transaction = jest.fn();
-  // Interactive tx cho confirm()/revise(): callback nhận CHÍNH bộ mock này làm `tx`.
+  // Interactive tx cho confirm()/revise()/applyDiscount()/resolveDiscount(): callback nhận
+  // CHÍNH bộ mock này làm `tx`.
   const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
   const txVersionRepo = { update: jest.fn(), create: jest.fn() };
   const txLineRepo = { update: jest.fn(), createMany: jest.fn() };
+  const txDiscountRepo = { create: jest.fn(), updateMany: jest.fn() };
   const txMock = {
     order: txOrderRepo,
     orderVersion: txVersionRepo,
     orderLineItem: txLineRepo,
+    discountApproval: txDiscountRepo,
   };
   const prisma = {
     order: orderRepo,
@@ -140,6 +146,7 @@ describe('OrdersService', () => {
     orderLineItem: lineRepo,
     product: productRepo,
     customer: customerRepo,
+    discountApproval: discountApprovalRepo,
     $transaction: transaction,
   } as unknown as PrismaService;
   const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
@@ -186,6 +193,11 @@ describe('OrdersService', () => {
     txLineRepo.update.mockResolvedValue({});
     txLineRepo.createMany.mockResolvedValue({ count: 0 });
     orderVersionRepo.findUnique.mockResolvedValue(null);
+    // Mặc định: đơn chưa từng áp chiết khấu — view compose `discount: null`.
+    discountApprovalRepo.findFirst.mockResolvedValue(null);
+    discountApprovalRepo.findMany.mockResolvedValue([]);
+    txDiscountRepo.create.mockResolvedValue({});
+    txDiscountRepo.updateMany.mockResolvedValue({ count: 1 });
   });
 
   describe('AC-1/AC-4 — tạo đơn: một transaction 3 op, snapshot sourceId từ Customer', () => {
@@ -738,12 +750,7 @@ describe('OrdersService', () => {
       });
 
       const err = await bat(
-        service.update(
-          ACTOR,
-          DON_BAOGIA.id,
-          { scopeVanChuyen: true },
-          true,
-        ),
+        service.update(ACTOR, DON_BAOGIA.id, { scopeVanChuyen: true }, true),
       );
 
       expect(err.errorCode).toBe(ErrorCode.CONFLICT);
@@ -801,12 +808,7 @@ describe('OrdersService', () => {
     });
 
     it('body rỗng (không field nào) ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event', async () => {
-      const view = await service.update(
-        ACTOR,
-        DON_BAOGIA.id,
-        {},
-        true,
-      );
+      const view = await service.update(ACTOR, DON_BAOGIA.id, {}, true);
 
       expect(view.scopeThiCong).toBe(DON_BAOGIA.scopeThiCong);
       expect(orderRepo.update).not.toHaveBeenCalled();
@@ -991,6 +993,7 @@ describe('OrdersService', () => {
       // 19_600_000 + 500_000 = 20_100_000; 8% = 1_608_000.
       expect(result).toEqual({
         subtotal: 20_100_000,
+        discountAmount: 0,
         vatAmount: 1_608_000,
         total: 21_708_000,
       });
@@ -1004,6 +1007,7 @@ describe('OrdersService', () => {
 
       expect(result).toEqual({
         subtotal: 1_000_000,
+        discountAmount: 0,
         vatAmount: 100_000,
         total: 1_100_000,
       });
@@ -1020,6 +1024,7 @@ describe('OrdersService', () => {
 
       expect(result).toEqual({
         subtotal: 19_600_000,
+        discountAmount: 0,
         vatAmount: 0,
         total: 19_600_000,
       });
@@ -1042,7 +1047,12 @@ describe('OrdersService', () => {
     it('mảng rỗng ⇒ {0,0,0}; KHÔNG chạm Prisma, KHÔNG publish event', () => {
       const result = service.previewTotal({ lines: [] }, 8);
 
-      expect(result).toEqual({ subtotal: 0, vatAmount: 0, total: 0 });
+      expect(result).toEqual({
+        subtotal: 0,
+        discountAmount: 0,
+        vatAmount: 0,
+        total: 0,
+      });
       // Stateless đúng nghĩa: zero interaction với DB lẫn EventBus.
       for (const repo of [
         orderRepo,
@@ -1057,6 +1067,75 @@ describe('OrdersService', () => {
       }
       expect(transaction).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('discountAmount trừ TRƯỚC VAT: vat trên vatBase với CON SỐ PHÂN BIỆT (720k chứ KHÔNG 800k) — mutant bỏ discount khỏi base lộ ngay', () => {
+      const result = service.previewTotal(
+        {
+          lines: [{ unitPrice: 10_000_000, qty: 1 }],
+          discountAmount: 1_000_000,
+        },
+        8,
+      );
+
+      // vatBase = 10tr − 1tr = 9tr; 8% của 9tr = 720_000 (mutant tính trên subtotal sẽ ra
+      // 800_000); total = 9tr + 720k.
+      expect(result).toEqual({
+        subtotal: 10_000_000,
+        discountAmount: 1_000_000,
+        vatAmount: 720_000,
+        total: 9_720_000,
+      });
+    });
+
+    it('discountAmount 0 và VẮNG field cho CÙNG kết quả (hành vi cũ y hệt — regression 4.2/4.4)', () => {
+      const soKhong = service.previewTotal(
+        { lines: [{ unitPrice: 1_000_000, qty: 1 }], discountAmount: 0 },
+        8,
+      );
+      const vangField = service.previewTotal(
+        { lines: [{ unitPrice: 1_000_000, qty: 1 }] },
+        8,
+      );
+
+      expect(soKhong).toEqual(vangField);
+      expect(soKhong.vatAmount).toBe(80_000);
+      expect(soKhong.total).toBe(1_080_000);
+    });
+
+    it('discountAmount > subtotal ⇒ 400 fieldErrors discountAmount', async () => {
+      const err = await bat(
+        Promise.resolve().then(() =>
+          service.previewTotal(
+            {
+              lines: [{ unitPrice: 1_000_000, qty: 1 }],
+              discountAmount: 1_000_001,
+            },
+            8,
+          ),
+        ),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(err.getStatus()).toBe(400);
+    });
+
+    it("vatMode 'khong_vat' + discount ⇒ total = subtotal − discount (afterDiscount cho màn duyệt)", () => {
+      const result = service.previewTotal(
+        {
+          lines: [{ unitPrice: 10_000_000, qty: 1 }],
+          vatMode: 'khong_vat',
+          discountAmount: 2_000_000,
+        },
+        8,
+      );
+
+      expect(result).toEqual({
+        subtotal: 10_000_000,
+        discountAmount: 2_000_000,
+        vatAmount: 0,
+        total: 8_000_000,
+      });
     });
   });
 
@@ -1112,10 +1191,17 @@ describe('OrdersService', () => {
       });
 
       // Version hiệu lực: vatRate từ config (controller resolve), vatMode HIỆU LỰC — đơn
-      // vatMode null (trước 4.4) đóng băng thành 'co_vat' TƯỜNG MINH, chotAt là thời điểm chốt.
+      // vatMode null (trước 4.4) đóng băng thành 'co_vat' TƯỜNG MINH, chotAt là thời điểm
+      // chốt. Đường `baogia` KHÔNG mang chiết khấu — `discountAmount` phải là null TƯỜNG
+      // MINH (regression 4.5 sau khi 4.7 mở đường chốt-từ-choduyet).
       expect(txVersionRepo.update).toHaveBeenCalledWith({
         where: { id: VERSION_ID },
-        data: { vatRate: 8, vatMode: 'co_vat', chotAt: expect.any(Date) },
+        data: {
+          vatRate: 8,
+          vatMode: 'co_vat',
+          chotAt: expect.any(Date),
+          discountAmount: null,
+        },
       });
 
       // 3 loại dòng — catalog thường: CẢ HAI cột = giá resolve SỐNG (2_600_000, không phải
@@ -1162,7 +1248,12 @@ describe('OrdersService', () => {
 
       expect(txVersionRepo.update).toHaveBeenCalledWith({
         where: { id: VERSION_ID },
-        data: { vatRate: 8, vatMode: 'khong_vat', chotAt: expect.any(Date) },
+        data: {
+          vatRate: 8,
+          vatMode: 'khong_vat',
+          chotAt: expect.any(Date),
+          discountAmount: null,
+        },
       });
     });
 
@@ -1236,7 +1327,7 @@ describe('OrdersService', () => {
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
-    it("trạng thái khác baogia/dachot (huy) ⇒ 409 CONFLICT, KHÔNG transaction", async () => {
+    it('trạng thái khác baogia/dachot (huy) ⇒ 409 CONFLICT, KHÔNG transaction', async () => {
       orderRepo.findUnique.mockResolvedValue({
         ...DON_BAOGIA,
         status: 'huy',
@@ -1442,9 +1533,8 @@ describe('OrdersService', () => {
 
     /** Version id MỚI mà revise() sinh — bắt từ payload create trong tx. */
     function versionIdMoi(): string {
-      return (
-        txVersionRepo.create.mock.calls[0][0] as { data: { id: string } }
-      ).data.id;
+      return (txVersionRepo.create.mock.calls[0][0] as { data: { id: string } })
+        .data.id;
     }
 
     beforeEach(() => {
@@ -1705,6 +1795,708 @@ describe('OrdersService', () => {
       });
       expect(view.status).toBe('baogia');
       expect(view.lineItems).toEqual([]);
+    });
+  });
+
+  describe('applyDiscount — Áp chiết khấu + gửi duyệt (Story 4.7, FR-18/AD-18)', () => {
+    const APPROVAL_ROW = {
+      id: 'apr-1',
+      orderId: DON_BAOGIA.id,
+      orderVersionId: VERSION_ID,
+      amount: 1_000_000,
+      status: 'cho_duyet',
+      requestNote: 'Khách quen',
+      resolveNote: null,
+      requestedByAccountId: ACTOR,
+      resolvedByAccountId: null,
+      resolvedAt: null,
+      createdAt: new Date('2026-07-17T03:00:00Z'),
+      updatedAt: new Date('2026-07-17T03:00:00Z'),
+    };
+
+    beforeEach(() => {
+      // Giỏ 1 dòng catalog: qty 8 × 2_450_000 = subtotal 19_600_000 (cờ tier BẬT nhưng
+      // qty < ngưỡng 10 ⇒ base price).
+      lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
+    });
+
+    it("happy: payload từng op — cổng baogia→choduyet, create đúng row approval; thứ tự ['write','publish']; event mang amount/note; view compose discount", async () => {
+      const thuTu: string[] = [];
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const ketQua = await callback(txMock);
+          thuTu.push('write');
+          return ketQua;
+        },
+      );
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+      discountApprovalRepo.findFirst.mockResolvedValue(APPROVAL_ROW);
+
+      const view = await service.applyDiscount(
+        ACTOR,
+        DON_BAOGIA.id,
+        1_000_000,
+        'Khách quen',
+        true,
+      );
+
+      // Cổng atomic: UPDATE điều kiện status trong WHERE — bất biến "một pending mỗi đơn".
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'baogia' },
+        data: { status: 'choduyet' },
+      });
+      // Row approval: uuid tiền-sinh, gắn bản hiệu lực, trạng thái pending, actor đề xuất.
+      expect(txDiscountRepo.create).toHaveBeenCalledWith({
+        data: {
+          id: expect.any(String),
+          orderId: DON_BAOGIA.id,
+          orderVersionId: VERSION_ID,
+          amount: 1_000_000,
+          status: 'cho_duyet',
+          requestNote: 'Khách quen',
+          requestedByAccountId: ACTOR,
+        },
+      });
+
+      expect(thuTu).toEqual(['write', 'publish']);
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const event = eventBus.publish.mock.calls[0][0] as DiscountRequested;
+      expect(event).toBeInstanceOf(DiscountRequested);
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.amount).toBe(1_000_000);
+      expect(event.note).toBe('Khách quen');
+      expect(event.before.status).toBe('baogia');
+      expect(event.after.status).toBe('choduyet');
+      expect(event.target).toEqual({ type: 'Order', id: DON_BAOGIA.id });
+
+      expect(view.status).toBe('choduyet');
+      expect(view.discount).toEqual({
+        amount: 1_000_000,
+        status: 'cho_duyet',
+        requestNote: 'Khách quen',
+        resolveNote: null,
+        requestedAt: APPROVAL_ROW.createdAt,
+        resolvedAt: null,
+      });
+    });
+
+    it('amount vượt subtotal hiện hành ⇒ 400 fieldErrors amount, KHÔNG transaction, KHÔNG event', async () => {
+      const err = await bat(
+        service.applyDiscount(ACTOR, DON_BAOGIA.id, 19_600_001, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(err.getStatus()).toBe(400);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('amount ĐÚNG BẰNG subtotal (biên trên) hợp lệ — tx chạy, row mang đúng amount', async () => {
+      await service.applyDiscount(ACTOR, DON_BAOGIA.id, 19_600_000, null, true);
+
+      expect(txDiscountRepo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          amount: 19_600_000,
+          requestNote: null,
+        }) as unknown,
+      });
+    });
+
+    it('đơn 0 dòng ⇒ 400 VALIDATION_ERROR, KHÔNG transaction', async () => {
+      lineRepo.findMany.mockResolvedValue([]);
+
+      const err = await bat(
+        service.applyDiscount(ACTOR, DON_BAOGIA.id, 1, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(err.getStatus()).toBe(400);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it("status khác baogia ('choduyet' — double-tap) ⇒ 409, KHÔNG transaction, KHÔNG event", async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'choduyet',
+      });
+
+      const err = await bat(
+        service.applyDiscount(ACTOR, DON_BAOGIA.id, 1_000_000, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('race thua cổng atomic (count 0) → đọc lại → 409 (áp KHÔNG idempotent-return), KHÔNG event', async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+
+      const err = await bat(
+        service.applyDiscount(ACTOR, DON_BAOGIA.id, 1_000_000, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('áp LẠI sau từ chối: approval tu_choi cũ KHÔNG chặn — tạo approval MỚI pending, view compose bản mới nhất', async () => {
+      // Đơn đã quay về baogia sau từ chối; approval tu_choi nằm lại làm hồ sơ. Áp lại
+      // phải đi qua (cổng chỉ nhìn Order.status) và bản MỚI đè vai trò "mới nhất".
+      const TU_CHOI_CU = {
+        ...APPROVAL_ROW,
+        status: 'tu_choi',
+        resolveNote: 'Biên quá mỏng',
+        resolvedByAccountId: 'acc-quanly-1',
+        resolvedAt: new Date('2026-07-17T04:00:00Z'),
+      };
+      const PENDING_MOI = {
+        ...APPROVAL_ROW,
+        id: 'apr-2',
+        amount: 500_000,
+        requestNote: 'Giảm ít hơn',
+        createdAt: new Date('2026-07-17T05:00:00Z'),
+        updatedAt: new Date('2026-07-17T05:00:00Z'),
+      };
+      discountApprovalRepo.findFirst
+        .mockResolvedValueOnce(TU_CHOI_CU) // viewOf(before) — tính subtotal
+        .mockResolvedValue(PENDING_MOI); // viewOf(after) — sau tx
+
+      const view = await service.applyDiscount(
+        ACTOR,
+        DON_BAOGIA.id,
+        500_000,
+        'Giảm ít hơn',
+        true,
+      );
+
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'baogia' },
+        data: { status: 'choduyet' },
+      });
+      expect(txDiscountRepo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          amount: 500_000,
+          status: 'cho_duyet',
+          requestNote: 'Giảm ít hơn',
+        }) as unknown,
+      });
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      expect(view.status).toBe('choduyet');
+      expect(view.discount).toMatchObject({
+        amount: 500_000,
+        status: 'cho_duyet',
+      });
+    });
+  });
+
+  describe('resolveDiscount — Duyệt/Từ chối chiết khấu (Story 4.7, FR-18/AD-18)', () => {
+    const NGUOI_DUYET = 'acc-quanly-1';
+    const DON_CHODUYET: Order = { ...DON_BAOGIA, status: 'choduyet' };
+    const APPROVAL_PENDING = {
+      id: 'apr-1',
+      orderId: DON_BAOGIA.id,
+      orderVersionId: VERSION_ID,
+      amount: 1_000_000,
+      status: 'cho_duyet',
+      requestNote: 'Khách quen',
+      resolveNote: null,
+      requestedByAccountId: ACTOR,
+      resolvedByAccountId: null,
+      resolvedAt: null,
+      createdAt: new Date('2026-07-17T03:00:00Z'),
+      updatedAt: new Date('2026-07-17T03:00:00Z'),
+    };
+
+    beforeEach(() => {
+      orderRepo.findUnique.mockResolvedValue(DON_CHODUYET);
+      discountApprovalRepo.findFirst.mockResolvedValue(APPROVAL_PENDING);
+      lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
+    });
+
+    it("đồng ý: cổng trên CHÍNH row approval đúng where/data; KHÔNG op order nào (đơn Ở NGUYÊN choduyet); thứ tự ['write','publish']; event approved=true", async () => {
+      const thuTu: string[] = [];
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const ketQua = await callback(txMock);
+          thuTu.push('write');
+          return ketQua;
+        },
+      );
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+
+      const view = await service.resolveDiscount(
+        NGUOI_DUYET,
+        DON_BAOGIA.id,
+        true,
+        null,
+        true,
+      );
+
+      expect(txDiscountRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: APPROVAL_PENDING.id, status: 'cho_duyet' },
+        data: {
+          status: 'dong_y',
+          resolvedByAccountId: NGUOI_DUYET,
+          resolveNote: null,
+          resolvedAt: expect.any(Date),
+        },
+      });
+      // Đồng ý KHÔNG đổi status đơn — Chốt là hành động RIÊNG qua confirm().
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+
+      expect(thuTu).toEqual(['write', 'publish']);
+      const event = eventBus.publish.mock.calls[0][0] as DiscountResolved;
+      expect(event).toBeInstanceOf(DiscountResolved);
+      expect(event.actorAccountId).toBe(NGUOI_DUYET);
+      expect(event.approved).toBe(true);
+      expect(event.reason).toBeNull();
+      expect(event.before.status).toBe('choduyet');
+      expect(event.after.status).toBe('choduyet');
+
+      expect(view.status).toBe('choduyet');
+    });
+
+    it('từ chối: CÓ op order choduyet→baogia đúng where/data; approval ghi resolveNote; event approved=false mang reason', async () => {
+      const view = await service.resolveDiscount(
+        NGUOI_DUYET,
+        DON_BAOGIA.id,
+        false,
+        'Biên quá mỏng',
+        true,
+      );
+
+      expect(txDiscountRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: APPROVAL_PENDING.id, status: 'cho_duyet' },
+        data: {
+          status: 'tu_choi',
+          resolvedByAccountId: NGUOI_DUYET,
+          resolveNote: 'Biên quá mỏng',
+          resolvedAt: expect.any(Date),
+        },
+      });
+      // Đơn quay về Báo giá — sửa lại được; approval tu_choi nằm lại làm hồ sơ.
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'choduyet' },
+        data: { status: 'baogia' },
+      });
+
+      const event = eventBus.publish.mock.calls[0][0] as DiscountResolved;
+      expect(event.approved).toBe(false);
+      expect(event.reason).toBe('Biên quá mỏng');
+      expect(event.before.status).toBe('choduyet');
+      expect(event.after.status).toBe('baogia');
+
+      expect(view.status).toBe('baogia');
+    });
+
+    it('từ chối THIẾU reason (null / toàn whitespace) ⇒ 400 fieldErrors reason, KHÔNG transaction, KHÔNG event', async () => {
+      const errNull = await bat(
+        service.resolveDiscount(NGUOI_DUYET, DON_BAOGIA.id, false, null, true),
+      );
+      const errTrang = await bat(
+        service.resolveDiscount(NGUOI_DUYET, DON_BAOGIA.id, false, '   ', true),
+      );
+
+      expect(errNull.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(errNull.getStatus()).toBe(400);
+      expect(errTrang.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('retry CÙNG decision trên approval đã dong_y ⇒ 200 view hiện tại, KHÔNG transaction, KHÔNG event', async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_PENDING,
+        status: 'dong_y',
+        resolvedByAccountId: NGUOI_DUYET,
+        resolvedAt: new Date('2026-07-17T04:00:00Z'),
+      });
+
+      const view = await service.resolveDiscount(
+        NGUOI_DUYET,
+        DON_BAOGIA.id,
+        true,
+        null,
+        true,
+      );
+
+      expect(view.status).toBe('choduyet');
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('decision NGƯỢC trên approval đã dong_y ⇒ 409 CONFLICT, KHÔNG transaction', async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_PENDING,
+        status: 'dong_y',
+      });
+
+      const err = await bat(
+        service.resolveDiscount(
+          NGUOI_DUYET,
+          DON_BAOGIA.id,
+          false,
+          'Đổi ý',
+          true,
+        ),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('KHÔNG có approval nào ⇒ 409 CONFLICT, KHÔNG transaction', async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue(null);
+
+      const err = await bat(
+        service.resolveDiscount(NGUOI_DUYET, DON_BAOGIA.id, true, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('race thua cổng (count 0) → đọc lại thấy CÙNG decision ⇒ idempotent view, KHÔNG event', async () => {
+      txDiscountRepo.updateMany.mockResolvedValue({ count: 0 });
+      discountApprovalRepo.findFirst
+        .mockResolvedValueOnce(APPROVAL_PENDING) // pre-check: còn pending
+        .mockResolvedValueOnce({ ...APPROVAL_PENDING, status: 'dong_y' }); // bên kia đã duyệt
+
+      const view = await service.resolveDiscount(
+        NGUOI_DUYET,
+        DON_BAOGIA.id,
+        true,
+        null,
+        true,
+      );
+
+      expect(view.status).toBe('choduyet');
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('race thua cổng → đọc lại thấy decision NGƯỢC ⇒ 409, KHÔNG event', async () => {
+      txDiscountRepo.updateMany.mockResolvedValue({ count: 0 });
+      discountApprovalRepo.findFirst
+        .mockResolvedValueOnce(APPROVAL_PENDING)
+        .mockResolvedValueOnce({ ...APPROVAL_PENDING, status: 'tu_choi' });
+
+      const err = await bat(
+        service.resolveDiscount(NGUOI_DUYET, DON_BAOGIA.id, true, null, true),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('retry TỪ CHỐI trên approval đã tu_choi KHÔNG kèm reason ⇒ idempotent view (check idempotency TRƯỚC validate reason), đọc approval MỚI NHẤT, KHÔNG tx/event', async () => {
+      // Retry sau khi từ chối thành công: client có thể gửi lại body không reason —
+      // đảo thứ tự idempotency/validate-reason sẽ 400 sai và phá NFR SM-1.
+      orderRepo.findUnique.mockResolvedValue(DON_BAOGIA); // đơn đã quay về baogia
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_PENDING,
+        status: 'tu_choi',
+        resolveNote: 'Biên quá mỏng',
+        resolvedByAccountId: NGUOI_DUYET,
+        resolvedAt: new Date('2026-07-17T04:00:00Z'),
+      });
+
+      const view = await service.resolveDiscount(
+        NGUOI_DUYET,
+        DON_BAOGIA.id,
+        false,
+        null,
+        true,
+      );
+
+      // "Mới nhất" là hợp đồng thật: sau áp-lại có NHIỀU approval — bỏ orderBy là
+      // resolve nhầm bản cũ nhất. Pin CALL ĐẦU (điểm đọc quyết định của resolveDiscount)
+      // vì viewOf cũng findFirst với orderBy khớp — assert any-call sẽ false-green.
+      expect(discountApprovalRepo.findFirst).toHaveBeenNthCalledWith(1, {
+        where: { orderId: DON_BAOGIA.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(view.status).toBe('baogia');
+      expect(view.discount).toMatchObject({
+        status: 'tu_choi',
+        resolveNote: 'Biên quá mỏng',
+      });
+      expect(transaction).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('từ chối thắng cổng approval nhưng đơn KHÔNG ở choduyet (bất biến gãy) ⇒ lỗi nổi lên, rollback TOÀN tx, KHÔNG event', async () => {
+      // Approval cho_duyet ⇒ đơn PHẢI choduyet (cổng áp bảo đảm). Cổng order count 0
+      // trong nhánh từ chối là dữ liệu gãy — PHẢI throw để Prisma rollback cả op approval,
+      // KHÔNG được nuốt im lặng (approval resolved trong khi đơn kẹt choduyet).
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.resolveDiscount(
+          NGUOI_DUYET,
+          DON_BAOGIA.id,
+          false,
+          'Biên quá mỏng',
+          true,
+        ),
+      ).rejects.toThrow(/[Bb]ất biến/);
+
+      // Cổng approval ĐÃ chạy trước khi phát hiện gãy — rollback là việc của tx.
+      expect(txDiscountRepo.updateMany).toHaveBeenCalledTimes(1);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("confirm — Chốt từ choduyet sau duyệt (Story 4.7, spine 'duyệt then Chốt')", () => {
+    const DON_CHODUYET: Order = { ...DON_BAOGIA, status: 'choduyet' };
+    const APPROVAL_DONG_Y = {
+      id: 'apr-1',
+      orderId: DON_BAOGIA.id,
+      orderVersionId: VERSION_ID,
+      amount: 1_500_000,
+      status: 'dong_y',
+      requestNote: null,
+      resolveNote: 'OK',
+      requestedByAccountId: ACTOR,
+      resolvedByAccountId: 'acc-quanly-1',
+      resolvedAt: new Date('2026-07-17T04:00:00Z'),
+      createdAt: new Date('2026-07-17T03:00:00Z'),
+      updatedAt: new Date('2026-07-17T04:00:00Z'),
+    };
+
+    beforeEach(() => {
+      orderRepo.findUnique.mockResolvedValue(DON_CHODUYET);
+      discountApprovalRepo.findFirst.mockResolvedValue(APPROVAL_DONG_Y);
+      lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
+    });
+
+    it('approval dong_y ⇒ cổng where dùng status QUAN SÁT (choduyet), version snapshot mang discountAmount = amount đã duyệt', async () => {
+      const view = await service.confirm(ACTOR, DON_BAOGIA.id, 8, true);
+
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'choduyet' },
+        data: { status: 'dachot' },
+      });
+      expect(txVersionRepo.update).toHaveBeenCalledWith({
+        where: { id: VERSION_ID },
+        data: {
+          vatRate: 8,
+          vatMode: 'co_vat',
+          chotAt: expect.any(Date),
+          discountAmount: 1_500_000,
+        },
+      });
+      expect(view.status).toBe('dachot');
+      expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(OrderConfirmed);
+    });
+
+    it("approval còn cho_duyet ⇒ 409 'Chiết khấu chưa được duyệt', KHÔNG transaction", async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_DONG_Y,
+        status: 'cho_duyet',
+        resolvedAt: null,
+      });
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('approval tu_choi (dữ liệu kẹt bất thường) ⇒ 409, KHÔNG transaction', async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_DONG_Y,
+        status: 'tu_choi',
+      });
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('đơn choduyet KHÔNG có approval nào ⇒ 409, KHÔNG transaction', async () => {
+      discountApprovalRepo.findFirst.mockResolvedValue(null);
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('race reject-giữa-chừng: thua cổng choduyet (count 0) → đọc lại thấy baogia ⇒ 409, KHÔNG event', async () => {
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_CHODUYET) // pre-check
+        .mockResolvedValueOnce({ ...DON_BAOGIA, status: 'baogia' }); // reject thắng trước
+
+      const err = await bat(service.confirm(ACTOR, DON_BAOGIA.id, 8, true));
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listPendingDiscounts — danh sách chờ duyệt + biên ước tính (Story 4.7, FR-18/FR-37)', () => {
+    const DON_CHODUYET: Order = { ...DON_BAOGIA, status: 'choduyet' };
+    /** Biên 33.4% (1000−666=334) — half-up XUỐNG 33. */
+    const SP_A = {
+      id: 'prod-a',
+      name: 'SP A',
+      unit: 'cái',
+      price: 1_000,
+      priceEditable: false,
+      warrantyMonths: null,
+      prices: [],
+    };
+    /** Biên 33.5% (200−133=67) — half-up LÊN 34. */
+    const SP_B = {
+      id: 'prod-b',
+      name: 'SP B',
+      unit: 'cái',
+      price: 200,
+      priceEditable: false,
+      warrantyMonths: null,
+      prices: [],
+    };
+    const DONG_A: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-a',
+      productId: 'prod-a',
+      name: 'SP A',
+      qty: 2,
+      unitPrice: 1_000,
+      displayOrder: 0,
+    };
+    const DONG_B: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-b',
+      productId: 'prod-b',
+      name: 'SP B',
+      qty: 1,
+      unitPrice: 200,
+      displayOrder: 1,
+    };
+    /** Dòng tự do — không productId ⇒ margin null. */
+    const DONG_TU_DO: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-c',
+      productId: null,
+      name: 'Tự do',
+      unit: 'bộ',
+      qty: 1,
+      unitPrice: 500,
+      priceEditable: true,
+      displayOrder: 2,
+    };
+    /** Dòng giá 0 (tặng kèm) — chia 0 ⇒ margin null dù có costPrice. */
+    const DONG_GIA_0: OrderLineItem = {
+      ...DONG_CATALOG,
+      id: 'line-d',
+      productId: 'prod-a',
+      name: 'SP A tặng kèm',
+      qty: 1,
+      unitPrice: 0,
+      priceEditable: true,
+      displayOrder: 3,
+    };
+    const APPROVAL_KEM_ORDER = {
+      id: 'apr-1',
+      orderId: DON_BAOGIA.id,
+      orderVersionId: VERSION_ID,
+      amount: 700,
+      status: 'cho_duyet',
+      requestNote: 'Khách quen',
+      resolveNote: null,
+      requestedByAccountId: ACTOR,
+      resolvedByAccountId: null,
+      resolvedAt: null,
+      createdAt: new Date('2026-07-17T03:00:00Z'),
+      updatedAt: new Date('2026-07-17T03:00:00Z'),
+      order: DON_CHODUYET,
+      requestedBy: { displayName: 'Thợ Kỹ Sư A' },
+    };
+
+    beforeEach(() => {
+      discountApprovalRepo.findMany.mockResolvedValue([APPROVAL_KEM_ORDER]);
+      lineRepo.findMany.mockResolvedValue([
+        DONG_A,
+        DONG_B,
+        DONG_TU_DO,
+        DONG_GIA_0,
+      ]);
+      // HAI đường tra product: toViews (quote select — KHÔNG costPrice) và margin
+      // (select riêng {id, costPrice}) — phân biệt theo select của call.
+      productRepo.findMany.mockImplementation(
+        async (args: { select: Record<string, unknown> }) =>
+          args.select.costPrice === true
+            ? [
+                { id: 'prod-a', costPrice: 666 },
+                { id: 'prod-b', costPrice: 133 },
+              ]
+            : [SP_A, SP_B],
+      );
+    });
+
+    it('CÓ costs.view: item đúng shape, subtotal/afterDiscount backend tính, margin half-up biên (33.4→33, 33.5→34), null cho tự do/giá 0', async () => {
+      const items = await service.listPendingDiscounts(true, true);
+
+      expect(discountApprovalRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { status: 'cho_duyet' } }),
+      );
+      expect(items).toHaveLength(1);
+      const item = items[0];
+      expect(item.orderId).toBe(DON_BAOGIA.id);
+      expect(item.customerSdt).toBe(SDT_E164);
+      expect(item.amount).toBe(700);
+      expect(item.requestNote).toBe('Khách quen');
+      expect(item.requestedByAccountId).toBe(ACTOR);
+      expect(item.requestedByDisplayName).toBe('Thợ Kỹ Sư A');
+      // subtotal = 2×1000 + 1×200 + 500 + 0 = 2_700; afterDiscount = 2_700 − 700 = 2_000.
+      expect(item.subtotal).toBe(2_700);
+      expect(item.afterDiscount).toBe(2_000);
+      expect(item.lines.map((line) => line.estimatedMarginPct)).toEqual([
+        33,
+        34,
+        null,
+        null,
+      ]);
+      // Margin là số ĐÃ LÀM TRÒN — response không chứa costPrice dưới bất kỳ dạng nào.
+      expect(JSON.stringify(items)).not.toContain('costPrice');
+    });
+
+    it('KHÔNG costs.view: mọi margin null VÀ KHÔNG query costPrice (fence FR-37 hai chiều)', async () => {
+      const items = await service.listPendingDiscounts(false, true);
+
+      expect(
+        items[0].lines.every((line) => line.estimatedMarginPct === null),
+      ).toBe(true);
+      for (const call of productRepo.findMany.mock.calls) {
+        expect(
+          (call[0] as { select: Record<string, unknown> }).select,
+        ).not.toHaveProperty('costPrice');
+      }
+      expect(JSON.stringify(items)).not.toContain('costPrice');
+    });
+
+    it('không approval pending nào ⇒ mảng rỗng, KHÔNG tra dòng/product', async () => {
+      discountApprovalRepo.findMany.mockResolvedValue([]);
+
+      const items = await service.listPendingDiscounts(true, true);
+
+      expect(items).toEqual([]);
+      expect(lineRepo.findMany).not.toHaveBeenCalled();
+      expect(productRepo.findMany).not.toHaveBeenCalled();
     });
   });
 

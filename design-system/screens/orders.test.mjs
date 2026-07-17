@@ -115,7 +115,9 @@ test('each platform reaches the backend through every port method the cart needs
   // `[\s\S]{0,30}?` tolerates the line break dart format puts between the port
   // and the method (`widget.ordersPort\n    .create(`).
   for (const [name, code] of allCode) {
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder', 'reviseOrder']) {
+    // `applyDiscount` là method DUY NHẤT của 4.7 mà màn cart gọi —
+    // resolveDiscount/listPendingDiscounts thuộc màn duyệt (discount-approval.test.mjs).
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder', 'reviseOrder', 'applyDiscount']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -185,6 +187,19 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     // confirm dialog (UX-DR-20: the dialog states what reopening means).
     'Mở lại để sửa',
     'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.',
+    // Áp chiết khấu (Story 4.7) — the button/dialog title, the two fields, the
+    // send button, the FULL consequence sentence, the three state banners
+    // (rejected = prefix, the resolveNote is appended at runtime) and the
+    // totals row label.
+    'Áp chiết khấu',
+    'Mức chiết khấu (đ)',
+    'Lý do đề xuất',
+    'Gửi duyệt',
+    'Gửi duyệt sẽ chuyển đơn sang Chờ duyệt chiết khấu — đơn khoá sửa cho tới khi được duyệt hoặc bị từ chối.',
+    'Chờ duyệt chiết khấu — chiết khấu đang chờ người có quyền duyệt.',
+    'Chiết khấu đã được duyệt — có thể chốt đơn.',
+    'Chiết khấu bị từ chối — ',
+    'Chiết khấu',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `web quote screen is missing the label "${label}"`);
@@ -266,17 +281,28 @@ test('web wires all three totals fields; both fakes carry the one half-up VAT fo
   const dartFake = read('mobile/lib/design_system/session/fake_orders_port.dart');
   // Story 4.4: the multiplier is the fake's `vatRate` const (pinned to the backend
   // default 8) and the tick echo gates it — same shape on both twins.
+  // Story 4.7: the base is `vatBase = subtotal - discountAmount` — the discount
+  // subtracts BEFORE VAT; a fake computing VAT on the raw subtotal has drifted
+  // from computeOrderTotals().
   assert.ok(
-    webFake.includes('Math.floor((subtotal * vatRate + 50) / 100)'),
-    'web fake must compute VAT with the backend formula floor((subtotal*vatRate+50)/100) — half-up, grand subtotal',
+    webFake.includes('Math.floor((vatBase * vatRate + 50) / 100)'),
+    'web fake must compute VAT with the backend formula floor((vatBase*vatRate+50)/100) — half-up, on vatBase',
+  );
+  assert.ok(
+    webFake.includes('const vatBase = subtotal - discountAmount;'),
+    'web fake must subtract the discount into vatBase before VAT (Story 4.7)',
   );
   assert.ok(
     webFake.includes('const vatRate = 8;'),
     'web fake must pin vatRate to the backend default 8',
   );
   assert.ok(
-    dartFake.includes('(subtotal * vatRate + 50) ~/ 100'),
-    'dart fake must compute VAT with the backend formula (subtotal*vatRate+50)~/100 — half-up, grand subtotal',
+    dartFake.includes('(vatBase * vatRate + 50) ~/ 100'),
+    'dart fake must compute VAT with the backend formula (vatBase*vatRate+50)~/100 — half-up, on vatBase',
+  );
+  assert.ok(
+    dartFake.includes('final int vatBase = subtotal - discountAmount;'),
+    'dart fake must subtract the discount into vatBase before VAT (Story 4.7)',
   );
   assert.ok(
     dartFake.includes('const int vatRate = 8;'),
@@ -396,6 +422,13 @@ test('no screen self-assigns the confirmed status — it only renders the Order 
     assert.ok(
       !code.includes("'dachot'"),
       `${name} must not carry the confirmed-status literal — status comes only from the Order the port returns`,
+    );
+    // Story 4.7: the awaiting-approval status gets the SAME rule — compare via
+    // the port constant (ORDER_STATUS_CHODUYET / kOrderStatusChoduyet), never
+    // the raw literal.
+    assert.ok(
+      !code.includes("'choduyet'"),
+      `${name} must not carry the awaiting-approval status literal — import the port constant`,
     );
   }
 });
