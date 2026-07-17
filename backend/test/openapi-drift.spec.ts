@@ -343,6 +343,34 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(document.components?.schemas?.FieldErrorDto).toBeDefined();
   });
 
+  it('spec chứa 3 route xuất/tải báo giá + 2 DTO metadata; 2 route GET khai binary (FR-21, AD-3)', () => {
+    const document = buildOpenApiDocument(app);
+    expect(document.paths['/orders/{id}/xuat-bao-gia']?.post).toBeDefined();
+    expect(document.components?.schemas?.QuoteExportResponseDto).toBeDefined();
+    expect(document.components?.schemas?.QuoteExportFileDto).toBeDefined();
+
+    // 2 route proxy trả bytes: content-type đúng loại file + schema binary — FE gen client
+    // biết đây là download, không phải JSON.
+    const anhGet = document.paths['/orders/{id}/bao-gia/anh']?.get as {
+      responses: Record<
+        string,
+        { content?: Record<string, { schema?: { format?: string } }> }
+      >;
+    };
+    const pdfGet = document.paths['/orders/{id}/bao-gia/pdf']?.get as {
+      responses: Record<
+        string,
+        { content?: Record<string, { schema?: { format?: string } }> }
+      >;
+    };
+    expect(anhGet.responses['200'].content?.['image/png']?.schema?.format).toBe(
+      'binary',
+    );
+    expect(
+      pdfGet.responses['200'].content?.['application/pdf']?.schema?.format,
+    ).toBe('binary');
+  });
+
   it('spec version = version backend (AC-2 "versioned")', () => {
     // AC-2 yêu cầu spec "versioned": version của OpenAPI doc phải bám version
     // backend (package.json), không hardcode rời rạc.

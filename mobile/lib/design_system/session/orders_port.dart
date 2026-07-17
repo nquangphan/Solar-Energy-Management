@@ -12,6 +12,8 @@
 // `'baogia'`-only mutation window, the `priceEditable` gate on unit prices, the
 // `Order.sourceId` snapshot. Nothing here is a security boundary.
 
+import 'dart:typed_data';
+
 /// The confirmed order status — the ONE status literal screens compare against
 /// (Story 4.6). Screens import this constant; the guard forbids the raw literal
 /// inside screen files, so the string lives here in the port file only.
@@ -271,6 +273,30 @@ class ResolveDiscountInput {
   final String? reason;
 }
 
+/// One exported quote file (Story 4.8, FR-21) — [bytes] are the BACKEND-rendered
+/// binary (image or PDF), fetched through the JWT proxy routes (AD-3: no public
+/// bucket, no presigned URL). The screen only wraps them into XFile/share.
+class QuoteExportFile {
+  const QuoteExportFile({
+    required this.fileName,
+    required this.mimeType,
+    required this.bytes,
+  });
+
+  final String fileName;
+  final String mimeType;
+  final Uint8List bytes;
+}
+
+/// The pair one [OrdersPort.exportQuote] call yields — share order is
+/// [image, pdf] (UX-DR-21).
+class QuoteExportFiles {
+  const QuoteExportFiles({required this.image, required this.pdf});
+
+  final QuoteExportFile image;
+  final QuoteExportFile pdf;
+}
+
 /// One line of a pending-discount item — [estimatedMarginPct] is a
 /// BACKEND-rounded integer percent (or null: free line, zero price, or caller
 /// lacks `costs.view`, FR-37). The screen renders it verbatim ("X%" / "—"),
@@ -439,4 +465,11 @@ abstract class OrdersPort {
   /// is backend-computed; margins are null when the caller lacks `costs.view`.
   /// Throws 403 (`discounts.approve` missing).
   Future<List<DiscountPendingItem>> listPendingDiscounts();
+
+  /// Export the quote as PDF + image and fetch both files (Story 4.8, FR-21) —
+  /// `POST /orders/:id/xuat-bao-gia` then the two `GET /orders/:id/bao-gia/*`
+  /// proxy routes. The BACKEND renders both from ONE template (totals from the
+  /// one pricing function, AD-16) and overwrites the order's latest file pair.
+  /// Throws 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
+  Future<QuoteExportFiles> exportQuote(String orderId);
 }

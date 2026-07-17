@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  StreamableFile,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -18,6 +19,7 @@ import {
   ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiProduces,
   ApiTags,
 } from '@nestjs/swagger';
 import { AccountPermissionsService } from '../accounts/account-permissions.service';
@@ -40,10 +42,12 @@ import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
+import { QuoteExportResponseDto } from './dto/quote-export-response.dto';
 import { ResolveDiscountRequestDto } from './dto/resolve-discount-request.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 import { OrdersService } from './orders.service';
+import { QuoteExportService } from './quote-export.service';
 
 /**
  * Tạo Đơn + giỏ hàng dòng báo giá (Story 4.1, FR-1). MỌI handler khai
@@ -67,6 +71,7 @@ export class OrdersController {
     private readonly featureFlags: FeatureFlagsService,
     private readonly settings: SettingsService,
     private readonly accountPermissions: AccountPermissionsService,
+    private readonly quoteExport: QuoteExportService,
   ) {}
 
   private async tieredPricingEnabled(): Promise<boolean> {
@@ -491,5 +496,93 @@ export class OrdersController {
     @Param('lineId') lineId: string,
   ): Promise<void> {
     await this.orders.removeLine(account.id, id, lineId);
+  }
+
+  // Xuất báo giá PDF + ảnh (Story 4.8, FR-21) — action nghiệp vụ là sub-resource POST
+  // (khuôn `:id/chot`). Body rỗng; response CHỈ metadata — bytes tải qua 2 route proxy dưới.
+  @Post(':id/xuat-bao-gia')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  // Render + đè bộ file mới nhất của đơn, không tạo resource định danh mới — 201 mặc định
+  // của @Post sai ngữ nghĩa (khuôn :id/chot).
+  @HttpCode(HttpStatus.OK)
+  @ApiOkResponse({
+    type: QuoteExportResponseDto,
+    description:
+      'Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/bao-gia/anh|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Báo giá chưa có dòng nào — không có gì để xuất (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này (NOT_FOUND).',
+  })
+  async exportQuote(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<QuoteExportResponseDto> {
+    // vatRate + cờ tier resolve TƯƠI mỗi request rồi truyền xuống (khuôn :id/chot) —
+    // dùng khi đơn CHƯA chốt (chưa có snapshot thuế trên version).
+    return (await this.quoteExport.exportQuote(
+      account.id,
+      id,
+      await this.settings.vatRatePercent(),
+      await this.tieredPricingEnabled(),
+    )) as QuoteExportResponseDto;
+  }
+
+  // 2 route proxy tải file đã xuất (AD-3): backend stream bytes từ R2 sau JWT + permission
+  // guard — KHÔNG presigned URL công khai, không public bucket. Sub-resource của `:id` —
+  // không collision static-route.
+  @Get(':id/bao-gia/anh')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  @ApiProduces('image/png')
+  @ApiOkResponse({
+    schema: { type: 'string', format: 'binary' },
+    description: 'Bytes ảnh PNG báo giá mới nhất của Đơn.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Đơn này chưa xuất báo giá lần nào (NOT_FOUND).',
+  })
+  async downloadQuoteImage(@Param('id') id: string): Promise<StreamableFile> {
+    const file = await this.quoteExport.getExportFile(id, 'anh');
+    return new StreamableFile(file.body, {
+      type: file.contentType,
+      disposition: `attachment; filename="${file.fileName}"`,
+    });
+  }
+
+  @Get(':id/bao-gia/pdf')
+  @RequirePermissions(PERM.quotesCreateEdit)
+  @ApiProduces('application/pdf')
+  @ApiOkResponse({
+    schema: { type: 'string', format: 'binary' },
+    description: 'Bytes PDF báo giá mới nhất của Đơn.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Đơn này chưa xuất báo giá lần nào (NOT_FOUND).',
+  })
+  async downloadQuotePdf(@Param('id') id: string): Promise<StreamableFile> {
+    const file = await this.quoteExport.getExportFile(id, 'pdf');
+    return new StreamableFile(file.body, {
+      type: file.contentType,
+      disposition: `attachment; filename="${file.fileName}"`,
+    });
   }
 }

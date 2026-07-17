@@ -42,6 +42,7 @@ class CreateQuoteScreen extends StatefulWidget {
     required this.customersPort,
     this.perms = const <PermissionKey>{},
     this.onDone,
+    this.shareImpl,
   });
 
   final OrdersPort ordersPort;
@@ -56,6 +57,11 @@ class CreateQuoteScreen extends StatefulWidget {
 
   /// Called after the order is confirmed ("Chốt", Story 4.5) with the frozen order.
   final void Function(Order order)? onDone;
+
+  /// The share implementation for "Chia sẻ báo giá" (Story 4.8) — injected in
+  /// tests so no real platform channel is hit on the test VM (the injectable
+  /// seam of AppShareButton); defaults to [platformShareXFiles] in production.
+  final AppShareFn? shareImpl;
 
   @override
   State<CreateQuoteScreen> createState() => _CreateQuoteScreenState();
@@ -94,6 +100,9 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// Đang chờ port Áp chiết khấu (Story 4.7) — cùng khuôn _chotBusy; thành
   /// công thì màn tự khoá sửa vì status sang 'choduyet'.
   bool _discountBusy = false;
+
+  /// Đang chờ exportQuote + share (Story 4.8) — cùng khuôn _chotBusy.
+  bool _shareBusy = false;
 
   // Dialog Áp chiết khấu (Story 4.7): amount là số nguyên đồng nhập tay
   // (CHUYỂN ĐỔI input — pattern _freeUnitPrice, không phải số học tiền) + lý
@@ -413,6 +422,43 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
       _showError(err);
     } finally {
       if (mounted) setState(() => _chotBusy = false);
+    }
+  }
+
+  /// Chia sẻ báo giá (Story 4.8, FR-21): exportQuote qua port → XFile ×2 →
+  /// native share [ảnh, pdf] — ảnh đứng TRƯỚC (UX-DR-21 share sheet ưu tiên
+  /// ảnh). KHÔNG dialog xác nhận — share không đổi dữ liệu đơn (UX-DR-20
+  /// native share đi thẳng). Lỗi port → banner + giỏ/state NGUYÊN VẸN (bất
+  /// biến k); user huỷ share sheet KHÔNG phải lỗi (share fn nuốt dismissed).
+  Future<void> _shareQuote() async {
+    final Order? order = _order;
+    if (order == null) return;
+    setState(() => _shareBusy = true);
+    try {
+      final QuoteExportFiles files =
+          await widget.ordersPort.exportQuote(order.id);
+      final AppShareFn share = widget.shareImpl ?? platformShareXFiles;
+      await share(
+        <XFile>[
+          XFile.fromData(
+            files.image.bytes,
+            mimeType: files.image.mimeType,
+            name: files.image.fileName,
+          ),
+          XFile.fromData(
+            files.pdf.bytes,
+            mimeType: files.pdf.mimeType,
+            name: files.pdf.fileName,
+          ),
+        ],
+        title: files.image.fileName,
+      );
+      if (!mounted) return;
+      setState(() => _error = null);
+    } catch (err) {
+      _showError(err);
+    } finally {
+      if (mounted) setState(() => _shareBusy = false);
     }
   }
 
@@ -1142,6 +1188,25 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     label: 'Mở lại để sửa',
                     variant: AppButtonVariant.primary,
                     onPressed: _moLaiBusy ? null : _openMoLaiDialog,
+                  ),
+                ),
+              ),
+            // Chia sẻ báo giá (Story 4.8, FR-21): hiện MỌI trạng thái khi có
+            // ≥1 dòng (FR-21 "sau Chốt và khi cần" — báo giá nháp vẫn đưa
+            // khách xem; 0 dòng vô nghĩa, backend vẫn 400 làm hàng rào thật,
+            // AD-4). KHÔNG ConfirmDialog — share không phải hành động hệ quả
+            // tiền (UX-DR-20). KHÔNG nút tải-file riêng trên mobile (đó là nút
+            // web-only) — share sheet OS có sẵn Lưu ảnh/Drive.
+            if (order.lineItems.isNotEmpty)
+              AppGate(
+                perms: widget.perms,
+                requires: AppPermissionKeys.quotesCreateEdit,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space12),
+                  child: AppButton(
+                    label: 'Chia sẻ báo giá',
+                    variant: AppButtonVariant.ghost,
+                    onPressed: _shareBusy ? null : _shareQuote,
                   ),
                 ),
               ),

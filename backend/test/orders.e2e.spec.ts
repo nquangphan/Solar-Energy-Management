@@ -6,8 +6,11 @@ import request from 'supertest';
 import { AccountPermissionsService } from '../src/accounts/account-permissions.service';
 import { AccountsService } from '../src/accounts/accounts.service';
 import { PERM } from '../src/accounts/domain/permission-registry';
+import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { StoragePort } from '../src/storage/storage.port';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** ⇒ phải
@@ -137,6 +140,32 @@ describe('/orders (e2e)', () => {
   const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   // Hồ sơ duyệt chiết khấu (4.7): findFirst = approval mới nhất cho view; findMany = list chờ duyệt.
   const discountApprovalRepo = { findFirst: jest.fn(), findMany: jest.fn() };
+  // Hồ sơ xuất báo giá (4.8): upsert mô phỏng ĐÚNG ngữ nghĩa unique orderId — MỘT slot,
+  // lần 2 đi nhánh update; findUnique đọc lại slot đó (2 route proxy + xuất lần n).
+  let quoteExportRow: Record<string, unknown> | null = null;
+  const quoteExportRepo = { findUnique: jest.fn(), upsert: jest.fn() };
+  // Storage in-memory + renderer stub (override provider) — e2e KHÔNG đụng Chromium/R2.
+  const storageMap = new Map<string, { body: Buffer; contentType: string }>();
+  const storageStub = {
+    putObject: async (key: string, body: Buffer, contentType: string) => {
+      storageMap.set(key, { body, contentType });
+    },
+    getObject: async (key: string) => {
+      const found = storageMap.get(key);
+      if (found === undefined) {
+        throw new AppException(ErrorCode.NOT_FOUND, 404, 'Không tìm thấy file.');
+      }
+      return found;
+    },
+  };
+  const PDF_STUB = Buffer.from('%PDF-1.4 stub');
+  const PNG_STUB = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    Buffer.from('png-stub'),
+  ]);
+  const rendererStub = {
+    render: jest.fn(async () => ({ pdf: PDF_STUB, image: PNG_STUB })),
+  };
   // Interactive tx cho POST :id/chot + :id/mo-lai + :id/ap-chiet-khau + :id/duyet-chiet-khau.
   const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
   const txVersionRepo = { update: jest.fn(), create: jest.fn() };
@@ -163,6 +192,7 @@ describe('/orders (e2e)', () => {
     featureFlag: featureFlagRepo,
     systemSetting: systemSettingRepo,
     discountApproval: discountApprovalRepo,
+    quoteExport: quoteExportRepo,
     $transaction: transaction,
   };
   const accountsMock = {
@@ -191,6 +221,10 @@ describe('/orders (e2e)', () => {
       .useValue(accountsMock)
       .overrideProvider(AccountPermissionsService)
       .useValue(accountPermissionsMock)
+      .overrideProvider(StoragePort)
+      .useValue(storageStub)
+      .overrideProvider(QuoteRendererPort)
+      .useValue(rendererStub)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -241,6 +275,33 @@ describe('/orders (e2e)', () => {
     discountApprovalRepo.findMany.mockResolvedValue([]);
     txDiscountRepo.create.mockResolvedValue({});
     txDiscountRepo.updateMany.mockResolvedValue({ count: 1 });
+    // Hồ sơ xuất báo giá (4.8): slot reset mỗi test; upsert giữ ngữ nghĩa unique orderId.
+    quoteExportRow = null;
+    storageMap.clear();
+    rendererStub.render.mockClear();
+    rendererStub.render.mockImplementation(async () => ({
+      pdf: PDF_STUB,
+      image: PNG_STUB,
+    }));
+    quoteExportRepo.upsert.mockImplementation(
+      async (args: {
+        where: { orderId: string };
+        create: Record<string, unknown>;
+        update: Record<string, unknown>;
+      }) => {
+        quoteExportRow =
+          quoteExportRow === null
+            ? { id: 'qe-1', ...args.create }
+            : { ...quoteExportRow, ...args.update };
+        return quoteExportRow;
+      },
+    );
+    quoteExportRepo.findUnique.mockImplementation(
+      async (args: { where: { orderId: string } }) =>
+        quoteExportRow !== null && quoteExportRow.orderId === args.where.orderId
+          ? quoteExportRow
+          : null,
+    );
   });
 
   describe('authn/authz fail-closed trên MỌI route', () => {
@@ -288,6 +349,18 @@ describe('/orders (e2e)', () => {
       {
         name: 'GET /orders/cho-duyet-chiet-khau',
         call: () => request(server()).get('/orders/cho-duyet-chiet-khau'),
+      },
+      {
+        name: 'POST /orders/:id/xuat-bao-gia',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/xuat-bao-gia`),
+      },
+      {
+        name: 'GET /orders/:id/bao-gia/anh',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/bao-gia/anh`),
+      },
+      {
+        name: 'GET /orders/:id/bao-gia/pdf',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/bao-gia/pdf`),
       },
     ];
 
@@ -1912,6 +1985,155 @@ describe('/orders (e2e)', () => {
         .send({ lines: [{ unitPrice: 100, qty: 1 }], discountAmount: -1 });
       expect(previewAm.status).toBe(400);
       expect(transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Story 4.8 — xuất & tải báo giá (FR-21, AD-3)', () => {
+    /** Parser binary cho supertest — superagent không tự buffer image/pdf. */
+    function binaryParser(
+      res: request.Response,
+      callback: (err: Error | null, body: Buffer) => void,
+    ): void {
+      // Ở tầng parse, superagent đưa vào response STREAM thô (type khai là Response).
+      const stream = res as unknown as NodeJS.ReadableStream;
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => callback(null, Buffer.concat(chunks)));
+    }
+
+    const VERSION_CHUA_CHOT = {
+      id: VERSION_ID,
+      orderId: ORDER_ID,
+      versionNo: 1,
+      vatRate: null,
+      vatMode: null,
+      chotAt: null,
+      discountAmount: null,
+      createdAt: new Date('2026-07-16T01:00:00Z'),
+      updatedAt: new Date('2026-07-16T01:00:00Z'),
+    };
+
+    beforeEach(() => {
+      // Khác default suite (null): export cần version hiện hành để đọc snapshot thuế.
+      orderVersionRepo.findUnique.mockResolvedValue(VERSION_CHUA_CHOT);
+    });
+
+    it('flow: POST xuat-bao-gia 200 metadata → GET anh (PNG magic) → GET pdf (%PDF) → audit QuoteExported', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const fileBase = `bao-gia-${ORDER_ID.slice(0, 8)}`;
+
+      const xuat = await request(server())
+        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send();
+
+      expect(xuat.status).toBe(200);
+      expect(xuat.body.orderId).toBe(ORDER_ID);
+      expect(xuat.body.orderVersionId).toBe(VERSION_ID);
+      expect(xuat.body.image).toEqual({
+        fileName: `${fileBase}.png`,
+        size: PNG_STUB.length,
+      });
+      expect(xuat.body.pdf).toEqual({
+        fileName: `${fileBase}.pdf`,
+        size: PDF_STUB.length,
+      });
+      // Bytes KHÔNG nằm trong response metadata.
+      expect(JSON.stringify(xuat.body)).not.toContain('%PDF');
+      // exportedAt là ISO datetime hợp lệ (client hiển thị "xuất lúc nào").
+      expect(new Date(xuat.body.exportedAt as string).getTime()).not.toBeNaN();
+
+      const anh = await request(server())
+        .get(`/orders/${ORDER_ID}/bao-gia/anh`)
+        .set('Authorization', `Bearer ${token()}`)
+        .buffer(true)
+        .parse(binaryParser);
+
+      expect(anh.status).toBe(200);
+      expect(anh.headers['content-type']).toContain('image/png');
+      expect(anh.headers['content-disposition']).toContain(`${fileBase}.png`);
+      // Magic bytes PNG.
+      expect((anh.body as Buffer).subarray(0, 8)).toEqual(
+        Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      );
+
+      const pdf = await request(server())
+        .get(`/orders/${ORDER_ID}/bao-gia/pdf`)
+        .set('Authorization', `Bearer ${token()}`)
+        .buffer(true)
+        .parse(binaryParser);
+
+      expect(pdf.status).toBe(200);
+      expect(pdf.headers['content-type']).toContain('application/pdf');
+      expect(pdf.headers['content-disposition']).toContain(`${fileBase}.pdf`);
+      expect((pdf.body as Buffer).toString('utf8')).toMatch(/^%PDF/);
+
+      // AuditSubscriber THẬT đã ghi QuoteExported (AD-18 — không gọi audit trực tiếp).
+      expect(auditRepo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          eventType: 'QuoteExported',
+          actorAccountId: ACCOUNT_ID,
+          targetType: 'Order',
+          targetId: ORDER_ID,
+        }),
+      });
+    });
+
+    it('đơn CHƯA xuất lần nào → GET anh/pdf 404 NOT_FOUND', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const anh = await request(server())
+        .get(`/orders/${ORDER_ID}/bao-gia/anh`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(anh.status).toBe(404);
+      expect(anh.body.code).toBe(ErrorCode.NOT_FOUND);
+
+      const pdf = await request(server())
+        .get(`/orders/${ORDER_ID}/bao-gia/pdf`)
+        .set('Authorization', `Bearer ${token()}`);
+      expect(pdf.status).toBe(404);
+      expect(pdf.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it('đơn 0 dòng → POST xuat-bao-gia 400 VALIDATION_ERROR, KHÔNG render/ghi', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      lineRepo.findMany.mockResolvedValue([]);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send();
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(rendererStub.render).not.toHaveBeenCalled();
+      expect(quoteExportRepo.upsert).not.toHaveBeenCalled();
+    });
+
+    it('xuất LẦN HAI → 200, vẫn MỘT row QuoteExport (upsert nhánh update), key R2 không đổi', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+      const auth = { Authorization: `Bearer ${token()}` };
+
+      const lan1 = await request(server())
+        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .set(auth)
+        .send();
+      const lan2 = await request(server())
+        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .set(auth)
+        .send();
+
+      expect(lan1.status).toBe(200);
+      expect(lan2.status).toBe(200);
+      expect(quoteExportRepo.upsert).toHaveBeenCalledTimes(2);
+      // MỘT slot duy nhất — lần 2 merge update lên row cũ, id giữ nguyên.
+      expect(quoteExportRow).not.toBeNull();
+      expect((quoteExportRow as Record<string, unknown>).id).toBe('qe-1');
+      // Key deterministic — R2 vẫn đúng 2 object (đè, không rác).
+      expect([...storageMap.keys()].sort()).toEqual([
+        `quotes/${ORDER_ID}/bao-gia.pdf`,
+        `quotes/${ORDER_ID}/bao-gia.png`,
+      ]);
     });
   });
 

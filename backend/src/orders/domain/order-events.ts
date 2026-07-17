@@ -217,6 +217,28 @@ export class DiscountResolved implements DomainEvent {
   }
 }
 
+/**
+ * Báo giá được XUẤT ra file PDF + ảnh (Story 4.8, FR-21). KHÔNG mang before/after snapshot:
+ * export không đổi `Order.status` — không phải transition, không đụng AD-11; audit chỉ cần
+ * "ai xuất gì lúc nào" (`fileName` + bản hiệu lực lúc xuất). Share phía client là hành động
+ * OS, không backend call — không audit share.
+ */
+export class QuoteExported implements DomainEvent {
+  readonly type = 'QuoteExported';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    orderId: string,
+    readonly orderVersionId: string,
+    readonly fileName: string,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: orderId };
+  }
+}
+
 /** Một dòng bị XOÁ — chỉ có trạng thái "trước". */
 export class OrderLineRemoved implements DomainEvent {
   readonly type = 'OrderLineRemoved';

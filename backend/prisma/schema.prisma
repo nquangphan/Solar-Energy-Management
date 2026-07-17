@@ -43,6 +43,7 @@ model Account {
   assignedOrders Order[] @relation("OrderAssignee")
   discountRequests    DiscountApproval[] @relation("DiscountRequestedBy")
   discountResolutions DiscountApproval[] @relation("DiscountResolvedBy")
+  quoteExports        QuoteExport[]      @relation("QuoteExportCreatedBy")
 
   @@map("accounts")
 }
@@ -350,6 +351,7 @@ model Order {
   updatedAt         DateTime        @updatedAt @map("updated_at")
   versions          OrderVersion[]  @relation("OrderVersions")
   discountApprovals DiscountApproval[]
+  quoteExport       QuoteExport?
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -376,6 +378,7 @@ model OrderVersion {
   lineItems      OrderLineItem[]
   currentOf      Order?          @relation("OrderCurrentVersion")
   discountApprovals DiscountApproval[]
+  quoteExports   QuoteExport[]
 
   @@unique([orderId, versionNo])
   @@map("order_versions")
@@ -450,6 +453,36 @@ model DiscountApproval {
   @@index([status])
   @@index([orderId])
   @@map("discount_approvals")
+}
+
+/// Hồ sơ xuất báo giá (FR-21, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2.
+///
+/// `orderId` @unique = bất biến "MỘT bộ file mới nhất mỗi Đơn": bấm Xuất lần n upsert đè
+/// row này và ghi đè cùng object key trên R2 (`quotes/{orderId}/bao-gia.{png|pdf}`) —
+/// file luôn phản ánh nội dung hiện tại của đơn, không rác R2, không lịch sử file
+/// (lịch sử bản update là chuyện của OrderVersion).
+///
+/// `orderVersionId` = bản hiệu lực lúc xuất (hồ sơ "xuất từ bản nào");
+/// `createdByAccountId` = ai bấm Xuất lần đầu (audit chi tiết từng lần nằm ở AuditLog
+/// qua event QuoteExported, không ở đây).
+model QuoteExport {
+  id                 String       @id @default(uuid())
+  orderId            String       @unique @map("order_id")
+  order              Order        @relation(fields: [orderId], references: [id])
+  orderVersionId     String       @map("order_version_id")
+  orderVersion       OrderVersion @relation(fields: [orderVersionId], references: [id])
+  imageKey           String       @map("image_key")
+  pdfKey             String       @map("pdf_key")
+  imageSize          Int          @map("image_size")
+  pdfSize            Int          @map("pdf_size")
+  fileName           String       @map("file_name")
+  createdByAccountId String       @map("created_by_account_id")
+  createdBy          Account      @relation("QuoteExportCreatedBy", fields: [createdByAccountId], references: [id])
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  @@index([orderVersionId])
+  @@map("quote_exports")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

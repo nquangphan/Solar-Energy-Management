@@ -233,6 +233,31 @@ class _AutoRejectPort extends FakeOrdersPort {
   }
 }
 
+/// A port that RECORDS every exportQuote call (Story 4.8) — proves the share
+/// button sends exactly one export for the right order, then hands the fake's
+/// static demo files to the injected share fn.
+class _RecordingExportPort extends FakeOrdersPort {
+  final List<String> exportCalls = <String>[];
+
+  @override
+  Future<QuoteExportFiles> exportQuote(String orderId) {
+    exportCalls.add(orderId);
+    return super.exportQuote(orderId);
+  }
+}
+
+/// A port whose EXPORT is refused with the AD-5 envelope — proves a failed
+/// export surfaces the backend's sentence and keeps the cart/state intact
+/// (Story 4.8, invariant k).
+class _RejectingExportPort extends FakeOrdersPort {
+  _RejectingExportPort(this.error);
+
+  final OrderPortException error;
+
+  @override
+  Future<QuoteExportFiles> exportQuote(String orderId) async => throw error;
+}
+
 Widget _host(Widget screen) => MaterialApp(home: Scaffold(body: screen));
 
 /// The rendered on/off state of the scope chip with [label].
@@ -272,12 +297,14 @@ Future<void> _chotDonQuaFake(WidgetTester tester) async {
 CreateQuoteScreen _screen({
   FakeOrdersPort? ordersPort,
   Set<PermissionKey> perms = const <PermissionKey>{},
+  AppShareFn? shareImpl,
 }) =>
     CreateQuoteScreen(
       ordersPort: ordersPort ?? FakeOrdersPort(),
       catalogPort: FakeCatalogPort(),
       customersPort: FakeCustomersPort(),
       perms: perms,
+      shareImpl: shareImpl,
     );
 
 void main() {
@@ -1288,6 +1315,123 @@ void main() {
       expect(find.widgetWithText(TextField, '1'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsOneWidget);
       expect(find.text('Chiết khấu'), findsNothing);
+    });
+
+    // ------------------------------------------------------------------
+    // Story 4.8 — Chia sẻ báo giá (FR-21): export qua port → share [ảnh, pdf].
+    // ------------------------------------------------------------------
+
+    /// Thêm 1 dòng catalog vào giỏ (điều kiện ≥1 dòng cho nút share).
+    Future<void> themMotDong(WidgetTester tester) async {
+      await _tap(tester, 'Chọn từ danh mục');
+      await _tap(tester, 'Thêm');
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets(
+        'Chia sẻ báo giá (4.8): quotes.create_edit + ≥1 dòng → nút hiện, tap → exportQuote đúng 1 lần + shareImpl nhận đúng 2 file [ảnh, pdf]',
+        (WidgetTester tester) async {
+      final _RecordingExportPort port = _RecordingExportPort();
+      final List<List<XFile>> shared = <List<XFile>>[];
+      Future<AppShareResult> recordingShare(
+        List<XFile> files, {
+        String? title,
+        String? text,
+      }) async {
+        shared.add(files);
+        return AppShareResult.shared;
+      }
+
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: port,
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+        shareImpl: recordingShare,
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await themMotDong(tester);
+
+      await _tap(tester, 'Chia sẻ báo giá');
+
+      // Fake nhận ĐÚNG một lần cho đúng đơn.
+      expect(port.exportCalls, hasLength(1));
+      // shareImpl nhận đúng 2 file, ẢNH đứng TRƯỚC pdf (UX-DR-21). Thứ tự pin
+      // bằng mimeType — XFile.fromData không expose lại `name` (getter rỗng
+      // khi không có path), nên không assert tên file ở đây.
+      expect(shared, hasLength(1));
+      final List<XFile> files = shared.single;
+      expect(files, hasLength(2));
+      expect(files[0].mimeType, 'image/png');
+      expect(files[1].mimeType, 'application/pdf');
+    });
+
+    testWidgets(
+        'Chia sẻ báo giá (4.8): perms KHÔNG có quotes.create_edit → nút không render (gate biến mất)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.discountsApply},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await themMotDong(tester);
+
+      // Hàng nút vẫn render (Áp chiết khấu có quyền) nhưng nút share KHÔNG
+      // tồn tại trong cây widget — Gate fail-closed, backend vẫn enforce AD-4.
+      expect(find.widgetWithText(AppButton, 'Áp chiết khấu'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chia sẻ báo giá'), findsNothing);
+    });
+
+    testWidgets(
+        'Chia sẻ báo giá (4.8): giỏ 0 dòng → nút không render (0 dòng vô nghĩa; backend 400 là hàng rào thật)',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(_screen(
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      expect(
+        find.text('Chưa có dòng nào. Thêm dòng đầu tiên để bắt đầu.'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(AppButton, 'Chia sẻ báo giá'), findsNothing);
+    });
+
+    testWidgets(
+        'Chia sẻ báo giá (4.8): port throw → banner câu backend, giỏ + editable NGUYÊN VẸN, shareImpl KHÔNG được gọi',
+        (WidgetTester tester) async {
+      const String backendSentence = 'Không thể xuất báo giá chưa có dòng nào.';
+      final List<List<XFile>> shared = <List<XFile>>[];
+      Future<AppShareResult> recordingShare(
+        List<XFile> files, {
+        String? title,
+        String? text,
+      }) async {
+        shared.add(files);
+        return AppShareResult.shared;
+      }
+
+      await tester.pumpWidget(_host(_screen(
+        ordersPort: _RejectingExportPort(
+          const OrderPortException(backendSentence),
+        ),
+        perms: const <PermissionKey>{AppPermissionKeys.quotesCreateEdit},
+        shareImpl: recordingShare,
+      )));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+      await themMotDong(tester);
+
+      await _tap(tester, 'Chia sẻ báo giá');
+
+      // Câu backend nguyên văn; KHÔNG file nào tới share; dòng giỏ KHÔNG mất;
+      // đơn VẪN editable; nút share còn đó để thử lại (bất biến k).
+      expect(find.text(backendSentence), findsOneWidget);
+      expect(shared, isEmpty);
+      expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
+      expect(find.widgetWithText(TextField, '1'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Chia sẻ báo giá'), findsOneWidget);
     });
   });
 }

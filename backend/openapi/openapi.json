@@ -2743,6 +2743,183 @@
         ]
       }
     },
+    "/orders/{id}/xuat-bao-gia": {
+      "post": {
+        "operationId": "OrdersController_exportQuote",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/bao-gia/anh|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteExportResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Báo giá chưa có dòng nào — không có gì để xuất (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/bao-gia/anh": {
+      "get": {
+        "operationId": "OrdersController_downloadQuoteImage",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bytes ảnh PNG báo giá mới nhất của Đơn.",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn này chưa xuất báo giá lần nào (NOT_FOUND).",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/bao-gia/pdf": {
+      "get": {
+        "operationId": "OrdersController_downloadQuotePdf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bytes PDF báo giá mới nhất của Đơn.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn này chưa xuất báo giá lần nào (NOT_FOUND).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/settings/vat-rate": {
       "get": {
         "operationId": "SettingsController_getVatRate",
@@ -4368,6 +4545,64 @@
             "description": "Cờ \"linh động/dự kiến\" — chỉ hiển thị."
           }
         }
+      },
+      "QuoteExportFileDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "description": "Tên file gợi ý khi tải/share (vd `bao-gia-1a2b3c4d.png`)."
+          },
+          "size": {
+            "type": "number",
+            "description": "Kích thước file — byte."
+          }
+        },
+        "required": [
+          "fileName",
+          "size"
+        ]
+      },
+      "QuoteExportResponseDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Id Đơn."
+          },
+          "orderVersionId": {
+            "type": "string",
+            "description": "Bản hiệu lực lúc xuất — hồ sơ \"xuất từ bản nào\"."
+          },
+          "exportedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Thời điểm xuất (ISO-8601 UTC)."
+          },
+          "image": {
+            "description": "File ảnh PNG.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteExportFileDto"
+              }
+            ]
+          },
+          "pdf": {
+            "description": "File PDF.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteExportFileDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "orderId",
+          "orderVersionId",
+          "exportedAt",
+          "image",
+          "pdf"
+        ]
       },
       "VatRateResponseDto": {
         "type": "object",

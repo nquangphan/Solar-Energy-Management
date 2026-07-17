@@ -176,6 +176,23 @@ export interface ResolveDiscountInput {
 }
 
 /**
+ * One exported quote file (Story 4.8, FR-21) — `bytes` are the BACKEND-rendered
+ * binary (image or PDF), fetched through the JWT proxy routes (AD-3: no public
+ * bucket, no presigned URL). The screen only wraps them into `File`/share.
+ */
+export interface QuoteExportFile {
+  fileName: string;
+  mimeType: string;
+  bytes: Uint8Array;
+}
+
+/** The pair one `exportQuote` call yields — share order is [image, pdf] (UX-DR-21). */
+export interface QuoteExportFiles {
+  image: QuoteExportFile;
+  pdf: QuoteExportFile;
+}
+
+/**
  * One line of a pending-discount item — `estimatedMarginPct` is a BACKEND-rounded
  * integer percent (or null: free line, zero price, or caller lacks `costs.view`,
  * FR-37). The screen renders it verbatim ("X%" / "—"), never computes it.
@@ -327,4 +344,13 @@ export interface OrdersPort {
    * Rejects 403 (`discounts.approve` missing).
    */
   listPendingDiscounts(): Promise<DiscountPendingItem[]>;
+
+  /**
+   * Export the quote as PDF + image and fetch both files (Story 4.8, FR-21) —
+   * `POST /orders/:id/xuat-bao-gia` then the two `GET /orders/:id/bao-gia/*`
+   * proxy routes. The BACKEND renders both from ONE template (totals from the
+   * one pricing function, AD-16) and overwrites the order's latest file pair.
+   * Rejects 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
+   */
+  exportQuote(orderId: string): Promise<QuoteExportFiles>;
 }

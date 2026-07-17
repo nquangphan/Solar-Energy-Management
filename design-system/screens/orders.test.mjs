@@ -117,7 +117,7 @@ test('each platform reaches the backend through every port method the cart needs
   for (const [name, code] of allCode) {
     // `applyDiscount` là method DUY NHẤT của 4.7 mà màn cart gọi —
     // resolveDiscount/listPendingDiscounts thuộc màn duyệt (discount-approval.test.mjs).
-    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder', 'reviseOrder', 'applyDiscount']) {
+    for (const call of ['create', 'get', 'addLine', 'updateLine', 'removeLine', 'previewTotal', 'updateScopeFlags', 'updateOrderMeta', 'confirmOrder', 'reviseOrder', 'applyDiscount', 'exportQuote']) {
       assert.match(code, new RegExp(`ordersPort[\\s\\S]{0,60}?\\.${call}\\(`), `${name} must call ordersPort.${call}()`);
     }
     for (const call of ['listProducts', 'listGroups', 'getGroup']) {
@@ -200,11 +200,18 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Chiết khấu đã được duyệt — có thể chốt đơn.',
     'Chiết khấu bị từ chối — ',
     'Chiết khấu',
+    // Chia sẻ báo giá (Story 4.8, FR-21) — native share đi thẳng, KHÔNG dialog
+    // (UX-DR-20); nút hiện mọi trạng thái khi giỏ có dòng.
+    'Chia sẻ báo giá',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `web quote screen is missing the label "${label}"`);
     assert.ok(mobile.includes(label), `mobile quote screen is missing the label "${label}"`);
   }
+  // Tải PDF là nút WEB-ONLY (Story 4.8): desktop không share file được thì tải
+  // PDF về; mobile KHÔNG có nút này — share sheet OS có sẵn Lưu ảnh/Drive.
+  assert.ok(web.includes('Tải PDF'), 'web quote screen is missing the web-only "Tải PDF" button');
+  assert.ok(!mobile.includes('Tải PDF'), 'mobile must NOT have a "Tải PDF" button — the OS share sheet already offers save/Drive');
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).

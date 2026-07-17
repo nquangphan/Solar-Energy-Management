@@ -8,6 +8,8 @@
 // stand-in backend). It enforces no security rule — permissions, the `'baogia'`
 // window, the priceEditable gate all live on the real server (AD-4).
 
+import 'dart:typed_data';
+
 import 'catalog_port.dart';
 import 'customers_port.dart';
 import 'fake_catalog_port.dart';
@@ -15,6 +17,20 @@ import 'fake_customers_port.dart';
 import 'orders_port.dart';
 
 const String _now = '2026-07-16T00:00:00.000Z';
+
+/// STATIC demo bytes for `exportQuote` (Story 4.8) — the real backend renders
+/// PDF/PNG from the quote template; the demo just hands back a valid 1×1 PNG
+/// and a minimal PDF header so the share plumbing is exercisable offline.
+final Uint8List _demoQuotePng = Uint8List.fromList(const <int>[
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, //
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, //
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00, //
+  0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00, //
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, //
+  0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82, //
+]);
+final Uint8List _demoQuotePdf =
+    Uint8List.fromList('%PDF-1.4\n%%EOF\n'.codeUnits);
 
 /// Digits of a string, minus leading zeros — mirrors the backend's phone matching.
 String _digits(String raw) =>
@@ -463,6 +479,33 @@ class FakeOrdersPort implements OrdersPort {
       );
     }
     return items;
+  }
+
+  @override
+  Future<QuoteExportFiles> exportQuote(String orderId) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // Twin of the backend 400: an empty quote has nothing to export.
+    if (order.lineItems.isEmpty) {
+      throw const OrderPortException(
+          'Không thể xuất báo giá chưa có dòng nào.');
+    }
+    final String fileBase =
+        'bao-gia-${orderId.substring(0, orderId.length < 8 ? orderId.length : 8)}';
+    return QuoteExportFiles(
+      image: QuoteExportFile(
+        fileName: '$fileBase.png',
+        mimeType: 'image/png',
+        bytes: _demoQuotePng,
+      ),
+      pdf: QuoteExportFile(
+        fileName: '$fileBase.pdf',
+        mimeType: 'application/pdf',
+        bytes: _demoQuotePdf,
+      ),
+    );
   }
 
   @override

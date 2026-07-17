@@ -30,6 +30,7 @@ import {
   ScopeFlag,
   Sheet,
   Table,
+  shareFiles,
 } from '../../design-system/components';
 // PERMISSION_KEYS (generated, đủ 21 khoá) chứ KHÔNG phải PERM (hand-block 7 khoá
 // nav): 4.5 tham chiếu PERM.ordersConfirm = undefined → Gate fail-closed → nút
@@ -120,6 +121,9 @@ export function CreateQuoteScreen({
   const [discountBusy, setDiscountBusy] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountNote, setDiscountNote] = useState('');
+  // Đang chờ exportQuote + share (Story 4.8) — cùng khuôn chotBusy; dùng chung
+  // cho cả hai nút (Chia sẻ / Tải PDF) vì cùng một pipeline export phía sau.
+  const [shareBusy, setShareBusy] = useState(false);
 
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
@@ -439,6 +443,57 @@ export function CreateQuoteScreen({
     }
   }
 
+  /**
+   * Chia sẻ báo giá (Story 4.8, FR-21): exportQuote qua port → dựng File ×2 →
+   * native share [ảnh, pdf] — ảnh đứng TRƯỚC (UX-DR-21 ưu tiên ảnh; trình duyệt
+   * không share file được thì shareFiles tự tải ảnh). KHÔNG dialog xác nhận —
+   * share không đổi dữ liệu đơn (UX-DR-20 native share đi thẳng). Lỗi port →
+   * Banner, GIỮ nguyên giỏ (bất biến k); user huỷ share sheet KHÔNG phải lỗi
+   * (share.ts đã nuốt AbortError).
+   */
+  async function handleShareQuote() {
+    setShareBusy(true);
+    try {
+      const files = await ordersPort.exportQuote(order!.id);
+      const image = new File([files.image.bytes], files.image.fileName, {
+        type: files.image.mimeType,
+      });
+      const pdf = new File([files.pdf.bytes], files.pdf.fileName, {
+        type: files.pdf.mimeType,
+      });
+      await shareFiles({
+        files: [image, pdf],
+        title: files.image.fileName,
+        fallbackDownload: true,
+      });
+      setError(null);
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  /**
+   * Tải PDF (web-only, Story 4.8): cùng pipeline export nhưng chỉ đưa PDF vào
+   * share — desktop không share file được thì shareFiles tự tải PDF về.
+   */
+  async function handleDownloadPdf() {
+    setShareBusy(true);
+    try {
+      const files = await ordersPort.exportQuote(order!.id);
+      const pdf = new File([files.pdf.bytes], files.pdf.fileName, {
+        type: files.pdf.mimeType,
+      });
+      await shareFiles({ files: [pdf], fallbackDownload: true });
+      setError(null);
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
   async function handleDelete(lineId: string) {
     try {
       await ordersPort.removeLine(order!.id, lineId);
@@ -704,6 +759,33 @@ export function CreateQuoteScreen({
                 onClick={() => setMoLaiDialogOpen(true)}
               >
                 Mở lại để sửa
+              </Button>
+            </div>
+          </Gate>
+        )}
+
+        {/* Chia sẻ báo giá + Tải PDF (Story 4.8, FR-21): hiện MỌI trạng thái
+            khi có ≥1 dòng (FR-21 "sau Chốt và khi cần" — báo giá nháp vẫn đưa
+            khách xem; 0 dòng vô nghĩa, backend vẫn 400 làm hàng rào thật,
+            AD-4). KHÔNG ConfirmDialog — share không phải hành động hệ quả
+            tiền (UX-DR-20). Tải PDF là nút web-only. */}
+        {order.lineItems.length > 0 && (
+          <Gate perms={perms} requires={PERMISSION_KEYS.quotesCreateEdit}>
+            <div className="quote-chot-row">
+              <Button
+                variant="ghost"
+                type="button"
+                disabled={shareBusy}
+                onClick={handleShareQuote}
+              >
+                Chia sẻ báo giá
+              </Button>
+              <Button
+                type="button"
+                disabled={shareBusy}
+                onClick={handleDownloadPdf}
+              >
+                Tải PDF
               </Button>
             </div>
           </Gate>

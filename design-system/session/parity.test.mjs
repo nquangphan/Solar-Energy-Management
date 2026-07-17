@@ -232,6 +232,30 @@ test('the orders port carries the Story 4.7 discount surface on BOTH platforms (
   assert.ok(existsSync(resolve(repoRoot, 'mobile/lib/screens/orders/discount_approval_screen.dart')), 'mobile discount_approval_screen missing (Story 4.7)');
 });
 
+test('the orders port carries the Story 4.8 quote-export surface on BOTH platforms (twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+
+  // The export method exists on both twins — and takes ONLY the order id
+  // (same rule as confirm/revise: no invented input payload; the backend
+  // renders from the order's own content).
+  assert.match(webPort, /exportQuote\(orderId: string\): Promise<QuoteExportFiles>;/, 'web OrdersPort missing exportQuote (Story 4.8)');
+  assert.match(mobPort, /Future<QuoteExportFiles> exportQuote\(String orderId\);/, 'mobile OrdersPort missing exportQuote (Story 4.8)');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(!/ExportQuoteInput/.test(src), `${name} must not declare an ExportQuoteInput — POST :id/xuat-bao-gia carries no body`);
+  }
+
+  // Twin type tokens: the file pair + the single file shape (fileName/mimeType/
+  // bytes — Uint8Array on web, Uint8List via dart:typed_data on mobile).
+  for (const token of ['QuoteExportFile', 'QuoteExportFiles', 'fileName', 'mimeType']) {
+    assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 4.8)`);
+    assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 4.8)`);
+  }
+  assert.ok(webPort.includes('bytes: Uint8Array'), 'web QuoteExportFile must carry bytes as Uint8Array');
+  assert.ok(mobPort.includes('final Uint8List bytes'), 'mobile QuoteExportFile must carry bytes as Uint8List');
+  assert.ok(mobPort.includes("import 'dart:typed_data';"), 'mobile orders port must import dart:typed_data for Uint8List');
+});
+
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {
   // Same decision as customer-sources (Story 3.5): system config is desk work,
   // DESIGN.md ships no mobile config screen — a Dart twin would be code no screen

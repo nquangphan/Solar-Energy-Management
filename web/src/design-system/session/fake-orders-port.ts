@@ -24,6 +24,7 @@ import type {
   OrderTotals,
   OrdersPort,
   PreviewTotalInput,
+  QuoteExportFiles,
   ResolveDiscountInput,
   UpdateOrderLineInput,
   UpdateOrderMetaInput,
@@ -31,6 +32,21 @@ import type {
 } from './orders-port';
 
 const NOW = '2026-07-16T00:00:00.000Z';
+
+/**
+ * STATIC demo bytes for `exportQuote` (Story 4.8) — the real backend renders
+ * PDF/PNG from the quote template; the demo just hands back a valid 1×1 PNG and
+ * a minimal PDF header so the share/download plumbing is exercisable offline.
+ */
+const DEMO_QUOTE_PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+  0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89, 0x00, 0x00, 0x00,
+  0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49,
+  0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
+]);
+const DEMO_QUOTE_PDF = new TextEncoder().encode('%PDF-1.4\n%%EOF\n');
 
 /** Digits of a string, minus leading zeros — mirrors the backend's phone matching. */
 function digits(raw: string): string {
@@ -340,6 +356,32 @@ export class FakeOrdersPort implements OrdersPort {
       });
     }
     return Promise.resolve(items);
+  }
+
+  exportQuote(orderId: string): Promise<QuoteExportFiles> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
+    }
+    // Twin of the backend 400: an empty quote has nothing to export.
+    if (order.lineItems.length === 0) {
+      return Promise.reject(
+        new Error('Không thể xuất báo giá chưa có dòng nào.'),
+      );
+    }
+    const fileBase = `bao-gia-${orderId.slice(0, 8)}`;
+    return Promise.resolve({
+      image: {
+        fileName: `${fileBase}.png`,
+        mimeType: 'image/png',
+        bytes: DEMO_QUOTE_PNG,
+      },
+      pdf: {
+        fileName: `${fileBase}.pdf`,
+        mimeType: 'application/pdf',
+        bytes: DEMO_QUOTE_PDF,
+      },
+    });
   }
 
   reviseOrder(orderId: string): Promise<Order> {
