@@ -283,3 +283,52 @@ export class OrderLineRemoved implements DomainEvent {
     this.target = { type: 'Order', id: orderId };
   }
 }
+
+/**
+ * Ảnh bổ sung được THÊM vào Đơn ngoài luồng chuyển trạng thái (Story 5.6, FR-24).
+ *
+ * KHÔNG mang before/after snapshot: thêm ảnh không đổi `Order.status` — không phải
+ * transition, không đụng AD-11 (khuôn `QuoteExported`). FR-24 đòi audit cho thêm/xoá ảnh,
+ * và đường hoà giải là AD-18: producer publish event, `AuditSubscriber` ghi hàng audit.
+ *
+ * MỘT event cho CẢ lượt (mảng id + số ảnh): người dùng chọn 5 ảnh vẫn là một hành động,
+ * nên audit đọc lên khớp đúng cái họ đã làm.
+ */
+export class AttachmentAdded implements DomainEvent {
+  readonly type = 'AttachmentAdded';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    orderId: string,
+    readonly attachmentIds: readonly string[],
+    readonly soAnh: number,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: orderId };
+  }
+}
+
+/**
+ * MỘT ảnh bị XOÁ khỏi Đơn (Story 5.6, FR-24). Xoá là từng ảnh một nên một hàng một event —
+ * ngược với `AttachmentAdded` gộp cả lượt.
+ *
+ * `fileName` đi kèm vì hàng DB đã biến mất khi subscriber đọc event: không mang tên theo thì
+ * audit chỉ còn một id trỏ vào hư không.
+ */
+export class AttachmentRemoved implements DomainEvent {
+  readonly type = 'AttachmentRemoved';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    orderId: string,
+    readonly attachmentId: string,
+    readonly fileName: string,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: orderId };
+  }
+}

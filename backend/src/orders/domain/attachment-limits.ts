@@ -11,7 +11,7 @@
  * permission + phạm vi đơn, nên bán kính nổ nhỏ.
  */
 
-/** Tối đa 10 ảnh cho MỘT lượt chuyển trạng thái. */
+/** Tối đa 10 ảnh cho MỘT lượt tải lên (chuyển trạng thái hoặc thêm ảnh bổ sung). */
 export const SO_ANH_TOI_DA = 10;
 
 /** Tối đa 10 MB cho MỘT ảnh. */
@@ -98,7 +98,7 @@ export function kiemTraAnh(files: readonly AnhTaiLen[]): readonly LoiField[] {
       {
         field: 'anh',
         code: 'maxCount',
-        message: `Tối đa ${SO_ANH_TOI_DA} ảnh cho một lần chuyển trạng thái.`,
+        message: `Tối đa ${SO_ANH_TOI_DA} ảnh cho một lần tải lên.`,
       },
     ];
   }

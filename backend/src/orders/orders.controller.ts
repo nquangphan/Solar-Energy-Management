@@ -46,6 +46,10 @@ import {
 } from './domain/attachment-limits';
 import { vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
+import {
+  AttachmentListResponseDto,
+  AttachmentUploadResponseDto,
+} from './dto/attachment-response.dto';
 import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { DiscountPendingItemDto } from './dto/discount-pending-item.dto';
@@ -818,6 +822,137 @@ export class OrdersController {
       occurredAt: ketQua.occurredAt.toISOString(),
       soAnhDaLuu: ketQua.soAnhDaLuu,
     };
+  }
+
+  /**
+   * Danh sách ảnh của đơn — PHẲNG, gồm cả ảnh theo bước lẫn ảnh bổ sung (Story 5.6, FR-24).
+   *
+   * Gate đọc giống bốn đường đọc đơn (`view_all` OR `view_own`): ảnh của đơn là dữ liệu của
+   * đơn, và người xem được đơn thì xem được bằng chứng của nó.
+   */
+  @Get(':id/anh')
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiOkResponse({
+    type: AttachmentListResponseDto,
+    description:
+      'Mọi ảnh của đơn theo createdAt giảm dần; `coTheXoa` tính ở backend cho từng ảnh.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Đơn ngoài phạm vi hoặc không tồn tại (NOT_FOUND).',
+  })
+  async listAttachments(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<AttachmentListResponseDto> {
+    const items = await this.orders.danhSachAnh(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+    );
+    return { items: [...items] };
+  }
+
+  /**
+   * Thêm ảnh bổ sung NGOÀI luồng chuyển trạng thái (Story 5.6, FR-24).
+   *
+   * Gate `any-of` bốn key LÀM VIỆC trên đơn chứ không phải cặp `ordersView*`: xem đơn không
+   * phải là được ghi vào đơn. Thợ thi công có `construction.transition` (không có
+   * `quotes.create_edit`) vẫn phải thêm được ảnh nghiệm thu — đó là ca dùng thật của FR-24.
+   *
+   * ⚠️ Trần cứng multer CỐ Ý cao hơn ngưỡng hợp đồng: đặt bằng nhau thì `MulterError` bắn
+   * TRƯỚC handler ⇒ 500 thay vì 400 + `fieldErrors` mà hợp đồng đòi.
+   */
+  @Post(':id/anh')
+  @RequireAnyPermissions(
+    PERM.quotesCreateEdit,
+    PERM.constructionTransition,
+    PERM.deliveryConfirm,
+    PERM.paymentsRecord,
+  )
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FilesInterceptor('anh', TRAN_CUNG_SO_ANH, {
+      limits: { fileSize: TRAN_CUNG_KICH_THUOC_BYTE },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiCreatedResponse({
+    type: AttachmentUploadResponseDto,
+    description:
+      'Ảnh đã lưu với ba cột toạ độ null — không thuộc bước chuyển trạng thái nào.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Ảnh sai định dạng/quá lớn/quá nhiều (VALIDATION_ERROR) — không hàng nào tạo, không byte nào lên R2.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu cả bốn quyền làm việc trên đơn (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Đơn ngoài phạm vi hoặc không tồn tại (NOT_FOUND).',
+  })
+  async addAttachments(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @UploadedFiles() anh?: FileDaTaiLen[],
+  ): Promise<AttachmentUploadResponseDto> {
+    const ketQua = await this.orders.themAnh({
+      callerAccountId: account.id,
+      quyen: await this.quyenCuaNguoiGoi(account.id),
+      orderId: id,
+      anh: anh ?? [],
+    });
+    return {
+      soAnhDaLuu: ketQua.soAnhDaLuu,
+      attachmentIds: [...ketQua.attachmentIds],
+    };
+  }
+
+  /**
+   * Xoá MỘT ảnh của đơn (Story 5.6, FR-24) — hard delete, vết còn ở `audit_logs`.
+   *
+   * Guard HTTP chỉ là cửa ngoài; cửa THẬT là luật hàng trong service (người tải lên HOẶC có
+   * quyền chỉnh sửa đơn) — bốn key ở đây đều mở được cửa ngoài, nhưng chỉ luật hàng quyết
+   * định ai xoá được ảnh nào.
+   */
+  @Delete(':id/anh/:attachmentId')
+  @RequireAnyPermissions(
+    PERM.quotesCreateEdit,
+    PERM.constructionTransition,
+    PERM.deliveryConfirm,
+    PERM.paymentsRecord,
+  )
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'Ảnh đã bị xoá khỏi đơn.' })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Không phải người tải lên và không có quyền chỉnh sửa đơn (FORBIDDEN) — ảnh còn nguyên.',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Đơn ngoài phạm vi/không tồn tại, hoặc ảnh không thuộc đơn này (NOT_FOUND).',
+  })
+  async removeAttachment(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+  ): Promise<void> {
+    await this.orders.xoaAnh(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+      attachmentId,
+    );
   }
 
   /**

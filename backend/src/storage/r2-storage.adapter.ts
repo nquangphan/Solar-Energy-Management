@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -60,6 +61,13 @@ export class R2StorageAdapter extends StoragePort {
         Body: body,
         ContentType: contentType,
       }),
+    );
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    const client = this.resolveClient();
+    await client.send(
+      new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
     );
   }
 

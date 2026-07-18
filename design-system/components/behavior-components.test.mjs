@@ -56,6 +56,11 @@ const emptyState = read('EmptyState.tsx');
 const errorState = read('ErrorState.tsx');
 const shareButton = read('ShareButton.tsx');
 const imageUpload = read('ImageUpload.tsx');
+const attachmentGallery = read('AttachmentGallery.tsx');
+const attachmentGalleryDart = readFileSync(
+  resolve(repoRoot, 'mobile/lib/design_system/components/attachment_gallery.dart'),
+  'utf8',
+);
 const share = read('share.ts');
 const barrel = read('index.ts');
 
@@ -153,6 +158,72 @@ test('ImageUpload does NOT upload — no fetch/R2/signed/upload() (AD-3)', () =>
   assert.ok(/type="file"/.test(imageUpload), 'ImageUpload must use <input type="file">');
   assert.ok(/accept/.test(imageUpload), 'ImageUpload must forward an accept filter');
   assert.ok(/onAdd\b/.test(imageUpload), 'ImageUpload must emit chosen files via onAdd');
+});
+
+// ---------------------------------------------------------------------------
+// AttachmentGallery (Story 5.6) — renders SERVER photos, still NO network.
+// ---------------------------------------------------------------------------
+
+// The read-side twin of ImageUpload: it shows photos that already live on the
+// server, which makes "just fetch them here" the obvious wrong turn. The screen
+// pulls bytes through the authenticated proxy port and hands them down; the
+// component stays a pure renderer on BOTH platforms (AD-3).
+test('AttachmentGallery does NOT touch the network on either platform (AD-3)', () => {
+  const web = stripComments(attachmentGallery);
+  assert.ok(!/fetch\s*\(/.test(web), 'AttachmentGallery.tsx must not fetch()');
+  assert.ok(!/\bR2\b/.test(web), 'AttachmentGallery.tsx must not reference R2');
+  assert.ok(!/\bhttp/i.test(web), 'AttachmentGallery.tsx must not name an http endpoint');
+  assert.ok(!/signed/i.test(web), 'AttachmentGallery.tsx must not build a signed URL');
+  assert.ok(
+    !/XMLHttpRequest|\bsendBeacon\b|\bWebSocket\b|\baxios\b|\bimport\s*\(/.test(web),
+    'AttachmentGallery.tsx must not use XHR/sendBeacon/WebSocket/axios/dynamic import',
+  );
+
+  // Dart comments use the same // and /* */ forms, so the same stripper applies.
+  const mobile = stripComments(attachmentGalleryDart);
+  assert.ok(!/\bhttp/i.test(mobile), 'attachment_gallery.dart must not name an http endpoint');
+  assert.ok(!/\bR2\b/.test(mobile), 'attachment_gallery.dart must not reference R2');
+  assert.ok(!/signed/i.test(mobile), 'attachment_gallery.dart must not build a signed URL');
+  assert.ok(
+    !/Image\.network|NetworkImage|HttpClient|\bDio\b/.test(mobile),
+    'attachment_gallery.dart must not load images over the network — the screen injects bytes',
+  );
+
+  // It DOES render bytes the caller already holds, and reports delete intent.
+  assert.ok(/previewSrc/.test(attachmentGallery), 'web gallery must render caller-supplied previewSrc');
+  assert.ok(/Image\.memory/.test(attachmentGalleryDart), 'mobile gallery must render caller-supplied bytes');
+  assert.ok(/onDelete/.test(attachmentGallery) && /onDelete/.test(attachmentGalleryDart), 'both galleries must emit delete intent via onDelete');
+});
+
+// The web half of the design system has no bundler and no DOM lane (TD-1), so a
+// className that matches no rule is invisible: the component renders, every text
+// guard passes, and the browser lays it out with UA defaults. That is exactly how
+// the gallery first shipped — <figure> keeping its 1em/40px UA margin and three
+// caption spans running together on one line. Mobile has no equivalent hole: an
+// undefined Dart symbol simply will not compile.
+test('every class the gallery names is actually defined in components.css', () => {
+  const css = readFileSync(
+    resolve(repoRoot, 'web/src/design-system/components/components.css'),
+    'utf8',
+  );
+  // `.micro` and `.muted` are named by components across the whole web design
+  // system and are defined by NO stylesheet in this repo — a pre-existing gap
+  // that is not this component's to close. Skipping them keeps the guard honest
+  // instead of green-by-exception.
+  const preExistingUndefined = new Set(['micro', 'muted']);
+  const used = new Set();
+  for (const m of attachmentGallery.matchAll(/className="([^"]+)"/g)) {
+    for (const cls of m[1].split(/\s+/)) {
+      if (cls && !preExistingUndefined.has(cls)) used.add(cls);
+    }
+  }
+  assert.ok(used.size > 0, 'gallery must carry class names at all');
+  for (const cls of used) {
+    assert.ok(
+      new RegExp(`\\.${cls}[\\s,{:.]`).test(css),
+      `.${cls} is used by AttachmentGallery.tsx but defined in no stylesheet`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

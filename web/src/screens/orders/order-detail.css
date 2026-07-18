@@ -121,3 +121,26 @@
   gap: var(--space-8);
   margin-top: var(--space-12);
 }
+
+/* Tab Ảnh (Story 5.6): the gallery, then the add block under it. The two are
+   separate flows — picking never opens while the delete dialog is up — so they
+   only need vertical separation, not a shared container. */
+.od-anh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.od-anh-them {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  align-items: flex-start;
+}
+
+.od-anh-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--ink);
+}

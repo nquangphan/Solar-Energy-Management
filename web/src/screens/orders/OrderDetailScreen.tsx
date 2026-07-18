@@ -26,20 +26,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  AttachmentGallery,
   Button,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   Frame,
+  ImageUpload,
   ScopeFlag,
   Skeleton,
   StatusChip,
   Stepper,
   Table,
 } from '../../design-system/components';
+import type { AttachmentGalleryItem } from '../../design-system/components/AttachmentGallery';
+import type { ImageUploadItem } from '../../design-system/components/ImageUpload';
 import type { StepItem } from '../../design-system/components/Stepper';
 import { STATUS_LABELS, type StatusKey } from '../../design-system/components/StatusChip';
 import { filterNav } from '../../design-system/gating/permissions';
 import type {
+  AttachmentItem,
   Order,
   OrderLifecycleStep,
   OrderNextStep,
@@ -66,14 +72,33 @@ type LoadState = 'loading' | 'ready' | 'error' | 'notfound';
 
 const TAB_THONG_TIN = 'thong-tin';
 const TAB_LICH_SU = 'lich-su';
+const TAB_ANH = 'anh';
 
-// Exactly two tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 and Ảnh is Story
-// 5.6 — rendering an empty tab for a feature that does not exist promises the
-// user something nobody built.
+// Exactly three tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — rendering an
+// empty tab for a feature that does not exist promises the user something nobody
+// built. Ảnh shipped in Story 5.6.
 const TABS = [
   { key: TAB_THONG_TIN, label: 'Thông tin' },
   { key: TAB_LICH_SU, label: 'Lịch sử update' },
+  { key: TAB_ANH, label: 'Ảnh' },
 ];
+
+/**
+ * The photo ceiling the backend enforces per upload. Mirrored here only to stop
+ * the picker offering an eleventh tile — the refusal itself stays server-side.
+ */
+const SO_ANH_TOI_DA = 10;
+
+/**
+ * One picked photo held in TWO shapes at once: the `File` that gets posted, and
+ * the `ImageUploadItem` the shipped picker draws a thumbnail from. Kept side by
+ * side under one temporary id so removing a thumbnail removes the right File.
+ */
+interface AnhDaChon {
+  id: string;
+  file: File;
+  item: ImageUploadItem;
+}
 
 /**
  * Narrow the port's `string` status to the chip's strict union. The port mirrors
@@ -82,6 +107,11 @@ const TABS = [
  */
 function isStatusKey(value: string): value is StatusKey {
   return Object.prototype.hasOwnProperty.call(STATUS_LABELS, value);
+}
+
+/** Status key → its shipped Vietnamese label; unknown keys render verbatim. */
+function nhanTrangThai(value: string): string {
+  return isStatusKey(value) ? STATUS_LABELS[value] : value;
 }
 
 /**
@@ -155,6 +185,148 @@ export function OrderDetailScreen({
     void load();
   }, [load]);
 
+  // ---- Tab Ảnh (Story 5.6) -------------------------------------------------
+  // Loaded LAZILY, on first open of the tab: photos are the heaviest thing on
+  // this screen and most visits never open it. Folding them into `load()` above
+  // would make every detail view pay for a panel nobody asked for.
+  const [anhItems, setAnhItems] = useState<AttachmentItem[]>([]);
+  const [anhPreviews, setAnhPreviews] = useState<Record<string, string>>({});
+  const [anhState, setAnhState] = useState<LoadState>('loading');
+  const [anhDaMo, setAnhDaMo] = useState(false);
+  const [anhDaChon, setAnhDaChon] = useState<AnhDaChon[]>([]);
+  const [xoaId, setXoaId] = useState<string | null>(null);
+  const anhLatest = useRef(0);
+  const seq = useRef(0);
+  // Every object URL this tab has minted, so it can hand each one back. The
+  // browser holds the whole blob alive until revoke — at 10 MB a photo, a tab
+  // reloaded a few times after adding and deleting would pin hundreds of MB
+  // that nothing on screen still points at.
+  const anhUrls = useRef<string[]>([]);
+
+  const thuHoiAnhUrls = useCallback(() => {
+    for (const url of anhUrls.current) URL.revokeObjectURL(url);
+    anhUrls.current = [];
+  }, []);
+
+  // The tab can be left open when the screen goes away; the URLs outlive it.
+  useEffect(() => thuHoiAnhUrls, [thuHoiAnhUrls]);
+
+  const loadAnh = useCallback(async () => {
+    const ticket = ++anhLatest.current;
+    setAnhState('loading');
+    // The previous batch is dead the moment a reload starts: the list is about
+    // to be replaced, and a deleted photo's URL would otherwise never be freed.
+    thuHoiAnhUrls();
+    setAnhPreviews({});
+    try {
+      const danhSach = await port.listAnh(orderId);
+      if (ticket !== anhLatest.current) return;
+      setAnhItems(danhSach);
+      setAnhState('ready');
+      // Bytes come through the authenticated proxy, ONE call per photo; the
+      // gallery component never fetches (AD-3). A photo whose bytes fail simply
+      // keeps the placeholder glyph — one broken image must not blank the tab.
+      for (const item of danhSach) {
+        try {
+          const blob = await port.anhBytes(orderId, item.id);
+          const url = URL.createObjectURL(blob);
+          // A newer load already revoked this batch — hand the URL straight
+          // back instead of parking it in state nothing reads.
+          if (ticket !== anhLatest.current) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          anhUrls.current.push(url);
+          setAnhPreviews((truoc) => ({ ...truoc, [item.id]: url }));
+        } catch {
+          /* placeholder glyph stands in */
+        }
+      }
+    } catch {
+      if (ticket !== anhLatest.current) return;
+      setAnhState('error');
+    }
+  }, [port, orderId, thuHoiAnhUrls]);
+
+  const moTab = useCallback(
+    (key: string) => {
+      setTab(key);
+      if (key === TAB_ANH && !anhDaMo) {
+        setAnhDaMo(true);
+        void loadAnh();
+      }
+    },
+    [anhDaMo, loadAnh],
+  );
+
+  const chonAnh = useCallback((files: File[]) => {
+    setAnhDaChon((truoc) => [
+      ...truoc,
+      ...files.map((file) => {
+        seq.current += 1;
+        const id = `anh-moi-${seq.current}`;
+        return {
+          id,
+          file,
+          item: { id, url: URL.createObjectURL(file), name: file.name },
+        };
+      }),
+    ]);
+  }, []);
+
+  const boAnhDaChon = useCallback((id: string) => {
+    setAnhDaChon((truoc) => {
+      const bo = truoc.find((a) => a.id === id);
+      if (bo?.item.url) URL.revokeObjectURL(bo.item.url);
+      return truoc.filter((a) => a.id !== id);
+    });
+  }, []);
+
+  const guiAnh = useCallback(async () => {
+    if (anhDaChon.length === 0) return;
+    try {
+      await port.themAnh(orderId, anhDaChon.map((a) => a.file));
+      // Previews are revoked only after the post succeeded — a failed attempt
+      // keeps its thumbnails so the user can retry without re-picking.
+      for (const a of anhDaChon) if (a.item.url) URL.revokeObjectURL(a.item.url);
+      setAnhDaChon([]);
+      await loadAnh();
+    } catch {
+      setAnhState('error');
+    }
+  }, [port, orderId, anhDaChon, loadAnh]);
+
+  const xacNhanXoa = useCallback(async () => {
+    if (xoaId === null) return;
+    const id = xoaId;
+    setXoaId(null);
+    try {
+      await port.xoaAnh(orderId, id);
+      await loadAnh();
+    } catch {
+      setAnhState('error');
+    }
+  }, [port, orderId, xoaId, loadAnh]);
+
+  /**
+   * Port item → gallery item. The step badge is built from the SHIPPED status
+   * label table — a third label table for the same statuses would drift.
+   */
+  const galleryItems: AttachmentGalleryItem[] = anhItems.map((item) => ({
+    id: item.id,
+    fileName: item.fileName,
+    nguoiTaiLen: item.nguoiTaiLen,
+    createdAt: item.createdAt,
+    statusTo: item.statusTo,
+    buocLabel:
+      item.statusFrom !== null && item.statusTo !== null
+        ? `Bước: ${nhanTrangThai(item.statusFrom)} → ${nhanTrangThai(item.statusTo)}`
+        : undefined,
+    previewSrc: anhPreviews[item.id],
+    // Backend-computed (AD-2) — the screen renders it, never rebuilds it.
+    coTheXoa: item.coTheXoa,
+  }));
+
   return (
     <WebShell
       url="app.phuongnamsolar.vn/don-hang"
@@ -195,7 +367,7 @@ export function OrderDetailScreen({
               )}
             </Frame>
 
-            <Tabs tabs={TABS} activeKey={tab} onSelect={setTab} />
+            <Tabs tabs={TABS} activeKey={tab} onSelect={moTab} />
 
             {tab === TAB_THONG_TIN && (
               <div className="od-facts">
@@ -285,9 +457,59 @@ export function OrderDetailScreen({
                 ))}
               </ul>
             )}
+
+            {tab === TAB_ANH && anhState === 'loading' && (
+              <div className="od-state">
+                <Skeleton />
+                <Skeleton />
+              </div>
+            )}
+
+            {tab === TAB_ANH && anhState === 'error' && (
+              <ErrorState
+                message="Không tải được ảnh của đơn."
+                retryLabel="Thử lại"
+                onRetry={() => void loadAnh()}
+              />
+            )}
+
+            {tab === TAB_ANH && anhState === 'ready' && (
+              <div className="od-anh">
+                <AttachmentGallery
+                  items={galleryItems}
+                  onDelete={setXoaId}
+                  emptyLabel="Chưa có ảnh nào."
+                />
+                <div className="od-anh-them">
+                  <h3 className="od-anh-title">Thêm ảnh bổ sung</h3>
+                  {/* The shipped picker holds LOCAL files only; posting them is
+                      this screen's job (AD-3). */}
+                  <ImageUpload
+                    images={anhDaChon.map((a) => a.item)}
+                    onAdd={chonAnh}
+                    onRemove={boAnhDaChon}
+                    max={SO_ANH_TOI_DA}
+                  />
+                  {anhDaChon.length > 0 && (
+                    <Button onClick={() => void guiAnh()}>Thêm ảnh</Button>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
+
+      {/* The delete dialog and the picker's sheet are two SEPARATE flows: they
+          never open together, so overlays stack at most one deep (UX-DR-20). */}
+      <ConfirmDialog
+        open={xoaId !== null}
+        title="Xoá ảnh"
+        consequence="Ảnh sẽ bị xoá vĩnh viễn và không khôi phục được."
+        tone="danger"
+        onConfirm={() => void xacNhanXoa()}
+        onCancel={() => setXoaId(null)}
+      />
     </WebShell>
   );
 }

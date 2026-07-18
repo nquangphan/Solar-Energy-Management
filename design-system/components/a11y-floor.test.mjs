@@ -58,6 +58,7 @@ test('every icon-only web control carries an aria-label', () => {
     'components/Sheet.tsx': 'Đóng',
     'components/CartLineRow.tsx': 'Xoá dòng',
     'components/ImageUpload.tsx': 'Xoá ảnh',
+    'components/AttachmentGallery.tsx': 'Xoá ảnh',
   };
   for (const [file, needle] of Object.entries(iconOnly)) {
     const src = readFileSync(resolve(repoRoot, 'web/src/design-system', file), 'utf8');
@@ -77,6 +78,11 @@ test('every icon-only mobile control carries a Semantics(button, label)', () => 
   const upload = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/components/image_upload.dart'), 'utf8');
   assert.match(upload, /Semantics\(\s*button:\s*true,\s*label:\s*'Thêm ảnh'/, 'add-tile must be a labelled Semantics button');
   assert.match(upload, /Semantics\(\s*button:\s*true,\s*label:\s*'Xoá ảnh'/, 'remove control must be a labelled Semantics button');
+
+  // attachment_gallery.dart (Story 5.6) has one icon-only control — the
+  // per-thumb delete (ic-trash).
+  const gallery = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/components/attachment_gallery.dart'), 'utf8');
+  assert.match(gallery, /Semantics\(\s*button:\s*true,\s*label:\s*'Xoá ảnh'/, 'gallery delete control must be a labelled Semantics button');
 });
 
 // Status chips must clear the WCAG AA text floor (UX-DR-26): every `.chip--*`

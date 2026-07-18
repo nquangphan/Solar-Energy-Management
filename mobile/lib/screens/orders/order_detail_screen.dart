@@ -27,6 +27,8 @@
 //
 // No money math (AD-10/16): every number shown is one the backend computed.
 
+import 'dart:typed_data';
+
 import 'package:flutter/widgets.dart';
 
 import '../../design_system/components/components.dart';
@@ -46,13 +48,19 @@ enum _LoadState { loading, ready, error, notFound }
 
 const String _kTabThongTin = 'thong-tin';
 const String _kTabLichSu = 'lich-su';
+const String _kTabAnh = 'anh';
 
-/// Exactly two tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 and Ảnh is Story
-/// 5.6 — an empty tab promises the user something nobody built.
+/// Exactly three tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — an empty tab
+/// promises the user something nobody built. Ảnh shipped in Story 5.6.
 const List<AppTabItem> _kTabs = <AppTabItem>[
   AppTabItem(key: _kTabThongTin, label: 'Thông tin'),
   AppTabItem(key: _kTabLichSu, label: 'Lịch sử update'),
+  AppTabItem(key: _kTabAnh, label: 'Ảnh'),
 ];
+
+/// The photo ceiling the backend enforces per upload. Mirrored here only to stop
+/// the picker offering an eleventh tile — the refusal itself stays server-side.
+const int _kSoAnhToiDa = 10;
 
 class OrderDetailScreen extends StatefulWidget {
   const OrderDetailScreen({
@@ -61,6 +69,7 @@ class OrderDetailScreen extends StatefulWidget {
     required this.orderId,
     this.onBack,
     this.onChangeStatus,
+    this.pick,
   });
 
   final OrdersPort port;
@@ -69,6 +78,10 @@ class OrderDetailScreen extends StatefulWidget {
 
   /// Opens the status-change screen (Story 5.5). Null = the button never renders.
   final VoidCallback? onChangeStatus;
+
+  /// Injectable picker for the Ảnh tab (Story 5.6) — widget tests run without a
+  /// platform channel, so the seam has to reach the shipped picker.
+  final ImagePickFn? pick;
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -85,6 +98,102 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   /// Three requests, ONE ticket for the whole batch: they are one screenful of
   /// one order, so a stale batch must be discarded as a batch.
   int _latest = 0;
+
+  // ---- Tab Ảnh (Story 5.6) -------------------------------------------------
+  // Loaded LAZILY, on first open of the tab: photos are the heaviest thing on
+  // this screen and most visits never open it. Folding them into [_load] would
+  // make every detail view pay for a panel nobody asked for.
+  List<AttachmentItem> _anh = const <AttachmentItem>[];
+  final Map<String, Uint8List> _anhBytes = <String, Uint8List>{};
+  _LoadState _anhState = _LoadState.loading;
+  bool _anhDaMo = false;
+  List<XFile> _anhDaChon = const <XFile>[];
+  int _anhLatest = 0;
+
+  Future<void> _loadAnh() async {
+    final int ticket = ++_anhLatest;
+    setState(() {
+      _anhState = _LoadState.loading;
+      // The previous batch is dead the moment a reload starts. Keeping it means
+      // a deleted photo's bytes stay resident for the life of the screen — at
+      // 10 MB a photo that adds up on a phone.
+      _anhBytes.clear();
+    });
+    try {
+      final List<AttachmentItem> danhSach =
+          await widget.port.listAnh(widget.orderId);
+      if (!mounted || ticket != _anhLatest) return;
+      setState(() {
+        _anh = danhSach;
+        _anhState = _LoadState.ready;
+      });
+      // Bytes come through the authenticated proxy, ONE call per photo; the
+      // gallery widget never fetches (AD-3). A photo whose bytes fail simply
+      // keeps the placeholder glyph — one broken image must not blank the tab.
+      for (final AttachmentItem item in danhSach) {
+        try {
+          final Uint8List bytes =
+              await widget.port.anhBytes(widget.orderId, item.id);
+          if (!mounted || ticket != _anhLatest) return;
+          setState(() => _anhBytes[item.id] = bytes);
+        } catch (_) {
+          // placeholder glyph stands in
+        }
+      }
+    } catch (_) {
+      if (!mounted || ticket != _anhLatest) return;
+      setState(() => _anhState = _LoadState.error);
+    }
+  }
+
+  void _moTab(String key) {
+    setState(() => _tab = key);
+    if (key == _kTabAnh && !_anhDaMo) {
+      _anhDaMo = true;
+      _loadAnh();
+    }
+  }
+
+  Future<void> _guiAnh() async {
+    if (_anhDaChon.isEmpty) return;
+    final List<XFile> gui = _anhDaChon;
+    try {
+      await widget.port.themAnh(widget.orderId, gui);
+      if (!mounted) return;
+      setState(() => _anhDaChon = const <XFile>[]);
+      await _loadAnh();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _anhState = _LoadState.error);
+    }
+  }
+
+  /// Delete goes through a Dialog stating the consequence (UX-DR-20) — never
+  /// straight off the tap, and never while the picker's sheet is open: the two
+  /// flows are separate, so overlays stack at most one deep.
+  Future<void> _hoiXoaAnh(String attachmentId) async {
+    // AppConfirmDialog pops its OWN route and then calls back, so the action
+    // hangs off `onConfirm` — popping again here would close the screen behind
+    // the dialog. Cancel (button, X, barrier, back) simply never calls back.
+    await showAppDialog<void>(
+      context: context,
+      child: AppConfirmDialog(
+        title: 'Xoá ảnh',
+        consequence: 'Ảnh sẽ bị xoá vĩnh viễn và không khôi phục được.',
+        onConfirm: () => _xoaAnh(attachmentId),
+      ),
+    );
+  }
+
+  Future<void> _xoaAnh(String attachmentId) async {
+    try {
+      await widget.port.xoaAnh(widget.orderId, attachmentId);
+      await _loadAnh();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _anhState = _LoadState.error);
+    }
+  }
 
   @override
   void initState() {
@@ -196,10 +305,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             AppTabs(
               tabs: _kTabs,
               activeKey: _tab,
-              onSelect: (String key) => setState(() => _tab = key),
+              onSelect: _moTab,
             ),
             const SizedBox(height: AppTokens.space16),
-            if (_tab == _kTabThongTin) _facts(order) else _history(),
+            if (_tab == _kTabThongTin)
+              _facts(order)
+            else if (_tab == _kTabLichSu)
+              _history()
+            else
+              _anhTab(),
           ],
         );
     }
@@ -332,6 +446,106 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       separatorBuilder: (_, __) => const SizedBox(height: AppTokens.space8),
       itemBuilder: (BuildContext context, int i) => _versionRow(_versions[i]),
     );
+  }
+
+  /// Status key → its shipped Vietnamese label; unknown keys render verbatim.
+  /// The step badge reuses the ONE label table — a third copy would drift.
+  String _nhanTrangThai(String value) {
+    final StatusKey? key = statusKeyOf(value);
+    return key == null ? value : kStatusLabels[key]!;
+  }
+
+  Widget _anhTab() {
+    switch (_anhState) {
+      case _LoadState.loading:
+        return const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            AppSkeleton(),
+            SizedBox(height: AppTokens.space8),
+            AppSkeleton(),
+          ],
+        );
+      case _LoadState.error:
+      case _LoadState.notFound:
+        return AppErrorState(
+          message: 'Không tải được ảnh của đơn.',
+          retryLabel: 'Thử lại',
+          onRetry: _loadAnh,
+        );
+      case _LoadState.ready:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            AppAttachmentGallery(
+              items: <AppAttachmentItem>[
+                for (final AttachmentItem item in _anh)
+                  AppAttachmentItem(
+                    id: item.id,
+                    fileName: item.fileName,
+                    nguoiTaiLen: item.nguoiTaiLen,
+                    createdAt: item.createdAt,
+                    statusTo: item.statusTo,
+                    buocLabel: item.statusFrom != null && item.statusTo != null
+                        ? 'Bước: ${_nhanTrangThai(item.statusFrom!)} → ${_nhanTrangThai(item.statusTo!)}'
+                        : null,
+                    bytes: _anhBytes[item.id],
+                    // Backend-computed (AD-2) — rendered, never rebuilt.
+                    coTheXoa: item.coTheXoa,
+                  ),
+              ],
+              onDelete: _hoiXoaAnh,
+              emptyLabel: 'Chưa có ảnh nào.',
+            ),
+            const SizedBox(height: AppTokens.space16),
+            const Text(
+              'Thêm ảnh bổ sung',
+              style: TextStyle(
+                color: AppTokens.ink,
+                fontFamily: AppTokens.fontFamily,
+                fontSize: 13.0,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: AppTokens.space8),
+            // The shipped picker holds LOCAL files only; posting them is this
+            // screen's job (AD-3). `pick` stays injectable so widget tests run
+            // without a platform channel.
+            AppImageUpload(
+              images: <AppUploadItem>[
+                for (int i = 0; i < _anhDaChon.length; i++)
+                  AppUploadItem(
+                    id: 'anh-moi-$i',
+                    path: _anhDaChon[i].path,
+                    name: _anhDaChon[i].name,
+                  ),
+              ],
+              max: _kSoAnhToiDa,
+              pick: widget.pick,
+              onAdd: (List<XFile> files) => setState(
+                () => _anhDaChon = <XFile>[..._anhDaChon, ...files],
+              ),
+              onRemove: (String id) {
+                final int i = int.parse(id.split('-').last);
+                setState(
+                  () => _anhDaChon = <XFile>[
+                    for (int j = 0; j < _anhDaChon.length; j++)
+                      if (j != i) _anhDaChon[j],
+                  ],
+                );
+              },
+            ),
+            if (_anhDaChon.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppTokens.space8),
+              AppButton(
+                label: 'Thêm ảnh',
+                variant: AppButtonVariant.primary,
+                onPressed: _guiAnh,
+              ),
+            ],
+          ],
+        );
+    }
   }
 
   Widget _versionRow(OrderVersionItem version) {

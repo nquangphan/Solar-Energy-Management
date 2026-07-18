@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { Order, OrderLineItem, Prisma } from '@prisma/client';
 import {
   resolveUnitPrice,
@@ -39,6 +39,8 @@ import { diffDong, type ThayDoiBanUpdate } from './domain/version-diff';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
+  AttachmentAdded,
+  AttachmentRemoved,
   DiscountRequested,
   DiscountResolved,
   OrderConfirmed,
@@ -310,6 +312,9 @@ function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
 
 @Injectable()
 export class OrdersService {
+  /** Chỉ dùng cho lỗi ĐÃ NUỐT có chủ đích (xoá object R2 sau khi DB đã commit). */
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBus,
@@ -744,6 +749,227 @@ export class OrdersService {
     }
     const { body } = await this.storage.getObject(row.objectKey);
     return { body, contentType: row.contentType, fileName: row.fileName };
+  }
+
+  /**
+   * `GET /orders/:id/anh` — DANH SÁCH PHẲNG mọi ảnh của đơn: cả ảnh gắn vào một bước (5.5,
+   * `statusTo != null`) lẫn ảnh bổ sung (5.6, `statusTo == null`), FR-24.
+   *
+   * Sắp theo `createdAt` giảm dần chứ KHÔNG theo `occurredAt`: cột đó `null` cho mọi ảnh bổ
+   * sung ⇒ dùng nó sắp thì nửa danh sách có vị trí không xác định.
+   *
+   * `objectKey` KHÔNG vào DTO (AD-3): key R2 là chi tiết hạ tầng, client không cần và không
+   * được biết — mọi byte đi qua route proxy đã scope.
+   */
+  async danhSachAnh(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<
+    readonly {
+      readonly id: string;
+      readonly fileName: string;
+      readonly contentType: string;
+      readonly size: number;
+      readonly createdAt: Date;
+      readonly nguoiTaiLen: string;
+      readonly statusFrom: string | null;
+      readonly statusTo: string | null;
+      readonly coTheXoa: boolean;
+    }[]
+  > {
+    await this.findScopedOrThrow(callerAccountId, quyen, orderId);
+    const rows = await this.prisma.attachment.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+      include: { uploadedBy: { select: { displayName: true } } },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      fileName: row.fileName,
+      contentType: row.contentType,
+      size: row.size,
+      createdAt: row.createdAt,
+      nguoiTaiLen: row.uploadedBy.displayName,
+      statusFrom: row.statusFrom,
+      statusTo: row.statusTo,
+      coTheXoa: this.xoaDuocAnh(callerAccountId, quyen, row.uploadedByAccountId),
+    }));
+  }
+
+  /**
+   * Luật xoá ảnh của FR-24 — MỘT chỗ, ở backend: người đã tải lên HOẶC người có quyền chỉnh
+   * sửa đơn. Client chỉ hiển thị cờ này, KHÔNG dựng lại biểu thức (AD-2/AD-4) — bản sao luật
+   * thứ hai chắc chắn sẽ lệch.
+   *
+   * `quotesCreateEdit` chính là "quyền chỉnh sửa đơn" trong repo này: registry không có
+   * `orders.edit`, và key đó đang gate mọi đường ghi đơn hiện có.
+   */
+  private xoaDuocAnh(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    uploadedByAccountId: string,
+  ): boolean {
+    return (
+      uploadedByAccountId === callerAccountId || quyen.has(PERM.quotesCreateEdit)
+    );
+  }
+
+  /**
+   * `POST /orders/:id/anh` — thêm ảnh bổ sung NGOÀI luồng chuyển trạng thái (FR-24).
+   *
+   * THỨ TỰ BẮT BUỘC: phạm vi → validate → upload R2 → ghi DB → publish. Validate đứng TRƯỚC
+   * R2 vì một lượt 400 mà bytes đã lên bucket là rác vĩnh viễn không hàng DB nào trỏ tới.
+   *
+   * Ba cột toạ độ ghi `null` CÓ CHỦ ĐÍCH: những hàng này không thuộc bước nào. Ghi trạng thái
+   * hiện tại vào đó là bịa ra một transition không ai bấm và làm hỏng ngữ nghĩa FR-23.
+   *
+   * KHÔNG gọi `applyTransition`, KHÔNG đọc/ghi `Order.status` — đây là đường ghi metadata.
+   */
+  async themAnh(input: {
+    readonly callerAccountId: string;
+    readonly quyen: ReadonlySet<string>;
+    readonly orderId: string;
+    readonly anh: readonly (AnhTaiLen & { readonly buffer: Buffer })[];
+  }): Promise<{
+    readonly soAnhDaLuu: number;
+    readonly attachmentIds: readonly string[];
+  }> {
+    await this.findScopedOrThrow(
+      input.callerAccountId,
+      input.quyen,
+      input.orderId,
+    );
+
+    // Một lượt rỗng KHÔNG phải lỗi ở `kiemTraAnh()`: kèm ảnh là optional cho
+    // chuyển trạng thái (FR-23), nên domain nói mảng rỗng là hợp lệ. Ở ĐÂY thì
+    // khác — cả route này chỉ có một việc là thêm ảnh. Cho nó đi tiếp sẽ ghi một
+    // hàng audit `AttachmentAdded` nói rằng đã thêm ảnh trong khi không có ảnh
+    // nào, và một vết audit sai còn tệ hơn không có vết nào.
+    if (input.anh.length === 0) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Ảnh đính kèm không hợp lệ.',
+        [{ field: 'anh', code: 'minCount', message: 'Chọn ít nhất 1 ảnh.' }],
+      );
+    }
+
+    const loiFile = kiemTraAnh(input.anh);
+    if (loiFile.length > 0) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Ảnh đính kèm không hợp lệ.',
+        [...loiFile],
+      );
+    }
+
+    // Id sinh TRƯỚC upload: `createMany` không trả id, nên đây là cách DUY NHẤT object key và
+    // hàng DB trỏ đúng nhau VÀ `AttachmentAdded` có `attachmentIds`.
+    const anhDaLen = input.anh.map((file) => {
+      const id = randomUUID();
+      return {
+        id,
+        file,
+        objectKey: `attachments/${input.orderId}/${id}.${duoiTuMime(file.mimetype)}`,
+      };
+    });
+    for (const item of anhDaLen) {
+      await this.storage.putObject(
+        item.objectKey,
+        item.file.buffer,
+        item.file.mimetype,
+      );
+    }
+
+    await this.prisma.attachment.createMany({
+      data: anhDaLen.map((item) => ({
+        id: item.id,
+        orderId: input.orderId,
+        uploadedByAccountId: input.callerAccountId,
+        objectKey: item.objectKey,
+        fileName: tenFileAnToan(item.file.originalname),
+        contentType: item.file.mimetype,
+        size: item.file.size,
+        statusFrom: null,
+        statusTo: null,
+        occurredAt: null,
+      })),
+    });
+
+    await this.eventBus.publish(
+      new AttachmentAdded(
+        input.callerAccountId,
+        input.orderId,
+        anhDaLen.map((item) => item.id),
+        anhDaLen.length,
+        new Date(),
+      ),
+    );
+
+    return {
+      soAnhDaLuu: anhDaLen.length,
+      attachmentIds: anhDaLen.map((item) => item.id),
+    };
+  }
+
+  /**
+   * `DELETE /orders/:id/anh/:attachmentId` — xoá HẲN một ảnh (hard delete, FR-24).
+   *
+   * Vết xoá nằm ở `audit_logs` (append-only) qua `AttachmentRemoved`, nên không cần cột
+   * soft-delete — thêm nó là thêm một trạng thái phải lọc ở mọi truy vấn về sau.
+   *
+   * ⚠️ THỨ TỰ DB TRƯỚC, R2 SAU. Xoá R2 trước rồi DB fail ⇒ hàng còn đó trỏ vào bytes không
+   * tồn tại ⇒ gallery vỡ. Chiều này hỏng chỉ để lại bytes mồ côi — vô hình với mọi endpoint
+   * vì không còn hàng nào trỏ tới. Vì vậy lỗi R2 bị NUỐT: một lần xoá đã commit không được
+   * biến thành 500 cho người dùng.
+   */
+  async xoaAnh(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+    attachmentId: string,
+  ): Promise<void> {
+    await this.findScopedOrThrow(callerAccountId, quyen, orderId);
+    const row = await this.prisma.attachment.findFirst({
+      where: { id: attachmentId, orderId },
+    });
+    if (row === null) {
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        'Không tìm thấy ảnh đính kèm.',
+      );
+    }
+
+    if (!this.xoaDuocAnh(callerAccountId, quyen, row.uploadedByAccountId)) {
+      throw new AppException(
+        ErrorCode.FORBIDDEN,
+        403,
+        'Bạn không có quyền xoá ảnh này.',
+      );
+    }
+
+    await this.prisma.attachment.delete({ where: { id: attachmentId } });
+
+    await this.eventBus.publish(
+      new AttachmentRemoved(
+        callerAccountId,
+        orderId,
+        attachmentId,
+        row.fileName,
+        new Date(),
+      ),
+    );
+
+    try {
+      await this.storage.deleteObject(row.objectKey);
+    } catch (error) {
+      this.logger.warn(
+        `Xoá object R2 thất bại (bytes mồ côi, không ảnh hưởng người dùng): ${row.objectKey} — ${String(error)}`,
+      );
+    }
   }
 
   /**

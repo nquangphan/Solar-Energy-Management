@@ -241,6 +241,43 @@ class StatusChangeResult {
   final int soAnhDaLuu;
 }
 
+/// One photo attached to an order (Story 5.6, FR-24) — mirrors the backend
+/// `AttachmentItemDto` field for field.
+///
+/// [statusFrom]/[statusTo] are the step coordinates: BOTH null means this is a
+/// supplementary photo that belongs to no transition. The screen reads that pair
+/// to pick the badge; it does not infer the kind from anywhere else.
+///
+/// [coTheXoa] is computed by the BACKEND (uploader OR order-edit permission,
+/// AD-2/AD-4). The client ONLY renders it — rebuilding that expression here
+/// would be a second copy of the rule, and it would drift.
+///
+/// There is NO object key here: R2 keys never leave the backend (AD-3). Bytes
+/// come from [OrdersPort.anhBytes], which goes through the authenticated proxy.
+class AttachmentItem {
+  const AttachmentItem({
+    required this.id,
+    required this.fileName,
+    required this.contentType,
+    required this.size,
+    required this.createdAt,
+    required this.nguoiTaiLen,
+    required this.statusFrom,
+    required this.statusTo,
+    required this.coTheXoa,
+  });
+
+  final String id;
+  final String fileName;
+  final String contentType;
+  final int size;
+  final String createdAt;
+  final String nguoiTaiLen;
+  final String? statusFrom;
+  final String? statusTo;
+  final bool coTheXoa;
+}
+
 /// One quantity change between two versions.
 class OrderVersionQtyChange {
   const OrderVersionQtyChange({
@@ -726,4 +763,36 @@ abstract class OrdersPort {
     String event,
     List<XFile> anh,
   );
+
+  /// Every photo of the order — step photos AND supplementary ones, in ONE flat
+  /// list newest first (Story 5.6, FR-24) — `GET /orders/:id/anh`.
+  ///
+  /// The order is the backend's (`createdAt` descending); the screen does not
+  /// re-sort. Throws 403 (neither `orders.view_all` nor `orders.view_own`), 404
+  /// (order out of scope or missing).
+  Future<List<AttachmentItem>> listAnh(String orderId);
+
+  /// Attach supplementary photos OUTSIDE the transition flow (Story 5.6,
+  /// FR-24) — `POST /orders/:id/anh` as `multipart/form-data`. The rows land
+  /// with all three step coordinates null: they belong to no step.
+  ///
+  /// Limits are the backend's: 10 photos per upload, 10 MB each,
+  /// jpeg/png/webp/heic. Throws 400 (`fieldErrors` says which photo), 403, 404.
+  Future<void> themAnh(String orderId, List<XFile> files);
+
+  /// Delete ONE photo — `DELETE /orders/:id/anh/:attachmentId` (Story 5.6,
+  /// FR-24). Hard delete; the trail lives in the audit log.
+  ///
+  /// Call this only for items whose [AttachmentItem.coTheXoa] is true — the
+  /// backend enforces the same rule anyway and answers 403 otherwise (AD-4:
+  /// hiding the button is UX, not security). Throws 403, 404.
+  Future<void> xoaAnh(String orderId, String attachmentId);
+
+  /// Bytes of ONE photo for preview — `GET /orders/:id/anh/:attachmentId`
+  /// (Story 5.5 proxy route, AD-3: the bucket is not public, every byte comes
+  /// through the backend behind JWT).
+  ///
+  /// The SCREEN calls this and hands the result to the gallery widget; the
+  /// gallery itself never touches the network. Throws 403, 404.
+  Future<Uint8List> anhBytes(String orderId, String attachmentId);
 }

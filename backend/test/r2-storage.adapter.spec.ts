@@ -28,6 +28,9 @@ jest.mock('@aws-sdk/client-s3', () => ({
   GetObjectCommand: class {
     constructor(public readonly input: Record<string, unknown>) {}
   },
+  DeleteObjectCommand: class {
+    constructor(public readonly input: Record<string, unknown>) {}
+  },
 }));
 
 // Import SAU jest.mock — adapter nhận class giả ở trên.
@@ -156,6 +159,29 @@ describe('R2StorageAdapter (unit, hermetic)', () => {
     expect(loi).toBeInstanceOf(AppException);
     expect(loi.errorCode).toBe(ErrorCode.NOT_FOUND);
     expect(loi.getStatus()).toBe(404);
+  });
+
+  it('deleteObject gửi đúng Bucket/Key; dùng lại client đã cache', async () => {
+    coDuEnv();
+    mockSend.mockResolvedValue({});
+    const adapter = new R2StorageAdapter();
+    await adapter.putObject('attachments/don-1/a.jpg', Buffer.from('x'), 'image/jpeg');
+    await adapter.deleteObject('attachments/don-1/a.jpg');
+
+    const lenh = mockSend.mock.calls[1][0] as { input: Record<string, unknown> };
+    expect(lenh.input).toEqual({
+      Bucket: 'bucket-noi-bo',
+      Key: 'attachments/don-1/a.jpg',
+    });
+    expect(mockS3Configs).toHaveLength(1);
+  });
+
+  it('deleteObject thiếu env → Error liệt kê 4 biến, không gọi SDK', async () => {
+    const adapter = new R2StorageAdapter();
+    await expect(adapter.deleteObject('attachments/don-1/a.jpg')).rejects.toThrow(
+      'Thiếu cấu hình R2: cần đủ 4 biến môi trường R2_ENDPOINT, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET để đọc/ghi file.',
+    );
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('getObject lỗi HTTP 404 không tên NoSuchKey → vẫn NOT_FOUND; lỗi khác → propagate NGUYÊN', async () => {

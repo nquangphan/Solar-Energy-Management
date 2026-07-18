@@ -385,3 +385,45 @@ test('mobile bottom-nav stays hard-locked — the session example never gates it
   const botnav = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/shell/app_bottom_nav.dart'), 'utf8');
   assert.ok(botnav.includes('_tabs.length == 5'), 'bottom-nav must keep its 5-tab lock assertion');
 });
+
+test('Story 5.6 attachment surface exists on BOTH platforms (ports + gallery component)', () => {
+  // A surface that ships on one platform only is worse than one that ships on
+  // neither: half the users get a feature the other half cannot see, and no
+  // single lane fails. The four port methods and the gallery widget are checked
+  // together because they are one surface — a port with no renderer, or a
+  // renderer with no port, is a dead end either way.
+  const ports = [
+    ['web', readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8')],
+    ['mobile', readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8')],
+  ];
+  for (const [platform, src] of ports) {
+    for (const method of ['listAnh', 'themAnh', 'xoaAnh', 'anhBytes']) {
+      assert.ok(src.includes(method), `${platform} orders port must declare ${method}()`);
+    }
+    assert.ok(src.includes('AttachmentItem'), `${platform} orders port must declare AttachmentItem`);
+  }
+
+  // The fakes must answer them too, or every screen test hits an unimplemented
+  // method instead of the demo data it was written against.
+  const fakes = [
+    ['web', readFileSync(resolve(webDir, 'fake-orders-port.ts'), 'utf8')],
+    ['mobile', readFileSync(resolve(mobDir, 'fake_orders_port.dart'), 'utf8')],
+  ];
+  for (const [platform, src] of fakes) {
+    for (const method of ['listAnh', 'themAnh', 'xoaAnh', 'anhBytes']) {
+      assert.ok(src.includes(method), `${platform} fake orders port must implement ${method}()`);
+    }
+    // The demo data must cover the branch the UI treats specially: a photo the
+    // caller cannot delete. Without it, "hide the button" is never exercised.
+    assert.ok(/coTheXoa:\s*false/.test(src), `${platform} fake must include a photo with coTheXoa false`);
+  }
+
+  assert.ok(
+    existsSync(resolve(repoRoot, 'web/src/design-system/components/AttachmentGallery.tsx')),
+    'web gallery component missing',
+  );
+  assert.ok(
+    existsSync(resolve(repoRoot, 'mobile/lib/design_system/components/attachment_gallery.dart')),
+    'mobile gallery widget missing',
+  );
+});

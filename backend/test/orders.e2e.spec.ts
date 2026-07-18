@@ -170,13 +170,24 @@ describe('/orders (e2e)', () => {
   const quoteExportRepo = { findUnique: jest.fn(), upsert: jest.fn() };
   // Ảnh đính kèm bước chuyển trạng thái (5.5): `createMany` chạy TRONG tx cùng
   // `applyTransition`; `findFirst` là đường đọc của proxy bytes.
-  const attachmentRepo = { createMany: jest.fn(), findFirst: jest.fn() };
+  const attachmentRepo = {
+    createMany: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    delete: jest.fn(),
+  };
   // Storage in-memory + renderer stub (override provider) — e2e KHÔNG đụng Chromium/R2.
   const storageMap = new Map<string, { body: Buffer; contentType: string }>();
+  // `deleteObject` là jest.fn để lane này đo được HAI thứ mà stub im lặng che mất:
+  // nó CÓ được gọi thật, và lỗi của nó bị nuốt sau khi DB đã commit.
+  const deleteObjectStub = jest.fn(async (key: string) => {
+    storageMap.delete(key);
+  });
   const storageStub = {
     putObject: async (key: string, body: Buffer, contentType: string) => {
       storageMap.set(key, { body, contentType });
     },
+    deleteObject: deleteObjectStub,
     getObject: async (key: string) => {
       const found = storageMap.get(key);
       if (found === undefined) {
@@ -449,6 +460,18 @@ describe('/orders (e2e)', () => {
       {
         name: 'GET /orders/:id/anh/:attachmentId',
         call: () => request(server()).get(`/orders/${ORDER_ID}/anh/att-1`),
+      },
+      {
+        name: 'GET /orders/:id/anh',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/anh`),
+      },
+      {
+        name: 'POST /orders/:id/anh',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/anh`),
+      },
+      {
+        name: 'DELETE /orders/:id/anh/:attachmentId',
+        call: () => request(server()).delete(`/orders/${ORDER_ID}/anh/att-1`),
       },
     ];
 
@@ -3385,6 +3408,249 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(404);
         expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+      });
+    });
+
+    /**
+     * Story 5.6 — ảnh bổ sung qua dây.
+     *
+     * Mã HTTP chỉ đo được ở lane này: unit test khẳng định `AppException` mang
+     * status 403/404, nhưng cái người dùng nhận là kết quả của `AllExceptionsFilter`
+     * dựng envelope trên đường ra. 5.5 đã có tiền lệ hai con số lệch nhau.
+     */
+    describe('Story 5.6 — ảnh bổ sung qua dây', () => {
+      const HANG_ANH_NGUOI_KHAC = {
+        id: 'att-nguoi-khac',
+        orderId: ORDER_ID,
+        uploadedByAccountId: 'acc-ai-do-khac',
+        objectKey: `attachments/${ORDER_ID}/att-nguoi-khac.jpg`,
+        fileName: 'nghiem-thu.jpg',
+        contentType: 'image/jpeg',
+        size: 2048,
+        statusFrom: 'dacoc',
+        statusTo: 'thicong',
+        occurredAt: new Date('2026-07-18T03:00:00Z'),
+        createdAt: new Date('2026-07-18T03:00:00Z'),
+      };
+
+      it('GET danh sách ⇒ 200 với items + coTheXoa, KHÔNG rò objectKey (AC-4)', async () => {
+        attachmentRepo.findMany.mockResolvedValue([
+          { ...HANG_ANH_NGUOI_KHAC, uploadedBy: { displayName: 'Trần Thợ' } },
+        ]);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/anh`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.items).toHaveLength(1);
+        expect(res.body.items[0].nguoiTaiLen).toBe('Trần Thợ');
+        expect(res.body.items[0]).toHaveProperty('coTheXoa');
+        expect(JSON.stringify(res.body)).not.toContain('attachments/');
+      });
+
+      it('DELETE ảnh của người khác khi KHÔNG có quyền sửa đơn ⇒ 403 qua dây (AC-7)', async () => {
+        // Quyền đủ mở CỬA NGOÀI (gate HTTP), nhưng luật hàng vẫn chặn: cửa thật
+        // là "người tải lên HOẶC có quyền chỉnh sửa đơn".
+        givenPermissions(PERM.ordersViewAll, PERM.constructionTransition);
+        attachmentRepo.findFirst.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+
+        const res = await request(server())
+          .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        expect(res.body.message).toBe('Bạn không có quyền xoá ảnh này.');
+        expect(attachmentRepo.delete).not.toHaveBeenCalled();
+      });
+
+      it('DELETE thành công ⇒ 204 không body', async () => {
+        givenPermissions(PERM.ordersViewAll, PERM.quotesCreateEdit);
+        attachmentRepo.findFirst.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+        attachmentRepo.delete.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+
+        const res = await request(server())
+          .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(204);
+        expect(attachmentRepo.delete).toHaveBeenCalledWith({
+          where: { id: 'att-nguoi-khac' },
+        });
+      });
+
+      it('POST ảnh hợp lệ ⇒ 201 + attachmentIds (AC-9)', async () => {
+        attachmentRepo.createMany.mockResolvedValue({ count: 1 });
+
+        const res = await request(server())
+          .post(`/orders/${ORDER_ID}/anh`)
+          .set('Authorization', `Bearer ${token()}`)
+          .attach('anh', Buffer.alloc(1024, 0x41), {
+            filename: 'bo-sung.jpg',
+            contentType: 'image/jpeg',
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.soAnhDaLuu).toBe(1);
+        expect(res.body.attachmentIds).toHaveLength(1);
+        // Ba cột toạ độ null — hàng này không thuộc bước nào.
+        const hang = attachmentRepo.createMany.mock.calls[0][0].data[0];
+        expect(hang.statusFrom).toBeNull();
+        expect(hang.statusTo).toBeNull();
+        expect(hang.occurredAt).toBeNull();
+      });
+
+      it('POST ảnh sai định dạng ⇒ 400 + fieldErrors giữ được envelope qua multer (AC-10)', async () => {
+        const res = await request(server())
+          .post(`/orders/${ORDER_ID}/anh`)
+          .set('Authorization', `Bearer ${token()}`)
+          .attach('anh', Buffer.alloc(512, 0x41), {
+            filename: 'hop-dong.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].code).toBe('mimeType');
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+      });
+
+      /** Một request multipart chỉ gồm N file trên field `anh` — route ảnh bổ sung. */
+      function postAnh(
+        files: readonly { name: string; mime: string; size: number }[],
+      ): request.Test {
+        const req = request(server())
+          .post(`/orders/${ORDER_ID}/anh`)
+          .set('Authorization', `Bearer ${token()}`);
+        for (const f of files) {
+          req.attach('anh', Buffer.alloc(f.size, 0x41), {
+            filename: f.name,
+            contentType: f.mime,
+          });
+        }
+        return req;
+      }
+
+      /**
+       * Trần cứng multer của route này CỐ Ý cao hơn ngưỡng hợp đồng. Hạ nó xuống bằng
+       * ngưỡng hợp đồng ⇒ `MulterError` bắn TRƯỚC handler ⇒ 500/413 thay vì 400 +
+       * `fieldErrors` mà AC-10 đòi. Toàn bộ lane unit mù với thay đổi đó vì nó gọi thẳng
+       * service, không đi qua interceptor.
+       */
+      describe('AC-10 — envelope 400 sống sót qua multer trên route ảnh bổ sung', () => {
+        it(`${SO_ANH_TOI_DA + 1} ảnh ⇒ 400 \`maxCount\`, KHÔNG 500/413`, async () => {
+          const res = await postAnh(
+            Array.from({ length: SO_ANH_TOI_DA + 1 }, () => anh()),
+          );
+
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+          expect(res.body.fieldErrors[0].code).toBe('maxCount');
+          expect(res.body.traceId).toBeDefined();
+          expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+          expect(storageMap.size).toBe(0);
+        });
+
+        it('ảnh vượt dung lượng hợp đồng ⇒ 400 `maxSize`, KHÔNG 413 của multer', async () => {
+          const res = await postAnh([
+            anh({ size: KICH_THUOC_TOI_DA_BYTE + 1 }),
+          ]);
+
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+          expect(res.body.fieldErrors[0].code).toBe('maxSize');
+          expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+          expect(storageMap.size).toBe(0);
+        });
+      });
+
+      /**
+       * AC-5 qua dây: quyền đủ mở CỬA HTTP nhưng đơn không thuộc phạm vi actor ⇒ 404 với
+       * đúng thông điệp "không tìm thấy đơn". Fake `findFirst` áp chính mệnh đề phạm vi mà
+       * service gửi xuống, nên bỏ `findScopedOrThrow` khỏi một route là ca đó đỏ.
+       */
+      describe('AC-5 — đơn ngoài phạm vi ⇒ 404 ở CẢ BA route', () => {
+        beforeEach(() => {
+          orderRepo.findUnique.mockResolvedValue({
+            ...DON_DACOC,
+            ownerAccountId: 'acc-nguoi-khac',
+            assigneeAccountId: 'acc-nguoi-khac-2',
+          });
+          // Không có `ordersViewAll` ⇒ phạm vi thu hẹp; vẫn đủ quyền qua gate của cả ba route.
+          givenPermissions(PERM.ordersViewOwn, PERM.constructionTransition);
+          attachmentRepo.findFirst.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+        });
+
+        it('GET danh sách ⇒ 404, KHÔNG chạm bảng attachments', async () => {
+          const res = await request(server())
+            .get(`/orders/${ORDER_ID}/anh`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(404);
+          expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+          expect(res.body.message).toContain('Không tìm thấy đơn hàng');
+          expect(attachmentRepo.findMany).not.toHaveBeenCalled();
+        });
+
+        it('POST ⇒ 404, KHÔNG byte nào lên storage', async () => {
+          const res = await postAnh([anh()]);
+
+          expect(res.status).toBe(404);
+          expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+          expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+          expect(storageMap.size).toBe(0);
+        });
+
+        it('DELETE ⇒ 404, hàng DB và object R2 còn nguyên', async () => {
+          const res = await request(server())
+            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(404);
+          expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+          expect(attachmentRepo.delete).not.toHaveBeenCalled();
+          expect(deleteObjectStub).not.toHaveBeenCalled();
+        });
+      });
+
+      /**
+       * AC-8 qua dây. Unit test canh THỨ TỰ hai lệnh; lane này canh hai thứ khác: bytes
+       * thật sự rời storage, và lỗi R2 sau commit không bao giờ thành 500 cho người dùng.
+       */
+      describe('AC-8 — xoá DB trước, R2 sau, lỗi R2 bị nuốt', () => {
+        beforeEach(() => {
+          givenPermissions(PERM.ordersViewAll, PERM.quotesCreateEdit);
+          attachmentRepo.findFirst.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+          attachmentRepo.delete.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
+          storageMap.set(HANG_ANH_NGUOI_KHAC.objectKey, {
+            body: Buffer.from('bytes'),
+            contentType: 'image/jpeg',
+          });
+        });
+
+        it('204 ⇒ object R2 biến mất thật, đúng objectKey của hàng đã xoá', async () => {
+          const res = await request(server())
+            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(204);
+          expect(deleteObjectStub).toHaveBeenCalledWith(
+            HANG_ANH_NGUOI_KHAC.objectKey,
+          );
+          expect(storageMap.has(HANG_ANH_NGUOI_KHAC.objectKey)).toBe(false);
+        });
+
+        it('R2 chớp sau khi DB commit ⇒ VẪN 204, không rò 500 ra người dùng', async () => {
+          deleteObjectStub.mockRejectedValueOnce(new Error('R2 down'));
+
+          const res = await request(server())
+            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(204);
+          expect(attachmentRepo.delete).toHaveBeenCalled();
+        });
       });
     });
 

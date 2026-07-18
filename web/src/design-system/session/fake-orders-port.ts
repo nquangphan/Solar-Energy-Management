@@ -16,6 +16,7 @@ import { DEMO_CUSTOMERS } from './fake-customers-port';
 import type { Customer } from './customers-port';
 import type {
   AddOrderLineInput,
+  AttachmentItem,
   OrderListItem,
   OrderListQuery,
   OrderPage,
@@ -659,6 +660,133 @@ export class FakeOrdersPort implements OrdersPort {
       occurredAt: NOW,
       soAnhDaLuu: anh.length,
     });
+  }
+
+  /**
+   * Demo photos — three shapes on purpose so every branch of the gallery has
+   * data: one step photo (both coordinates set), one supplementary photo (both
+   * null), and one the caller cannot delete.
+   *
+   * `coTheXoa` arrives PRE-COMPUTED here exactly as it does from the real
+   * backend — the fake plays the server's role, so the rule lives here and never
+   * in a screen or component (AD-2).
+   */
+  private anhDemo = new Map<string, AttachmentItem[]>();
+
+  private anhCuaDon(orderId: string): AttachmentItem[] {
+    const daCo = this.anhDemo.get(orderId);
+    if (daCo !== undefined) return daCo;
+    const khoiTao: AttachmentItem[] = [
+      {
+        id: `${orderId}-anh-bo-sung`,
+        fileName: 'bien-ban-bo-sung.png',
+        contentType: 'image/png',
+        size: 204800,
+        createdAt: NOW,
+        nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+        statusFrom: null,
+        statusTo: null,
+        coTheXoa: true,
+      },
+      {
+        id: `${orderId}-anh-buoc`,
+        fileName: 'nghiem-thu-thi-cong.jpg',
+        contentType: 'image/jpeg',
+        size: 512000,
+        createdAt: NOW,
+        nguoiTaiLen: 'Trần Thợ Thi Công',
+        statusFrom: 'dacoc',
+        statusTo: 'thicong',
+        coTheXoa: true,
+      },
+      {
+        id: `${orderId}-anh-nguoi-khac`,
+        fileName: 'giao-hang.jpg',
+        contentType: 'image/jpeg',
+        size: 348160,
+        createdAt: NOW,
+        nguoiTaiLen: 'Lê Kho Giao',
+        statusFrom: 'thicong',
+        statusTo: 'danggiao',
+        coTheXoa: false,
+      },
+    ];
+    this.anhDemo.set(orderId, khoiTao);
+    return khoiTao;
+  }
+
+  listAnh(orderId: string): Promise<AttachmentItem[]> {
+    if (!this.orders.has(orderId)) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
+      );
+    }
+    return Promise.resolve([...this.anhCuaDon(orderId)]);
+  }
+
+  themAnh(orderId: string, files: File[]): Promise<void> {
+    if (!this.orders.has(orderId)) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
+      );
+    }
+    if (files.length > DEMO_SO_ANH_TOI_DA) {
+      return Promise.reject(
+        this.loi('VALIDATION_ERROR', 'Ảnh đính kèm không hợp lệ.', [
+          {
+            field: 'anh',
+            message: `Tối đa ${DEMO_SO_ANH_TOI_DA} ảnh cho một lần tải lên.`,
+          },
+        ]),
+      );
+    }
+    const danhSach = this.anhCuaDon(orderId);
+    files.forEach((file, i) => {
+      this.seq += 1;
+      danhSach.unshift({
+        id: `${orderId}-anh-moi-${this.seq}-${i}`,
+        fileName: file.name,
+        contentType: file.type,
+        size: file.size,
+        createdAt: NOW,
+        nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+        statusFrom: null,
+        statusTo: null,
+        coTheXoa: true,
+      });
+    });
+    return Promise.resolve();
+  }
+
+  xoaAnh(orderId: string, attachmentId: string): Promise<void> {
+    const danhSach = this.anhCuaDon(orderId);
+    const viTri = danhSach.findIndex((a) => a.id === attachmentId);
+    if (viTri === -1) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', 'Không tìm thấy ảnh đính kèm.'),
+      );
+    }
+    if (!danhSach[viTri].coTheXoa) {
+      return Promise.reject(
+        this.loi('FORBIDDEN', 'Bạn không có quyền xoá ảnh này.'),
+      );
+    }
+    danhSach.splice(viTri, 1);
+    return Promise.resolve();
+  }
+
+  anhBytes(orderId: string, attachmentId: string): Promise<Blob> {
+    const found = this.anhCuaDon(orderId).find((a) => a.id === attachmentId);
+    if (found === undefined) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', 'Không tìm thấy ảnh đính kèm.'),
+      );
+    }
+    // Demo bytes, not a real image: the fake stands in for the proxy route, and
+    // no test renders actual pixels.
+    return Promise.resolve(
+      new Blob([`anh-demo-${attachmentId}`], { type: found.contentType }),
+    );
   }
 
   /** AD-5 envelope shape the real port rejects with. */

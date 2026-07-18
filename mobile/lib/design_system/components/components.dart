@@ -41,6 +41,11 @@ export 'share_button.dart'
 export 'image_upload.dart'
     show AppImageUpload, AppUploadItem, ImagePickFn, platformPickImages;
 
+// Read-only gallery for photos already on the server (Story 5.6) — the picker
+// above is for LOCAL files; this one renders what the backend already has.
+export 'attachment_gallery.dart'
+    show AppAttachmentGallery, AppAttachmentItem;
+
 // Form control layer (mirror Story 4.1): real checkbox for the group-picker
 // checklist.
 export 'checkbox.dart' show AppCheckbox;

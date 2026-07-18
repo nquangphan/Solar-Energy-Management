@@ -167,6 +167,21 @@
   display:flex;align-items:center;justify-content:center;color:#b7c9c4;font-size:20px}
 .thumb.add{border-style:dashed;border-color:var(--teal);color:var(--teal-700);font-weight:800}
 
+/* Attachment gallery: read-side twin of the picker above. Reuses .thumbs/.thumb
+   for the tile itself and adds the caption stack the picker has no need for —
+   badge, uploader, timestamp — plus the corner delete control. <figure> carries
+   a UA margin of 1em 40px, so zeroing it is not cosmetic: without it every tile
+   sits 40px away from its neighbour. The caption spans are block-level for the
+   same reason — inline they run together into one unreadable line. */
+.attachment-gallery{align-items:flex-start}
+.attachment-item{margin:0;display:flex;flex-direction:column;gap:4px;width:74px}
+.attachment-item .thumb{position:relative}
+.attachment-delete{position:absolute;top:2px;right:2px;min-width:24px;min-height:24px;padding:4px;
+  display:flex;align-items:center;justify-content:center;background:var(--surface);color:var(--ink-2);
+  border:1.5px solid var(--line);border-radius:var(--radius-full);cursor:pointer;font-size:12px}
+.attachment-badge{display:block;font-weight:700;color:var(--ink-2)}
+.attachment-meta{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* Skeleton (AC-2): token-based loading bar — surface-2 fill + 6px radius. Width/
    height come from the component (props); static (no shimmer — Viền nét). */
 .skel{background:var(--surface-2);border-radius:6px}

@@ -857,6 +857,136 @@ class FakeOrdersPort implements OrdersPort {
     return _copy(revised);
   }
 
+  /// Demo photos — three shapes on purpose so every branch of the gallery has
+  /// data: one step photo (both coordinates set), one supplementary photo (both
+  /// null), and one the caller cannot delete.
+  ///
+  /// [AttachmentItem.coTheXoa] arrives PRE-COMPUTED here exactly as it does from
+  /// the real backend — the fake plays the server's role, so the rule lives here
+  /// and never in a screen or widget (AD-2).
+  final Map<String, List<AttachmentItem>> _anhDemo =
+      <String, List<AttachmentItem>>{};
+
+  List<AttachmentItem> _anhCuaDon(String orderId) =>
+      _anhDemo.putIfAbsent(orderId, () => <AttachmentItem>[
+            AttachmentItem(
+              id: '$orderId-anh-bo-sung',
+              fileName: 'bien-ban-bo-sung.png',
+              contentType: 'image/png',
+              size: 204800,
+              createdAt: _now,
+              nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+              statusFrom: null,
+              statusTo: null,
+              coTheXoa: true,
+            ),
+            AttachmentItem(
+              id: '$orderId-anh-buoc',
+              fileName: 'nghiem-thu-thi-cong.jpg',
+              contentType: 'image/jpeg',
+              size: 512000,
+              createdAt: _now,
+              nguoiTaiLen: 'Trần Thợ Thi Công',
+              statusFrom: 'dacoc',
+              statusTo: 'thicong',
+              coTheXoa: true,
+            ),
+            AttachmentItem(
+              id: '$orderId-anh-nguoi-khac',
+              fileName: 'giao-hang.jpg',
+              contentType: 'image/jpeg',
+              size: 348160,
+              createdAt: _now,
+              nguoiTaiLen: 'Lê Kho Giao',
+              statusFrom: 'thicong',
+              statusTo: 'danggiao',
+              coTheXoa: false,
+            ),
+          ]);
+
+  @override
+  Future<List<AttachmentItem>> listAnh(String orderId) async {
+    if (!_orders.containsKey(orderId)) {
+      throw OrderPortException(
+        'Không tìm thấy đơn hàng: $orderId',
+        code: 'NOT_FOUND',
+      );
+    }
+    return List<AttachmentItem>.of(_anhCuaDon(orderId));
+  }
+
+  @override
+  Future<void> themAnh(String orderId, List<XFile> files) async {
+    if (!_orders.containsKey(orderId)) {
+      throw OrderPortException(
+        'Không tìm thấy đơn hàng: $orderId',
+        code: 'NOT_FOUND',
+      );
+    }
+    if (files.length > _kDemoSoAnhToiDa) {
+      throw const OrderPortException(
+        'Ảnh đính kèm không hợp lệ.',
+        code: 'VALIDATION_ERROR',
+        fieldErrors: <String, String>{
+          'anh': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần tải lên.',
+        },
+      );
+    }
+    final List<AttachmentItem> danhSach = _anhCuaDon(orderId);
+    for (int i = 0; i < files.length; i++) {
+      _seq++;
+      danhSach.insert(
+        0,
+        AttachmentItem(
+          id: '$orderId-anh-moi-$_seq-$i',
+          fileName: files[i].name,
+          contentType: 'image/jpeg',
+          size: 102400,
+          createdAt: _now,
+          nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+          statusFrom: null,
+          statusTo: null,
+          coTheXoa: true,
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<void> xoaAnh(String orderId, String attachmentId) async {
+    final List<AttachmentItem> danhSach = _anhCuaDon(orderId);
+    final int viTri =
+        danhSach.indexWhere((AttachmentItem a) => a.id == attachmentId);
+    if (viTri == -1) {
+      throw const OrderPortException(
+        'Không tìm thấy ảnh đính kèm.',
+        code: 'NOT_FOUND',
+      );
+    }
+    if (!danhSach[viTri].coTheXoa) {
+      throw const OrderPortException(
+        'Bạn không có quyền xoá ảnh này.',
+        code: 'FORBIDDEN',
+      );
+    }
+    danhSach.removeAt(viTri);
+  }
+
+  @override
+  Future<Uint8List> anhBytes(String orderId, String attachmentId) async {
+    final bool coAnh = _anhCuaDon(orderId)
+        .any((AttachmentItem a) => a.id == attachmentId);
+    if (!coAnh) {
+      throw const OrderPortException(
+        'Không tìm thấy ảnh đính kèm.',
+        code: 'NOT_FOUND',
+      );
+    }
+    // Demo bytes, not a real image: the fake stands in for the proxy route, and
+    // no test decodes actual pixels.
+    return Uint8List.fromList(<int>[0x89, 0x50, 0x4e, 0x47]);
+  }
+
   Order _copy(Order order) => Order(
         id: order.id,
         status: order.status,

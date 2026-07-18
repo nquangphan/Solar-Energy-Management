@@ -172,6 +172,33 @@ export interface StatusChangeResult {
   soAnhDaLuu: number;
 }
 
+/**
+ * One photo attached to an order (Story 5.6, FR-24) — mirrors the backend
+ * `AttachmentItemDto` field for field.
+ *
+ * `statusFrom`/`statusTo` are the step coordinates: BOTH null means this is a
+ * supplementary photo that belongs to no transition. The screen reads that pair
+ * to pick the badge; it does not infer the kind from anywhere else.
+ *
+ * `coTheXoa` is computed by the BACKEND (uploader OR order-edit permission,
+ * AD-2/AD-4). The client ONLY renders it — rebuilding that expression here would
+ * be a second copy of the rule, and it would drift.
+ *
+ * There is NO object key here: R2 keys never leave the backend (AD-3). Bytes come
+ * from `anhBytes()`, which goes through the authenticated proxy route.
+ */
+export interface AttachmentItem {
+  id: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  createdAt: string;
+  nguoiTaiLen: string;
+  statusFrom: string | null;
+  statusTo: string | null;
+  coTheXoa: boolean;
+}
+
 /** What changed between version N-1 and version N — lines and quantities only. */
 export interface OrderVersionChange {
   them: string[];
@@ -541,4 +568,44 @@ export interface OrdersPort {
     event: string,
     anh: File[],
   ): Promise<StatusChangeResult>;
+
+  /**
+   * Every photo of the order — step photos AND supplementary ones, in ONE flat
+   * list newest first (Story 5.6, FR-24) — `GET /orders/:id/anh`.
+   *
+   * The order is the backend's (`createdAt` descending); the screen does not
+   * re-sort. Rejects 403 (neither `orders.view_all` nor `orders.view_own`), 404
+   * (order out of scope or missing).
+   */
+  listAnh(orderId: string): Promise<AttachmentItem[]>;
+
+  /**
+   * Attach supplementary photos OUTSIDE the transition flow (Story 5.6, FR-24) —
+   * `POST /orders/:id/anh` as `multipart/form-data`. The rows land with all three
+   * step coordinates null: they belong to no step.
+   *
+   * Limits are the backend's: 10 photos per upload, 10 MB each,
+   * jpeg/png/webp/heic. Rejects 400 (`fieldErrors` says which photo), 403, 404.
+   */
+  themAnh(orderId: string, files: File[]): Promise<void>;
+
+  /**
+   * Delete ONE photo — `DELETE /orders/:id/anh/:attachmentId` (Story 5.6, FR-24).
+   * Hard delete; the trail lives in the audit log.
+   *
+   * Call this only for items whose `coTheXoa` is true — the backend enforces the
+   * same rule anyway and answers 403 otherwise (AD-4: hiding the button is UX,
+   * not security). Rejects 403, 404.
+   */
+  xoaAnh(orderId: string, attachmentId: string): Promise<void>;
+
+  /**
+   * Bytes of ONE photo for preview — `GET /orders/:id/anh/:attachmentId`
+   * (Story 5.5 proxy route, AD-3: the bucket is not public, every byte comes
+   * through the backend behind JWT).
+   *
+   * The SCREEN calls this and hands the result to the gallery component; the
+   * gallery itself never touches the network. Rejects 403, 404.
+   */
+  anhBytes(orderId: string, attachmentId: string): Promise<Blob>;
 }

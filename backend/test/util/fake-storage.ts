@@ -23,5 +23,8 @@ export function fakeStorage(): FakeStorage {
       if (found === undefined) throw new Error(`Không có object: ${key}`);
       return found;
     },
+    deleteObject: async (key) => {
+      objects.delete(key);
+    },
   };
 }

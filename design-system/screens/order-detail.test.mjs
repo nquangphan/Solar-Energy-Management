@@ -243,15 +243,23 @@ test('the not-found state is distinct from the load-error state (AC-13, UX-DR-19
   );
 });
 
-// (e.3) EXACTLY TWO TABS. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 and Ảnh is
-// Story 5.6 — an empty tab promises the user something nobody built.
-test('exactly the two owned tabs render — no placeholder tabs for future stories', () => {
+// (e.3) EXACTLY THREE TABS. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — an empty
+// tab promises the user something nobody built. Ảnh LEFT the forbidden list in
+// Story 5.6: that story shipped the panel the tab opens, so the tab is now real.
+// The rule did not weaken — the set of shipped surfaces grew.
+test('exactly the three owned tabs render — no placeholder tabs for future stories', () => {
   // Stripped code, not raw text: both screens explain in a comment WHICH tabs
   // they deliberately do not render, and that explanation is worth keeping.
   for (const [name, src] of allCode) {
-    for (const notYet of ['Thanh toán', 'Ảnh đính kèm', 'Hợp đồng', 'Hoá đơn', 'HĐ & HĐơn']) {
+    for (const notYet of ['Thanh toán', 'Hợp đồng', 'Hoá đơn', 'HĐ & HĐơn']) {
       assert.ok(!src.includes(notYet), `${name} must not render a "${notYet}" tab — that story owns it`);
     }
+    // Positive assertion: the Ảnh tab must ACTUALLY be there on both platforms.
+    // Without it, deleting the tab would silently pass this test.
+    assert.ok(
+      /label:\s*'Ảnh'|label:\s*"Ảnh"/.test(src),
+      `${name} must render the Ảnh tab (Story 5.6)`,
+    );
   }
 });
 

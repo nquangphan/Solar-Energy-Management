@@ -14,4 +14,11 @@ export abstract class StoragePort {
 
   /** Đọc object; key không tồn tại → ném NotFound domain error (envelope 404). */
   abstract getObject(key: string): Promise<{ body: Buffer; contentType: string }>;
+
+  /**
+   * Xoá object. Caller gọi SAU khi hàng DB trỏ tới key đã bị xoá và commit — bytes mồ côi
+   * (xoá DB xong, xoá R2 hỏng) vô hình với mọi endpoint, còn thứ tự ngược lại để hàng DB
+   * trỏ vào bytes không tồn tại và làm vỡ đường đọc.
+   */
+  abstract deleteObject(key: string): Promise<void>;
 }

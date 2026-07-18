@@ -74,6 +74,14 @@ export type { ShareButtonProps } from './ShareButton';
 export { ImageUpload } from './ImageUpload';
 export type { ImageUploadProps, ImageUploadItem } from './ImageUpload';
 
+// Read-only gallery for photos already on the server (Story 5.6) — the picker
+// above is for LOCAL files; this one renders what the backend already has.
+export { AttachmentGallery } from './AttachmentGallery';
+export type {
+  AttachmentGalleryProps,
+  AttachmentGalleryItem,
+} from './AttachmentGallery';
+
 // Form control layer (Story 4.1): real checkbox for the group-picker checklist.
 export { Checkbox } from './Checkbox';
 export type { CheckboxProps } from './Checkbox';

@@ -3214,7 +3214,179 @@
         ]
       }
     },
+    "/orders/{id}/anh": {
+      "get": {
+        "operationId": "OrdersController_listAttachments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Mọi ảnh của đơn theo createdAt giảm dần; `coTheXoa` tính ở backend cho từng ảnh.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentListResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn ngoài phạm vi hoặc không tồn tại (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      },
+      "post": {
+        "operationId": "OrdersController_addAttachments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Ảnh đã lưu với ba cột toạ độ null — không thuộc bước chuyển trạng thái nào.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttachmentUploadResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ảnh sai định dạng/quá lớn/quá nhiều (VALIDATION_ERROR) — không hàng nào tạo, không byte nào lên R2.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu cả bốn quyền làm việc trên đơn (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn ngoài phạm vi hoặc không tồn tại (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}/anh/{attachmentId}": {
+      "delete": {
+        "operationId": "OrdersController_removeAttachment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Ảnh đã bị xoá khỏi đơn."
+          },
+          "403": {
+            "description": "Không phải người tải lên và không có quyền chỉnh sửa đơn (FORBIDDEN) — ảnh còn nguyên.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn ngoài phạm vi/không tồn tại, hoặc ảnh không thuộc đơn này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      },
       "get": {
         "operationId": "OrdersController_downloadAttachment",
         "parameters": [
@@ -5370,6 +5542,91 @@
           "status",
           "occurredAt",
           "soAnhDaLuu"
+        ]
+      },
+      "AttachmentItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Tên file đã dọn ký tự nguy hiểm lúc ghi, giữ tiếng Việt có dấu."
+          },
+          "contentType": {
+            "type": "string",
+            "example": "image/jpeg"
+          },
+          "size": {
+            "type": "number",
+            "description": "Kích thước byte."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "nguoiTaiLen": {
+            "type": "string",
+            "description": "Tên hiển thị người tải ảnh lên."
+          },
+          "statusFrom": {
+            "type": "object",
+            "description": "Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung.",
+            "nullable": true
+          },
+          "statusTo": {
+            "type": "object",
+            "description": "Trạng thái SAU bước ảnh này thuộc về; null với ảnh bổ sung.",
+            "nullable": true
+          },
+          "coTheXoa": {
+            "type": "boolean",
+            "description": "Người gọi có xoá được ảnh này không — tính Ở BACKEND (người tải lên HOẶC có quyền chỉnh sửa đơn). Client CHỈ hiển thị, không dựng lại luật."
+          }
+        },
+        "required": [
+          "id",
+          "fileName",
+          "contentType",
+          "size",
+          "createdAt",
+          "nguoiTaiLen",
+          "coTheXoa"
+        ]
+      },
+      "AttachmentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttachmentItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "AttachmentUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "soAnhDaLuu": {
+            "type": "number",
+            "description": "Số ảnh đã lưu trong lượt này."
+          },
+          "attachmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "soAnhDaLuu",
+          "attachmentIds"
         ]
       },
       "VatRateResponseDto": {
