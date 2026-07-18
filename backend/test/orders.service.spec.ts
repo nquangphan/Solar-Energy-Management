@@ -74,6 +74,8 @@ describe('OrdersService', () => {
     kWp: null,
     vatMode: null,
     validityNote: null,
+    cancelReason: null,
+    cancelledAt: null,
     createdAt: new Date('2026-07-16T01:00:00Z'),
     updatedAt: new Date('2026-07-16T01:00:00Z'),
   };
@@ -1081,6 +1083,8 @@ describe('OrdersService', () => {
         ...DON_BAOGIA,
         kWp: null,
         validityNote: null,
+    cancelReason: null,
+    cancelledAt: null,
       });
 
       const view = await service.update(

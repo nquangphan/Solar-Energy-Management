@@ -72,6 +72,10 @@ class _StubPort extends FakeOrdersPort {
   /// Story 5.5: non-empty makes the "Chuyển trạng thái" button render.
   final List<OrderNextStep> buocKeTiep;
 
+  /// Story 5.7: this stub never offers cancelling — that button has its own
+  /// test file (order_detail_cancel_test.dart), where `coTheHuy` is the point.
+  static const bool coTheHuy = false;
+
   @override
   Future<Order> get(String id) async => _order();
 
@@ -85,6 +89,7 @@ class _StubPort extends FakeOrdersPort {
             ),
         ],
         buocKeTiep: buocKeTiep,
+        coTheHuy: coTheHuy,
       );
 
   @override
@@ -144,6 +149,7 @@ class _HangingPort extends FakeOrdersPort {
       const OrderLifecycle(
         buoc: <OrderLifecycleStep>[],
         buocKeTiep: <OrderNextStep>[],
+        coTheHuy: false,
       );
 
   @override

@@ -64,6 +64,8 @@ import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { QuoteExportResponseDto } from './dto/quote-export-response.dto';
 import { ResolveDiscountRequestDto } from './dto/resolve-discount-request.dto';
 import { StatusChangeRequestDto } from './dto/status-change-request.dto';
+import { CancelOrderRequestDto } from './dto/cancel-order-request.dto';
+import { CancelOrderResponseDto } from './dto/cancel-order-response.dto';
 import { StatusChangeResponseDto } from './dto/status-change-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
@@ -309,6 +311,7 @@ export class OrdersController {
     return {
       buoc: [...vongDoi.buoc],
       buocKeTiep: [...vongDoi.buocKeTiep],
+      coTheHuy: vongDoi.coTheHuy,
     };
   }
 
@@ -821,6 +824,59 @@ export class OrdersController {
       status: ketQua.status,
       occurredAt: ketQua.occurredAt.toISOString(),
       soAnhDaLuu: ketQua.soAnhDaLuu,
+    };
+  }
+
+  /**
+   * Huỷ đơn KÈM LÝ DO (Story 5.7, FR-9).
+   *
+   * Cửa RIÊNG chứ không phải một sự kiện của `chuyen-trang-thai`: lý do là bắt buộc, và
+   * `huy` bị loại khỏi `SU_KIEN_THU_CONG` chính vì thế. Không nhận ảnh — người dùng chỉ gõ
+   * một dòng lý do trong Dialog, kéo multipart vào đây là kéo theo cả picker ảnh và một tầng
+   * overlay thứ hai (UX-DR-20).
+   *
+   * `@HttpCode(OK)` — kỷ luật của file: action nghiệp vụ trên resource CÓ SẴN không trả 201.
+   */
+  @Post(':id/huy')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions(PERM.quotesCreateEdit)
+  @ApiOkResponse({
+    type: CancelOrderResponseDto,
+    description:
+      'Đơn đã huỷ; lý do + thời điểm ghi trong CÙNG transaction với lệnh đổi status.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Lý do rỗng/chỉ khoảng trắng/dưới 3 ký tự sau trim, hoặc quá 500 ký tự (VALIDATION_ERROR kèm fieldErrors) — đơn KHÔNG đổi trạng thái.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quotes.create_edit (FORBIDDEN) — Order.status không đổi.',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Trạng thái hiện tại không có cạnh huỷ, kể cả đơn ĐÃ huỷ (CONFLICT) — huỷ lần hai không phải no-op.',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
+  })
+  async huyDon(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Body() dto: CancelOrderRequestDto,
+  ): Promise<CancelOrderResponseDto> {
+    const ketQua = await this.orders.huyDon({
+      callerAccountId: account.id,
+      quyen: await this.quyenCuaNguoiGoi(account.id),
+      orderId: id,
+      lyDo: dto.lyDo,
+    });
+    return {
+      status: ketQua.status,
+      occurredAt: ketQua.occurredAt.toISOString(),
     };
   }
 

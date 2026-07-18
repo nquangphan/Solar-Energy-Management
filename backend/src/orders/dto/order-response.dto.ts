@@ -119,6 +119,22 @@ export class OrderResponseDto {
   })
   validityNote!: string | null;
 
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description:
+      'Lý do huỷ đơn (Story 5.7) — null khi đơn chưa huỷ. KHÔNG rào theo quyền: ai xem được đơn thì xem được lý do huỷ của nó.',
+  })
+  cancelReason!: string | null;
+
+  @ApiPropertyOptional({
+    type: Date,
+    nullable: true,
+    description:
+      'Thời điểm huỷ (ISO-8601 UTC) — CÙNG một giá trị với `occurredAt` của hàng audit huỷ. null khi đơn chưa huỷ.',
+  })
+  cancelledAt!: Date | null;
+
   @ApiProperty({
     type: [OrderLineItemResponseDto],
     description:

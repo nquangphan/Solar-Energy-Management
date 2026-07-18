@@ -289,6 +289,24 @@ test('the orders port carries the Story 5.5 status-change surface on BOTH platfo
   assert.ok(mobPort.includes("import 'package:image_picker/image_picker.dart';"), 'mobile orders port must import image_picker for XFile');
 });
 
+test('huyDon + coTheHuy ship on ALL FOUR orders-port files (Story 5.7)', () => {
+  // Cancelling is its OWN endpoint, not an event of chuyenTrangThai: the reason
+  // is mandatory and only that path enforces it. So the seam has to appear on
+  // both real ports AND both fakes — a fake without it makes every screen test
+  // hit an unimplemented method instead of the demo data it was written for.
+  const files = [
+    ['web port', resolve(webDir, 'orders-port.ts')],
+    ['mobile port', resolve(mobDir, 'orders_port.dart')],
+    ['web fake', resolve(webDir, 'fake-orders-port.ts')],
+    ['mobile fake', resolve(mobDir, 'fake_orders_port.dart')],
+  ];
+  for (const [name, path] of files) {
+    const src = readFileSync(path, 'utf8');
+    assert.ok(src.includes('huyDon'), `${name} must declare/implement huyDon() (Story 5.7)`);
+    assert.ok(src.includes('coTheHuy'), `${name} must carry coTheHuy (Story 5.7)`);
+  }
+});
+
 test('the orders port carries the Story 4.9 warranty surface on BOTH platforms (twin re-check)', () => {
   const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
   const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');

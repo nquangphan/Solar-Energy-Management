@@ -114,9 +114,12 @@
   font-size: 12px;
 }
 
-/* The one action on this screen (Story 5.5). It renders only when the backend
-   offered a next step, so there is no disabled variant to style. */
+/* The actions on this screen: "Chuyển trạng thái" (5.5) and "Huỷ đơn" (5.7).
+   Each renders only when the backend said this caller can do it, so there is no
+   disabled variant to style. `wrap` because the two labels together overflow a
+   narrow column at large text sizes. */
 .od-actions {
+  flex-wrap: wrap;
   display: flex;
   gap: var(--space-8);
   margin-top: var(--space-12);
@@ -143,4 +146,19 @@
   font-size: 13px;
   font-weight: 800;
   color: var(--ink);
+}
+
+/* Huỷ đơn dialog (Story 5.7). The consequence sentence sits above the reason
+   field; the error line replaces nothing — it appears under the field so the
+   text the user typed stays visible while they read why it was refused. */
+.od-huy-hq {
+  margin: 0 0 var(--space-12);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.od-huy-loi {
+  margin: var(--space-8) 0 0;
+  font-size: 13px;
+  color: var(--danger);
 }

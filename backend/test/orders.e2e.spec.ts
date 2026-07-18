@@ -458,6 +458,10 @@ describe('/orders (e2e)', () => {
           request(server()).post(`/orders/${ORDER_ID}/chuyen-trang-thai`),
       },
       {
+        name: 'POST /orders/:id/huy',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/huy`),
+      },
+      {
         name: 'GET /orders/:id/anh/:attachmentId',
         call: () => request(server()).get(`/orders/${ORDER_ID}/anh/att-1`),
       },
@@ -3679,6 +3683,203 @@ describe('/orders (e2e)', () => {
         expect(res.body.buocKeTiep).toEqual([]);
         expect(res.body.buoc.length).toBeGreaterThan(0);
       });
+    });
+  });
+
+  /**
+   * Story 5.7 — `POST /orders/:id/huy`.
+   *
+   * ⚠️ MÃ HTTP CHỈ ĐO ĐƯỢC Ở ĐÂY. `ValidationPipe` chạy TRƯỚC service, nên một unit test
+   * khẳng định "lý do rỗng ⇒ 400" chỉ khẳng định service ném gì, không khẳng định người dùng
+   * nhận gì. Bài học 5.5 HIGH-1: DTO quá chặt ⇒ 400 của pipe thay 409 của nghiệp vụ và unit
+   * test không thấy.
+   */
+  describe('Story 5.7 — POST /orders/:id/huy (huỷ đơn kèm lý do)', () => {
+    const LY_DO = 'Khách đổi ý, không lắp nữa';
+
+    function huy(body: unknown = { lyDo: LY_DO }): request.Test {
+      return request(server())
+        .post(`/orders/${ORDER_ID}/huy`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send(body as object);
+    }
+
+    beforeEach(() => {
+      givenPermissions(PERM.ordersViewAll, PERM.quotesCreateEdit);
+    });
+
+    it('đơn `baogia` + lý do hợp lệ ⇒ 200, status `huy`, occurredAt ISO-8601', async () => {
+      const res = await huy();
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('huy');
+      expect(new Date(res.body.occurredAt).toISOString()).toBe(
+        res.body.occurredAt,
+      );
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: { cancelReason: LY_DO, cancelledAt: expect.any(Date) },
+      });
+    });
+
+    it.each([
+      ['thiếu hẳn field', {}],
+      ['rỗng', { lyDo: '' }],
+      ['chỉ khoảng trắng', { lyDo: '     ' }],
+      ['hai ký tự sau trim', { lyDo: ' ok ' }],
+      ['quá 500 ký tự', { lyDo: 'x'.repeat(501) }],
+      // Sai KIỂU: `@IsString` là hàng rào duy nhất. Gỡ nó ⇒ service chạy `input.lyDo.trim()`
+      // trên một số/null/mảng ⇒ TypeError ⇒ 500 INTERNAL, không phải 400 có `fieldErrors`.
+      // Unit test luôn truyền string nên không lane nào khác thấy được độ lệch này.
+      ['số, không phải chuỗi', { lyDo: 123 }],
+      ['null tường minh', { lyDo: null }],
+      ['mảng chuỗi', { lyDo: ['khách', 'đổi ý'] }],
+    ])('%s ⇒ 400 VALIDATION_ERROR — envelope trung tâm, không do controller dựng', async (_ten, body) => {
+      const res = await huy(body);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors?.[0]?.field).toBe('lyDo');
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('lý do 2 ký tự ⇒ lỗi mang code `required` của SERVICE, không phải `minLength` của DTO', async () => {
+      // Chốt bằng test cái mà DTO cố ý KHÔNG làm: luật độ dài tối thiểu sống ở service để
+      // người dùng nhận đúng MỘT thông điệp. Thêm `@MinLength(3)` vào DTO sẽ đổi code sang
+      // `minLength` và đổi message — unit test không thấy vì pipe không chạy ở đó.
+      // Input KHÔNG có khoảng trắng bao quanh: `' ok '` dài 4 ký tự thô nên lọt qua
+      // `@MinLength(3)`, và một mutant thêm decorator đó vào DTO sẽ sống sót.
+      const res = await huy({ lyDo: 'ok' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors?.[0]?.code).toBe('required');
+      expect(res.body.fieldErrors?.[0]?.message).toContain('3 ký tự');
+    });
+
+    it('lý do ĐÚNG 500 ký tự ⇒ 200 — trần là <= 500, không phải < 500', async () => {
+      // Cận trên chỉ đo được ở đây: `@MaxLength(500)` là luật của ValidationPipe. Ca 501 một
+      // mình không khoá được trần — hạ xuống 499 (hay 50) thì nó vẫn đỏ đúng như cũ.
+      const lyDo = 'x'.repeat(500);
+
+      const res = await huy({ lyDo });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('huy');
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: { cancelReason: lyDo, cancelledAt: expect.any(Date) },
+      });
+    });
+
+    it('lý do ĐÚNG 3 ký tự ⇒ 200 — ngưỡng dưới là >= 3 trên dây thật', async () => {
+      const res = await huy({ lyDo: 'xa.' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('huy');
+    });
+
+    it('field lạ trong body bị `whitelist` chặn — không có đường ghi đè `status`/`cancelledAt`', async () => {
+      // `whitelist: true` sống ở pipe, nên chỉ lane này chứng minh được rằng client không
+      // thể tự nhét cột vào lệnh update bằng cách gửi thêm field.
+      const res = await huy({
+        lyDo: LY_DO,
+        status: 'hoanthanh',
+        cancelledAt: '2020-01-01T00:00:00.000Z',
+        cancelReason: 'lý do giả mạo',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('huy');
+      expect(orderRepo.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: { cancelReason: LY_DO, cancelledAt: expect.any(Date) },
+      });
+    });
+
+    it('thiếu `quotes.create_edit` ⇒ 403, status không đổi', async () => {
+      givenPermissions(PERM.ordersViewAll, PERM.catalogView);
+
+      const res = await huy();
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('đơn ở `thicong` (không có cạnh huỷ) ⇒ 409', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'thicong',
+      });
+
+      const res = await huy();
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+    });
+
+    it('đơn ĐÃ huỷ ⇒ 409, không phải 200 no-op', async () => {
+      orderRepo.findUnique.mockResolvedValue({ ...DON_BAOGIA, status: 'huy' });
+
+      const res = await huy();
+
+      expect(res.status).toBe(409);
+    });
+
+    it('đơn của người khác, actor không có `orders.view_all` ⇒ 404 (không rò rỉ)', async () => {
+      givenPermissions(PERM.ordersViewOwn, PERM.quotesCreateEdit);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        ownerAccountId: 'acc-nguoi-khac',
+        assigneeAccountId: null,
+      });
+
+      const res = await huy();
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it('`/vong-doi` trả `coTheHuy: true` cho đơn `baogia` khi actor có quyền', async () => {
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.coTheHuy).toBe(true);
+      // `huy` KHÔNG BAO GIỜ lọt vào lane thủ công — cờ trên là đường DUY NHẤT client biết.
+      expect(res.body.buocKeTiep.map((b: { event: string }) => b.event)).not.toContain(
+        SU_KIEN.huy,
+      );
+    });
+
+    it('`/vong-doi` trả `coTheHuy: false` khi actor thiếu `quotes.create_edit`', async () => {
+      givenPermissions(PERM.ordersViewAll);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.coTheHuy).toBe(false);
+    });
+
+    it('`GET /orders/:id` trả `cancelReason`/`cancelledAt` của đơn đã huỷ', async () => {
+      const luc = new Date('2026-07-18T09:00:00Z');
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'huy',
+        cancelReason: LY_DO,
+        cancelledAt: luc,
+      });
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.cancelReason).toBe(LY_DO);
+      expect(res.body.cancelledAt).toBe(luc.toISOString());
     });
   });
 });

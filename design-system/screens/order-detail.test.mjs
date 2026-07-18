@@ -221,6 +221,14 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27, AC-12)',
     // history rows
     'Bản hiệu lực',
     'Bản gốc',
+    // Huỷ đơn (Story 5.7) — button, dialog title, consequence sentence, the
+    // reason field's caption, and the facts row that shows it afterwards.
+    'Huỷ đơn',
+    'Lý do huỷ',
+    'Xác nhận huỷ',
+    'Đóng',
+    'Đơn sẽ đóng lại và không tiếp tục được. Thao tác này không hoàn tác được.',
+    'Không huỷ được đơn.',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `the web order detail is missing the label "${label}"`);
@@ -263,18 +271,74 @@ test('exactly the three owned tabs render — no placeholder tabs for future sto
   }
 });
 
-// (e.4) NO BUTTON OWNED BY A STORY THAT HAS NOT SHIPPED. "Huỷ đơn" (5.7) and
-// "Share báo giá" still lead to screens that do not exist.
+// (e.4) NO BUTTON OWNED BY A STORY THAT HAS NOT SHIPPED. "Share báo giá" still
+// leads to a screen that does not exist.
 //
-// "Chuyển trạng thái" LEFT this list in Story 5.5: that story shipped the screen
-// the button opens, so it now owns the button too. The rule did not weaken — it
-// still says "no button to nowhere"; one destination stopped being nowhere.
+// "Chuyển trạng thái" LEFT this list in Story 5.5 and "Huỷ đơn" in Story 5.7:
+// each story shipped the destination its button opens, so it now owns the
+// button too. The rule did not weaken — it still says "no button to nowhere";
+// two destinations stopped being nowhere.
 test('the detail screen renders no button owned by a future story', () => {
   for (const [name, src] of allCode) {
-    for (const label of ['Huỷ đơn', 'Share báo giá']) {
+    for (const label of ['Share báo giá']) {
       assert.ok(!src.includes(label), `${name} must not render "${label}" — a later story owns that button`);
     }
   }
+});
+
+// (e.5) THE CANCEL BUTTON EXISTS, AND IS GATED ON ITS OWN FLAG (Story 5.7).
+//
+// 🔴 THE ASSERTION THAT MATTERS IS THE NEGATIVE ONE. `huy` is NOT part of the
+// manual lane, so `buocKeTiep` is EMPTY at 'baogia' — the status orders are
+// cancelled from most often. Nesting the cancel button inside the existing
+// `buocKeTiep.length > 0` wrapper renders it as NOTHING exactly there, and every
+// other guard in this file would still pass.
+test('the cancel button is gated on coTheHuy, NOT nested in a buocKeTiep condition (Story 5.7)', () => {
+  assert.ok(webCode.includes('Huỷ đơn'), 'the web detail must render the "Huỷ đơn" button');
+  assert.ok(mobileCode.includes('Huỷ đơn'), 'the mobile detail must render the "Huỷ đơn" button');
+
+  // Backend-computed flag, read straight off the lifecycle response (AD-2).
+  assert.match(webCode, /coTheHuy/, 'the web detail must gate the cancel button on coTheHuy');
+  assert.match(mobileCode, /_coTheHuy/, 'the mobile detail must gate the cancel button on _coTheHuy');
+
+  // The condition IMMEDIATELY guarding the button is the cancel flag alone.
+  const webNut = webCode.slice(0, webCode.indexOf('Huỷ đơn'));
+  const mobNut = mobileCode.slice(0, mobileCode.indexOf('Huỷ đơn'));
+  assert.match(
+    webNut.slice(-400),
+    /coTheHuy\s*&&/,
+    'the web cancel button must sit directly under a `coTheHuy &&` condition',
+  );
+  assert.match(
+    mobNut.slice(-400),
+    /if\s*\(_coTheHuy\)/,
+    'the mobile cancel button must sit directly under `if (_coTheHuy)`',
+  );
+
+  // 🔴 AND SO MUST THE CONTAINER AROUND IT. Checking only the inner condition is
+  // not enough: re-wrapping the whole action block in the old
+  // `buocKeTiep.length > 0 &&` leaves the inner `coTheHuy &&` untouched and
+  // still hides the button at 'baogia'. So assert the OUTER condition mentions
+  // the cancel flag, and that the old sole-wrapper shape is gone.
+  const webContainer = webCode.slice(0, webCode.indexOf('className="od-actions"'));
+  assert.match(
+    webContainer.slice(-300),
+    /\|\|\s*coTheHuy/,
+    'the .od-actions container must also open on coTheHuy — otherwise the button vanishes at baogia',
+  );
+  assert.ok(
+    !/\{buocKeTiep\.length > 0 && onChangeStatus && \(\s*<div className="od-actions"/.test(webCode),
+    'the web action container must not be gated on buocKeTiep alone (Story 5.7)',
+  );
+  assert.ok(
+    !/if \(_buocKeTiep\.isNotEmpty && widget\.onChangeStatus != null\) \.\.\.<Widget>\[/.test(mobileCode),
+    'the mobile action block must not be gated on _buocKeTiep alone (Story 5.7)',
+  );
+  assert.match(
+    mobileCode,
+    /\|\|\s*_coTheHuy\)\s*\.\.\.<Widget>\[/,
+    'the mobile action block must also open on _coTheHuy',
+  );
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).

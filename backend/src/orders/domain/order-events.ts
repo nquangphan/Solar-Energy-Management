@@ -332,3 +332,33 @@ export class AttachmentRemoved implements DomainEvent {
     this.target = { type: 'Order', id: orderId };
   }
 }
+
+/**
+ * Đơn bị HUỶ kèm lý do (Story 5.7, FR-9/AD-11).
+ *
+ * Publish THÊM, KHÔNG thay `StatusChanged`: `StatusChanged` là vết from→to chính tắc của mọi
+ * transition, còn event này mang payload nghiệp vụ (`lyDo`) mà vết đó không có chỗ chứa.
+ * Một hành động sinh hai event là tiền lệ đã có ở đường chốt đơn (`StatusChanged` +
+ * `OrderConfirmed`) — chấp nhận có chủ đích, đổi lại `StatusChanged` giữ đúng một hình dạng.
+ *
+ * ⚠️ ĐÂY LÀ SEAM CHO EPIC 6.7. Việc giải phóng tồn giữ chỗ / dựng phiếu nhập trả khi huỷ đơn
+ * đã xuất kho KHÔNG nằm ở đường huỷ (không có model tồn kho nào tồn tại ở thời điểm này):
+ * `inventory/` subscribe event này và tự quyết. `statusTruocHuy` có mặt chính vì thế — nó là
+ * dữ kiện quyết định "đã xuất kho chưa", và consumer không đọc ngược được Order đã đổi status.
+ */
+export class OrderCancelled implements DomainEvent {
+  readonly type = 'OrderCancelled';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string,
+    orderId: string,
+    readonly lyDo: string,
+    readonly statusTruocHuy: string,
+    readonly orderVersionId: string | null,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: orderId };
+  }
+}

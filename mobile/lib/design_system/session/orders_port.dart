@@ -86,6 +86,8 @@ class Order {
     this.kWp,
     this.vatMode,
     this.validityNote,
+    this.cancelReason,
+    this.cancelledAt,
     required this.lineItems,
     this.discount,
     required this.createdAt,
@@ -111,6 +113,12 @@ class Order {
 
   /// Quote validity note — free text ≤ 200 chars, display-only in Phase 1.
   final String? validityNote;
+
+  /// Why the order was cancelled, and when (Story 5.7). Both null until it is
+  /// cancelled. Not permission-fenced: whoever can read the order can read why
+  /// it was cancelled.
+  final String? cancelReason;
+  final String? cancelledAt;
   final List<OrderLine> lineItems;
 
   /// The LATEST discount-approval record (Story 4.7) — null when the order
@@ -222,10 +230,23 @@ class OrderNextStep {
 /// [buocKeTiep] EMPTY means this caller has no legal step — the "Chuyển trạng
 /// thái" button is then hidden outright, not greyed (UX-DR-22).
 class OrderLifecycle {
-  const OrderLifecycle({required this.buoc, required this.buocKeTiep});
+  const OrderLifecycle({
+    required this.buoc,
+    required this.buocKeTiep,
+    required this.coTheHuy,
+  });
 
   final List<OrderLifecycleStep> buoc;
   final List<OrderNextStep> buocKeTiep;
+
+  /// Whether THIS caller can cancel THIS order (Story 5.7) — the backend read it
+  /// off the transition table against the caller's real permissions.
+  ///
+  /// It cannot be derived from [buocKeTiep]: cancelling is not part of the
+  /// manual lane, so `huy` never appears there. And the client must not derive
+  /// it from `status` either — that is business logic (AD-2). `false` ⇒ the
+  /// button is ABSENT, not greyed (UX-DR-22).
+  final bool coTheHuy;
 }
 
 /// What one manual transition did — mirrors the backend `StatusChangeResponseDto`.
@@ -763,6 +784,20 @@ abstract class OrdersPort {
     String event,
     List<XFile> anh,
   );
+
+  /// Cancel the order with a REASON — `POST /orders/:id/huy` (Story 5.7, FR-9).
+  ///
+  /// Its own endpoint, not an `event` of [chuyenTrangThai]: the reason is
+  /// mandatory and only this path enforces it.
+  ///
+  /// [lyDo] is required, 3–500 characters after trimming. Call this only when
+  /// `getLifecycle().coTheHuy` is true — the backend enforces the same rule
+  /// anyway and answers 403/409 otherwise (AD-4: hiding the button is UX, not
+  /// security).
+  ///
+  /// Throws 400 (`fieldErrors` carries `lyDo`), 403, 409 (current status has no
+  /// cancel edge — including an order already cancelled), 404.
+  Future<void> huyDon(String orderId, String lyDo);
 
   /// Every photo of the order — step photos AND supplementary ones, in ONE flat
   /// list newest first (Story 5.6, FR-24) — `GET /orders/:id/anh`.

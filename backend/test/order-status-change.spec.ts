@@ -55,6 +55,8 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
     kWp: null,
     vatMode: null,
     validityNote: null,
+    cancelReason: null,
+    cancelledAt: null,
     createdAt: new Date('2026-07-18T01:00:00Z'),
     updatedAt: new Date('2026-07-18T01:00:00Z'),
   };

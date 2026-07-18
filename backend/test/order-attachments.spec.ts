@@ -58,6 +58,8 @@ describe('OrdersService — ảnh bổ sung (Story 5.6)', () => {
     kWp: null,
     vatMode: null,
     validityNote: null,
+    cancelReason: null,
+    cancelledAt: null,
     createdAt: new Date('2026-07-18T01:00:00Z'),
     updatedAt: new Date('2026-07-18T01:00:00Z'),
   };

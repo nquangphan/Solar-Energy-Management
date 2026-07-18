@@ -74,6 +74,13 @@ export interface Order {
   kWp: number | null;
   vatMode: string | null;
   validityNote: string | null;
+  /**
+   * Why the order was cancelled, and when (Story 5.7). Both null until it is
+   * cancelled. Not permission-fenced: whoever can read the order can read why it
+   * was cancelled.
+   */
+  cancelReason: string | null;
+  cancelledAt: string | null;
   lineItems: OrderLine[];
   discount: OrderDiscount | null;
   createdAt: string;
@@ -163,6 +170,16 @@ export interface OrderNextStep {
 export interface OrderLifecycle {
   buoc: OrderLifecycleStep[];
   buocKeTiep: OrderNextStep[];
+  /**
+   * Whether THIS caller can cancel THIS order (Story 5.7) — the backend read it
+   * off the transition table against the caller's real permissions.
+   *
+   * It cannot be derived from `buocKeTiep`: cancelling is not part of the manual
+   * lane, so `huy` never appears there. And the client must not derive it from
+   * `status` either — that is business logic (AD-2). `false` ⇒ the button is
+   * ABSENT, not greyed (UX-DR-22).
+   */
+  coTheHuy: boolean;
 }
 
 /** What one manual transition did — mirrors the backend `StatusChangeResponseDto`. */
@@ -568,6 +585,21 @@ export interface OrdersPort {
     event: string,
     anh: File[],
   ): Promise<StatusChangeResult>;
+
+  /**
+   * Cancel the order with a REASON — `POST /orders/:id/huy` (Story 5.7, FR-9).
+   *
+   * Its own endpoint, not an `event` of `chuyenTrangThai`: the reason is
+   * mandatory and only this path enforces it.
+   *
+   * `lyDo` is required, 3–500 characters after trimming. Call this only when
+   * `getLifecycle().coTheHuy` is true — the backend enforces the same rule anyway
+   * and answers 403/409 otherwise (AD-4: hiding the button is UX, not security).
+   *
+   * Rejects 400 (`fieldErrors` carries `lyDo`), 403, 409 (current status has no
+   * cancel edge — including an order already cancelled), 404.
+   */
+  huyDon(orderId: string, lyDo: string): Promise<void>;
 
   /**
    * Every photo of the order — step photos AND supplementary ones, in ONE flat

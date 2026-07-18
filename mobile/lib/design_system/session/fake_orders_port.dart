@@ -23,6 +23,9 @@ const String _now = '2026-07-16T00:00:00.000Z';
 /// Demo mirror of the backend's photo-count ceiling (`SO_ANH_TOI_DA`).
 const int _kDemoSoAnhToiDa = 10;
 
+/// Demo mirror of the backend's minimum cancel-reason length (Story 5.7).
+const int _kDemoLyDoToiThieu = 3;
+
 /// STATIC demo bytes for `exportQuote` (Story 4.8) — the real backend renders
 /// PDF/PNG from the quote template; the demo just hands back a valid 1×1 PNG
 /// and a minimal PDF header so the share plumbing is exercisable offline.
@@ -322,6 +325,11 @@ class FakeOrdersPort implements OrdersPort {
           ),
       ],
       buocKeTiep: _buocKeTiepDemo(status, thiCong, vanChuyen),
+      // The demo "server" answers this the way the real one does — from the
+      // same three statuses the transition table gives a `huy` edge. It lives
+      // HERE and never in a screen (AD-2), which is also why the fake, not the
+      // screen, knows a cancelled order can no longer be cancelled.
+      coTheHuy: const <String>['baogia', 'dachot', 'dacoc'].contains(status),
     );
   }
 
@@ -427,6 +435,61 @@ class FakeOrdersPort implements OrdersPort {
       status: buoc.first.to,
       occurredAt: _now,
       soAnhDaLuu: anh.length,
+    );
+  }
+
+  /// Demo twin of `POST /orders/:id/huy` (Story 5.7). Applies the same three
+  /// refusals in the same order as the real backend so the dialog's error
+  /// branch is exercisable offline: unknown order → 404, status with no cancel
+  /// edge (including one already cancelled) → 409, reason too short → 400 with
+  /// `fieldErrors`.
+  @override
+  Future<void> huyDon(String orderId, String lyDo) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException(
+        'Không tìm thấy đơn hàng: $orderId',
+        code: 'NOT_FOUND',
+      );
+    }
+    if (!const <String>['baogia', 'dachot', 'dacoc'].contains(order.status)) {
+      throw const OrderPortException(
+        'Không huỷ được đơn ở trạng thái hiện tại.',
+        code: 'CONFLICT',
+      );
+    }
+    final String sach = lyDo.trim();
+    if (sach.length < _kDemoLyDoToiThieu) {
+      throw const OrderPortException(
+        'Cần lý do khi huỷ đơn.',
+        code: 'VALIDATION_ERROR',
+        fieldErrors: <String, String>{
+          'lyDo':
+              'Lý do huỷ là bắt buộc, tối thiểu $_kDemoLyDoToiThieu ký tự.',
+        },
+      );
+    }
+    _orders[orderId] = Order(
+      id: order.id,
+      status: 'huy',
+      customerSdt: order.customerSdt,
+      currentVersionId: order.currentVersionId,
+      ownerAccountId: order.ownerAccountId,
+      assigneeAccountId: order.assigneeAccountId,
+      sourceId: order.sourceId,
+      custType: order.custType,
+      scopeThietBi: order.scopeThietBi,
+      scopeThiCong: order.scopeThiCong,
+      scopeVanChuyen: order.scopeVanChuyen,
+      kWp: order.kWp,
+      vatMode: order.vatMode,
+      validityNote: order.validityNote,
+      cancelReason: sach,
+      cancelledAt: _now,
+      lineItems: order.lineItems,
+      discount: order.discount,
+      createdAt: order.createdAt,
+      updatedAt: _now,
     );
   }
 
@@ -1002,6 +1065,8 @@ class FakeOrdersPort implements OrdersPort {
         kWp: order.kWp,
         vatMode: order.vatMode,
         validityNote: order.validityNote,
+        cancelReason: order.cancelReason,
+        cancelledAt: order.cancelledAt,
         lineItems: List<OrderLine>.of(order.lineItems),
         discount: order.discount,
         createdAt: order.createdAt,

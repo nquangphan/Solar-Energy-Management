@@ -23,6 +23,7 @@ import {
   SU_KIEN_THU_CONG,
   buocKeTiep,
   buocVongDoi,
+  coTheHuy,
   daTaiDich,
   evaluateTransition,
   type BuocKeTiep,
@@ -43,6 +44,7 @@ import {
   AttachmentRemoved,
   DiscountRequested,
   DiscountResolved,
+  OrderCancelled,
   OrderConfirmed,
   OrderCreated,
   OrderLineAdded,
@@ -291,6 +293,17 @@ const TU_DONG_GATE_THUA = new Error('tu-dong-gate-thua');
  * biết lần nào ăn ⇒ 409, KHÔNG nuốt thành no-op.
  */
 const THU_CONG_GATE_THUA = new Error('thu-cong-gate-thua');
+
+/**
+ * Sentinel abort transaction lane HUỶ ĐƠN (Story 5.7). Cùng luật với lane thủ công — người
+ * bấm Huỷ mà thua cuộc đua phải ăn 409, không được nuốt thành no-op — nhưng là một OBJECT
+ * RIÊNG: hai lane bắt sentinel theo IDENTITY, dùng chung một instance là để lane này nuốt
+ * mất abort của lane kia khi hai request chạy song song.
+ */
+const HUY_GATE_THUA = new Error('huy-gate-thua');
+
+/** Số ký tự tối thiểu của lý do huỷ SAU khi trim — chặn `"."` / `"x"` cho có lệ. */
+const DO_DAI_LY_DO_TOI_THIEU = 3;
 
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
@@ -713,6 +726,133 @@ export class OrdersService {
       occurredAt,
       soAnhDaLuu: anhDaLen.length,
     };
+  }
+
+  /**
+   * CỬA VÀO CÔNG KHAI DUY NHẤT cho HUỶ ĐƠN kèm lý do (Story 5.7, FR-9) — `POST /:id/huy`.
+   *
+   * Vì sao là một cửa riêng chứ không phải một sự kiện của lane thủ công: lý do là BẮT BUỘC,
+   * và một `applyTransition` trần không có chỗ nào enforce điều đó. Đưa `huy` vào
+   * `SU_KIEN_THU_CONG` sẽ mở đúng một đường huỷ đơn không cần lý do.
+   *
+   * THỨ TỰ BẮT BUỘC:
+   *  1. `findScopedOrThrow` — ngoài phạm vi ⇒ 404 CÙNG thông điệp với không tồn tại.
+   *  2. Validate lý do — luật NGHIỆP VỤ ("rỗng sau trim") sống ở đây, không ở DTO: decorator
+   *     quá chặt khiến `ValidationPipe` trả 400 bằng một envelope khác trước khi service chạy.
+   *  3. Pre-check thuần `evaluateTransition()` — 403/409 CÓ THÔNG ĐIỆP trước khi mở
+   *     transaction. Không phải lớp bảo mật thứ hai: engine dưới row lock vẫn là quyền cuối.
+   *  4. `$transaction`: engine ghi status → `update` hai cột lý do. Rollback ⇒ không cột nào
+   *     đổi và status cũng không.
+   *  5. Publish SAU commit (AD-18), `StatusChanged` rồi `OrderCancelled`.
+   *
+   * ⚠️ Lệnh `update` ở bước 4 KHÔNG ghi field `status` — AD-11 còn nguyên, engine vẫn là nơi
+   * duy nhất đổi status. Nhét `cancelReason` vào chữ ký `applyTransition()` sẽ đổi hợp đồng
+   * của một engine đang phục vụ ba lane khác.
+   *
+   * ⚠️ AC-11 — KHÔNG một lệnh nào ở đây chạm tồn kho. Không có model tồn kho nào tồn tại; việc
+   * giải phóng chỗ giữ / phiếu nhập trả thuộc Epic 6.7 và nối vào qua `OrderCancelled`.
+   *
+   * Đơn ĐÃ ở `huy` ⇒ 409 (bảng không có cạnh `huy → huy`), KHÔNG no-op như lane auto: đây là
+   * người bấm nút, và người bấm hai lần cần biết lần nào ăn.
+   */
+  async huyDon(input: {
+    readonly callerAccountId: string;
+    readonly quyen: ReadonlySet<string>;
+    readonly orderId: string;
+    readonly lyDo: string;
+  }): Promise<{
+    readonly status: OrderStatusKey;
+    readonly occurredAt: Date;
+  }> {
+    const before = await this.findScopedOrThrow(
+      input.callerAccountId,
+      input.quyen,
+      input.orderId,
+    );
+
+    const lyDo = input.lyDo.trim();
+    if (lyDo.length < DO_DAI_LY_DO_TOI_THIEU) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Cần lý do khi huỷ đơn.',
+        [
+          {
+            field: 'lyDo',
+            code: 'required',
+            message: `Lý do huỷ là bắt buộc, tối thiểu ${DO_DAI_LY_DO_TOI_THIEU} ký tự.`,
+          },
+        ],
+      );
+    }
+
+    const preCheck = evaluateTransition({
+      order: before,
+      event: SU_KIEN.huy,
+      actorPermissions: input.quyen,
+      scopeFlags: {
+        thietBi: before.scopeThietBi,
+        thiCong: before.scopeThiCong,
+        vanChuyen: before.scopeVanChuyen,
+      },
+    });
+    if (!preCheck.ok) {
+      if (preCheck.reason === 'permission') {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          403,
+          'Bạn không có quyền huỷ đơn này.',
+        );
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Không huỷ được đơn ở trạng thái hiện tại.',
+      );
+    }
+
+    // MỘT timestamp cho MỘT sự kiện — cột `cancelledAt`, `StatusChanged` (tức hàng audit) và
+    // `OrderCancelled` phải cùng một "lúc", nếu không lý do và vết audit không nối được nhau.
+    const occurredAt = new Date();
+    let statusChanged: StatusChanged;
+    try {
+      statusChanged = await this.prisma.$transaction(async (tx) => {
+        const event = await this.applyTransition(tx, {
+          order: before,
+          event: SU_KIEN.huy,
+          actorPermissions: input.quyen,
+          actorAccountId: input.callerAccountId,
+          sentinel: HUY_GATE_THUA,
+          occurredAt,
+        });
+        await tx.order.update({
+          where: { id: input.orderId },
+          data: { cancelReason: lyDo, cancelledAt: occurredAt },
+        });
+        return event;
+      });
+    } catch (error) {
+      if (error !== HUY_GATE_THUA) throw error;
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Không huỷ được đơn ở trạng thái hiện tại.',
+      );
+    }
+
+    await this.eventBus.publish(statusChanged);
+    await this.eventBus.publish(
+      new OrderCancelled(
+        input.callerAccountId,
+        input.orderId,
+        lyDo,
+        before.status,
+        before.currentVersionId,
+        occurredAt,
+      ),
+    );
+
+    return { status: preCheck.to, occurredAt };
   }
 
   /**
@@ -1147,6 +1287,7 @@ export class OrdersService {
   ): Promise<{
     readonly buoc: readonly BuocVongDoi[];
     readonly buocKeTiep: readonly BuocKeTiep[];
+    readonly coTheHuy: boolean;
   }> {
     const order = await this.findScopedOrThrow(callerAccountId, quyen, id);
     const scopeFlags = {
@@ -1160,6 +1301,10 @@ export class OrdersService {
     return {
       buoc: buocVongDoi(status, scopeFlags),
       buocKeTiep: buocKeTiep(status, scopeFlags, quyen),
+      // Câu trả lời THỨ BA cho cùng một lần đọc đơn (5.7): nút "Huỷ đơn" hiện hay ẩn.
+      // `huy` KHÔNG BAO GIỜ có trong `buocKeTiep` (nó không thuộc lane thủ công), nên client
+      // không có cách nào suy ra cờ này từ hai mảng trên — và AD-2 cấm nó tự suy từ status.
+      coTheHuy: coTheHuy(status, quyen),
     };
   }
 

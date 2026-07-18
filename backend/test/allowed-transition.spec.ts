@@ -2,13 +2,18 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import {
   ALLOWED_TRANSITIONS,
   SU_KIEN,
+  SU_KIEN_THU_CONG,
   buocKeTiep,
   buocVongDoi,
+  coTheHuy,
   daTaiDich,
   evaluateTransition,
   type OrderScopeFlags,
 } from '../src/orders/domain/allowed-transition';
-import { type OrderStatusKey } from '../src/orders/domain/order-status';
+import {
+  ORDER_STATUS_KEYS,
+  type OrderStatusKey,
+} from '../src/orders/domain/order-status';
 
 /**
  * Unit DOMAIN THUẦN — không mock gì (hàm không async, không side effect). Bảng chuyển trạng
@@ -495,6 +500,86 @@ describe('allowed-transition (domain thuần)', () => {
               rule.requires === buoc.requires,
           );
           expect(dong).toBeDefined();
+        }
+      }
+    });
+  });
+
+  describe('coTheHuy — người này huỷ được đơn ở trạng thái này không (Story 5.7)', () => {
+    const QUYEN_HUY: ReadonlySet<string> = new Set([PERM.quotesCreateEdit]);
+
+    /** Ba trạng thái CÓ cạnh huỷ trong bảng — suy từ bảng, không chép tay. */
+    const CO_CANH_HUY = ALLOWED_TRANSITIONS.filter(
+      (rule) => rule.event === SU_KIEN.huy,
+    ).map((rule) => rule.from);
+
+    it.each(ORDER_STATUS_KEYS)(
+      'trạng thái `%s`: có quyền `quotes.create_edit` ⇒ đúng bằng "bảng có cạnh huỷ từ đây"',
+      (status) => {
+        expect(coTheHuy(status, QUYEN_HUY)).toBe(CO_CANH_HUY.includes(status));
+      },
+    );
+
+    it.each(ORDER_STATUS_KEYS)(
+      'trạng thái `%s`: THIẾU quyền ⇒ luôn false, kể cả nơi bảng có cạnh',
+      (status) => {
+        expect(coTheHuy(status, new Set())).toBe(false);
+      },
+    );
+
+    it('quyền KHÁC không mở được cửa huỷ (không any-of, không suy diễn)', () => {
+      expect(coTheHuy('baogia', new Set([PERM.ordersConfirm]))).toBe(false);
+      expect(coTheHuy('baogia', new Set([PERM.paymentsRecord]))).toBe(false);
+    });
+
+    it('đơn ĐÃ huỷ ⇒ false — `huy` là terminal, không huỷ lần hai', () => {
+      expect(coTheHuy('huy', QUYEN_HUY)).toBe(false);
+    });
+
+    it('ĐỌC bảng, KHÔNG chép: đúng ba trạng thái baogia/dachot/dacoc mở cửa huỷ', () => {
+      const mo = ORDER_STATUS_KEYS.filter((s) => coTheHuy(s, QUYEN_HUY));
+      expect([...mo].sort()).toEqual(['baogia', 'dachot', 'dacoc'].sort());
+    });
+  });
+
+  describe('HỒI QUY 5.7 — huỷ KHÔNG lọt vào lane thủ công, KHÔNG mọc nấc stepper', () => {
+    it('`SU_KIEN_THU_CONG` KHÔNG chứa `huy` — nếu chứa, huỷ đi được qua cửa không đòi lý do', () => {
+      expect(SU_KIEN_THU_CONG).not.toContain(SU_KIEN.huy);
+      expect(SU_KIEN_THU_CONG).toHaveLength(5);
+    });
+
+    it('HÀNH VI: `buocVongDoi()` không sinh nấc `huy` cho bất kỳ trạng thái × bộ cờ nào (trừ khi đơn ĐANG ở `huy`)', () => {
+      const boCo: readonly OrderScopeFlags[] = [
+        { thietBi: false, thiCong: false, vanChuyen: false },
+        { thietBi: true, thiCong: false, vanChuyen: false },
+        { thietBi: false, thiCong: true, vanChuyen: false },
+        { thietBi: false, thiCong: false, vanChuyen: true },
+        { thietBi: true, thiCong: true, vanChuyen: false },
+        { thietBi: true, thiCong: false, vanChuyen: true },
+        { thietBi: true, thiCong: true, vanChuyen: true },
+      ];
+      for (const status of ORDER_STATUS_KEYS) {
+        for (const co of boCo) {
+          const nac = buocVongDoi(status, co).filter((b) => b.status === 'huy');
+          // Ngoại lệ DUY NHẤT: đơn đang đứng ở `huy` — stepper thiếu bước đang đứng là nói dối.
+          expect(nac).toEqual(
+            status === 'huy' ? [{ status: 'huy', trangThai: 'current' }] : [],
+          );
+        }
+      }
+    });
+
+    it('HÀNH VI: `buocKeTiep()` không bao giờ trả sự kiện `huy`, ở mọi trạng thái × mọi bộ cờ', () => {
+      for (const status of ORDER_STATUS_KEYS) {
+        for (const thiCong of [false, true]) {
+          for (const vanChuyen of [false, true]) {
+            const buoc = buocKeTiep(
+              status,
+              { thietBi: true, thiCong, vanChuyen },
+              TOAN_QUYEN,
+            );
+            expect(buoc.map((b) => b.event)).not.toContain(SU_KIEN.huy);
+          }
         }
       }
     });

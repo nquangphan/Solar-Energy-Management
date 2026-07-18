@@ -12,9 +12,16 @@
 // filtered here and nothing renders dimmed (UX-DR-11).
 //
 // The status chip is READ-ONLY (UX-DR-23): changing status is its own screen
-// (Story 5.5), reached by the one action button here. "Huỷ đơn" (5.7) and
-// "Share báo giá" still lead to screens that do not exist, and a button to
-// nowhere is worse than no button — they stay absent.
+// (Story 5.5), reached by one action button here. "Huỷ đơn" (5.7) is the second
+// one, and it opens a DIALOG rather than a screen — it collects one line of text
+// and nothing else, so a whole screen would be ceremony (UX-DR-19/20).
+// "Share báo giá" still leads to a screen that does not exist, and a button to
+// nowhere is worse than no button — it stays absent.
+//
+// THE TWO BUTTONS ARE GATED SEPARATELY. Cancelling is not part of the manual
+// lane, so `buocKeTiep` is EMPTY at 'baogia' — the status orders are cancelled
+// from most often. Wrapping both in one `buocKeTiep.length > 0` would make the
+// cancel button invisible exactly where it is needed.
 //
 // THE BUTTON'S VISIBILITY IS NOT A PERMISSION CALCULATION. It shows exactly when
 // the backend returned a non-empty `buocKeTiep`, and is ABSENT otherwise — not
@@ -29,8 +36,10 @@ import {
   AttachmentGallery,
   Button,
   ConfirmDialog,
+  Dialog,
   EmptyState,
   ErrorState,
+  Field,
   Frame,
   ImageUpload,
   ScopeFlag,
@@ -149,6 +158,9 @@ export function OrderDetailScreen({
   const [order, setOrder] = useState<Order | null>(null);
   const [steps, setSteps] = useState<OrderLifecycleStep[]>([]);
   const [buocKeTiep, setBuocKeTiep] = useState<OrderNextStep[]>([]);
+  // Backend-computed (AD-2/AD-4). The screen never asks "is the status one of
+  // these three" — that rule lives in the transition table.
+  const [coTheHuy, setCoTheHuy] = useState(false);
   const [versions, setVersions] = useState<OrderVersionItem[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [tab, setTab] = useState(TAB_THONG_TIN);
@@ -172,6 +184,7 @@ export function OrderDetailScreen({
       setOrder(don);
       setSteps(buoc.buoc);
       setBuocKeTiep(buoc.buocKeTiep);
+      setCoTheHuy(buoc.coTheHuy);
       setVersions(banUpdate);
       setState('ready');
     } catch (err) {
@@ -308,6 +321,42 @@ export function OrderDetailScreen({
     }
   }, [port, orderId, xoaId, loadAnh]);
 
+  // ---- Huỷ đơn (Story 5.7) -------------------------------------------------
+  const [moHuy, setMoHuy] = useState(false);
+  const [lyDoHuy, setLyDoHuy] = useState('');
+  const [loiHuy, setLoiHuy] = useState<string | null>(null);
+  const [dangHuy, setDangHuy] = useState(false);
+
+  // Opening this dialog CLOSES the delete-photo one. Overlays stack at most one
+  // level (UX-DR-20), and these two live on the same screen.
+  const moDialogHuy = useCallback(() => {
+    setXoaId(null);
+    setLyDoHuy('');
+    setLoiHuy(null);
+    setMoHuy(true);
+  }, []);
+
+  const xacNhanHuy = useCallback(async () => {
+    // Blocking an empty reason here is UX only — the backend refuses it too
+    // (AD-4), and it owns the exact rule.
+    if (lyDoHuy.trim() === '' || dangHuy) return;
+    setDangHuy(true);
+    setLoiHuy(null);
+    try {
+      await port.huyDon(orderId, lyDoHuy);
+      setMoHuy(false);
+      // Status, `cancelReason` and the lifecycle all changed — reload rather
+      // than patch local state, so the screen keeps showing one truth.
+      await load();
+    } catch (err) {
+      // The server's message verbatim: it is the one that knows WHY.
+      const message = (err as { message?: string } | null)?.message;
+      setLoiHuy(message ?? 'Không huỷ được đơn.');
+    } finally {
+      setDangHuy(false);
+    }
+  }, [port, orderId, lyDoHuy, dangHuy, load]);
+
   /**
    * Port item → gallery item. The step badge is built from the SHIPPED status
    * label table — a third label table for the same statuses would drift.
@@ -358,11 +407,18 @@ export function OrderDetailScreen({
           <>
             <Frame label="Vòng đời đơn" onBg>
               <Stepper steps={toStepItems(steps)} />
-              {buocKeTiep.length > 0 && onChangeStatus && (
+              {((buocKeTiep.length > 0 && onChangeStatus) || coTheHuy) && (
                 <div className="od-actions">
-                  <Button variant="primary" onClick={onChangeStatus}>
-                    Chuyển trạng thái
-                  </Button>
+                  {buocKeTiep.length > 0 && onChangeStatus && (
+                    <Button variant="primary" onClick={onChangeStatus}>
+                      Chuyển trạng thái
+                    </Button>
+                  )}
+                  {coTheHuy && (
+                    <Button variant="danger" onClick={moDialogHuy}>
+                      Huỷ đơn
+                    </Button>
+                  )}
                 </div>
               )}
             </Frame>
@@ -389,6 +445,12 @@ export function OrderDetailScreen({
                     )}
                   </span>
                 </div>
+                {order.cancelReason !== null && (
+                  <div className="od-kv">
+                    <span className="od-k">Lý do huỷ</span>
+                    <span className="od-v">{order.cancelReason}</span>
+                  </div>
+                )}
                 <div className="od-kv">
                   <span className="od-k">Công suất</span>
                   <span className="od-v">{order.kWp === null ? '—' : `${order.kWp} kWp`}</span>
@@ -502,6 +564,40 @@ export function OrderDetailScreen({
 
       {/* The delete dialog and the picker's sheet are two SEPARATE flows: they
           never open together, so overlays stack at most one deep (UX-DR-20). */}
+      <Dialog
+        open={moHuy}
+        title="Huỷ đơn"
+        tone="danger"
+        onClose={() => setMoHuy(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setMoHuy(false)}>
+              Đóng
+            </Button>
+            <Button
+              variant="danger"
+              disabled={lyDoHuy.trim() === '' || dangHuy}
+              onClick={() => void xacNhanHuy()}
+            >
+              Xác nhận huỷ
+            </Button>
+          </>
+        }
+      >
+        <p className="od-huy-hq">
+          Đơn sẽ đóng lại và không tiếp tục được. Thao tác này không hoàn tác được.
+        </p>
+        <Field
+          label="Lý do huỷ"
+          multiline
+          rows={3}
+          value={lyDoHuy}
+          onChange={(e) => setLyDoHuy(e.target.value)}
+          maxLength={500}
+        />
+        {loiHuy !== null && <p className="od-huy-loi">{loiHuy}</p>}
+      </Dialog>
+
       <ConfirmDialog
         open={xoaId !== null}
         title="Xoá ảnh"

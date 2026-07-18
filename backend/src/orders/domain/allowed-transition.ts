@@ -272,7 +272,10 @@ export function daTaiDich(status: string, event: TransitionEvent): boolean {
  *    ⇒ đơn `dachot` mà giá vẫn trôi theo danh mục. Hỏng DỮ LIỆU, không phải hỏng UX.
  *  - `mo_lai` → `POST /:id/mo-lai`; `ap_chiet_khau` → `POST /:id/ap-chiet-khau`;
  *    `tu_choi_chiet_khau` → đường duyệt chiết khấu.
- *  - `huy` → Story 5.7: bắt buộc lý do + giải phóng tồn `reserved`.
+ *  - `huy` → `POST /:id/huy` (Story 5.7): lý do là BẮT BUỘC và `huyDon()` là nơi enforce nó.
+ *    Đưa `huy` vào danh sách này sẽ mở đúng một đường huỷ đơn KHÔNG cần lý do. Việc giải
+ *    phóng tồn giữ chỗ thuộc Epic 6.7, nối vào qua event `OrderCancelled` — không phải việc
+ *    của lane thủ công.
  *  - `du_coc` → lane AUTO (Story 5.2): hệ quả của sự kiện thanh toán, không phải nút người bấm.
  */
 export const SU_KIEN_THU_CONG: readonly TransitionEvent[] = [
@@ -324,6 +327,31 @@ export function buocKeTiep(
     to: rule.to,
     requires: rule.requires,
   }));
+}
+
+/**
+ * Người gọi NÀY huỷ được đơn đang ở trạng thái NÀY không (Story 5.7, AD-2/AD-4: client không
+ * tự suy). Hàm THUẦN — không async, không Prisma.
+ *
+ * ĐỌC bảng, KHÔNG chép bảng (AD-11): thêm/bớt một cạnh `huy` trong `ALLOWED_TRANSITIONS` là
+ * câu trả lời ở đây tự đổi theo. Hardcode `['baogia','dachot','dacoc']` sẽ là bảng thứ hai và
+ * nó sẽ lệch.
+ *
+ * KHÔNG nhận `scopeFlags`: không cạnh `huy` nào khai `scopeGuard` — huỷ đơn không phụ thuộc
+ * đơn có thi công hay vận chuyển. Thêm tham số đó là mời một luật không tồn tại vào chữ ký.
+ *
+ * `false` ⇒ client ẩn HẲN nút "Huỷ đơn", không vẽ xám (UX-DR-22).
+ */
+export function coTheHuy(
+  status: OrderStatusKey,
+  quyen: ReadonlySet<string>,
+): boolean {
+  return ALLOWED_TRANSITIONS.some(
+    (rule) =>
+      rule.event === SU_KIEN.huy &&
+      rule.from === status &&
+      quyen.has(rule.requires),
+  );
 }
 
 /** Một nấc của stepper vòng đời: bước nào, đơn đã qua / đang đứng / sắp tới. */

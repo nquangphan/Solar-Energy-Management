@@ -45,6 +45,9 @@ const NOW = '2026-07-16T00:00:00.000Z';
 /** Demo mirror of the backend's photo-count ceiling (`SO_ANH_TOI_DA`). */
 const DEMO_SO_ANH_TOI_DA = 10;
 
+/** Demo mirror of the backend's minimum cancel-reason length (Story 5.7). */
+const DEMO_LY_DO_TOI_THIEU = 3;
+
 /**
  * Demo rows for the order-list screen (Story 5.3) — used only when nothing was
  * created in this session, so the list screen is demoable standalone. Spread
@@ -159,6 +162,8 @@ export class FakeOrdersPort implements OrdersPort {
       // null is reserved for pre-4.4 orders; the fake plays that role.
       vatMode: 'co_vat',
       validityNote: null,
+      cancelReason: null,
+      cancelledAt: null,
       lineItems: [],
       discount: null,
       createdAt: NOW,
@@ -550,7 +555,51 @@ export class FakeOrdersPort implements OrdersPort {
               : ('done' as const),
       })),
       buocKeTiep: this.buocKeTiepDemo(status, thiCong, vanChuyen),
+      // The demo "server" answers this the way the real one does — from the same
+      // three statuses the transition table gives a `huy` edge. It lives HERE and
+      // never in a screen (AD-2), which is also why the fake, not the screen,
+      // knows that a cancelled order can no longer be cancelled.
+      coTheHuy: ['baogia', 'dachot', 'dacoc'].includes(status),
     });
+  }
+
+  /**
+   * Demo twin of `POST /orders/:id/huy` (Story 5.7). Applies the same three
+   * refusals in the same order as the real backend so the dialog's error branch
+   * is exercisable offline: unknown order → 404, status with no cancel edge
+   * (including one already cancelled) → 409, reason too short → 400 with
+   * `fieldErrors`.
+   */
+  huyDon(orderId: string, lyDo: string): Promise<void> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
+      );
+    }
+    if (!['baogia', 'dachot', 'dacoc'].includes(order.status)) {
+      return Promise.reject(
+        this.loi('CONFLICT', 'Không huỷ được đơn ở trạng thái hiện tại.'),
+      );
+    }
+    const sach = lyDo.trim();
+    if (sach.length < DEMO_LY_DO_TOI_THIEU) {
+      return Promise.reject(
+        this.loi('VALIDATION_ERROR', 'Cần lý do khi huỷ đơn.', [
+          {
+            field: 'lyDo',
+            message: `Lý do huỷ là bắt buộc, tối thiểu ${DEMO_LY_DO_TOI_THIEU} ký tự.`,
+          },
+        ]),
+      );
+    }
+    this.orders.set(orderId, {
+      ...order,
+      status: 'huy',
+      cancelReason: sach,
+      cancelledAt: NOW,
+    });
+    return Promise.resolve();
   }
 
   /**

@@ -349,6 +349,11 @@ model Order {
   kWp               Float?          @map("k_wp")
   vatMode           String?         @map("vat_mode")
   validityNote      String?         @map("validity_note")
+  /// Lý do huỷ + thời điểm huỷ — ghi CÙNG transaction với lệnh đổi status sang `huy`.
+  /// Cột chứ không chỉ AuditLog: tab Thông tin đọc lý do để render, còn `AuditLog.after` là
+  /// JSON append-only để truy vết, không phải đường đọc thứ hai cho dữ kiện của chính Đơn.
+  cancelReason      String?         @map("cancel_reason")
+  cancelledAt       DateTime?       @map("cancelled_at")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt @map("updated_at")
   versions          OrderVersion[]  @relation("OrderVersions")

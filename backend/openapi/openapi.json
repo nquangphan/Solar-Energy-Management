@@ -3214,6 +3214,91 @@
         ]
       }
     },
+    "/orders/{id}/huy": {
+      "post": {
+        "operationId": "OrdersController_huyDon",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelOrderRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đơn đã huỷ; lý do + thời điểm ghi trong CÙNG transaction với lệnh đổi status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelOrderResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Lý do rỗng/chỉ khoảng trắng/dưới 3 ký tự sau trim, hoặc quá 500 ký tự (VALIDATION_ERROR kèm fieldErrors) — đơn KHÔNG đổi trạng thái.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quotes.create_edit (FORBIDDEN) — Order.status không đổi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Trạng thái hiện tại không có cạnh huỷ, kể cả đơn ĐÃ huỷ (CONFLICT) — huỷ lần hai không phải no-op.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}/anh": {
       "get": {
         "operationId": "OrdersController_listAttachments",
@@ -4781,6 +4866,17 @@
             "nullable": true,
             "description": "Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự, Phase 1 chỉ hiển thị (Story 4.4). null = chưa nhập."
           },
+          "cancelReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do huỷ đơn (Story 5.7) — null khi đơn chưa huỷ. KHÔNG rào theo quyền: ai xem được đơn thì xem được lý do huỷ của nó."
+          },
+          "cancelledAt": {
+            "format": "date-time",
+            "type": "string",
+            "nullable": true,
+            "description": "Thời điểm huỷ (ISO-8601 UTC) — CÙNG một giá trị với `occurredAt` của hàng audit huỷ. null khi đơn chưa huỷ."
+          },
           "lineItems": {
             "description": "Dòng của BẢN HIỆU LỰC (qua currentVersionId), sắp theo displayOrder tăng dần. Rỗng = đơn mới tạo.",
             "type": "array",
@@ -5172,11 +5268,16 @@
             "items": {
               "$ref": "#/components/schemas/OrderNextStepDto"
             }
+          },
+          "coTheHuy": {
+            "type": "boolean",
+            "description": "Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút \"Huỷ đơn\", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `buocKeTiep`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó."
           }
         },
         "required": [
           "buoc",
-          "buocKeTiep"
+          "buocKeTiep",
+          "coTheHuy"
         ]
       },
       "ThayDoiSoLuongDto": {
@@ -5542,6 +5643,50 @@
           "status",
           "occurredAt",
           "soAnhDaLuu"
+        ]
+      },
+      "CancelOrderRequestDto": {
+        "type": "object",
+        "properties": {
+          "lyDo": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Lý do huỷ đơn — BẮT BUỘC, tối thiểu 3 ký tự sau khi trim (service enforce).",
+            "example": "Khách đổi ý, không lắp nữa"
+          }
+        },
+        "required": [
+          "lyDo"
+        ]
+      },
+      "CancelOrderResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "description": "Trạng thái đơn SAU khi huỷ — luôn 'huy'.",
+            "example": "huy"
+          },
+          "occurredAt": {
+            "type": "string",
+            "description": "Thời điểm huỷ (ISO-8601 UTC). CÙNG một giá trị với cột `cancelledAt` và với `occurredAt` của hàng audit."
+          }
+        },
+        "required": [
+          "status",
+          "occurredAt"
         ]
       },
       "AttachmentItemDto": {

@@ -63,6 +63,7 @@ class _StubPort extends FakeOrdersPort {
     return OrderLifecycle(
       buoc: const <OrderLifecycleStep>[],
       buocKeTiep: buocKeTiep,
+      coTheHuy: false,
     );
   }
 
@@ -345,6 +346,7 @@ void main() {
       const OrderLifecycle(
         buoc: <OrderLifecycleStep>[],
         buocKeTiep: _kMotNhanh,
+        coTheHuy: false,
       ),
     );
     await tester.pumpAndSettle();

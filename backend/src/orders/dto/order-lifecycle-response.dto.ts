@@ -59,4 +59,10 @@ export class OrderLifecycleResponseDto {
       'Bước kế tiếp NGƯỜI GỌI bấm được. MẢNG RỖNG ⇒ nút "Chuyển trạng thái" ẩn hẳn, không vẽ xám (UX-DR-22).',
   })
   buocKeTiep!: OrderNextStepDto[];
+
+  @ApiProperty({
+    description:
+      'Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút "Huỷ đơn", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `buocKeTiep`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó.',
+  })
+  coTheHuy!: boolean;
 }

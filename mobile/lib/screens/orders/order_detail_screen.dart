@@ -11,14 +11,21 @@
 // filtered here and nothing renders dimmed (UX-DR-11).
 //
 // The status chip is READ-ONLY (UX-DR-23): changing status is its own screen
-// (Story 5.5), reached by the one action button here. "Huỷ đơn" (5.7) and
-// "Share báo giá" still lead to screens that do not exist — they stay absent.
+// (Story 5.5), reached by one action button here. "Huỷ đơn" (5.7) is the second
+// one, and it opens a DIALOG rather than a screen — it collects one line of text
+// and nothing else (UX-DR-19/20). "Share báo giá" still leads to a screen that
+// does not exist — it stays absent.
 //
-// THE BUTTON'S VISIBILITY IS NOT A PERMISSION CALCULATION. It shows exactly when
-// the backend returned a non-empty `buocKeTiep`, and is ABSENT otherwise — not
+// THE BUTTONS' VISIBILITY IS NOT A PERMISSION CALCULATION. Each shows exactly
+// when the backend said this caller can do it, and is ABSENT otherwise — not
 // greyed (UX-DR-22). The branches need DIFFERENT permission keys, so an any-of
 // expression here would be a third copy of the rule and it would drift
 // (AD-2/AD-4).
+//
+// AND THE TWO ARE GATED SEPARATELY. Cancelling is not part of the manual lane,
+// so `buocKeTiep` is EMPTY at 'baogia' — the status orders are cancelled from
+// most often. One shared `_buocKeTiep.isNotEmpty` would hide the cancel button
+// exactly where it is needed.
 //
 // LABELS are byte-identical with the web twin (UX-DR-27) — including the tab and
 // frame labels. The mockup shortens them on mobile ("Lịch sử", "Vòng đời"); this
@@ -91,6 +98,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Order? _order;
   List<OrderLifecycleStep> _steps = const <OrderLifecycleStep>[];
   List<OrderNextStep> _buocKeTiep = const <OrderNextStep>[];
+
+  /// Backend-computed (AD-2/AD-4). The screen never asks "is the status one of
+  /// these three" — that rule lives in the transition table.
+  bool _coTheHuy = false;
   List<OrderVersionItem> _versions = const <OrderVersionItem>[];
   _LoadState _state = _LoadState.loading;
   String _tab = _kTabThongTin;
@@ -185,6 +196,26 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
+  /// Huỷ đơn (Story 5.7) goes through a Dialog stating the consequence and
+  /// carrying the mandatory reason field (UX-DR-19/20) — not a screen: one line
+  /// of text does not need one, and there is no photo picker here to open a
+  /// second overlay (which is exactly why 5.5 had to be a screen).
+  ///
+  /// [AppDialog] — NOT [AppConfirmDialog], which has no input slot. AppDialog
+  /// does not pop itself either, so the dialog below owns its own pop.
+  Future<void> _hoiHuyDon() async {
+    final bool? daHuy = await showAppDialog<bool>(
+      context: context,
+      child: _HuyDonDialog(
+        onConfirm: (String lyDo) => widget.port.huyDon(widget.orderId, lyDo),
+      ),
+    );
+    if (daHuy != true || !mounted) return;
+    // Status, `cancelReason` and the lifecycle all changed — reload rather than
+    // patch local state, so the screen keeps showing one truth.
+    await _load();
+  }
+
   Future<void> _xoaAnh(String attachmentId) async {
     try {
       await widget.port.xoaAnh(widget.orderId, attachmentId);
@@ -216,6 +247,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         final OrderLifecycle vongDoi = results[1] as OrderLifecycle;
         _steps = vongDoi.buoc;
         _buocKeTiep = vongDoi.buocKeTiep;
+        _coTheHuy = vongDoi.coTheHuy;
         _versions = results[2] as List<OrderVersionItem>;
         _state = _LoadState.ready;
       });
@@ -290,15 +322,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _stepper(),
-            if (_buocKeTiep.isNotEmpty && widget.onChangeStatus != null) ...<Widget>[
+            if ((_buocKeTiep.isNotEmpty && widget.onChangeStatus != null) ||
+                _coTheHuy) ...<Widget>[
               const SizedBox(height: AppTokens.space12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: AppButton(
-                  label: 'Chuyển trạng thái',
-                  variant: AppButtonVariant.primary,
-                  onPressed: widget.onChangeStatus,
-                ),
+              // `Wrap`, not `Row`: the two labels together overflow the phone
+              // frame at large text scales, and a RenderFlex overflow is the
+              // bug this screen already carries once (5.4) — not twice.
+              Wrap(
+                spacing: AppTokens.space8,
+                runSpacing: AppTokens.space8,
+                children: <Widget>[
+                  if (_buocKeTiep.isNotEmpty && widget.onChangeStatus != null)
+                    AppButton(
+                      label: 'Chuyển trạng thái',
+                      variant: AppButtonVariant.primary,
+                      onPressed: widget.onChangeStatus,
+                    ),
+                  if (_coTheHuy)
+                    AppButton(
+                      label: 'Huỷ đơn',
+                      variant: AppButtonVariant.danger,
+                      onPressed: _hoiHuyDon,
+                    ),
+                ],
               ),
             ],
             const SizedBox(height: AppTokens.space16),
@@ -376,6 +422,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ],
           ),
         ),
+        if (order.cancelReason != null) _kv('Lý do huỷ', order.cancelReason!),
         _kv('Công suất', order.kWp == null ? '—' : '${order.kWp} kWp'),
         _kv('Người phụ trách', order.assigneeAccountId ?? '—'),
         // All three flags always render: AppScopeFlag strikes the off ones
@@ -641,4 +688,102 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
         ),
       );
+}
+
+/// The Huỷ đơn dialog (Story 5.7). Holds its own text/error/busy state so the
+/// screen behind it does not rebuild on every keystroke, and pops with `true`
+/// only after the port call succeeded.
+///
+/// Blocking an empty reason here is UX only — the backend refuses it too (AD-4)
+/// and it owns the exact rule.
+class _HuyDonDialog extends StatefulWidget {
+  const _HuyDonDialog({required this.onConfirm});
+
+  final Future<void> Function(String lyDo) onConfirm;
+
+  @override
+  State<_HuyDonDialog> createState() => _HuyDonDialogState();
+}
+
+class _HuyDonDialogState extends State<_HuyDonDialog> {
+  final TextEditingController _lyDo = TextEditingController();
+  String? _loi;
+  bool _dangGui = false;
+
+  @override
+  void dispose() {
+    _lyDo.dispose();
+    super.dispose();
+  }
+
+  Future<void> _gui() async {
+    if (_lyDo.text.trim().isEmpty || _dangGui) return;
+    setState(() {
+      _dangGui = true;
+      _loi = null;
+    });
+    try {
+      await widget.onConfirm(_lyDo.text);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        // The server's message verbatim: it is the one that knows WHY.
+        _loi =
+            error is OrderPortException ? error.message : 'Không huỷ được đơn.';
+        _dangGui = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool guiDuoc = _lyDo.text.trim().isNotEmpty && !_dangGui;
+    // While the request is in flight the dialog REFUSES to close. Tapping the
+    // barrier (or Back) would pop the route with `null` while `onConfirm` is
+    // still running: the order gets cancelled server-side, but the caller reads
+    // `daHuy != true` and skips the reload — leaving the screen showing a stale
+    // "Huỷ đơn" button and no reason row for an order that is already cancelled.
+    return PopScope(
+      canPop: !_dangGui,
+      child: AppDialog(
+        title: 'Huỷ đơn',
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const AppBanner(
+              tone: AppBannerTone.danger,
+              message:
+                  'Đơn sẽ đóng lại và không tiếp tục được. Thao tác này không hoàn tác được.',
+            ),
+            const SizedBox(height: AppTokens.space12),
+            AppField(
+              label: 'Lý do huỷ',
+              controller: _lyDo,
+              maxLines: 3,
+              onChanged: (_) => setState(() {}),
+            ),
+            if (_loi != null) ...<Widget>[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(tone: AppBannerTone.danger, message: _loi!),
+            ],
+          ],
+        ),
+        footer: <Widget>[
+          AppButton(
+            label: 'Đóng',
+            variant: AppButtonVariant.ghost,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+          AppButton(
+            label: 'Xác nhận huỷ',
+            variant: AppButtonVariant.danger,
+            onPressed: guiDuoc ? () => _gui() : null,
+          ),
+        ],
+      ),
+    );
+  }
 }

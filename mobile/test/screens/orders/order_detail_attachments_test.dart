@@ -86,6 +86,7 @@ class _AnhPort extends FakeOrdersPort {
           OrderLifecycleStep(status: 'thicong', trangThai: 'current'),
         ],
         buocKeTiep: <OrderNextStep>[],
+        coTheHuy: false,
       );
 
   @override
