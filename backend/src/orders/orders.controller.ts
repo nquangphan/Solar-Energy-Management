@@ -78,6 +78,19 @@ export class OrdersController {
     return await this.featureFlags.isEnabled(FLAG.catalogTieredPricing);
   }
 
+  /**
+   * Bộ quyền của người gọi, resolve TƯƠI từ DB mỗi request (khuôn `listPendingDiscounts` —
+   * KHÔNG suy từ JWT). Engine transition đánh giá guard theo bộ này (AD-11): guard HTTP
+   * `@RequirePermissions` chặn ở cửa, engine chặn ở nơi thực sự ghi — hai tầng, vì các
+   * đường transition tương lai (auto-transition, chuyển bước thủ công) không đi qua đúng
+   * một endpoint một quyền như bốn đường hiện tại.
+   */
+  private async quyenCuaNguoiGoi(
+    accountId: string,
+  ): Promise<ReadonlySet<string>> {
+    return await this.accountPermissions.listForAccount(accountId);
+  }
+
   @Post()
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiCreatedResponse({
@@ -266,6 +279,7 @@ export class OrdersController {
       id,
       await this.settings.vatRatePercent(),
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderResponseDto;
   }
 
@@ -306,6 +320,7 @@ export class OrdersController {
       account.id,
       id,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderResponseDto;
   }
 
@@ -350,6 +365,7 @@ export class OrdersController {
       body.amount,
       body.note ?? null,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderResponseDto;
   }
 
@@ -393,6 +409,7 @@ export class OrdersController {
       body.approve,
       body.reason ?? null,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderResponseDto;
   }
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import type { Order, OrderLineItem } from '@prisma/client';
+import type { Order, OrderLineItem, Prisma } from '@prisma/client';
 import {
   resolveUnitPrice,
   type PriceTier,
@@ -16,6 +16,11 @@ import {
   CHIET_KHAU_DONG_Y,
   CHIET_KHAU_TU_CHOI,
 } from './domain/discount-approval-status';
+import {
+  SU_KIEN,
+  evaluateTransition,
+  type TransitionEvent,
+} from './domain/allowed-transition';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
@@ -29,6 +34,7 @@ import {
   OrderMetaChanged,
   OrderRevised,
   OrderScopeChanged,
+  StatusChanged,
   type OrderLineSnapshot,
   type OrderSnapshot,
 } from './domain/order-events';
@@ -68,11 +74,26 @@ import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
  * MUTATION DÒNG chỉ khi `status === 'baogia'` (khác ⇒ 409) — sửa sau chốt là luồng version
  * mới (Story 4.6).
  *
- * GHI STATUS (AD-11): `confirm()` + `revise()` + `applyDiscount()` + `resolveDiscount()`
- * (nhánh từ chối) là BỐN điểm ghi `Order.status` tạm thời trong codebase — cùng khuôn
- * transition nghiệp vụ có gate quyền + audit + cổng atomic. 5.1 nuốt cả bốn block vào
- * `applyTransition()`; ngoài chúng không đường nào ĐỔI status.
+ * GHI STATUS (AD-11): `applyTransition()` là con đường code DUY NHẤT ĐỔI `Order.status`.
+ * Ngoại lệ duy nhất là `create()` — nó INSERT trạng thái khởi tạo, không phải chuyển trạng
+ * thái. Bất biến này không phải lời hứa: source-guard
+ * `no-order-status-write-outside-transition.spec.ts` quét `src/` và fail nếu có điểm ghi thứ
+ * hai. Luật "được chuyển hay không" sống ở `domain/allowed-transition.ts` (thuần, không
+ * Prisma); executor ở đây chỉ khoá dòng, ghi, và trả event `StatusChanged` cho caller publish
+ * SAU commit.
+ *
+ * KHOÁ DÒNG: mọi đường ĐỌC-rồi-GHI trên một đơn (`applyTransition` và 4 mutator nội dung)
+ * lấy CÙNG một khoá `SELECT … FOR UPDATE` trên dòng `orders` làm op đầu tiên trong tx của
+ * mình. Khoá một phía là vô nghĩa: nếu chỉ transition khoá mà mutator dòng không khoá, một
+ * `addLine` vẫn chèn được dòng chưa-snapshot vào giữa lúc `confirm` đọc dòng và lúc commit.
  */
+
+/**
+ * Client Prisma BÊN TRONG một interactive `$transaction`. Engine transition và mọi mutator
+ * nhận `tx` từ caller và chạy trong tx của caller — KHÔNG tự mở transaction riêng (tx lồng
+ * nhau là hai tx độc lập, cổng atomic sẽ mất tác dụng).
+ */
+type PrismaTx = Prisma.TransactionClient;
 
 /**
  * Projection Product cho đường báo giá — `select` TƯỜNG MINH, 🔴 KHÔNG có `costPrice`:
@@ -257,7 +278,16 @@ export class OrdersService {
   }
 
   private async findOrThrow(id: string): Promise<Order> {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+    return this.findOrThrowIn(this.prisma, id);
+  }
+
+  /**
+   * Như `findOrThrow` nhưng đọc qua client được truyền vào — dùng để đọc LẠI đơn BÊN TRONG
+   * tx sau khi đã cầm khoá dòng. Đọc status ngoài tx rồi ghi trong tx là một lời hứa suông:
+   * giữa hai thời điểm đó ai cũng chen vào được.
+   */
+  private async findOrThrowIn(tx: PrismaTx, id: string): Promise<Order> {
+    const order = await tx.order.findUnique({ where: { id } });
     if (order === null) {
       throw new AppException(
         ErrorCode.NOT_FOUND,
@@ -291,6 +321,93 @@ export class OrdersService {
       ErrorCode.CONFLICT,
       409,
       'Đơn chưa có bản hiệu lực.',
+    );
+  }
+
+  /**
+   * Khoá dòng `orders` trong tx hiện tại — op ĐẦU TIÊN chạm DB của mọi đường đọc-rồi-ghi
+   * trên một đơn. Postgres giữ khoá tới hết tx, nên hai request trên cùng đơn xếp hàng thay
+   * vì cùng đọc một ảnh chụp rồi cùng ghi đè.
+   *
+   * `$queryRaw` template-tag ⇒ tham số bind, KHÔNG nội suy chuỗi. Precedent
+   * `product-prices.service.ts` dùng dạng mảng `$transaction([ops])`; ở đây tx là
+   * interactive nên phải `await tx.$queryRaw` bên trong callback.
+   */
+  private async lockOrderRow(tx: PrismaTx, orderId: string): Promise<void> {
+    await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
+  }
+
+  /**
+   * ENGINE CHUYỂN TRẠNG THÁI — method DUY NHẤT toàn codebase có `status` trong `data` của
+   * một lệnh ghi Prisma trên `order` (trừ `create()` lúc INSERT). Đây là hiện thực của AD-11.
+   *
+   * Chạy BÊN TRONG `$transaction` của caller. Thứ tự KHÔNG được đảo:
+   *  1. `evaluateTransition()` — hợp lệ hay không quyết TRƯỚC khi đụng DB (từ chối không tốn
+   *     một khoá nào, và không để lại dấu vết ghi nào để rollback).
+   *  2. Khoá dòng đơn.
+   *  3. Cổng atomic `updateMany` với `status` QUAN SÁT ĐƯỢC làm điều kiện WHERE — không
+   *     hardcode literal: `chot` hợp lệ từ CẢ `baogia` LẪN `choduyet`, một literal sẽ âm
+   *     thầm vô hiệu hoá nhánh còn lại.
+   *  4. Thua cổng (`count === 0`) ⇒ ném sentinel của caller để rollback TOÀN tx; caller bắt
+   *     theo IDENTITY (`error !== SENTINEL`), không `instanceof`.
+   *
+   * Trả về event `StatusChanged` CHƯA publish — caller publish SAU khi commit (AD-18). Engine
+   * KHÔNG BAO GIỜ gọi `AuditService`: nó phát event, `AuditSubscriber` ghi log.
+   */
+  private async applyTransition(
+    tx: PrismaTx,
+    input: {
+      readonly order: Order;
+      readonly event: TransitionEvent;
+      readonly actorPermissions: ReadonlySet<string>;
+      readonly actorAccountId: string;
+      readonly sentinel: Error;
+      readonly occurredAt: Date;
+    },
+  ): Promise<StatusChanged> {
+    const { order } = input;
+    const ketQua = evaluateTransition({
+      order,
+      event: input.event,
+      actorPermissions: input.actorPermissions,
+      scopeFlags: {
+        thietBi: order.scopeThietBi,
+        thiCong: order.scopeThiCong,
+        vanChuyen: order.scopeVanChuyen,
+      },
+    });
+    if (!ketQua.ok) {
+      // Envelope do `AllExceptionsFilter` dựng (AD-5) — service chỉ ném `AppException`.
+      // Thiếu quyền là 403; ngoài bảng / sai cờ phạm vi là xung đột trạng thái ⇒ 409.
+      if (ketQua.reason === 'permission') {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          403,
+          'Bạn không có quyền thực hiện chuyển trạng thái này.',
+        );
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        ketQua.reason === 'scope'
+          ? 'Bước này không thuộc phạm vi của đơn.'
+          : 'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+      );
+    }
+
+    await this.lockOrderRow(tx, order.id);
+    const { count } = await tx.order.updateMany({
+      where: { id: order.id, status: order.status },
+      data: { status: ketQua.to },
+    });
+    if (count === 0) throw input.sentinel;
+
+    const after: Order = { ...order, status: ketQua.to };
+    return new StatusChanged(
+      input.actorAccountId,
+      orderSnapshot(order),
+      orderSnapshot(after),
+      input.occurredAt,
     );
   }
 
@@ -475,17 +592,23 @@ export class OrdersService {
       return this.viewOf(before, tieredPricingEnabled);
     }
 
-    const updated = await this.prisma.order.update({
-      where: { id: before.id },
-      // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `kWp`/`validityNote`
-      // = null GHI null (xoá giá trị).
-      data: {
-        scopeThiCong: dto.scopeThiCong,
-        scopeVanChuyen: dto.scopeVanChuyen,
-        vatMode: dto.vatMode,
-        kWp: dto.kWp,
-        validityNote: dto.validityNote,
-      },
+    // Khoá dòng đơn rồi đọc lại status TRONG tx: `assertMutable` ở trên chỉ là fast-path,
+    // cửa sổ giữa nó và lệnh ghi đủ rộng cho một `chot` chen ngang.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.lockOrderRow(tx, before.id);
+      this.assertMutable(await this.findOrThrowIn(tx, orderId));
+      return tx.order.update({
+        where: { id: before.id },
+        // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `kWp`/`validityNote`
+        // = null GHI null (xoá giá trị).
+        data: {
+          scopeThiCong: dto.scopeThiCong,
+          scopeVanChuyen: dto.scopeVanChuyen,
+          vatMode: dto.vatMode,
+          kWp: dto.kWp,
+          validityNote: dto.validityNote,
+        },
+      });
     });
 
     // Publish SAU write — mỗi event đúng nhóm field nó mô tả (audit tra theo ngữ nghĩa).
@@ -514,11 +637,10 @@ export class OrdersService {
 
   /**
    * CHỐT Đơn (Story 4.5, FR-5/AD-6/AD-16): đóng băng giá bằng snapshot trong MỘT transaction.
-   * ⚠️ 5.1 nuốt block này vào `applyTransition()` — đây là điểm ghi `Order.status` DUY NHẤT
-   * tạm thời (KHÔNG thêm điểm ghi thứ hai; KHÔNG dựng bảng transition ở đây).
+   * Việc ĐỔI status uỷ thác cho `applyTransition()` — hàm này chỉ còn sở hữu phần snapshot.
    *
-   * Cổng idempotency = atomic `updateMany({where: {id, status: 'baogia'}})` + `count === 1`
-   * (khuôn Story 2.3 chống replay): Postgres READ COMMITTED re-check WHERE sau row lock ⇒
+   * Cổng idempotency nằm trong engine (`updateMany` theo status quan sát được + `count === 1`,
+   * khuôn Story 2.3 chống replay): Postgres READ COMMITTED re-check WHERE sau row lock ⇒
    * 2 request đồng thời đúng MỘT bên thắng; bên thua nhận `count 0` → sentinel abort tx →
    * đọc lại → `dachot` thì trả idempotent, trạng thái lạ thì 409. Pre-check `dachot` trước
    * tx chỉ là fast-path; cổng thật nằm TRONG tx. Bắt buộc interactive `$transaction` —
@@ -546,6 +668,7 @@ export class OrdersService {
     orderId: string,
     vatRatePercent: number,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
     const before = await this.findOrThrow(orderId);
     if (before.status === TRANG_THAI_DA_CHOT) {
@@ -575,12 +698,14 @@ export class OrdersService {
     }
     const versionId = this.currentVersionIdOrThrow(before);
 
-    const lines = await this.prisma.orderLineItem.findMany({
+    // Báo giá rỗng không có gì để đóng băng — gần như chắc chắn là mis-tap. Đây là FAST-PATH
+    // ngoài tx để trả 400 mà không mở transaction; danh sách dòng THẬT dùng để snapshot được
+    // đọc LẠI bên trong tx sau khi đã cầm khoá (xem dưới).
+    const dongTruocTx = await this.prisma.orderLineItem.findMany({
       where: { orderVersionId: versionId },
       orderBy: { displayOrder: 'asc' },
     });
-    // Báo giá rỗng không có gì để đóng băng — gần như chắc chắn là mis-tap. Kiểm TRƯỚC tx.
-    if (lines.length === 0) {
+    if (dongTruocTx.length === 0) {
       throw new AppException(
         ErrorCode.VALIDATION_ERROR,
         400,
@@ -588,76 +713,95 @@ export class OrdersService {
       );
     }
 
-    // Giá danh mục resolve MỘT lần cho mọi dòng catalog (kể cả priceEditable — cần
-    // catalogPriceSnapshot song song), CÙNG cờ với đường live/toViews — đóng băng đúng con
-    // số khách đang thấy trên màn.
-    const catalogIds = [
-      ...new Set(
-        lines
-          .filter((line) => line.productId !== null)
-          .map((line) => line.productId as string),
-      ),
-    ];
-    const products =
-      catalogIds.length === 0
-        ? []
-        : ((await this.prisma.product.findMany({
-            where: { id: { in: catalogIds } },
-            select: PRODUCT_QUOTE_SELECT,
-          })) as ProductQuoteView[]);
-    const productById = new Map(products.map((p) => [p.id, p]));
+    /**
+     * Dựng snapshot cho một tập dòng. Giá danh mục resolve MỘT lần cho mọi dòng catalog (kể
+     * cả `priceEditable` — cần `catalogPriceSnapshot` song song), CÙNG cờ với đường
+     * live/`toViews` — đóng băng đúng con số khách đang thấy trên màn.
+     *
+     * `warrantyStartAt` mang theo từng snapshot: cần biết dòng nào CHƯA có mốc bảo hành để
+     * chỉ ghi cho dòng đó (dòng đã có mốc — re-chốt bản update — giữ nguyên ngày cũ).
+     */
+    const dungSnapshot = async (tx: PrismaTx, lines: OrderLineItem[]) => {
+      const catalogIds = [
+        ...new Set(
+          lines
+            .filter((line) => line.productId !== null)
+            .map((line) => line.productId as string),
+        ),
+      ];
+      const products =
+        catalogIds.length === 0
+          ? []
+          : ((await tx.product.findMany({
+              where: { id: { in: catalogIds } },
+              select: PRODUCT_QUOTE_SELECT,
+            })) as ProductQuoteView[]);
+      const productById = new Map(products.map((p) => [p.id, p]));
 
-    // `warrantyStartAt` mang theo từng snapshot: cần biết dòng nào CHƯA có mốc bảo hành để
-    // chỉ ghi cho dòng đó trong tx (dòng đã có mốc — re-chốt bản update — giữ nguyên ngày cũ).
-    const lineSnapshots = lines.map((line) => {
-      if (line.productId === null) {
-        // Dòng tự do: giá nhập tay đóng băng, không có giá danh mục để so.
-        return {
-          id: line.id,
-          unitPriceSnapshot: line.unitPrice,
-          catalogPriceSnapshot: null,
-          warrantyStartAt: line.warrantyStartAt,
-        };
-      }
-      const product = productById.get(line.productId);
-      // Product PHẢI còn (FK restrict) — nhánh undefined chỉ là phòng dữ liệu hỏng, rơi về
-      // giá cache như `toViews`.
-      const catalogPrice =
-        product === undefined
-          ? line.unitPrice
-          : resolveUnitPrice({
-              basePrice: product.price,
-              tiers: product.prices,
-              quantity: line.qty,
-              tieredPricingEnabled,
-            });
-      return line.priceEditable
-        ? {
-            // Phí lắp đặt đã sửa giá: đóng băng giá ĐÃ SỬA, giá danh mục lưu SONG SONG.
+      return lines.map((line) => {
+        if (line.productId === null) {
+          // Dòng tự do: giá nhập tay đóng băng, không có giá danh mục để so.
+          return {
             id: line.id,
             unitPriceSnapshot: line.unitPrice,
-            catalogPriceSnapshot: catalogPrice,
-            warrantyStartAt: line.warrantyStartAt,
-          }
-        : {
-            // Catalog thường: giá SỐNG tại thời điểm chốt — cả hai cột cùng con số.
-            id: line.id,
-            unitPriceSnapshot: catalogPrice,
-            catalogPriceSnapshot: catalogPrice,
+            catalogPriceSnapshot: null,
             warrantyStartAt: line.warrantyStartAt,
           };
-    });
+        }
+        const product = productById.get(line.productId);
+        // Product PHẢI còn (FK restrict) — nhánh undefined chỉ là phòng dữ liệu hỏng, rơi về
+        // giá cache như `toViews`.
+        const catalogPrice =
+          product === undefined
+            ? line.unitPrice
+            : resolveUnitPrice({
+                basePrice: product.price,
+                tiers: product.prices,
+                quantity: line.qty,
+                tieredPricingEnabled,
+              });
+        return line.priceEditable
+          ? {
+              // Phí lắp đặt đã sửa giá: đóng băng giá ĐÃ SỬA, giá danh mục lưu SONG SONG.
+              id: line.id,
+              unitPriceSnapshot: line.unitPrice,
+              catalogPriceSnapshot: catalogPrice,
+              warrantyStartAt: line.warrantyStartAt,
+            }
+          : {
+              // Catalog thường: giá SỐNG tại thời điểm chốt — cả hai cột cùng con số.
+              id: line.id,
+              unitPriceSnapshot: catalogPrice,
+              catalogPriceSnapshot: catalogPrice,
+              warrantyStartAt: line.warrantyStartAt,
+            };
+      });
+    };
 
+    // MỘT timestamp cho MỘT sự kiện: cùng con số dùng cho `chotAt` trên version/dòng và cho
+    // `occurredAt` của cả hai event — hai lần `new Date()` sẽ đẻ ra hai "lúc" cho một việc.
     const chotAt = new Date();
+    let statusChanged: StatusChanged;
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const { count } = await tx.order.updateMany({
-          // Status QUAN SÁT ĐƯỢC (`baogia` hoặc `choduyet`) — bên nào đổi status giữa chừng
-          // (reject/chốt đôi) làm WHERE trượt ⇒ count 0 ⇒ sentinel.
-          where: { id: before.id, status: before.status },
-          data: { status: TRANG_THAI_DA_CHOT },
+      statusChanged = await this.prisma.$transaction(async (tx) => {
+        // Engine: đánh giá guard → khoá dòng → cổng atomic theo status QUAN SÁT ĐƯỢC
+        // (`baogia` hoặc `choduyet`) → sentinel nếu thua. Op ĐẦU TIÊN của tx.
+        const event = await this.applyTransition(tx, {
+          order: before,
+          event: SU_KIEN.chot,
+          actorPermissions,
+          actorAccountId,
+          sentinel: CHOT_GATE_THUA,
+          occurredAt: chotAt,
         });
-        if (count === 0) throw CHOT_GATE_THUA;
+        // Dòng đọc BÊN TRONG tx, SAU khoá — đây là điểm mấu chốt của TOCTOU: đọc ngoài tx
+        // thì một `addLine` commit trong khoảng giữa sẽ để lại một dòng KHÔNG có snapshot
+        // trong một đơn đã chốt, tức giá của đơn đã chốt vẫn còn tự đổi theo danh mục.
+        const lines = await tx.orderLineItem.findMany({
+          where: { orderVersionId: versionId },
+          orderBy: { displayOrder: 'asc' },
+        });
+        const lineSnapshots = await dungSnapshot(tx, lines);
         await tx.orderVersion.update({
           where: { id: versionId },
           data: {
@@ -686,6 +830,7 @@ export class OrdersService {
             },
           });
         }
+        return event;
       });
     } catch (error) {
       if (error !== CHOT_GATE_THUA) throw error;
@@ -704,24 +849,26 @@ export class OrdersService {
     // `updateMany` không trả row — compose status mới lên object `before` trong bộ nhớ để
     // response (và snapshot `after` của event) nói 'dachot'.
     const after: Order = { ...before, status: TRANG_THAI_DA_CHOT };
+    // HAI event cho MỘT hành động: `OrderConfirmed` mang ngữ nghĩa nghiệp vụ (đường thông
+    // báo tiêu thụ), `StatusChanged` là vết from→to chính tắc của AD-11. Cả hai SAU commit.
     await this.eventBus.publish(
       new OrderConfirmed(
         actorAccountId,
         orderSnapshot(before),
         orderSnapshot(after),
-        new Date(),
+        chotAt,
       ),
     );
+    await this.eventBus.publish(statusChanged);
     return this.viewOf(after, tieredPricingEnabled);
   }
 
   /**
    * MỞ LẠI Đơn đã chốt để sửa (Story 4.6, FR-6/AD-6): sinh BẢN UPDATE MỚI, không ghi đè bản
-   * cũ. ⚠️ Điểm ghi `Order.status` tạm thời thứ HAI (cùng `confirm()`) — 5.1 nuốt block này
-   * vào `applyTransition()`.
+   * cũ. Việc ĐỔI status uỷ thác cho `applyTransition()`.
    *
-   * MỘT interactive `$transaction`: cổng atomic `updateMany({where: {id, status: 'dachot'}})`
-   * đặt ĐẦU tx — bên thua race (`count === 0`) abort TRƯỚC khi create gì, rollback rẻ; sau
+   * MỘT interactive `$transaction`: cổng transition đặt ĐẦU tx — bên thua race
+   * (`count === 0`) abort TRƯỚC khi create gì, rollback rẻ; sau
    * cổng: tạo `OrderVersion` mới `versionNo + 1` (vatRate/vatMode/chotAt null — bản đang sửa
    * chưa đóng băng thuế), copy TOÀN BỘ dòng bản hiệu lực sang bản mới (snapshot cả 3 cột =
    * null ⇒ `toViews` live-resolve lại giá danh mục hiện tại — hành vi trước-chốt FR-5;
@@ -744,6 +891,7 @@ export class OrdersService {
     actorAccountId: string,
     orderId: string,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
     const before = await this.findOrThrow(orderId);
     if (before.status === TRANG_THAI_BAO_GIA) {
@@ -800,13 +948,20 @@ export class OrdersService {
       displayOrder: line.displayOrder,
     }));
 
+    // MỘT timestamp cho MỘT sự kiện — dùng chung cho `OrderRevised` và `StatusChanged`.
+    const moLaiAt = new Date();
+    let statusChanged: StatusChanged;
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const { count } = await tx.order.updateMany({
-          where: { id: before.id, status: TRANG_THAI_DA_CHOT },
-          data: { status: TRANG_THAI_BAO_GIA },
+      statusChanged = await this.prisma.$transaction(async (tx) => {
+        // Cổng transition VẪN là op đầu tiên của tx: bên thua rollback trước khi create gì.
+        const event = await this.applyTransition(tx, {
+          order: before,
+          event: SU_KIEN.moLai,
+          actorPermissions,
+          actorAccountId,
+          sentinel: MO_LAI_GATE_THUA,
+          occurredAt: moLaiAt,
         });
-        if (count === 0) throw MO_LAI_GATE_THUA;
         await tx.orderVersion.create({
           data: {
             id: newVersionId,
@@ -823,6 +978,7 @@ export class OrdersService {
           where: { id: before.id },
           data: { currentVersionId: newVersionId },
         });
+        return event;
       });
     } catch (error) {
       if (error !== MO_LAI_GATE_THUA) throw error;
@@ -850,19 +1006,23 @@ export class OrdersService {
         actorAccountId,
         orderSnapshot(before),
         orderSnapshot(after),
-        new Date(),
+        moLaiAt,
       ),
     );
+    await this.eventBus.publish(statusChanged);
     return this.viewOf(after, tieredPricingEnabled);
   }
 
   /**
    * ÁP CHIẾT KHẤU + gửi duyệt (Story 4.7, FR-18/AD-18): baogia → choduyet + tạo hồ sơ
-   * `DiscountApproval` `cho_duyet` trong MỘT interactive transaction. ⚠️ Điểm ghi
-   * `Order.status` tạm thời thứ BA — 5.1 nuốt block này vào `applyTransition()`.
+   * `DiscountApproval` `cho_duyet` trong MỘT interactive transaction. Việc ĐỔI status uỷ
+   * thác cho `applyTransition()`.
    *
-   * Cổng atomic `updateMany({id, status: 'baogia'} → 'choduyet')` + `count === 1` cũng là
-   * bất biến "một pending mỗi đơn": không bao giờ sinh 2 approval `cho_duyet` cùng đơn.
+   * ⚠️ Cổng transition ở đây KIÊM bất biến "một pending mỗi đơn": approval chỉ được tạo sau
+   * khi cổng `baogia → choduyet` thắng, nên không bao giờ sinh 2 approval `cho_duyet` cùng
+   * đơn. Uỷ thác cổng cho engine KHÔNG được làm yếu bất biến đó — engine khoá dòng rồi mới
+   * `updateMany`, chặt hơn cổng cũ chứ không lỏng hơn (có test race khẳng định đúng MỘT
+   * approval sinh ra khi hai request đua nhau).
    * Thua cổng ⇒ 409 (KHÔNG idempotent-return — body mang amount, hai lần bấm khác nhau
    * không được im lặng nuốt). Validate TRƯỚC tx: `amount ≤ subtotal` hiện hành (qua
    * `computeOrderTotals` — hàm pricing duy nhất), đơn 0 dòng ⇒ 400 (khuôn `confirm`).
@@ -876,6 +1036,7 @@ export class OrdersService {
     amount: number,
     note: string | null,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
     const before = await this.findOrThrow(orderId);
     if (before.status !== TRANG_THAI_BAO_GIA) {
@@ -917,13 +1078,19 @@ export class OrdersService {
     }
 
     const approvalId = randomUUID();
+    // MỘT timestamp cho MỘT sự kiện — dùng chung cho `DiscountRequested` và `StatusChanged`.
+    const apAt = new Date();
+    let statusChanged: StatusChanged;
     try {
-      await this.prisma.$transaction(async (tx) => {
-        const { count } = await tx.order.updateMany({
-          where: { id: before.id, status: TRANG_THAI_BAO_GIA },
-          data: { status: TRANG_THAI_CHO_DUYET },
+      statusChanged = await this.prisma.$transaction(async (tx) => {
+        const event = await this.applyTransition(tx, {
+          order: before,
+          event: SU_KIEN.apChietKhau,
+          actorPermissions,
+          actorAccountId,
+          sentinel: AP_CK_GATE_THUA,
+          occurredAt: apAt,
         });
-        if (count === 0) throw AP_CK_GATE_THUA;
         await tx.discountApproval.create({
           data: {
             id: approvalId,
@@ -935,6 +1102,7 @@ export class OrdersService {
             requestedByAccountId: actorAccountId,
           },
         });
+        return event;
       });
     } catch (error) {
       if (error !== AP_CK_GATE_THUA) throw error;
@@ -955,18 +1123,25 @@ export class OrdersService {
         orderSnapshot(after),
         amount,
         note,
-        new Date(),
+        apAt,
       ),
     );
+    await this.eventBus.publish(statusChanged);
     return this.viewOf(after, tieredPricingEnabled);
   }
 
   /**
-   * DUYỆT / TỪ CHỐI chiết khấu (Story 4.7, FR-18/AD-18). Cổng atomic nằm trên CHÍNH row
-   * approval (`cho_duyet` → resolved) — 2 người duyệt đồng thời đúng MỘT bên thắng.
-   * ⚠️ Nhánh TỪ CHỐI là điểm ghi `Order.status` tạm thời thứ TƯ (choduyet → baogia, đơn
-   * sửa lại được) — 5.1 nuốt vào `applyTransition()`. Nhánh ĐỒNG Ý KHÔNG đổi status đơn
-   * (vẫn `choduyet` — "được Chốt", Chốt là hành động riêng qua `confirm()`).
+   * DUYỆT / TỪ CHỐI chiết khấu (Story 4.7, FR-18/AD-18).
+   *
+   * ⚠️ BẤT ĐỐI XỨNG với ba đường transition kia: cổng atomic thắng-thua ở đây nằm trên CHÍNH
+   * row `DiscountApproval` (`cho_duyet` → resolved), KHÔNG phải trên dòng `Order` — 2 người
+   * duyệt đồng thời đúng MỘT bên thắng ở đó. Lệnh ghi `Order.status` là HỆ QUẢ của việc
+   * thắng cổng ấy, chỉ ở nhánh TỪ CHỐI (choduyet → baogia, đơn sửa lại được), và nó mang
+   * theo một assertion bất biến: approval đang `cho_duyet` thì đơn BẮT BUỘC ở `choduyet`,
+   * lệch là dữ liệu hỏng ⇒ huỷ cả tx. Thứ tự (approval trước, order sau) KHÔNG được đảo.
+   *
+   * Nhánh ĐỒNG Ý KHÔNG đổi status đơn (vẫn `choduyet` — "được Chốt", Chốt là hành động
+   * riêng qua `confirm()`) nên KHÔNG gọi engine.
    *
    * Idempotency (NFR SM-1): retry CÙNG decision trên approval đã resolve ⇒ 200 view hiện
    * tại KHÔNG event; decision NGƯỢC ⇒ 409. `reason` BẮT BUỘC khi từ chối (400 fieldErrors),
@@ -979,6 +1154,7 @@ export class OrdersService {
     approve: boolean,
     reason: string | null,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
     const before = await this.findOrThrow(orderId);
     const approval = await this.prisma.discountApproval.findFirst({
@@ -1021,6 +1197,10 @@ export class OrdersService {
       );
     }
 
+    // MỘT timestamp cho MỘT sự kiện — dùng chung cho `resolvedAt`, `DiscountResolved` và
+    // `StatusChanged` của cùng một lần quyết.
+    const quyetAt = new Date();
+    let statusChanged: StatusChanged | null = null;
     try {
       await this.prisma.$transaction(async (tx) => {
         const { count } = await tx.discountApproval.updateMany({
@@ -1029,22 +1209,25 @@ export class OrdersService {
             status: approve ? CHIET_KHAU_DONG_Y : CHIET_KHAU_TU_CHOI,
             resolvedByAccountId: actorAccountId,
             resolveNote: reason,
-            resolvedAt: new Date(),
+            resolvedAt: quyetAt,
           },
         });
         if (count === 0) throw DUYET_CK_GATE_THUA;
         if (!approve) {
-          // Từ chối trả đơn về Báo giá — approval `cho_duyet` ⇒ đơn PHẢI `choduyet` (cổng
-          // áp bảo đảm); count khác 1 là bất biến gãy ⇒ throw để rollback TOÀN tx.
-          const gate = await tx.order.updateMany({
-            where: { id: before.id, status: TRANG_THAI_CHO_DUYET },
-            data: { status: TRANG_THAI_BAO_GIA },
-          });
-          if (gate.count !== 1) {
-            throw new Error(
+          // Từ chối trả đơn về Báo giá. Sentinel truyền vào engine ở ĐÂY chính là lỗi BẤT
+          // BIẾN GÃY, không phải một cổng thua bình thường: approval `cho_duyet` ⇒ đơn PHẢI
+          // ở `choduyet` (cổng áp bảo đảm), nên `count === 0` nghĩa là dữ liệu hỏng. Caller
+          // KHÔNG bắt nó ⇒ nó nổi lên, huỷ TOÀN tx (kể cả approval vừa resolve).
+          statusChanged = await this.applyTransition(tx, {
+            order: before,
+            event: SU_KIEN.tuChoiChietKhau,
+            actorPermissions,
+            actorAccountId,
+            sentinel: new Error(
               `Bất biến gãy: approval cho_duyet nhưng đơn ${before.id} không ở choduyet.`,
-            );
-          }
+            ),
+            occurredAt: quyetAt,
+          });
         }
       });
     } catch (error) {
@@ -1080,9 +1263,11 @@ export class OrdersService {
         orderSnapshot(after),
         approve,
         reason,
-        new Date(),
+        quyetAt,
       ),
     );
+    // CHỈ nhánh từ chối đổi status ⇒ chỉ nó có vết `StatusChanged`.
+    if (statusChanged !== null) await this.eventBus.publish(statusChanged);
     return this.viewOf(after, tieredPricingEnabled);
   }
 
@@ -1206,17 +1391,13 @@ export class OrdersService {
     this.assertMutable(order);
     const versionId = this.currentVersionIdOrThrow(order);
 
-    // Cuối danh sách của BẢN HIỆU LỰC — displayOrder do server gán, client không đánh số.
-    // max + 1, KHÔNG count: sau một lần xoá dòng, count nhỏ hơn displayOrder lớn nhất còn
-    // lại ⇒ dòng mới trùng số với dòng cũ và không còn đứng cuối (orderBy tie).
-    const last = await this.prisma.orderLineItem.findFirst({
-      where: { orderVersionId: versionId },
-      orderBy: { displayOrder: 'desc' },
-      select: { displayOrder: true },
-    });
-    const displayOrder = last === null ? 0 : last.displayOrder + 1;
-
-    let created: OrderLineItem;
+    // Dữ liệu dòng dựng TRƯỚC tx (validate + tra danh mục là đọc thuần, không cần khoá);
+    // `displayOrder` cố tình VẮNG MẶT ở đây — nó là kết quả của một phép đọc-rồi-ghi nên
+    // phải sinh BÊN TRONG tx đã cầm khoá.
+    let duLieuDong: Omit<
+      Prisma.OrderLineItemUncheckedCreateInput,
+      'displayOrder'
+    >;
     if (dto.productId !== undefined) {
       const product = (await this.prisma.product.findUnique({
         where: { id: dto.productId },
@@ -1260,42 +1441,64 @@ export class OrdersService {
               quantity: dto.qty,
               tieredPricingEnabled,
             });
-      created = await this.prisma.orderLineItem.create({
-        data: {
-          orderVersionId: versionId,
-          productId: product.id,
-          name: product.name,
-          unit: product.unit,
-          qty: dto.qty,
-          unitPrice,
-          priceEditable: product.priceEditable,
-          // Công lắp/phí lắp đặt (`priceEditable = true`) KHÔNG BAO GIỜ mang bảo hành lên
-          // dòng — kể cả khi catalog lỡ có `warrantyMonths` (form Sản phẩm cho nhập với mọi
-          // product). Bảo hành của dòng đó luôn null, UI hiện "Không có".
-          warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
-          isFlexible: dto.isFlexible ?? false,
-          note: dto.note ?? null,
-          displayOrder,
-        },
-      });
+      duLieuDong = {
+        orderVersionId: versionId,
+        productId: product.id,
+        name: product.name,
+        unit: product.unit,
+        qty: dto.qty,
+        unitPrice,
+        priceEditable: product.priceEditable,
+        // Công lắp/phí lắp đặt (`priceEditable = true`) KHÔNG BAO GIỜ mang bảo hành lên
+        // dòng — kể cả khi catalog lỡ có `warrantyMonths` (form Sản phẩm cho nhập với mọi
+        // product). Bảo hành của dòng đó luôn null, UI hiện "Không có".
+        warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
+        isFlexible: dto.isFlexible ?? false,
+        note: dto.note ?? null,
+      };
     } else {
-      created = await this.prisma.orderLineItem.create({
+      duLieuDong = {
+        orderVersionId: versionId,
+        productId: null,
+        // DTO đã bắt buộc name/unit/unitPrice với dòng tự do (`@ValidateIf`) — non-null ở đây.
+        name: dto.name as string,
+        unit: dto.unit as string,
+        qty: dto.qty,
+        unitPrice: dto.unitPrice as number,
+        priceEditable: true,
+        warrantyMonths: null,
+        isFlexible: dto.isFlexible ?? false,
+        note: dto.note ?? null,
+      };
+    }
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      await this.lockOrderRow(tx, orderId);
+      // Đọc lại status TRONG tx: nếu không, một `chot` chen giữa `assertMutable` và lệnh
+      // create sẽ để lọt một dòng CHƯA snapshot vào đơn đã chốt.
+      const trongTx = await this.findOrThrowIn(tx, orderId);
+      this.assertMutable(trongTx);
+      // Con trỏ bản hiệu lực cũng phải đọc LẠI trong tx, không dùng lại giá trị ngoài tx:
+      // một cặp `chot` + `mo_lai` chen vào cửa sổ này đưa status VỀ LẠI `baogia` (nên
+      // `assertMutable` vẫn qua) nhưng đã repoint sang bản mới — ghi theo con trỏ cũ là chèn
+      // dòng vào một bản đã chết, mất hút khỏi báo giá mà không một lỗi nào nổi lên.
+      const versionIdTrongTx = this.currentVersionIdOrThrow(trongTx);
+      // Cuối danh sách của BẢN HIỆU LỰC — displayOrder do server gán, client không đánh số.
+      // max + 1, KHÔNG count: sau một lần xoá dòng, count nhỏ hơn displayOrder lớn nhất còn
+      // lại ⇒ dòng mới trùng số với dòng cũ và không còn đứng cuối (orderBy tie).
+      const last = await tx.orderLineItem.findFirst({
+        where: { orderVersionId: versionIdTrongTx },
+        orderBy: { displayOrder: 'desc' },
+        select: { displayOrder: true },
+      });
+      return tx.orderLineItem.create({
         data: {
-          orderVersionId: versionId,
-          productId: null,
-          // DTO đã bắt buộc name/unit/unitPrice với dòng tự do (`@ValidateIf`) — non-null ở đây.
-          name: dto.name as string,
-          unit: dto.unit as string,
-          qty: dto.qty,
-          unitPrice: dto.unitPrice as number,
-          priceEditable: true,
-          warrantyMonths: null,
-          isFlexible: dto.isFlexible ?? false,
-          note: dto.note ?? null,
-          displayOrder,
+          ...duLieuDong,
+          orderVersionId: versionIdTrongTx,
+          displayOrder: last === null ? 0 : last.displayOrder + 1,
         },
       });
-    }
+    });
 
     await this.eventBus.publish(
       new OrderLineAdded(
@@ -1347,20 +1550,25 @@ export class OrdersService {
     // VẪN được có bảo hành — điều kiện phải kèm `productId !== null`.
     const warrantyLocked = before.productId !== null && before.priceEditable;
 
-    const updated = await this.prisma.orderLineItem.update({
-      where: { id: lineId },
-      // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `note: null` xoá ghi chú.
-      // `warrantyMonths` phân biệt "không gửi" (undefined — key vắng mặt) vs "gửi null" (bỏ
-      // bảo hành — ghi null thật); dòng công lắp bị khoá thì key vắng mặt luôn, kể cả khi gửi.
-      data: {
-        qty: dto.qty,
-        unitPrice: dto.unitPrice,
-        note: dto.note,
-        isFlexible: dto.isFlexible,
-        ...(dto.warrantyMonths !== undefined && !warrantyLocked
-          ? { warrantyMonths: dto.warrantyMonths }
-          : {}),
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await this.lockOrderRow(tx, orderId);
+      // Đọc lại status TRONG tx sau khi có khoá — `assertMutable` ở trên chỉ là fast-path.
+      this.assertMutable(await this.findOrThrowIn(tx, orderId));
+      return tx.orderLineItem.update({
+        where: { id: lineId },
+        // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `note: null` xoá ghi chú.
+        // `warrantyMonths` phân biệt "không gửi" (undefined — key vắng mặt) vs "gửi null" (bỏ
+        // bảo hành — ghi null thật); dòng công lắp bị khoá thì key vắng mặt luôn, kể cả khi gửi.
+        data: {
+          qty: dto.qty,
+          unitPrice: dto.unitPrice,
+          note: dto.note,
+          isFlexible: dto.isFlexible,
+          ...(dto.warrantyMonths !== undefined && !warrantyLocked
+            ? { warrantyMonths: dto.warrantyMonths }
+            : {}),
+        },
+      });
     });
 
     await this.eventBus.publish(
@@ -1386,7 +1594,12 @@ export class OrdersService {
     this.assertMutable(order);
     const before = await this.findLineOrThrow(order, lineId);
 
-    await this.prisma.orderLineItem.delete({ where: { id: lineId } });
+    await this.prisma.$transaction(async (tx) => {
+      await this.lockOrderRow(tx, orderId);
+      // Đọc lại status TRONG tx sau khi có khoá — `assertMutable` ở trên chỉ là fast-path.
+      this.assertMutable(await this.findOrThrowIn(tx, orderId));
+      await tx.orderLineItem.delete({ where: { id: lineId } });
+    });
 
     await this.eventBus.publish(
       new OrderLineRemoved(

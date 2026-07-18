@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -227,6 +228,135 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
           data: { orderId: view.id, versionNo: 1 },
         }),
       ).rejects.toMatchObject({ code: 'P2002' });
+    });
+  });
+
+  /**
+   * TOCTOU giữa `confirm` (đọc dòng → snapshot → commit) và `addLine` (đọc status → chèn
+   * dòng), trên Postgres THẬT.
+   *
+   * BẤT BIẾN: một đơn đã `dachot` thì MỌI dòng của nó phải có `unitPriceSnapshot`. Một dòng
+   * lọt vào mà thiếu snapshot sẽ live-resolve theo danh mục TƯƠNG LAI trên một đơn đã đóng
+   * băng giá — tức là giá của đơn đã chốt vẫn còn tự đổi.
+   *
+   * Chạy NHIỀU VÒNG, KHÔNG delay nhân tạo: một vòng duy nhất với `setTimeout` chỉ ép được
+   * một thứ tự và sẽ xanh giả kể cả khi đã gỡ sạch khoá (đã kiểm chứng bằng mutation). Nhiều
+   * vòng đua tự do mới chạm được cả hai chiều interleaving.
+   */
+  describe('TOCTOU: chốt đua với thêm dòng (khoá FOR UPDATE hai phía)', () => {
+    const TOAN_QUYEN: ReadonlySet<string> = new Set(Object.values(PERM));
+    const SO_VONG = 12;
+
+    it('đơn đã chốt ⇒ MỌI dòng đều có snapshot giá (không dòng nào lọt qua cửa sổ)', async () => {
+      for (let vong = 0; vong < SO_VONG; vong++) {
+        const don = await service.create(accountId, { customerSdt: SDT });
+        await service.addLine(accountId, don.id, { productId, qty: 1 }, false);
+
+        // Hai request xuất phát CÙNG LÚC trên cùng một đơn — thứ tự do DB quyết.
+        const ketQua = await Promise.allSettled([
+          service.confirm(accountId, don.id, 8, false, TOAN_QUYEN),
+          service.addLine(accountId, don.id, { productId, qty: 7 }, false),
+        ]);
+
+        const sauCung = await prisma.order.findUniqueOrThrow({
+          where: { id: don.id },
+        });
+        const dong = await prisma.orderLineItem.findMany({
+          where: { orderVersionId: sauCung.currentVersionId as string },
+          orderBy: { displayOrder: 'asc' },
+        });
+
+        if (sauCung.status === 'dachot') {
+          for (const d of dong) {
+            expect({
+              vong,
+              soDong: dong.length,
+              snapshot: d.unitPriceSnapshot,
+            }).toEqual({
+              vong,
+              soDong: dong.length,
+              snapshot: expect.any(Number),
+            });
+          }
+        }
+        // Bên thua (nếu có) phải thua tử tế bằng 409, không phải 500.
+        for (const kq of ketQua) {
+          if (kq.status === 'rejected') {
+            expect((kq.reason as { getStatus(): number }).getStatus()).toBe(
+              409,
+            );
+          }
+        }
+      }
+    });
+
+    /**
+     * Cửa sổ ĐỐI XỨNG với test trên, phía `updateLine`. Đọc-lại-status-trong-tx MỘT MÌNH
+     * không đóng được nó: dưới READ COMMITTED, một `SELECT` thường vẫn đọc được ảnh chụp
+     * `baogia` trong khi transaction `confirm` đang giữ khoá và chưa commit. `updateLine`
+     * đi tiếp, ghi vào dòng (row khác, không đụng khoá nào), rồi commit SAU khi đơn đã
+     * `dachot` — giá của một đơn đã đóng băng vừa tự đổi.
+     *
+     * Bất biến bắt được điều đó mà không cần biết ai thắng: với dòng TỰ DO, `confirm` đóng
+     * băng `unitPriceSnapshot = unitPrice` đang thấy. `updateLine` thắng trước ⇒ `confirm`
+     * chụp giá MỚI. `confirm` thắng trước ⇒ `updateLine` đọc lại thấy `dachot` ⇒ 409, giá
+     * giữ nguyên. Hai cột LỆCH NHAU chỉ xảy ra khi một lệnh ghi lọt qua sau lúc đóng băng.
+     */
+    it('đơn đã chốt ⇒ unitPriceSnapshot KHỚP unitPrice (không lệnh sửa giá nào lọt qua sau lúc đóng băng)', async () => {
+      const GIA_DAU = 100_000;
+      const GIA_SUA = 777_000;
+
+      for (let vong = 0; vong < SO_VONG; vong++) {
+        const don = await service.create(accountId, { customerSdt: SDT });
+        // Dòng TỰ DO: `priceEditable` = true ⇒ `unitPrice` sửa được, và `confirm` đóng băng
+        // đúng con số đang thấy (dòng catalog thì snapshot theo giá danh mục, không phản
+        // ánh được lệnh sửa).
+        const dongTuDo = await service.addLine(
+          accountId,
+          don.id,
+          {
+            name: 'Công lắp đặt',
+            unit: 'gói',
+            qty: 1,
+            unitPrice: GIA_DAU,
+          },
+          false,
+        );
+
+        const ketQua = await Promise.allSettled([
+          service.confirm(accountId, don.id, 8, false, TOAN_QUYEN),
+          service.updateLine(
+            accountId,
+            don.id,
+            dongTuDo.id,
+            { unitPrice: GIA_SUA },
+            false,
+          ),
+        ]);
+
+        const sauCung = await prisma.order.findUniqueOrThrow({
+          where: { id: don.id },
+        });
+        const dong = await prisma.orderLineItem.findMany({
+          where: { orderVersionId: sauCung.currentVersionId as string },
+        });
+
+        if (sauCung.status === 'dachot') {
+          for (const d of dong) {
+            expect({ vong, snapshot: d.unitPriceSnapshot }).toEqual({
+              vong,
+              snapshot: d.unitPrice,
+            });
+          }
+        }
+        for (const kq of ketQua) {
+          if (kq.status === 'rejected') {
+            expect((kq.reason as { getStatus(): number }).getStatus()).toBe(
+              409,
+            );
+          }
+        }
+      }
     });
   });
 });

@@ -48,7 +48,7 @@ export class OrderResponseDto {
 
   @ApiProperty({
     description:
-      "Trạng thái đơn — 4.1 luôn 'baogia'; mọi thay đổi thuộc applyTransition() (Story 5.1).",
+      "Trạng thái đơn — đơn mới luôn 'baogia'; mọi thay đổi đi qua applyTransition().",
     example: 'baogia',
   })
   status!: string;

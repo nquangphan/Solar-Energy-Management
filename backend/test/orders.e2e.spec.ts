@@ -120,13 +120,19 @@ describe('/orders (e2e)', () => {
     findUnique: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
   };
-  const orderVersionRepo = { create: jest.fn(), findUnique: jest.fn() };
+  const orderVersionRepo = {
+    create: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+  };
   const lineRepo = {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
     findMany: jest.fn(),
     create: jest.fn(),
+    createMany: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
   };
@@ -139,7 +145,12 @@ describe('/orders (e2e)', () => {
   // Config hệ thống: vắng row = default 8% (preview-total resolve rate qua SettingsService).
   const systemSettingRepo = { findUnique: jest.fn().mockResolvedValue(null) };
   // Hồ sơ duyệt chiết khấu (4.7): findFirst = approval mới nhất cho view; findMany = list chờ duyệt.
-  const discountApprovalRepo = { findFirst: jest.fn(), findMany: jest.fn() };
+  const discountApprovalRepo = {
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    create: jest.fn(),
+    updateMany: jest.fn(),
+  };
   // Hồ sơ xuất báo giá (4.8): upsert mô phỏng ĐÚNG ngữ nghĩa unique orderId — MỘT slot,
   // lần 2 đi nhánh update; findUnique đọc lại slot đó (2 route proxy + xuất lần n).
   let quoteExportRow: Record<string, unknown> | null = null;
@@ -153,7 +164,11 @@ describe('/orders (e2e)', () => {
     getObject: async (key: string) => {
       const found = storageMap.get(key);
       if (found === undefined) {
-        throw new AppException(ErrorCode.NOT_FOUND, 404, 'Không tìm thấy file.');
+        throw new AppException(
+          ErrorCode.NOT_FOUND,
+          404,
+          'Không tìm thấy file.',
+        );
       }
       return found;
     },
@@ -166,16 +181,22 @@ describe('/orders (e2e)', () => {
   const rendererStub = {
     render: jest.fn(async () => ({ pdf: PDF_STUB, image: PNG_STUB })),
   };
-  // Interactive tx cho POST :id/chot + :id/mo-lai + :id/ap-chiet-khau + :id/duyet-chiet-khau.
-  const txOrderRepo = { updateMany: jest.fn(), update: jest.fn() };
-  const txVersionRepo = { update: jest.fn(), create: jest.fn() };
-  const txLineRepo = { update: jest.fn(), createMany: jest.fn() };
-  const txDiscountRepo = { create: jest.fn(), updateMany: jest.fn() };
+  // `tx` bên trong interactive `$transaction` dùng CHÍNH bộ repo mock ở trên (cùng object,
+  // khác tên) — đúng sự thật của Prisma, và giữ cho assertion trên repo thường vẫn đúng khi
+  // lệnh ghi nằm trong tx. `$queryRaw` là khoá dòng đơn.
+  const queryRaw = jest.fn(async () => [{ id: ORDER_ID }]);
+  const txOrderRepo = orderRepo;
+  const txVersionRepo = orderVersionRepo;
+  const txLineRepo = lineRepo;
+  const txDiscountRepo = discountApprovalRepo;
   const txMock = {
     order: txOrderRepo,
     orderVersion: txVersionRepo,
     orderLineItem: txLineRepo,
     discountApproval: txDiscountRepo,
+    // `confirm` resolve giá danh mục BÊN TRONG tx (đọc dòng sau khoá ⇒ tra product cũng ở đó).
+    product: productRepo,
+    $queryRaw: queryRaw,
   };
   const transaction = jest.fn(async (arg: unknown) =>
     typeof arg === 'function'
@@ -194,6 +215,7 @@ describe('/orders (e2e)', () => {
     discountApproval: discountApprovalRepo,
     quoteExport: quoteExportRepo,
     $transaction: transaction,
+    $queryRaw: queryRaw,
   };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),
@@ -263,12 +285,12 @@ describe('/orders (e2e)', () => {
         ? (arg as (tx: unknown) => Promise<unknown>)(txMock)
         : Promise.all(arg as Promise<unknown>[]),
     );
+    // CHỈ khai default cho method chưa có default ở trên — `tx*` và repo thường là CÙNG
+    // object, khai lại sẽ ghi đè mất giá trị trả về mà test khác đang dựa vào.
     txOrderRepo.updateMany.mockResolvedValue({ count: 1 });
-    txOrderRepo.update.mockResolvedValue({});
     txVersionRepo.update.mockResolvedValue({});
-    txVersionRepo.create.mockResolvedValue({});
-    txLineRepo.update.mockResolvedValue({});
     txLineRepo.createMany.mockResolvedValue({ count: 0 });
+    queryRaw.mockResolvedValue([{ id: ORDER_ID }]);
     orderVersionRepo.findUnique.mockResolvedValue(null);
     // Mặc định: đơn chưa từng áp chiết khấu.
     discountApprovalRepo.findFirst.mockResolvedValue(null);
@@ -464,7 +486,10 @@ describe('/orders (e2e)', () => {
   describe('Story 4.9 — bảo hành theo dòng vật tư (FR-36)', () => {
     it('PATCH warrantyMonths: 24 ⇒ 200, response warrantyMonths 24', async () => {
       givenPermissions(PERM.quotesCreateEdit);
-      lineRepo.update.mockResolvedValue({ ...DONG_CATALOG, warrantyMonths: 24 });
+      lineRepo.update.mockResolvedValue({
+        ...DONG_CATALOG,
+        warrantyMonths: 24,
+      });
 
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}/line-items/line-1`)
@@ -1149,6 +1174,31 @@ describe('/orders (e2e)', () => {
           data: expect.objectContaining({ eventType: 'OrderConfirmed' }),
         }),
       );
+      // Vết from→to chính tắc (AD-11) đi qua CHÍNH `AuditSubscriber` thật — engine không
+      // gọi AuditService, nó publish event và consumer ghi log (AD-18).
+      expect(auditRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            eventType: 'StatusChanged',
+            actorAccountId: ACCOUNT_ID,
+          }),
+        }),
+      );
+    });
+
+    it('mỗi transition để lại ĐÚNG MỘT vết StatusChanged mang from→to (AD-11)', async () => {
+      givenPermissions(PERM.ordersConfirm);
+
+      await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      const vet = auditRepo.create.mock.calls
+        .map((call) => (call[0] as { data: Record<string, unknown> }).data)
+        .filter((data) => data.eventType === 'StatusChanged');
+      expect(vet).toHaveLength(1);
+      expect(vet[0].before).toMatchObject({ status: 'baogia' });
+      expect(vet[0].after).toMatchObject({ status: 'dachot' });
     });
 
     it("vatRate đóng băng theo CONFIG: row vat.rate_percent = '10' ⇒ version snapshot vatRate 10, không phải default", async () => {

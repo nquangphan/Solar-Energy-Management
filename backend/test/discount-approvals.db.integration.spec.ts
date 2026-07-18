@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -34,6 +35,9 @@ if (!coDb) {
 moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', () => {
   let prisma: PrismaClient;
   let service: OrdersService;
+
+  /** Bộ quyền đầy đủ — lane này kiểm ràng buộc DB, không kiểm phân quyền. */
+  const TOAN_QUYEN: ReadonlySet<string> = new Set(Object.values(PERM));
 
   // Dữ liệu riêng của test — dọn trước và sau mỗi lần chạy.
   const SDT = '+84900000047';
@@ -186,6 +190,7 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
         50_000,
         'Khách quen',
         false,
+        TOAN_QUYEN,
       );
 
       expect(view.status).toBe('choduyet');
@@ -207,8 +212,22 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
       const orderId = await taoDonCoDong();
 
       const ketQua = await Promise.allSettled([
-        service.applyDiscount(accountId, orderId, 10_000, null, false),
-        service.applyDiscount(accountId, orderId, 20_000, null, false),
+        service.applyDiscount(
+          accountId,
+          orderId,
+          10_000,
+          null,
+          false,
+          TOAN_QUYEN,
+        ),
+        service.applyDiscount(
+          accountId,
+          orderId,
+          20_000,
+          null,
+          false,
+          TOAN_QUYEN,
+        ),
       ]);
 
       const thang = ketQua.filter((r) => r.status === 'fulfilled');
@@ -226,11 +245,32 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
   describe('AC-2 — duyệt: cổng atomic trên CHÍNH row approval', () => {
     it('hai resolveDiscount CÙNG decision đua nhau ⇒ cả hai 200 nhưng row chỉ resolve MỘT lần (resolvedBy không bị đè)', async () => {
       const orderId = await taoDonCoDong();
-      await service.applyDiscount(accountId, orderId, 50_000, null, false);
+      await service.applyDiscount(
+        accountId,
+        orderId,
+        50_000,
+        null,
+        false,
+        TOAN_QUYEN,
+      );
 
       const ketQua = await Promise.allSettled([
-        service.resolveDiscount(approverId, orderId, true, null, false),
-        service.resolveDiscount(approverId, orderId, true, null, false),
+        service.resolveDiscount(
+          approverId,
+          orderId,
+          true,
+          null,
+          false,
+          TOAN_QUYEN,
+        ),
+        service.resolveDiscount(
+          approverId,
+          orderId,
+          true,
+          null,
+          false,
+          TOAN_QUYEN,
+        ),
       ]);
 
       // Cùng decision: bên thua cổng đọc lại thấy dong_y ⇒ idempotent-return.
@@ -249,7 +289,14 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
 
     it('từ chối trả đơn về baogia trong CÙNG tx với resolve row', async () => {
       const orderId = await taoDonCoDong();
-      await service.applyDiscount(accountId, orderId, 50_000, null, false);
+      await service.applyDiscount(
+        accountId,
+        orderId,
+        50_000,
+        null,
+        false,
+        TOAN_QUYEN,
+      );
 
       await service.resolveDiscount(
         approverId,
@@ -257,6 +304,7 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
         false,
         'Biên quá mỏng',
         false,
+        TOAN_QUYEN,
       );
 
       const order = await prisma.order.findUniqueOrThrow({
@@ -275,9 +323,23 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
     it('confirm từ choduyet (approval dong_y) ghi discount_amount; đường baogia giữ null', async () => {
       // Đường có chiết khấu.
       const coCk = await taoDonCoDong();
-      await service.applyDiscount(accountId, coCk, 50_000, null, false);
-      await service.resolveDiscount(approverId, coCk, true, null, false);
-      const chot = await service.confirm(accountId, coCk, 8, false);
+      await service.applyDiscount(
+        accountId,
+        coCk,
+        50_000,
+        null,
+        false,
+        TOAN_QUYEN,
+      );
+      await service.resolveDiscount(
+        approverId,
+        coCk,
+        true,
+        null,
+        false,
+        TOAN_QUYEN,
+      );
+      const chot = await service.confirm(accountId, coCk, 8, false, TOAN_QUYEN);
       expect(chot.status).toBe('dachot');
       const verCoCk = await prisma.orderVersion.findUniqueOrThrow({
         where: { id: chot.currentVersionId as string },
@@ -286,7 +348,13 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
 
       // Đường baogia thẳng (regression 4.5): discountAmount null tường minh.
       const khongCk = await taoDonCoDong();
-      const chotThang = await service.confirm(accountId, khongCk, 8, false);
+      const chotThang = await service.confirm(
+        accountId,
+        khongCk,
+        8,
+        false,
+        TOAN_QUYEN,
+      );
       const verKhongCk = await prisma.orderVersion.findUniqueOrThrow({
         where: { id: chotThang.currentVersionId as string },
       });

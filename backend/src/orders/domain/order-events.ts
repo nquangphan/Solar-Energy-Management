@@ -239,6 +239,35 @@ export class QuoteExported implements DomainEvent {
   }
 }
 
+/**
+ * `Order.status` ĐỔI — vết from→to chính tắc mà AD-11 đòi, phát ra từ CHÍNH nơi duy nhất ghi
+ * status. before/after tự kể chuyện from→to; `AuditSubscriber` ghi `AuditLog` (producer
+ * KHÔNG gọi audit trực tiếp — AD-18).
+ *
+ * Event này publish THÊM, KHÔNG thay thế các event nghiệp vụ (`OrderConfirmed`,
+ * `OrderRevised`, `DiscountRequested`, `DiscountResolved`): chúng mang payload nghiệp vụ
+ * (`amount`, `note`, `approved`, `reason`) mà đường thông báo cần và đã có test khẳng định.
+ * Hệ quả tường minh: một lần chốt sinh HAI dòng audit — chấp nhận, vì `StatusChanged` là vết
+ * duy nhất mà mọi transition tương lai (auto-transition, chuyển bước thủ công) sẽ có.
+ *
+ * `actorAccountId` OPTIONAL: `undefined` = transition do hệ thống tự chạy theo sự kiện
+ * (thanh toán/tồn kho), không có con người nào bấm nút.
+ */
+export class StatusChanged implements DomainEvent {
+  readonly type = 'StatusChanged';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  constructor(
+    readonly actorAccountId: string | undefined,
+    readonly before: OrderSnapshot,
+    readonly after: OrderSnapshot,
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: after.id };
+  }
+}
+
 /** Một dòng bị XOÁ — chỉ có trạng thái "trước". */
 export class OrderLineRemoved implements DomainEvent {
   readonly type = 'OrderLineRemoved';
