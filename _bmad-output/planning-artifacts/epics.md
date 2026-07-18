@@ -166,8 +166,8 @@ Giỏ hàng + cờ phạm vi + VAT qua /orders/preview-total; chốt + snapshot 
 **FRs covered:** FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-21
 
 ### Epic 5: Vòng đời đơn & Thi công & Bảo hành (nhánh cá nhân)
-applyTransition engine gate theo cờ + auto-transition; danh sách đơn (+ follow-up + empty/loading/error); chi tiết đơn (stepper + tabs + lịch sử bản update); chuyển trạng thái + đính kèm ảnh (optional); huỷ đơn (giải phóng reserved, phiếu nhập trả); nhánh Thi công (bỏ "Lên lịch", Đang thi công→Nghiệm thu); tra cứu bảo hành theo SĐT. **Publish StatusChanged event.**
-**FRs covered:** FR-7, FR-8, FR-9, FR-10, FR-23, FR-24
+applyTransition engine gate theo cờ + auto-transition; danh sách đơn (+ follow-up + empty/loading/error); chi tiết đơn (stepper + tabs + lịch sử bản update); chuyển trạng thái + đính kèm ảnh (optional); huỷ đơn kèm lý do (publish `OrderCancelled` làm seam cho tồn kho Epic 6.7); nhánh Thi công (bỏ "Lên lịch", Đang thi công→Nghiệm thu); tra cứu bảo hành theo SĐT. **Publish StatusChanged + OrderCancelled event.**
+**FRs covered:** FR-7, FR-8, FR-9, FR-10, FR-23, FR-24, FR-36
 
 ### Epic 6: Giao hàng & Tồn kho (nhánh bỏ mối)
 Nhánh Giao hàng (Đang giao→Đã giao, gate cờ Thiết bị) dùng lại engine E5; tồn kho hiện tại (onHand + reserved + khả dụng); phiếu nhập/xuất + bình quân gia quyền giá vốn; xuất kho gắn đơn (một đơn một phiếu, snapshot costPriceSnapshot lúc xuất); chặn ở khâu xuất (không chặn chốt); StockMovement ledger (idempotent); phiếu nhập trả khi huỷ đơn đã xuất (**publish StockOutBlocked/StockIssued event**).
@@ -477,8 +477,8 @@ As a người tạo báo giá, I want cấu hình bảo hành cho từng dòng v
 - **Given** mỗi dòng chốt, **When** lần đầu tiên Đơn chốt, **Then** **đóng băng `OrderLineItem.warrantyStartAt`** = ngày chốt của **DÒNG ĐÓ** (không phải ngày chốt Đơn) — lý do: nếu tạo version mới sửa một dòng ghi chú tháng 6 sẽ tạo version mới và gia hạn bảo hành toàn đơn; đặt mốc trên dòng thì hàng cũ giữ ngày cũ, hàng mới thêm lấy ngày mới (§3).
 - **Given** mỗi dòng có bảo hành, **When** hiển thị, **Then** lưu **tháng** (int); UI hiển thị "5 năm" khi `warrantyMonths` chia hết 12, "18 tháng" khi không (§3).
 
-## Epic 5: Vòng đời đơn & Thi công (nhánh cá nhân)
-_applyTransition engine gate theo cờ + permission + audit; auto-transition; danh sách đơn (+follow-up, empty/loading/error); chi tiết đơn (stepper/tabs/lịch sử); chuyển trạng thái + ảnh optional; huỷ; nhánh Thi công. Publish StatusChanged. FR-7,8,9,10,23,24._
+## Epic 5: Vòng đời đơn & Thi công & Bảo hành (nhánh cá nhân)
+_applyTransition engine gate theo cờ + permission + audit; auto-transition; danh sách đơn (+follow-up, empty/loading/error); chi tiết đơn (stepper/tabs/lịch sử); chuyển trạng thái + ảnh optional; huỷ kèm lý do; nhánh Thi công; tra cứu bảo hành theo SĐT. Publish StatusChanged + OrderCancelled. FR-7,8,9,10,23,24,36._
 
 ### Story 5.1: Engine `applyTransition()` — enum + bảng transition + guard + audit
 As a lập trình viên backend, I want một hàm `applyTransition()` duy nhất ghi `Order.status`, So that mọi chuyển trạng thái đi qua một chỗ đánh giá guard và ghi audit.
@@ -522,12 +522,12 @@ As a người có quyền, I want thêm/xoá ảnh bổ sung trong chi tiết đ
 - **Given** một ảnh, **When** xoá, **Then** chỉ người đã tải lên hoặc người có quyền chỉnh sửa đơn mới xoá được; thêm/xoá ghi Audit (FR-24).
 - **Given** upload, **When** thêm ảnh, **Then** mobile chụp/chọn thư viện, web chọn file; binary ở R2 (FR-24, AD-3, UX-DR-25).
 
-### Story 5.7: Huỷ đơn — giải phóng reserved, phiếu nhập trả khi đã xuất
-As a người có quyền, I want huỷ đơn kèm lý do, So that đóng đơn không tiếp tục mà vẫn lưu vết tồn kho.
+### Story 5.7: Huỷ đơn kèm lý do (giải phóng tồn → Epic 6.7)
+As a người có quyền, I want huỷ đơn kèm lý do, So that đóng đơn không tiếp tục mà vẫn lưu vết ai huỷ / khi nào / vì sao.
 **Acceptance Criteria:**
 - **Given** một Đơn ở trạng thái cho phép huỷ, **When** người có quyền huỷ, **Then** đi qua `applyTransition()` sang "Huỷ", bắt buộc nhập lý do (FR-9, AD-11).
-- **Given** hành động huỷ **TRƯỚC khi xuất kho**, **When** xác nhận, **Then** qua Dialog nêu hậu quả; huỷ `StockMovement` → **giải phóng `reserved`** ngay; ghi Audit + publish `StatusChanged` (UX-DR-20, AD-18, §2).
-- **Given** hành động huỷ **SAU khi xuất kho** (đã giảm `onHand`), **When** xác nhận, **Then** **KHÔNG tự cộng tồn**; phải tạo **phiếu nhập trả** từ lúc xuất để lên tồn lại (§2).
+- **Given** hành động huỷ, **When** xác nhận, **Then** qua Dialog nêu hậu quả; lý do lưu thành cột đọc được trên Đơn (`cancelReason`/`cancelledAt`), không chỉ trong AuditLog; ghi Audit + publish `StatusChanged` **và** `OrderCancelled` (mang `orderId`, `orderVersionId`, `lyDo`, `statusTruocHuy`) làm **seam** cho tồn kho (UX-DR-19, UX-DR-20, AD-18, PRD §4.11).
+- **Given** đường huỷ đơn, **When** cài đặt, **Then** **KHÔNG** chứa bất kỳ lệnh ghi tồn kho nào (`StockMovement`, `StockItem`, `onHand`, `reserved`) — khoá bằng source-guard; giải phóng `reserved` và phiếu nhập trả **thuộc Story 6.7**, subscribe `OrderCancelled` (AD-19).
 - **Given** huỷ, **When** xác nhận, **Then** publish `StatusChanged` + ghi Audit.
 
 ### Story 5.8: Nhánh Thi công — bỏ "Lên lịch" (Đang thi công → Nghiệm thu)
@@ -603,6 +603,8 @@ As a người quản lý tồn kho, I want tạo phiếu nhập trả khi huỷ 
 - **Given** Đơn huỷ **SAU khi xuất kho** (đã giảm `onHand`), **When** xác nhận huỷ, **Then** KHÔNG tự cộng tồn; phải tạo **phiếu nhập trả** từ phiếu xuất lúc đó để lên tồn lại (§2).
 - **Given** phiếu nhập trả, **When** tạo, **Then** entity `StockVoucher` loại "nhập", gắn phiếu xuất gốc, cùng giá vốn (`unitCost` = `costPriceSnapshot` lúc xuất) để báo cáo lợi nhuận không lệch (§2, §4).
 - **Given** tạo phiếu trả, **When** lưu, **Then** tăng lại `onHand`, ghi Audit, gắn link Đơn huỷ (FR-24, AD-18).
+- **Given** đường huỷ đơn đã ship ở Story 5.7 KHÔNG chạm tồn kho (khoá bằng source-guard), **When** nối tồn kho vào, **Then** story này **subscribe event `OrderCancelled`** (mang `orderId`, `orderVersionId`, `lyDo`, `statusTruocHuy`) — đây là seam duy nhất; **không** thêm lệnh ghi tồn vào `huyDon()` (AD-11, AD-18).
+- **Given** Đơn huỷ **TRƯỚC khi xuất kho**, **When** xử lý `OrderCancelled`, **Then** huỷ `StockMovement` của version đó → **giải phóng `reserved`** ngay (chuyển từ Story 5.7 sang đây vì ledger chưa tồn tại ở Epic 5) (AD-19).
 _Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng thái (publish DepositRecorded/PaymentRecorded); sinh HĐ Thi công/Mua bán (PDF); tạo hoá đơn (DB + PDF). FR-11,12,13,27,28._
 
 ### Story 7.1: Cấu hình Lịch thanh toán nhiều đợt (chặn đợt đầu 0%)

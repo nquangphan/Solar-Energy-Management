@@ -32,9 +32,9 @@ Nguyên tắc xuyên suốt (từ PRD §1): app là **máy tăng tốc, không p
 | **B · Đơn hàng** | Danh sách đơn (`s-orders`) | Tab Đơn hàng | Lọc theo Trạng thái, follow-up đơn chưa chốt (FR-10) |
 | | Báo giá / Giỏ hàng (`s-quote`) | FAB **+Tạo** / "Xem chi tiết" | Trái tim app: dựng Dòng báo giá, tổng realtime, Chốt (FR-1..5) |
 | | Chọn / Tạo khách (`s-customer-pick`) | Trong luồng tạo đơn | Tra SĐT → chọn khách cũ hoặc tạo mới (FR-29) |
-| | Chi tiết đơn (`s-order-detail`) | Row danh sách đơn | Trạng thái, lịch sử bản update, ảnh, hành động (FR-6) |
+| | Chi tiết đơn (`s-order-detail`) | Row danh sách đơn | Trạng thái, lịch sử bản update, ảnh, hành động (FR-6). **Huỷ đơn là Dialog trong màn này**, không phải màn riêng: không nhận ảnh ⇒ không picker ⇒ giữ đúng một tầng overlay (lý do bắt buộc, ghi Audit) |
 | | Chuyển trạng thái + ảnh (`s-status-change`) | Nút hành động trong Chi tiết đơn | Chọn bước kế, đính kèm ảnh optional (FR-9, FR-23) |
-| | Xác nhận huỷ đơn (`s-order-cancel`) | Chi tiết đơn | Huỷ có lý do, ghi Audit |
+| | Tra cứu bảo hành (`s-warranty-lookup`) | Sidebar (web) | Nhập SĐT khách → đơn + từng dòng vật tư kèm hạn bảo hành còn lại và trạng thái Còn hạn / Sắp hết / Hết hạn (FR-36) |
 | **C · Tiền & Chứng từ** | Duyệt chiết khấu (`s-discount-approval`) | Dashboard / thông báo | Danh sách chờ duyệt → Đồng ý / Từ chối kèm lý do (FR-18) |
 | | Thanh toán (`s-payments`) | Chi tiết đơn | Cấu hình Lịch, ghi nhận từng đợt (FR-11, FR-12) |
 | | Sinh hợp đồng (`s-contract`) | Chi tiết đơn | HĐ Thi công / Mua bán, xuất PDF (FR-13) |
@@ -50,7 +50,7 @@ Nguyên tắc xuyên suốt (từ PRD §1): app là **máy tăng tốc, không p
 | | Tạo / sửa account (`s-account-form`) | Nút trong Phân quyền | Tạo account, nạp Role preset |
 | | Audit log (`s-audit`) | Sidebar (Super Admin) | Nhật ký bất biến; chỉ Super Admin (FR-20) |
 
-**Điều hướng.** Mobile — bottom nav 5 tab khoá cứng mọi màn: **Trang chủ · Đơn hàng · ➕Tạo · Kho · Menu**; FAB **+Tạo** (teal, tách khỏi thanh nav) luôn mở màn Báo giá. Màn xác thực (Đăng nhập, Quên MK) không có bottom nav. Web — sidebar dọc: Trang chủ, Đơn hàng, Khách hàng, Danh mục, Kho, Phân quyền, Audit, Hồ sơ. Top bar chuẩn: title + back trái + action phải. Dialog/bottom-sheet chỉ chồng **một cấp**, không hai.
+**Điều hướng.** Mobile — bottom nav 5 tab khoá cứng mọi màn: **Trang chủ · Đơn hàng · ➕Tạo · Kho · Menu**; FAB **+Tạo** (teal, tách khỏi thanh nav) luôn mở màn Báo giá. Màn xác thực (Đăng nhập, Quên MK) không có bottom nav. Web — sidebar dọc: Trang chủ, Đơn hàng, Khách hàng, Danh mục, Kho, Tra cứu bảo hành, Cấu hình, Phân quyền, Audit, Hồ sơ. Top bar chuẩn: title + back trái + action phải. Dialog/bottom-sheet chỉ chồng **một cấp**, không hai.
 
 → Composition reference: `mockups/all-screens.html`. Spine thắng khi mâu thuẫn.
 
@@ -78,7 +78,7 @@ Chỉ hành vi. Spec thị giác + token ở `DESIGN.md.Components`.
 | Component | Dùng ở | Quy tắc hành vi |
 |---|---|---|
 | **Dòng giỏ hàng (cart line item)** | Báo giá | Sửa số lượng/đơn giá → tổng recalc ngay, không lưu thủ công (FR-1). Dòng pick từ Sản phẩm auto-điền đơn giá theo Danh mục hiện tại; Dòng tự do/gói nhập tay. Cờ "linh động/dự kiến" chỉ hiển thị, không đổi cách tính (FR-1). Swipe/nút xoá dòng. |
-| **Status chip** | Danh sách đơn, Chi tiết đơn, Dashboard | Một chip = một Trạng thái, dùng bộ token màu riêng ({chip.baogia}, {chip.dachot}, {chip.dacoc}, {chip.thicong}, {chip.nghiemthu}, {chip.danggiao}, {chip.hoanthanh}, {chip.huy}). Chỉ đọc — không bấm để đổi; đổi trạng thái qua màn riêng. |
+| **Status chip** | Danh sách đơn, Chi tiết đơn, Dashboard | Một chip = một Trạng thái, dùng bộ token màu riêng — **10 khoá chính tắc** ({chip.baogia}, {chip.choduyet}, {chip.dachot}, {chip.dacoc}, {chip.thicong}, {chip.nghiemthu}, {chip.danggiao}, {chip.dagiao}, {chip.hoanthanh}, {chip.huy}). Chỉ đọc — không bấm để đổi; đổi trạng thái qua màn riêng. |
 | **Stepper trạng thái** | Chi tiết đơn, Chuyển trạng thái | Hiển thị chuỗi bước **gate theo Cờ phạm vi** (FR-7): bước không áp dụng bị ẩn hẳn, không disable xám. Bước hiện tại nổi bật {colors.teal}; bước đã qua có tick; bước tới mờ. |
 | **Ma trận quyền (permission matrix)** | Phân quyền | Lưới Quyền × checkbox trên một Account. Nút "Áp preset Role" nạp giá trị rồi cho tick/bỏ từng ô (FR-17). Nguồn chân lý = bộ Quyền trên Account, không phải Role. |
 | **Bộ lọc (filters)** | Danh sách đơn, Khách, Kho, Audit | Lọc theo Trạng thái / mốc thời gian; chip filter bật/tắt. "Xem tất cả đơn" vs "chỉ đơn của mình" phụ thuộc Quyền, không phải filter (FR-18). |

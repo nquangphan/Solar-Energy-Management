@@ -105,11 +105,12 @@ flowchart TD
 - **Prevents:** sai số float; lệch tổng tiền/VAT/đợt thanh toán.
 - **Rule:** mọi giá trị tiền là **integer đồng** (không thập phân, không float). Tính VAT/tổng bằng số nguyên; làm tròn theo quy tắc cố định ở Domain.
 
-### AD-11 — State machine tường minh: enum + bảng transition `[ASSUMPTION]`
+### AD-11 — State machine tường minh: enum + bảng transition `[ADOPTED]`
 
 - **Binds:** FR-7, FR-8, FR-9
 - **Prevents:** logic trạng thái rải rác dạng if/else; transition ngầm định không kiểm soát được; `payments/`/`inventory/` tự ghi status; guard/audit trùng lặp.
-- **Rule:** trạng thái là enum tường minh; transition hợp lệ khai báo trong một **allowed-transition table** gate theo cờ phạm vi + permission. **MỘT hàm transition DUY NHẤT** thuộc `orders/domain` với chữ ký cố định `applyTransition({order, event, actorPermissions, scopeFlags}) → newState | rejection` là **con đường code DUY NHẤT** ghi `Order.status`; `payments/` và `inventory/` **gọi hàm này** (không bao giờ ghi status trực tiếp). Đây cũng là **nơi duy nhất** đánh giá guard permission + cờ phạm vi và **nơi duy nhất** phát bản ghi Audit. Auto-transition và manual transition dùng **chung một entry point**; auto-transition là hệ quả của sự kiện nghiệp vụ, đi qua cùng bảng này.
+- **Rule:** trạng thái là enum tường minh; transition hợp lệ khai báo trong một **allowed-transition table** gate theo cờ phạm vi + permission. Engine là **một cặp hai nửa, một hợp đồng**: `evaluateTransition()` — hàm **thuần** ở `orders/domain/allowed-transition.ts`, **nơi duy nhất** đánh giá guard permission + cờ phạm vi — và executor `OrdersService.applyTransition(tx, {order, event, actorPermissions, actorAccountId, sentinel, occurredAt}) → StatusChanged` ở tầng Application (Domain không được phụ thuộc Infrastructure nên một hàm ở `domain/` không thể tự ghi DB). Cặp này là **con đường code DUY NHẤT** ghi `Order.status`; `payments/` và `inventory/` **gọi vào đây** qua `OrdersService.chuyenTrangThaiTuDong()` (không bao giờ ghi status trực tiếp). Từ chối ném `AppException` 403 (thiếu quyền) / 409 (ngoài bảng hoặc sai cờ), không trả rejection object. Engine **KHÔNG** gọi Audit trực tiếp — nó phát `StatusChanged` và `AuditSubscriber` ghi log (AD-18). Auto-transition và manual transition dùng **chung một entry point**; auto-transition là hệ quả của sự kiện nghiệp vụ, đi qua cùng bảng này.
+- **Thi hành:** source-guard `backend/test/no-order-status-write-outside-transition.spec.ts` quét toàn `src/` — không call-site nào ngoài executor được ghi `Order.status` (Story 5.1).
 
 ### AD-12 — API REST + OpenAPI, Auth JWT access+refresh `[ASSUMPTION]`
 
@@ -121,7 +122,7 @@ flowchart TD
 
 - **Binds:** `all` (mọi màn Web + Mobile)
 - **Prevents:** web-mobile lệch nhau; mỗi màn style riêng; drift khỏi DESIGN.md.
-- **Rule:** tầng design system từ `DESIGN.md` là deliverable **ĐẦU TIÊN**, dựng cho cả hai nền tảng — thư viện component React (web) và thư viện widget Flutter (mobile) — cả hai tuân **cùng một hợp đồng thị giác** DESIGN.md (token màu, style Viền nét, 9 chip trạng thái, bộ icon SVG, topbar/botnav/frame). MỌI màn bắt buộc dùng lại component/token của design system; **cấm style ad-hoc**.
+- **Rule:** tầng design system từ `DESIGN.md` là deliverable **ĐẦU TIÊN**, dựng cho cả hai nền tảng — thư viện component React (web) và thư viện widget Flutter (mobile) — cả hai tuân **cùng một hợp đồng thị giác** DESIGN.md (token màu, style Viền nét, 10 chip trạng thái, bộ icon SVG, topbar/botnav/frame). MỌI màn bắt buộc dùng lại component/token của design system; **cấm style ad-hoc**.
 
 ### AD-14 — Firebase mobile + push tập trung `[ADOPTED]`
 
@@ -261,6 +262,8 @@ erDiagram
         string custType
         float kWp
         string vatMode
+        string cancelReason
+        datetime cancelledAt
     }
     ORDER_VERSION {
         uuid id
@@ -269,6 +272,7 @@ erDiagram
         int vatRate
         string vatMode
         datetime chotAt
+        uuid createdByAccountId FK
     }
     ORDER_LINE_ITEM {
         uuid id
@@ -388,6 +392,7 @@ stateDiagram-v2
     ChoDuyet --> BaoGia : từ chối
     ChoDuyet --> DaChot : duyệt then Chốt
     BaoGia --> DaChot : Chốt (snapshot giá)
+    DaChot --> BaoGia : Mở lại (sinh version mới)
     DaChot --> DaCoc : auto (đủ đợt cọc)
     DaCoc --> DangTC : cờ Thi công
     DangTC --> NghiemThu
@@ -435,13 +440,15 @@ backend/
     accounts/       # Account, Permission registry (SSOT), Role preset, quyền per-account (AD-8, AD-17)
     customers/      # Customer, SĐT là PK (AD-9)
     catalog/        # Product + tiered price (FR-14, FR-15)
-    orders/         # Order hợp nhất, line items, versions, state machine, snapshot (AD-6, AD-7, AD-11)
-    discounts/      # DiscountApproval (FR-18)
+    orders/         # Order hợp nhất, line items, versions, state machine, snapshot, chiết khấu (DiscountApproval), ảnh đính kèm (AD-6, AD-7, AD-11, AD-3, FR-18, FR-24)
     payments/       # PaymentSchedule, Installment, Payment; auto-transition trigger (FR-11, FR-12, FR-8)
     contracts/      # sinh HĐ Thi công / Mua bán → PDF (FR-13)
     invoices/       # Invoice (DB + PDF) (FR-27, FR-28)
     inventory/      # StockItem, StockVoucher(+lines), chặn xuất quá tồn (FR-25, FR-26)
-    attachments/    # R2 upload/proxy + metadata (AD-3)
+    settings/       # SystemSetting — VAT mặc định, thông tin công ty
+    feature-flags/  # FeatureFlag — bấm cờ, gate bởi `system.feature_flags` (AD-14)
+    health/         # health check
+    openapi/        # openapi-document.ts — spec là build artifact sinh từ code (AD-12)
     audit/          # AuditLog append-only, đọc chỉ Super Admin (FR-20)
     notifications/  # FCM sender qua firebase-admin, DeviceToken registry, Notification inbox, nhắc theo lịch (cần job scheduler, vd NestJS Schedule/cron); người nhận resolve qua permission engine (AD-14, AD-15, FR-30..34)
     dashboard/      # doanh thu / đếm đơn theo trạng thái (FR-19)
@@ -450,6 +457,8 @@ backend/
 ```
 
 > **Biến thể có chủ đích (hiện thực Epic 2, ghi lại 2026-07-09):** `JwtAuthGuard`/`PermissionsGuard` + decorator (`@Public`, `@RequirePermissions`, `@CurrentAccount`) nằm ở **`auth/`**, không phải `common/` như cây trên vẽ ban đầu — vì guard phụ thuộc `JwtService` (AuthModule) + `AccountsModule`; đặt ở `common/` sẽ **đảo ngược hướng phụ thuộc** (common → domain). Bất biến AD-4 là "guard enforce mỗi request", vị trí file là thứ yếu. `common/` giữ error envelope + exception filter + ValidationPipe. `events/` không có trong cây gốc (AD-18 chỉ nói "port ở nền backend") — đặt module riêng `@Global` vì nhiều domain tiêu thụ.
+>
+> **Biến thể có chủ đích (hiện thực Epic 4+5, ghi lại 2026-07-19):** `attachments/` và `discounts/` **không** thành module riêng như cây vẽ ban đầu — chúng là hành vi trên chính `Order` (cùng aggregate, cùng khoá dòng, cùng engine transition), tách ra sẽ đẻ **một đường ghi thứ hai** lên `Order` và phá AD-11. Phần R2 thuần hạ tầng vẫn ở `storage/`.
 
 ## Capability → Architecture Map
 
@@ -476,7 +485,7 @@ backend/
 
 ## Deferred
 
-- **Danh sách tên trạng thái cuối cùng** — khung state machine đã duyệt; verbatim label + mapping "đợt thanh toán → trạng thái" chi tiết chốt khi làm epics (§4.2, FR-8). State ở đây theo EXPERIENCE.md, chưa phải danh sách khoá.
+- ~~**Danh sách tên trạng thái cuối cùng**~~ — **ĐÃ CHỐT ở Epic 4/5:** 10 khoá chính tắc trong `backend/src/orders/domain/order-status.ts` (khoá thi công là `thicong`, KHÔNG phải `dangthicong`); nhãn verbatim trong `web/src/design-system/components/StatusChip.tsx`. Bước **"Lên lịch thi công" đã bị BỎ** khỏi vòng đời (Story 5.8) — chuỗi thật là Đang thi công → Nghiệm thu. Mapping "đợt thanh toán → trạng thái" là cạnh `du_coc` (`dachot → dacoc`) trong `orders/domain/allowed-transition.ts` (bảng 16 dòng), hình dạng khai ở `orders/domain/auto-transition-map.ts`; **giá trị** cấu hình lịch thanh toán vẫn thuộc Story 7.1.
 - **Giới hạn định dạng/dung lượng ảnh** — nơi lưu đã chốt (R2, AD-3); giới hạn kích thước/định dạng + nén để lại cho implementation (FR-24).
 - **CI/CD & môi trường triển khai** — VPS provider, pipeline, container/orchestration cụ thể chưa quyết (solo dev, ưu tiên đơn giản).
 - **Monitoring / backup** — chiến lược backup Postgres, retention R2, alerting để lại cho vận hành.

@@ -234,7 +234,7 @@ Tất cả component viền 1.5px, phẳng, không bóng.
 
 - **Button** (`.btn`) — mặc định outline: viền teal 1.5px, nền trắng, chữ `teal-700` 800. Biến thể: `--primary` (nền teal, chữ trắng), `--accent` (nền lime-050, viền lime), `--ghost` (viền line), `--danger` (viền/chữ đỏ). Size `--sm` (padding 5px 10px, bo sm), `--wide` (full width).
 - **Card / Frame** — `.card`: nền trắng, viền line, bo lg. `.frame`: viền ink 1.5px + **nhãn frame** nổi trên đường viền (`.frame-label`, micro uppercase) — mô-típ bản vẽ kỹ thuật đặc trưng.
-- **Chip / Status-chip** — pill bo full, viền 1.5px, chữ 11px/700, có `.dot` 6px cùng màu chữ. 9 biến thể trạng thái xem bảng màu ở trên. Kèm `.ktype` (loại khách, viền lime), `.scope-flag` (bật/tắt quyền, on = teal, off = gạch ngang mờ).
+- **Chip / Status-chip** — pill bo full, viền 1.5px, chữ 11px/700, có `.dot` 6px cùng màu chữ. 10 biến thể trạng thái xem bảng màu ở trên. Kèm `.ktype` (loại khách, viền lime), `.scope-flag` (bật/tắt quyền, on = teal, off = gạch ngang mờ).
 - **Field** (`.field`) — viền line 1.5px, bo DEFAULT, focus đổi viền sang teal (không glow). Nhãn `.flabel` micro uppercase muted phía trên. `.field-lg` cho form đăng nhập.
 - **Table** (`.table`) — dày, header nền `surface-2` + micro uppercase, ô viền dưới line 1px, hàng zebra `#F7FBFA`, cột số canh phải (`.num`), giá trị mạnh in đậm ink.
 - **Stepper** — chuỗi node tròn 26px nối bằng thanh 1.5px. `done` = teal đặc chữ trắng; `current` = viền teal + ring teal-050; `gate` = viền đứt nét mờ. Nhãn bước micro dưới node.
