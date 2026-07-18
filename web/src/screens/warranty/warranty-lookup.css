@@ -1,0 +1,42 @@
+/* hand-authored — screen-local layout for Tra cứu bảo hành (Story 5.9).
+
+   LAYOUT ONLY. Every colour, radius and font here comes from the token layer
+   (tokens.css) or from a shipped design-system class — this file invents no
+   palette (AD-13). The status pill reuses the shipped `.chip` and takes its
+   colour from `--ok` / `--warn` / `--danger` via an inline token reference in
+   the screen, so there is no fourth definition of "warning orange". */
+
+.bh-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Phone field + button on one line; the field takes the slack. */
+.bh-tra {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.bh-tra .fgroup {
+  flex: 1;
+}
+
+.bh-state {
+  padding: 8px 0;
+}
+
+.bh-khach {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* The pill sits in a table cell — the shipped `.chip` supplies shape and
+   weight; only the border/background tint is derived from the text colour so a
+   single `color` token drives the whole pill. */
+.bh-chip {
+  border-color: currentColor;
+  background: transparent;
+}

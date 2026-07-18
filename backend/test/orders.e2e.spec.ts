@@ -3984,4 +3984,138 @@ describe('/orders (e2e)', () => {
       expect(res.body.cancelledAt).toBe(luc.toISOString());
     });
   });
+
+  /**
+   * Lane DUY NHẤT đo được mã HTTP của đường tra cứu: `ValidationPipe` + guard + exception
+   * filter chỉ tồn tại ở đây. Đặc biệt là bẫy THỨ TỰ ROUTE — unit test không thấy nó.
+   */
+  describe('GET /orders/tra-cuu-bao-hanh (Story 5.9)', () => {
+    const DON_BAO_HANH = {
+      ...DON_BAOGIA,
+      status: 'nghiem_thu',
+      currentVersion: {
+        id: VERSION_ID,
+        chotAt: new Date('2026-01-15T02:00:00Z'),
+      },
+    };
+    const DONG_CO_BAO_HANH = {
+      ...DONG_CATALOG,
+      warrantyMonths: 144,
+      warrantyStartAt: new Date('2026-01-15T00:00:00Z'),
+    };
+
+    function danhSachDon(rows: readonly unknown[]): void {
+      orderRepo.findMany.mockResolvedValue(rows);
+    }
+
+    it('SĐT thô ⇒ 200 kèm khách + dòng bảo hành đã tính hạn', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      danhSachDon([DON_BAO_HANH]);
+      lineRepo.findMany.mockResolvedValue([DONG_CO_BAO_HANH]);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: '0912 345 678' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      // SĐT trả về đã chuẩn hoá — client gửi thô, nhận chuẩn (AD-9).
+      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.customer).toEqual({
+        sdt: SDT_E164,
+        name: KHACH.name,
+        custType: KHACH.custType,
+      });
+      const dong = res.body.orders[0].lineItems[0];
+      expect(dong.warrantyEndAt).toBe('2038-01-15T00:00:00.000Z');
+      expect(dong.warrantyStatus).toBe('con_han');
+    });
+
+    it('không có khách ⇒ 200 `found:false`, KHÔNG phải 404', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      customerRepo.findUnique.mockResolvedValue(null);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: '0912345678' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        found: false,
+        sdt: SDT_E164,
+        customer: null,
+        orders: [],
+      });
+    });
+
+    it('SĐT rác ⇒ 400 VALIDATION_ERROR kèm fieldErrors trỏ `sdt`', async () => {
+      givenPermissions(PERM.ordersViewAll);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: 'khong-phai-so' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('sdt');
+    });
+
+    it('thiếu CẢ hai quyền đọc đơn ⇒ 403', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: '0912345678' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(403);
+    });
+
+    it('chỉ view_own ⇒ 200 nhưng phạm vi DỮ LIỆU thu hẹp về đơn của chính người gọi', async () => {
+      // Ca 403 ở trên chỉ đo CỬA VÀO (guard). Cửa mở rồi, thứ quyết định người gọi thấy đơn
+      // của ai là bộ quyền mà handler chuyển XUỐNG service — và bộ đó phải là quyền THẬT của
+      // người gọi. Nếu handler chuyền một tập cố định có `view_all`, mọi ca khác vẫn xanh
+      // trong khi nhân viên chỉ có `view_own` đọc được đơn của người khác.
+      givenPermissions(PERM.ordersViewOwn);
+      danhSachDon([]);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: '0912345678' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(orderRepo.findMany).toHaveBeenCalledTimes(1);
+      expect(orderRepo.findMany.mock.calls[0][0].where).toEqual({
+        customerSdt: SDT_E164,
+        AND: [
+          {
+            OR: [
+              { ownerAccountId: ACCOUNT_ID },
+              { assigneeAccountId: ACCOUNT_ID },
+            ],
+          },
+        ],
+      });
+    });
+
+    it('KHÔNG rơi vào handler `@Get(":id")` — route tĩnh khai trước', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      danhSachDon([]);
+
+      const res = await request(server())
+        .get('/orders/tra-cuu-bao-hanh')
+        .query({ sdt: '0912345678' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      // Rơi vào `:id` sẽ cho 404 "Không tìm thấy đơn hàng: tra-cuu-bao-hanh" — một lỗi trông
+      // như lỗi dữ liệu. Hai assert: mã đúng, và đường đọc-theo-id KHÔNG hề được gọi.
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveProperty('found');
+      expect(orderRepo.findFirst).not.toHaveBeenCalled();
+    });
+  });
 });

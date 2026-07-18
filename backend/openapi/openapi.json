@@ -2152,6 +2152,63 @@
         ]
       }
     },
+    "/orders/tra-cuu-bao-hanh": {
+      "get": {
+        "operationId": "OrdersController_traCuuBaoHanh",
+        "parameters": [
+          {
+            "name": "sdt",
+            "required": true,
+            "in": "query",
+            "description": "SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.",
+            "schema": {
+              "example": "0903176968",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "LUÔN 200 — kể cả khi không có khách nào mang SĐT này (`found: false`). Kết quả ĐÃ thu hẹp theo quyền người gọi và chỉ gồm dòng CÓ bảo hành của bản hiệu lực; hạn/trạng thái do backend tính.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarrantyLookupResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "SĐT không hợp lệ (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}": {
       "get": {
         "operationId": "OrdersController_findOne",
@@ -5088,6 +5145,158 @@
           "subtotal",
           "afterDiscount",
           "lines"
+        ]
+      },
+      "WarrantyCustomerDto": {
+        "type": "object",
+        "properties": {
+          "sdt": {
+            "type": "string",
+            "example": "+84903176968"
+          },
+          "name": {
+            "type": "string",
+            "description": "Họ tên hoặc tên công ty."
+          },
+          "custType": {
+            "type": "string",
+            "description": "Loại khách: CA_NHAN | THUONG_MAI."
+          }
+        },
+        "required": [
+          "sdt",
+          "name",
+          "custType"
+        ]
+      },
+      "WarrantyLineItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Tên vật tư."
+          },
+          "qty": {
+            "type": "number"
+          },
+          "unit": {
+            "type": "string",
+            "example": "tấm"
+          },
+          "warrantyMonths": {
+            "type": "number",
+            "description": "Số tháng bảo hành của DÒNG này.",
+            "example": 60
+          },
+          "warrantyStartAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Ngày DÒNG NÀY chốt lần đầu (ISO-8601 UTC) — mốc theo DÒNG, không theo Đơn (FR-36): hai dòng cùng đơn được phép khác nhau."
+          },
+          "warrantyEndAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Hạn bảo hành (ISO-8601 UTC, luôn `00:00:00Z`) = `warrantyStartAt` + `warrantyMonths` tháng, kẹp về ngày cuối tháng đích."
+          },
+          "remainingDays": {
+            "type": "number",
+            "description": "Số ngày còn lại — ÂM khi đã hết hạn. Đây là số điều khiển `warrantyStatus`; client KHÔNG tự suy trạng thái từ nó.",
+            "example": 412
+          },
+          "remainingMonths": {
+            "type": "number",
+            "description": "Số tháng còn lại, làm tròn XUỐNG, sàn 0 — CHỈ để dựng câu hiển thị \"Còn 5 năm\".",
+            "example": 13
+          },
+          "warrantyStatus": {
+            "type": "string",
+            "description": "Trạng thái bảo hành — backend quyết, client chỉ ánh xạ ra màu + nhãn.",
+            "enum": [
+              "con_han",
+              "sap_het",
+              "het_han"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "qty",
+          "unit",
+          "warrantyMonths",
+          "warrantyStartAt",
+          "warrantyEndAt",
+          "remainingDays",
+          "remainingMonths",
+          "warrantyStatus"
+        ]
+      },
+      "WarrantyOrderDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "Trạng thái đơn — bộ khoá chip design-system."
+          },
+          "chotAt": {
+            "type": "object",
+            "nullable": true,
+            "description": "Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt."
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WarrantyLineItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "lineItems"
+        ]
+      },
+      "WarrantyLookupResponseDto": {
+        "type": "object",
+        "properties": {
+          "found": {
+            "type": "boolean",
+            "description": "Có khách hàng nào mang SĐT này chưa."
+          },
+          "sdt": {
+            "type": "string",
+            "description": "SĐT đã chuẩn hoá E.164 — trả về kể cả khi `found: false`.",
+            "example": "+84903176968"
+          },
+          "customer": {
+            "nullable": true,
+            "description": "Khách tìm được; `null` khi `found: false`.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WarrantyCustomerDto"
+              }
+            ]
+          },
+          "orders": {
+            "description": "Đơn của khách ĐÃ thu hẹp theo quyền người gọi, chỉ giữ đơn còn ít nhất một dòng có bảo hành.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WarrantyOrderDto"
+            }
+          }
+        },
+        "required": [
+          "found",
+          "sdt",
+          "customer",
+          "orders"
         ]
       },
       "OrderListItemDto": {

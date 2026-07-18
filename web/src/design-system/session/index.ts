@@ -43,6 +43,16 @@ export type {
 // WEB-ONLY on purpose (Story 4.4): system config is desk work — same decision as
 // customer-sources-port.ts, no Dart mirror. See the file header.
 export type { SettingsPort, SettingsPortError } from './settings-port';
+// Warranty-lookup seam (Story 5.9): READ-ONLY — the backend computes every date
+// and the status; the screen only renders them.
+export type {
+  WarrantyPort,
+  WarrantyLookup,
+  WarrantyOrder,
+  WarrantyLine,
+  WarrantyCustomer,
+  WarrantyPortError,
+} from './warranty-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -73,6 +83,7 @@ export {
 } from './fake-customer-sources-port';
 export { FakeOrdersPort } from './fake-orders-port';
 export { FakeSettingsPort } from './fake-settings-port';
+export { FakeWarrantyPort, DEMO_WARRANTY_ORDERS } from './fake-warranty-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

@@ -38,6 +38,13 @@ import {
 } from './domain/attachment-limits';
 import { diffDong, type ThayDoiBanUpdate } from './domain/version-diff';
 import { lineAmount } from './domain/line-amount';
+import {
+  soNgayConLai,
+  soThangConLai,
+  tinhHanBaoHanh,
+  trangThaiBaoHanh,
+  type TrangThaiBaoHanh,
+} from './domain/warranty';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
   AttachmentAdded,
@@ -215,6 +222,45 @@ export interface OrderVersionRow {
   readonly createdByDisplayName: string | null;
   readonly soDong: number;
   readonly thayDoi: ThayDoiBanUpdate;
+}
+
+/**
+ * Một dòng vật tư còn theo dõi bảo hành (Story 5.9). Mọi số ngày tháng do BACKEND tính —
+ * client không có thư viện ngày và không được tự suy trạng thái.
+ */
+export interface WarrantyLineView {
+  readonly id: string;
+  readonly name: string;
+  readonly qty: number;
+  readonly unit: string;
+  readonly warrantyMonths: number;
+  /** Ngày DÒNG NÀY chốt lần đầu — mốc theo DÒNG, không theo Đơn (FR-36, AD-20). */
+  readonly warrantyStartAt: Date;
+  readonly warrantyEndAt: Date;
+  /** Âm khi đã hết hạn — đây là số điều khiển `warrantyStatus`. */
+  readonly remainingDays: number;
+  readonly remainingMonths: number;
+  readonly warrantyStatus: TrangThaiBaoHanh;
+}
+
+/** Một đơn trong kết quả tra cứu bảo hành — chỉ dòng của bản hiệu lực (AD-6). */
+export interface WarrantyOrderView {
+  readonly id: string;
+  readonly status: string;
+  readonly chotAt: Date | null;
+  readonly lineItems: readonly WarrantyLineView[];
+}
+
+/** Kết quả `GET /orders/tra-cuu-bao-hanh` — "không có khách" là kết quả, không phải lỗi. */
+export interface WarrantyLookupView {
+  readonly found: boolean;
+  readonly sdt: string;
+  readonly customer: {
+    readonly sdt: string;
+    readonly name: string;
+    readonly custType: string;
+  } | null;
+  readonly orders: readonly WarrantyOrderView[];
 }
 
 /** Một item danh sách chờ duyệt chiết khấu (FR-18/FR-37) — số backend tính (AD-16). */
@@ -1346,6 +1392,134 @@ export class OrdersService {
         i === 0 ? [] : version.lineItems,
       ),
     }));
+  }
+
+  /**
+   * Tra cứu bảo hành theo SĐT khách (Story 5.9, FR-36) — ĐỌC THUẦN: không event, không ghi.
+   *
+   * Ba thứ backend làm hộ client, mỗi thứ vì một lý do khác nhau:
+   *  - **Chuẩn hoá SĐT** qua `normalizeVnPhone` — hàm DUY NHẤT biết cách dựng khoá chính
+   *    `Customer` (AD-9); client gửi chuỗi thô đúng như nhân viên gõ lúc khách gọi tới.
+   *  - **Số học ngày tháng** qua `domain/warranty` — cả web lẫn mobile đều không có thư viện
+   *    ngày, nên "start + N tháng" ở client là hai bản cài đặt của cùng một quy tắc có bẫy.
+   *  - **Phạm vi đọc** theo đúng mệnh đề của `findScopedOrThrow` — một đường tra cứu bỏ qua
+   *    phạm vi là một lỗ IDOR ngay cạnh nơi 5.3 vừa bịt.
+   *
+   * `now` là THAM SỐ (mặc định mốc hiện tại) và được lấy MỘT lần: mọi dòng phải so cùng một
+   * mốc, và test biên cần một mốc xác định.
+   */
+  async traCuuBaoHanh(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    sdtTho: string,
+    now: Date = new Date(),
+  ): Promise<WarrantyLookupView> {
+    const sdt = normalizeVnPhone(sdtTho);
+    if (sdt === null) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Số điện thoại không hợp lệ.',
+        [
+          {
+            field: 'sdt',
+            code: 'isPhoneNumber',
+            message:
+              'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).',
+          },
+        ],
+      );
+    }
+
+    const customer = await this.prisma.customer.findUnique({ where: { sdt } });
+    // Khách chưa có trong hệ thống là KẾT QUẢ hợp lệ của một phép tra, không phải lỗi — 404 ở
+    // đây buộc màn bắt exception cho một đường đi thành công (khuôn `customers/lookup`).
+    if (customer === null) {
+      return { found: false, sdt, customer: null, orders: [] };
+    }
+
+    const dieuKienPhamVi: Prisma.OrderWhereInput[] = [];
+    if (!quyen.has(PERM.ordersViewAll)) {
+      dieuKienPhamVi.push({
+        OR: [
+          { ownerAccountId: callerAccountId },
+          { assigneeAccountId: callerAccountId },
+        ],
+      });
+    }
+    const orders = await this.prisma.order.findMany({
+      where: { customerSdt: sdt, AND: dieuKienPhamVi },
+      include: { currentVersion: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Đơn chưa chốt không có bản hiệu lực — lọc TRƯỚC khi dựng `in`, đừng để `null` lọt vào.
+    const banHieuLuc = orders
+      .map((order) => order.currentVersionId)
+      .filter((id): id is string => id !== null);
+
+    // Dòng KHÔNG có bảo hành (công lắp, phí vận chuyển) bị loại ngay ở tầng API: endpoint tên
+    // là "tra cứu bảo hành", trả dòng không bảo hành là nhiễu cho người đang nghe máy.
+    const lines =
+      banHieuLuc.length === 0
+        ? []
+        : await this.prisma.orderLineItem.findMany({
+            where: {
+              orderVersionId: { in: banHieuLuc },
+              warrantyMonths: { not: null },
+              warrantyStartAt: { not: null },
+            },
+            orderBy: { displayOrder: 'asc' },
+          });
+
+    const theoBan = new Map<string, WarrantyLineView[]>();
+    for (const line of lines) {
+      // Hai field đã được `where` lọc, ép kiểu ở đây chỉ để TS thấy điều đó.
+      const startAt = line.warrantyStartAt as Date;
+      const months = line.warrantyMonths as number;
+      const endAt = tinhHanBaoHanh(startAt, months);
+      const ngayConLai = soNgayConLai(endAt, now);
+      const cua = theoBan.get(line.orderVersionId) ?? [];
+      cua.push({
+        id: line.id,
+        name: line.name,
+        qty: line.qty,
+        unit: line.unit,
+        warrantyMonths: months,
+        warrantyStartAt: startAt,
+        warrantyEndAt: endAt,
+        remainingDays: ngayConLai,
+        remainingMonths: soThangConLai(endAt, now),
+        warrantyStatus: trangThaiBaoHanh(ngayConLai),
+      });
+      theoBan.set(line.orderVersionId, cua);
+    }
+
+    return {
+      found: true,
+      sdt,
+      customer: {
+        sdt: customer.sdt,
+        name: customer.name,
+        custType: customer.custType,
+      },
+      orders: orders.flatMap((order) => {
+        const lineItems =
+          order.currentVersionId === null
+            ? []
+            : (theoBan.get(order.currentVersionId) ?? []);
+        // Đơn không còn dòng bảo hành nào biến mất khỏi kết quả (không phải hiện rỗng).
+        if (lineItems.length === 0) return [];
+        return [
+          {
+            id: order.id,
+            status: order.status,
+            chotAt: order.currentVersion?.chotAt ?? null,
+            lineItems,
+          },
+        ];
+      }),
+    };
   }
 
   /** Bản ghi Order ⇒ view response: nạp dòng của bản hiệu lực rồi phân giải qua `toViews`. */

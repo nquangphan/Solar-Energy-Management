@@ -30,6 +30,8 @@ test('the session module ships on BOTH platforms (twin files)', () => {
     'fake-orders-port.ts': 'fake_orders_port.dart',
     'catalog-port.ts': 'catalog_port.dart',
     'fake-catalog-port.ts': 'fake_catalog_port.dart',
+    'warranty-port.ts': 'warranty_port.dart',
+    'fake-warranty-port.ts': 'fake_warranty_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',
@@ -337,6 +339,64 @@ test('the orders port carries the Story 4.9 warranty surface on BOTH platforms (
   // is `5.0` (double) → "5.0 năm". The web twin's `/ 12` is safe (already known
   // divisible). Guarding the operator keeps the twins semantically identical.
   assert.ok(mobRow.includes('~/ 12'), 'mobile formatWarrantyMonths must use integer division `~/ 12` (60/12==5.0 would render "5.0 năm")');
+});
+
+test('the warranty port is the SAME one-method read contract on both platforms (Story 5.9)', () => {
+  const webPort = readFileSync(resolve(webDir, 'warranty-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'warranty_port.dart'), 'utf8');
+
+  assert.match(webPort, /lookup\(sdt: string\): Promise<WarrantyLookup>/, 'web WarrantyPort must expose lookup(sdt) => WarrantyLookup');
+  assert.match(mobPort, /Future<WarrantyLookup> lookup\(String sdt\)/, 'mobile WarrantyPort must expose lookup(sdt) => WarrantyLookup');
+
+  // The client never normalises the phone (AD-9) — both port docs must SAY so,
+  // because the rule is invisible in the signature: `sdt` is a String either way.
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(/NEVER NORMALISES A PHONE NUMBER/.test(src), `${name} warranty port doc must state that the client never normalises the phone (AD-9)`);
+  }
+
+  // Every computed field crosses the wire on BOTH twins. A field missing on one
+  // side is a screen that would have to compute it locally — the exact thing
+  // QĐ-4 forbids.
+  for (const field of ['warrantyEndAt', 'remainingDays', 'remainingMonths', 'warrantyStatus', 'warrantyStartAt', 'warrantyMonths']) {
+    assert.ok(webPort.includes(field), `web WarrantyLine missing ${field}`);
+    assert.ok(mobPort.includes(field), `mobile WarrantyLine missing ${field}`);
+  }
+});
+
+test('the warranty date formatter is a twin helper on BOTH screens (Story 5.9)', () => {
+  // Neither platform has a date library, so this ISO→DD/MM/YYYY slice had to be
+  // written twice. Pinned here for the same reason formatWarrantyMonths is: two
+  // copies of one rule drift the moment nobody is watching them together.
+  const webFmt = readFileSync(resolve(repoRoot, 'web/src/screens/warranty/format-ngay.ts'), 'utf8');
+  const mobScreen = readFileSync(resolve(repoRoot, 'mobile/lib/screens/warranty/warranty_lookup_screen.dart'), 'utf8');
+
+  assert.match(webFmt, /export function formatNgay\(/, 'web must expose formatNgay()');
+  assert.match(mobScreen, /String dinhDangNgay\(/, 'mobile must expose dinhDangNgay()');
+
+  // Both are a STRING SLICE, not a date parse: `warrantyEndAt` arrives at
+  // 00:00:00Z, and parsing it into a local Date would shift the day in UTC+7.
+  assert.ok(webFmt.includes('.slice(0, 10)'), 'web formatNgay must slice the ISO date part, not parse it');
+  assert.ok(mobScreen.includes('substring(0, 10)'), 'mobile dinhDangNgay must slice the ISO date part, not parse it');
+  // The fallback for a missing date is the SAME glyph on both sides.
+  assert.ok(webFmt.includes("'—'"), 'web formatNgay must fall back to —');
+  assert.ok(mobScreen.includes("'—'"), 'mobile dinhDangNgay must fall back to —');
+});
+
+test('the "how much is left" sentence is the SAME on both warranty screens (Story 5.9)', () => {
+  // `formatWarrantyMonths` prints ONE unit and reads 0 as "0 năm", so the line a
+  // staffer is actually on the phone about — weeks left, `remainingMonths == 0` —
+  // would say "Còn 0 năm" on a screen that fed it straight through. Both screens
+  // fall back to the day count the backend already sent; web has no widget test,
+  // so this pin is the only lane that sees the web half of that agreement.
+  const webScreen = readFileSync(resolve(repoRoot, 'web/src/screens/warranty/WarrantyLookupScreen.tsx'), 'utf8');
+  const mobScreen = readFileSync(resolve(repoRoot, 'mobile/lib/screens/warranty/warranty_lookup_screen.dart'), 'utf8');
+
+  for (const [name, src] of [['web', webScreen], ['mobile', mobScreen]]) {
+    assert.ok(/remainingMonths >= 1/.test(src), `${name} warranty screen must guard the month sentence on a WHOLE month (0 would render "0 năm")`);
+    assert.ok(/remainingDays > 0/.test(src), `${name} warranty screen must fall back to the backend's day count under one month`);
+    assert.ok(src.includes(' ngày'), `${name} warranty screen missing the day-count sentence`);
+    assert.ok(src.includes('Hết hạn hôm nay'), `${name} warranty screen must name the expiry day itself — "Còn 0 ngày" reads as expired`);
+  }
 });
 
 test('the settings port is a DELIBERATE web-only exception (Story 4.4)', () => {

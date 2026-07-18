@@ -68,10 +68,11 @@ describe('source-guard: gate `orders.view_*` chỉ mở cho đường ĐỌC (AC
   }
 
   /**
-   * Sáu route đọc được phép mang gate xem: danh sách (5.3), ba route của màn chi tiết (5.4),
+   * Bảy route đọc được phép mang gate xem: danh sách (5.3), ba route của màn chi tiết (5.4),
    * proxy đọc ảnh đính kèm (5.5) và danh sách ảnh của đơn (5.6) — ảnh của đơn là dữ liệu của
    * đơn, nên nó chịu đúng phạm vi và đúng gate của đơn; service `findScopedOrThrow` TRƯỚC khi
-   * chạm dữ liệu ảnh hay R2.
+   * chạm dữ liệu ảnh hay R2 — và tra cứu bảo hành (5.9): dữ liệu trả về LÀ nội dung đơn, đã
+   * thu hẹp theo cùng mệnh đề phạm vi, nên nó dùng đúng gate của đơn thay vì đẻ khoá quyền mới.
    * Danh sách này là HỢP ĐỒNG — thêm dòng vào đây là một quyết định, không phải một lần trượt tay.
    */
   const ROUTE_DOC_MO_QUYEN_XEM = new Set([
@@ -81,6 +82,7 @@ describe('source-guard: gate `orders.view_*` chỉ mở cho đường ĐỌC (AC
     'Get :id/phien-ban',
     'Get :id/anh/:attachmentId',
     'Get :id/anh',
+    'Get tra-cuu-bao-hanh',
   ]);
 
   const routes = docBoRoute();

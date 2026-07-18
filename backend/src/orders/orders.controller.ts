@@ -69,6 +69,8 @@ import { CancelOrderResponseDto } from './dto/cancel-order-response.dto';
 import { StatusChangeResponseDto } from './dto/status-change-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
+import { WarrantyLookupQueryDto } from './dto/warranty-lookup-query.dto';
+import { WarrantyLookupResponseDto } from './dto/warranty-lookup-response.dto';
 import { OrdersService } from './orders.service';
 import { QuoteExportService } from './quote-export.service';
 
@@ -219,6 +221,41 @@ export class OrdersController {
       permissions.has(PERM.costsView),
       await this.tieredPricingEnabled(),
     )) as DiscountPendingItemDto[];
+  }
+
+  /**
+   * Tra cứu bảo hành theo SĐT khách (Story 5.9, FR-36) — route TĨNH, khai TRƯỚC `@Get(':id')`
+   * theo kỷ luật thứ tự route của file này: đặt sau, `:id` nuốt chuỗi `"tra-cuu-bao-hanh"` và
+   * endpoint trả 404 "Không tìm thấy đơn hàng" — một lỗi trông như lỗi dữ liệu.
+   *
+   * Gate = cùng cặp quyền ĐỌC ĐƠN (OR): dữ liệu trả về LÀ nội dung đơn, nên quyền đọc đơn là
+   * đúng loại quyền — không đẻ khoá quyền mới cho một đường đọc thứ n. Phạm vi DỮ LIỆU do
+   * service thu hẹp theo cùng bộ quyền (AD-4).
+   */
+  @Get('tra-cuu-bao-hanh')
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiOkResponse({
+    type: WarrantyLookupResponseDto,
+    description:
+      'LUÔN 200 — kể cả khi không có khách nào mang SĐT này (`found: false`). Kết quả ĐÃ thu hẹp theo quyền người gọi và chỉ gồm dòng CÓ bảo hành của bản hiệu lực; hạn/trạng thái do backend tính.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description: 'SĐT không hợp lệ (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  async traCuuBaoHanh(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Query() query: WarrantyLookupQueryDto,
+  ): Promise<WarrantyLookupResponseDto> {
+    return (await this.orders.traCuuBaoHanh(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      query.sdt,
+    )) as WarrantyLookupResponseDto;
   }
 
   /**
