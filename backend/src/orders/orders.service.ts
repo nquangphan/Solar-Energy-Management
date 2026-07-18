@@ -18,6 +18,7 @@ import {
 } from './domain/discount-approval-status';
 import {
   SU_KIEN,
+  daTaiDich,
   evaluateTransition,
   type TransitionEvent,
 } from './domain/allowed-transition';
@@ -228,6 +229,13 @@ const AP_CK_GATE_THUA = new Error('ap-ck-gate-thua');
  */
 const DUYET_CK_GATE_THUA = new Error('duyet-ck-gate-thua');
 
+/**
+ * Sentinel abort transaction Auto-transition (Story 5.2) — cùng khuôn `CHOT_GATE_THUA`: bên
+ * thua cổng atomic rollback toàn tx, caller đọc lại rồi quyết. Khác một điểm: ở đường auto,
+ * "đã tới đích" là RETRY chứ không phải xung đột ⇒ kẻ thua trả no-op im lặng, không 409.
+ */
+const TU_DONG_GATE_THUA = new Error('tu-dong-gate-thua');
+
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
   return {
@@ -409,6 +417,80 @@ export class OrdersService {
       orderSnapshot(after),
       input.occurredAt,
     );
+  }
+
+  /**
+   * CỬA VÀO CÔNG KHAI DUY NHẤT cho auto-transition (Story 5.2, AD-11/AD-7) — `payments/`
+   * (7.2) và `inventory/` (6.x) gọi method NÀY thay vì phát minh một đường ghi status riêng.
+   *
+   * Method này KHÔNG sở hữu một luật transition nào: hợp lệ hay không vẫn do CÙNG
+   * `applyTransition()` mà `confirm`/`revise`/`applyDiscount` đi qua, và đích đến vẫn do
+   * bảng quyết. Nó chỉ sở hữu ba thứ: cổng no-op, ranh giới transaction, và publish.
+   *
+   * QUYỀN LÀ CỦA ACTOR THẬT, KHÔNG CÓ BYPASS: `actorPermissions` nhận TỪ CALLER (controller
+   * resolve tươi mỗi request qua `AccountPermissionsService`) — không có tham số "chạy với
+   * toàn quyền", không có hằng toàn quyền trong `orders/`. Sự kiện auto luôn có con người ở
+   * đầu nguồn: người ghi nhận thanh toán cầm `payments.record`, đúng key mà dòng `duCoc` đòi.
+   * Nhờ vậy gate AD-7 còn hiệu lực VÀ audit truy được về người thật.
+   *
+   * IDEMPOTENT (NFR-1 — caller đầu tiên của cửa này là ghi nhận tiền, phải retry được an
+   * toàn): đơn đã ở CHÍNH đích của sự kiện ⇒ no-op im lặng, không đổi status, không event
+   * thứ hai, không dòng audit thứ hai, KHÔNG 409. Cổng suy từ BẢNG (`daTaiDich`), không từ
+   * một danh sách cặp status/event chép tay ở đây.
+   *
+   * ⚠️ RANH GIỚI TRANSACTION: method tự mở transaction của NÓ, không chạy trong tx của
+   * caller — `payments/` không được cầm `tx` của `orders/` (hai module, hai aggregate) và
+   * engine cần khoá dòng đơn ở đúng phạm vi của mình. Đánh đổi phải biết: giữa "Payment
+   * commit" và "status đổi" có một khe; chấp nhận được vì cửa này idempotent nên caller
+   * retry được.
+   *
+   * Chỉ MỘT event: `StatusChanged`. Event nghiệp vụ đi kèm (`DepositRecorded`…) là của
+   * `payments/` ở 7.2, không phải của `orders/`.
+   */
+  async chuyenTrangThaiTuDong(input: {
+    readonly orderId: string;
+    readonly event: TransitionEvent;
+    readonly actorAccountId: string;
+    readonly actorPermissions: ReadonlySet<string>;
+  }): Promise<void> {
+    const before = await this.findOrThrow(input.orderId);
+    // FAST-PATH no-op: sự kiện tới lần thứ hai (retry mạng / ghi nhận thanh toán lặp) trên
+    // một đơn đã ở đích — không mở transaction, không khoá, không publish.
+    if (daTaiDich(before.status, input.event)) return;
+
+    // MỘT timestamp cho MỘT sự kiện.
+    const occurredAt = new Date();
+    let statusChanged: StatusChanged;
+    try {
+      statusChanged = await this.prisma.$transaction(async (tx) =>
+        // Engine là op ĐẦU TIÊN của tx: đánh giá guard → khoá dòng → cổng atomic theo status
+        // quan sát được → sentinel nếu thua.
+        this.applyTransition(tx, {
+          order: before,
+          event: input.event,
+          actorPermissions: input.actorPermissions,
+          actorAccountId: input.actorAccountId,
+          sentinel: TU_DONG_GATE_THUA,
+          occurredAt,
+        }),
+      );
+    } catch (error) {
+      // Bắt theo IDENTITY — mọi lỗi khác (403, 409 ngoài bảng/sai cờ) ném tiếp nguyên vẹn.
+      if (error !== TU_DONG_GATE_THUA) throw error;
+      // Thua cuộc đua: đọc lại sự thật. Nếu đơn đã ở đích thì kẻ thua vừa thấy đúng kết quả
+      // mình muốn ⇒ no-op, không 409 (hai lần ghi nhận cùng một khoản tiền không được biến
+      // thành một lỗi cho người dùng).
+      const current = await this.findOrThrow(input.orderId);
+      if (daTaiDich(current.status, input.event)) return;
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+      );
+    }
+
+    // SAU commit (AD-18) — producer không gọi audit/FCM trực tiếp.
+    await this.eventBus.publish(statusChanged);
   }
 
   /**
@@ -1553,7 +1635,15 @@ export class OrdersService {
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.lockOrderRow(tx, orderId);
       // Đọc lại status TRONG tx sau khi có khoá — `assertMutable` ở trên chỉ là fast-path.
-      this.assertMutable(await this.findOrThrowIn(tx, orderId));
+      const trongTx = await this.findOrThrowIn(tx, orderId);
+      this.assertMutable(trongTx);
+      // Và con trỏ bản hiệu lực cũng phải đọc LẠI: dòng phải thuộc bản ĐANG hiệu lực tại
+      // thời điểm ghi, không phải bản đã thấy lúc fast-path.
+      await this.findLineOrThrowIn(
+        tx,
+        this.currentVersionIdOrThrow(trongTx),
+        lineId,
+      );
       return tx.orderLineItem.update({
         where: { id: lineId },
         // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `note: null` xoá ghi chú.
@@ -1597,7 +1687,15 @@ export class OrdersService {
     await this.prisma.$transaction(async (tx) => {
       await this.lockOrderRow(tx, orderId);
       // Đọc lại status TRONG tx sau khi có khoá — `assertMutable` ở trên chỉ là fast-path.
-      this.assertMutable(await this.findOrThrowIn(tx, orderId));
+      const trongTx = await this.findOrThrowIn(tx, orderId);
+      this.assertMutable(trongTx);
+      // Con trỏ bản hiệu lực đọc LẠI trong tx (cùng lý do với `updateLine`): xoá theo con trỏ
+      // cũ là xoá dòng của một bản đã bị thay thế.
+      await this.findLineOrThrowIn(
+        tx,
+        this.currentVersionIdOrThrow(trongTx),
+        lineId,
+      );
       await tx.orderLineItem.delete({ where: { id: lineId } });
     });
 
@@ -1619,8 +1717,28 @@ export class OrdersService {
     order: Order,
     lineId: string,
   ): Promise<OrderLineItem> {
-    const versionId = this.currentVersionIdOrThrow(order);
-    const line = await this.prisma.orderLineItem.findUnique({
+    return this.findLineOrThrowIn(
+      this.prisma,
+      this.currentVersionIdOrThrow(order),
+      lineId,
+    );
+  }
+
+  /**
+   * Như `findLineOrThrow` nhưng đọc qua client được truyền vào và nhận con trỏ bản hiệu lực
+   * TƯỜNG MINH — dùng để validate lại BÊN TRONG tx sau khi đã cầm khoá.
+   *
+   * Vì sao con trỏ phải là tham số chứ không suy từ `order` đọc ngoài tx: một cặp `chot` +
+   * `mo_lai` chen vào cửa sổ đưa status VỀ LẠI `baogia` (nên `assertMutable` vẫn qua) nhưng
+   * đã repoint sang bản mới. Ghi theo con trỏ cũ là thao tác trên dòng của một bản ĐÃ CHẾT:
+   * dữ liệu mồ côi, không lỗi nào nổi lên.
+   */
+  private async findLineOrThrowIn(
+    tx: PrismaTx,
+    versionId: string,
+    lineId: string,
+  ): Promise<OrderLineItem> {
+    const line = await tx.orderLineItem.findUnique({
       where: { id: lineId },
     });
     if (line === null || line.orderVersionId !== versionId) {

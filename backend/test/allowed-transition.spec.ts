@@ -2,6 +2,7 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import {
   ALLOWED_TRANSITIONS,
   SU_KIEN,
+  daTaiDich,
   evaluateTransition,
   type OrderScopeFlags,
 } from '../src/orders/domain/allowed-transition';
@@ -210,6 +211,58 @@ describe('allowed-transition (domain thuần)', () => {
         }
       }
       expect(ketCuc).toEqual([]);
+    });
+  });
+
+  /**
+   * Cổng no-op của đường AUTO (Story 5.2, AC-5): "đơn đã ở CHÍNH cái đích mà sự kiện này
+   * nhắm tới" ⇒ retry, không phải xung đột.
+   *
+   * Suy từ BẢNG, không hardcode cặp status/event ở call-site — bảng là nguồn chân lý duy
+   * nhất, một bảng liệt kê thứ hai trong service là điểm drift đúng loại 5.1 vừa đóng.
+   */
+  describe('daTaiDich — cổng no-op idempotent cho đường auto', () => {
+    it('đúng cho đích của mỗi dòng bảng (mọi dòng, không liệt kê tay)', () => {
+      for (const rule of ALLOWED_TRANSITIONS) {
+        expect(daTaiDich(rule.to, rule.event)).toBe(true);
+      }
+    });
+
+    it('đúng cho `dacoc` + duCoc — đích chính tắc của mốc cọc', () => {
+      expect(daTaiDich('dacoc', SU_KIEN.duCoc)).toBe(true);
+    });
+
+    it('đúng cho hoanThanh bất kể đơn đi qua nhánh `from` nào trong ba nhánh', () => {
+      const nhanh = ALLOWED_TRANSITIONS.filter(
+        (rule) => rule.event === SU_KIEN.hoanThanh,
+      );
+      // Ba dòng `from` khác nhau (nghiemthu, dagiao, dachot) nhưng CÙNG một đích.
+      expect(nhanh).toHaveLength(3);
+      for (const rule of nhanh) {
+        expect(daTaiDich(rule.to, SU_KIEN.hoanThanh)).toBe(true);
+      }
+    });
+
+    it('SAI cho `dachot` + duCoc — đó là điểm XUẤT PHÁT, chưa phải đích', () => {
+      expect(daTaiDich('dachot', SU_KIEN.duCoc)).toBe(false);
+    });
+
+    it('cổng no-op KHÔNG được nuốt một transition hợp lệ: không sự kiện nào có `to` trùng một `from` của chính nó', () => {
+      // Nếu bảng có cả `X: a → b` lẫn `X: b → c` thì đơn đang ở `b` gặp sự kiện `X` sẽ bị
+      // fast-path `daTaiDich` trả no-op — một bước hợp lệ biến mất IM LẶNG, không lỗi nào nổi
+      // lên. Hôm nay bảng không có cặp nào như vậy; test này khoá lại để nó không mọc ra.
+      const xungDot = ALLOWED_TRANSITIONS.filter((rule) =>
+        daTaiDich(rule.from, rule.event),
+      ).map((rule) => `${rule.event}: ${rule.from} → ${rule.to}`);
+
+      expect(xungDot).toEqual([]);
+    });
+
+    it('SAI khi không dòng nào của sự kiện có `to` khớp status', () => {
+      // `duCoc` chỉ dẫn tới `dacoc`; đơn đang `hoanthanh` không phải đích của nó.
+      expect(daTaiDich('hoanthanh', SU_KIEN.duCoc)).toBe(false);
+      // Và một status không tồn tại trong bảng thì đương nhiên không phải đích của gì cả.
+      expect(daTaiDich('khong_ton_tai', SU_KIEN.hoanThanh)).toBe(false);
     });
   });
 });

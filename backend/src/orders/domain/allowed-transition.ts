@@ -235,3 +235,24 @@ export function evaluateTransition(input: {
   }
   return { ok: true, to: rule.to };
 }
+
+/**
+ * Đơn ĐÃ Ở CHÍNH CÁI ĐÍCH mà sự kiện này nhắm tới chưa? Hàm THUẦN — suy từ BẢNG, không từ
+ * một danh sách cặp status/event chép tay ở call-site (bảng là nguồn chân lý duy nhất; một
+ * bảng thứ hai là điểm drift).
+ *
+ * Dùng cho cổng no-op của đường AUTO (Story 5.2): sự kiện thanh toán tới lần thứ hai (retry
+ * mạng, ghi nhận lặp) mà đơn đã ở đích ⇒ đó là RETRY, không phải xung đột — trả no-op, không
+ * 409, không event thứ hai (NFR-1: thao tác tiền idempotent).
+ *
+ * ⚠️ KHÔNG dùng cho transition THỦ CÔNG (5.5): ở đó "đã ở đích" nhiều khả năng là người bấm
+ * hai lần và hợp đồng UI có thể muốn báo lỗi. Tổng quát hoá sớm là một quyết định UX chưa ai ra.
+ *
+ * `hoanThanh` có ba dòng `from` cùng đích — `some` phủ cả ba mà không cần biết đơn đã đi
+ * nhánh nào.
+ */
+export function daTaiDich(status: string, event: TransitionEvent): boolean {
+  return ALLOWED_TRANSITIONS.some(
+    (row) => row.event === event && row.to === status,
+  );
+}

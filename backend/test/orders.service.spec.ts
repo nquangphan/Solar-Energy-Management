@@ -3205,6 +3205,255 @@ describe('OrdersService', () => {
     });
   });
 
+  /**
+   * Story 5.2 — cửa vào CÔNG KHAI DUY NHẤT cho auto-transition. Method này KHÔNG sở hữu một
+   * luật transition nào: nó chỉ sở hữu phần *no-op + transaction + publish*, còn hợp lệ hay
+   * không vẫn do CÙNG `applyTransition()` mà `confirm`/`revise` đi qua (AD-11).
+   */
+  describe('chuyenTrangThaiTuDong — auto-transition qua CÙNG engine (Story 5.2)', () => {
+    const DON_DA_CHOT: Order = { ...DON_BAOGIA, status: 'dachot' };
+
+    it('AC-1: đủ cọc trên đơn đã chốt ⇒ cổng atomic ghi dachot → dacoc, publish StatusChanged của actor', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      await service.chuyenTrangThaiTuDong({
+        orderId: DON_DA_CHOT.id,
+        event: SU_KIEN.duCoc,
+        actorAccountId: ACTOR,
+        actorPermissions: TOAN_QUYEN,
+      });
+
+      // WHERE dùng status QUAN SÁT ĐƯỢC, `data` mang ĐÚNG đích của bảng — không literal nào
+      // do call-site tự chế.
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_DA_CHOT.id, status: 'dachot' },
+        data: { status: 'dacoc' },
+      });
+      // ĐÚNG MỘT event: auto-transition không có event nghiệp vụ đi kèm ở story này
+      // (`DepositRecorded` là của 7.2 và do `payments/` publish).
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      const event = eventBus.publish.mock.calls[0][0] as StatusChanged;
+      expect(event).toBeInstanceOf(StatusChanged);
+      expect({
+        actorAccountId: event.actorAccountId,
+        truoc: event.before.status,
+        sau: event.after.status,
+      }).toEqual({
+        actorAccountId: ACTOR,
+        truoc: 'dachot',
+        sau: 'dacoc',
+      });
+    });
+
+    it('AC-5: đơn ĐÃ ở đích + cùng sự kiện ⇒ no-op — KHÔNG mở transaction, KHÔNG publish, KHÔNG ném', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dacoc',
+      });
+
+      await expect(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_BAOGIA.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: TOAN_QUYEN,
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(transaction).not.toHaveBeenCalled();
+      expect(queryRaw).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('AC-5: thua cuộc đua (cổng count 0) nhưng đọc lại thấy ĐÃ tới đích ⇒ no-op, không 409', async () => {
+      // Kẻ thua cuộc đua thấy đúng kết quả mình muốn ⇒ retry thành công, không phải xung đột.
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_DA_CHOT)
+        .mockResolvedValue({ ...DON_BAOGIA, status: 'dacoc' });
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_DA_CHOT.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: TOAN_QUYEN,
+        }),
+      ).resolves.toBeUndefined();
+
+      // Kẻ thua KHÔNG publish — nếu không, một sự kiện thanh toán đẻ ra hai `StatusChanged`.
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('thua cuộc đua và đọc lại thấy đơn ĐI CHỖ KHÁC ⇒ 409 (không nuốt im lặng)', async () => {
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_DA_CHOT)
+        .mockResolvedValue({ ...DON_BAOGIA, status: 'huy' });
+      txOrderRepo.updateMany.mockResolvedValue({ count: 0 });
+
+      const err = await bat(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_DA_CHOT.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: TOAN_QUYEN,
+        }),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.getStatus()).toBe(409);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('AC-6: bộ quyền RỖNG ⇒ 403 — không khoá dòng nào, không lệnh ghi nào, không event', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      const err = await bat(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_DA_CHOT.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: new Set(),
+        }),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.FORBIDDEN);
+      expect(err.getStatus()).toBe(403);
+      // Bằng chứng KHÔNG có đường bypass: engine nhận đúng bộ quyền của actor, và nó từ chối
+      // TRƯỚC op DB đầu tiên.
+      expect(queryRaw).not.toHaveBeenCalled();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('AC-6: quyền của actor được truyền NGUYÊN VẸN — thiếu đúng key mà bảng đòi cũng là 403', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      // Có mọi quyền TRỪ `payments.record` — đúng key mà dòng `duCoc` đòi.
+      const thieuMotKey = new Set(
+        Object.values(PERM).filter((key) => key !== PERM.paymentsRecord),
+      );
+      const err = await bat(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_DA_CHOT.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: thieuMotKey,
+        }),
+      );
+
+      expect(err.getStatus()).toBe(403);
+    });
+
+    it('tất toán trên đơn `dachot` KHÔNG cờ Thiết bị ⇒ 409 phạm vi (đơn thi công không đi tắt)', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_DA_CHOT,
+        scopeThietBi: false,
+        scopeThiCong: true,
+      });
+
+      const err = await bat(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_DA_CHOT.id,
+          event: SU_KIEN.hoanThanh,
+          actorAccountId: ACTOR,
+          actorPermissions: TOAN_QUYEN,
+        }),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe('Bước này không thuộc phạm vi của đơn.');
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('tất toán trên đơn `dachot` CÓ cờ Thiết bị ⇒ đi được thẳng tới hoanthanh', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      await service.chuyenTrangThaiTuDong({
+        orderId: DON_DA_CHOT.id,
+        event: SU_KIEN.hoanThanh,
+        actorAccountId: ACTOR,
+        actorPermissions: TOAN_QUYEN,
+      });
+
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_DA_CHOT.id, status: 'dachot' },
+        data: { status: 'hoanthanh' },
+      });
+    });
+
+    it('sự kiện ngoài bảng từ trạng thái hiện tại (duCoc khi đang baogia) ⇒ 409, không ghi status', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
+
+      const err = await bat(
+        service.chuyenTrangThaiTuDong({
+          orderId: DON_BAOGIA.id,
+          event: SU_KIEN.duCoc,
+          actorAccountId: ACTOR,
+          actorPermissions: TOAN_QUYEN,
+        }),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(
+        'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+      );
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it("AD-18: thứ tự ['write','publish'] — StatusChanged rời khỏi đây SAU commit", async () => {
+      // Publish BÊN TRONG tx thì một rollback sau đó để lại event nói về một transition chưa
+      // từng xảy ra: audit ghi đơn đã cọc trong khi DB vẫn `dachot`. Không lane nào khác quan
+      // sát được thứ tự này — mock `$transaction` gọi callback đồng bộ nên "trong" và "ngoài"
+      // cho ra cùng kết quả ở mọi assertion khác.
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+      const thuTu: string[] = [];
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => {
+          const ketQua = await callback(txMock);
+          thuTu.push('write');
+          return ketQua;
+        },
+      );
+      eventBus.publish.mockImplementation(async () => {
+        thuTu.push('publish');
+      });
+
+      await service.chuyenTrangThaiTuDong({
+        orderId: DON_DA_CHOT.id,
+        event: SU_KIEN.duCoc,
+        actorAccountId: ACTOR,
+        actorPermissions: TOAN_QUYEN,
+      });
+
+      expect(thuTu).toEqual(['write', 'publish']);
+    });
+
+    it('KHOÁ DÒNG là op ĐẦU TIÊN chạm DB, trước cổng atomic', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+      const thuTu: string[] = [];
+      queryRaw.mockImplementation(async () => {
+        thuTu.push('lock');
+        return [{ id: DON_DA_CHOT.id }];
+      });
+      txOrderRepo.updateMany.mockImplementation(async () => {
+        thuTu.push('updateMany');
+        return { count: 1 };
+      });
+
+      await service.chuyenTrangThaiTuDong({
+        orderId: DON_DA_CHOT.id,
+        event: SU_KIEN.duCoc,
+        actorAccountId: ACTOR,
+        actorPermissions: TOAN_QUYEN,
+      });
+
+      expect(thuTu).toEqual(['lock', 'updateMany']);
+    });
+  });
+
   /** Task 6: mutator nội dung cũng phải lấy CÙNG khoá — khoá một phía là false-green. */
   describe('mutator nội dung — khoá dòng đơn + đọc lại status TRONG tx', () => {
     it.each([
@@ -3280,6 +3529,70 @@ describe('OrdersService', () => {
       expect(err.errorCode).toBe(ErrorCode.CONFLICT);
       expect(err.getStatus()).toBe(409);
       expect(lineRepo.create).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Nợ L-1 giao lại từ review 5.1. `assertMutable` đọc lại trong tx CHƯA đủ: một cặp
+     * `chot` + `mo_lai` chen vào cửa sổ đưa status VỀ LẠI `baogia` (nên `assertMutable` vẫn
+     * qua) nhưng đã repoint con trỏ sang bản MỚI. `lineId` được validate theo con trỏ đọc
+     * NGOÀI tx sẽ trỏ vào dòng của bản ĐÃ CHẾT — thao tác ghi thành công vào dữ liệu mồ côi,
+     * không một lỗi nào nổi lên.
+     */
+    describe('L-1: con trỏ bản hiệu lực cũng phải đọc LẠI trong tx', () => {
+      /** Ngoài tx: bản cũ. Trong tx: đã repoint sang bản mới ⇒ dòng cũ không còn thuộc bản. */
+      function repointGiuaChung(): void {
+        orderRepo.findUnique
+          .mockResolvedValueOnce(DON_BAOGIA)
+          .mockResolvedValue({ ...DON_BAOGIA, currentVersionId: 'ver-2' });
+      }
+
+      it('updateLine: dòng thuộc bản ĐÃ CHẾT ⇒ 404, KHÔNG lệnh ghi nào', async () => {
+        repointGiuaChung();
+
+        const err = await bat(
+          service.updateLine(
+            ACTOR,
+            DON_BAOGIA.id,
+            DONG_CATALOG.id,
+            { qty: 3 },
+            true,
+          ),
+        );
+
+        expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
+        expect(err.getStatus()).toBe(404);
+        expect(lineRepo.update).not.toHaveBeenCalled();
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      });
+
+      it('removeLine: dòng thuộc bản ĐÃ CHẾT ⇒ 404, KHÔNG xoá gì', async () => {
+        repointGiuaChung();
+
+        const err = await bat(
+          service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id),
+        );
+
+        expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
+        expect(err.getStatus()).toBe(404);
+        expect(lineRepo.delete).not.toHaveBeenCalled();
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      });
+
+      it('con trỏ KHÔNG đổi ⇒ cả hai vẫn đi bình thường (guard không chặn đường lành)', async () => {
+        lineRepo.update.mockResolvedValue({ ...DONG_CATALOG, qty: 3 });
+
+        await service.updateLine(
+          ACTOR,
+          DON_BAOGIA.id,
+          DONG_CATALOG.id,
+          { qty: 3 },
+          true,
+        );
+        await service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id);
+
+        expect(lineRepo.update).toHaveBeenCalled();
+        expect(lineRepo.delete).toHaveBeenCalled();
+      });
     });
   });
 });

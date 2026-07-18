@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
+import { SU_KIEN } from '../src/orders/domain/allowed-transition';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 
@@ -355,6 +356,174 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
               409,
             );
           }
+        }
+      }
+    });
+  });
+
+  /**
+   * Story 5.2 — cửa auto-transition dưới ĐUA THẬT trên Postgres.
+   *
+   * Hai lần ghi nhận CÙNG một khoản tiền (retry mạng, webhook lặp) tới cùng lúc. Bất biến
+   * NFR-1: đúng MỘT lần đổi status, đúng MỘT `StatusChanged`, kẻ thua trả no-op — KHÔNG ném
+   * 409 vào mặt người vừa ghi nhận tiền lần thứ hai.
+   *
+   * Nhiều vòng, KHÔNG delay nhân tạo: `setTimeout` chỉ ép được một thứ tự và xanh giả kể cả
+   * khi đã gỡ nhánh no-op sau sentinel (bài học 5.1).
+   */
+  describe('Story 5.2 — auto-transition idempotent dưới đua thật', () => {
+    const TOAN_QUYEN: ReadonlySet<string> = new Set(Object.values(PERM));
+    const SO_VONG = 12;
+
+    /** Bus GHI LẠI event — bất biến "một sự kiện một event" chỉ quan sát được qua đây. */
+    let daPublish: { type: string; after?: { status: string } }[];
+    let serviceCoBus: OrdersService;
+
+    beforeEach(() => {
+      daPublish = [];
+      serviceCoBus = new OrdersService(
+        prisma as unknown as PrismaService,
+        {
+          publish: async (event: unknown) => {
+            daPublish.push(
+              event as { type: string; after?: { status: string } },
+            );
+          },
+          subscribe: () => {},
+        } as unknown as EventBus,
+      );
+    });
+
+    it('hai auto-transition song song ⇒ MỘT lần đổi status, MỘT StatusChanged, kẻ thua no-op', async () => {
+      for (let vong = 0; vong < SO_VONG; vong++) {
+        const don = await serviceCoBus.create(accountId, { customerSdt: SDT });
+        await serviceCoBus.addLine(
+          accountId,
+          don.id,
+          { productId, qty: 1 },
+          false,
+        );
+        await serviceCoBus.confirm(accountId, don.id, 8, false, TOAN_QUYEN);
+        // Chỉ đếm event của cuộc đua, không tính event của bước dựng đơn.
+        daPublish = [];
+
+        const goi = () =>
+          serviceCoBus.chuyenTrangThaiTuDong({
+            orderId: don.id,
+            event: SU_KIEN.duCoc,
+            actorAccountId: accountId,
+            actorPermissions: TOAN_QUYEN,
+          });
+        const ketQua = await Promise.allSettled([goi(), goi()]);
+
+        const sauCung = await prisma.order.findUniqueOrThrow({
+          where: { id: don.id },
+        });
+        const doiSangDaCoc = daPublish.filter(
+          (e) => e.type === 'StatusChanged' && e.after?.status === 'dacoc',
+        );
+
+        // Đúng một lần đổi, đúng một vết — hai vết cho một khoản tiền là audit nói dối.
+        expect({
+          vong,
+          status: sauCung.status,
+          soEvent: doiSangDaCoc.length,
+          soThatBai: ketQua.filter((kq) => kq.status === 'rejected').length,
+        }).toEqual({ vong, status: 'dacoc', soEvent: 1, soThatBai: 0 });
+      }
+    });
+
+    it('gọi lại sau khi ĐÃ tới đích ⇒ no-op tuyệt đối: không event, không đổi updatedAt', async () => {
+      const don = await serviceCoBus.create(accountId, { customerSdt: SDT });
+      await serviceCoBus.addLine(
+        accountId,
+        don.id,
+        { productId, qty: 1 },
+        false,
+      );
+      await serviceCoBus.confirm(accountId, don.id, 8, false, TOAN_QUYEN);
+      await serviceCoBus.chuyenTrangThaiTuDong({
+        orderId: don.id,
+        event: SU_KIEN.duCoc,
+        actorAccountId: accountId,
+        actorPermissions: TOAN_QUYEN,
+      });
+      const sauLanDau = await prisma.order.findUniqueOrThrow({
+        where: { id: don.id },
+      });
+      daPublish = [];
+
+      await serviceCoBus.chuyenTrangThaiTuDong({
+        orderId: don.id,
+        event: SU_KIEN.duCoc,
+        actorAccountId: accountId,
+        actorPermissions: TOAN_QUYEN,
+      });
+
+      const sauLanHai = await prisma.order.findUniqueOrThrow({
+        where: { id: don.id },
+      });
+      expect(daPublish).toEqual([]);
+      // Không lệnh ghi nào chạm dòng đơn — `updatedAt` là bằng chứng ở tầng DB.
+      expect(sauLanHai.updatedAt).toEqual(sauLanDau.updatedAt);
+    });
+  });
+
+  /**
+   * Nợ L-1 (giao lại từ review 5.1): `updateLine` validate `lineId` theo con trỏ version đọc
+   * NGOÀI tx. Một cặp `chot` + `mo_lai` chen giữa đưa status VỀ LẠI `baogia` (nên
+   * `assertMutable` trong tx vẫn qua) nhưng đã repoint sang bản mới.
+   *
+   * Bất biến bắt được lỗi mà không cần biết ai thắng: `updateLine` mà THÀNH CÔNG thì thay đổi
+   * PHẢI nhìn thấy được ở BẢN ĐANG HIỆU LỰC. Ghi vào bản đã chết là "thành công" mà số cũ
+   * vẫn nguyên trên báo giá — mất dữ liệu im lặng, không lỗi nào nổi lên.
+   */
+  describe('L-1: sửa dòng đua với cặp chốt + mở lại (con trỏ version đọc trong tx)', () => {
+    const TOAN_QUYEN: ReadonlySet<string> = new Set(Object.values(PERM));
+    const SO_VONG = 12;
+    const QTY_MOI = 9;
+
+    it('updateLine thành công ⇒ thay đổi nằm ở BẢN HIỆU LỰC (không dòng nào rơi vào bản đã chết)', async () => {
+      for (let vong = 0; vong < SO_VONG; vong++) {
+        const don = await service.create(accountId, { customerSdt: SDT });
+        const dong = await service.addLine(
+          accountId,
+          don.id,
+          { productId, qty: 1 },
+          false,
+        );
+
+        const ketQua = await Promise.allSettled([
+          (async () => {
+            await service.confirm(accountId, don.id, 8, false, TOAN_QUYEN);
+            await service.revise(accountId, don.id, false, TOAN_QUYEN);
+          })(),
+          service.updateLine(
+            accountId,
+            don.id,
+            dong.id,
+            { qty: QTY_MOI },
+            false,
+          ),
+        ]);
+
+        const sauCung = await prisma.order.findUniqueOrThrow({
+          where: { id: don.id },
+        });
+        const dongHienLuc = await prisma.orderLineItem.findMany({
+          where: { orderVersionId: sauCung.currentVersionId as string },
+        });
+
+        if (ketQua[1].status === 'fulfilled') {
+          expect({
+            vong,
+            qty: dongHienLuc.map((d) => d.qty),
+          }).toEqual({ vong, qty: [QTY_MOI] });
+        } else {
+          // Thua thì phải thua tử tế: 409 (đơn đã chốt) hoặc 404 (dòng thuộc bản đã chết).
+          expect([404, 409]).toContain(
+            (ketQua[1].reason as { getStatus(): number }).getStatus(),
+          );
         }
       }
     });

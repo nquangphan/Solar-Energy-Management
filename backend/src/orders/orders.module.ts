@@ -26,6 +26,13 @@ import { QuoteRendererPort } from './quote/quote-renderer.port';
  *
  * KHÔNG import `PrismaModule`/`EventsModule` (cả hai `@Global`), KHÔNG re-register guard
  * (`APP_GUARD` đã có ở `AuthModule`).
+ *
+ * `exports` — LÝ DO DUY NHẤT: `payments/` (7.2) và `inventory/` (6.x) phải đổi trạng thái đơn
+ * theo sự kiện nghiệp vụ, và AD-11 nói chỉ có MỘT đường ghi `Order.status`. Không export thì
+ * module ngoài buộc phải phát minh đường ghi riêng — đúng thứ engine 5.1 sinh ra để chặn.
+ * Đường hợp lệ duy nhất là `OrdersService.chuyenTrangThaiTuDong()`; source-guard
+ * `test/no-order-status-write-outside-transition.spec.ts` quét toàn `src/` để mọi đường khác
+ * ĐỎ ngay.
  */
 @Module({
   imports: [FeatureFlagsModule, SettingsModule, AccountsModule, StorageModule],
@@ -35,5 +42,6 @@ import { QuoteRendererPort } from './quote/quote-renderer.port';
     QuoteExportService,
     { provide: QuoteRendererPort, useClass: PuppeteerQuoteRenderer },
   ],
+  exports: [OrdersService],
 })
 export class OrdersModule {}
