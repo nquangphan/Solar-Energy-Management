@@ -10,6 +10,7 @@ import {
 } from '../src/orders/domain/order-status';
 import { ListOrdersQueryDto } from '../src/orders/dto/list-orders-query.dto';
 import { OrdersService } from '../src/orders/orders.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * HÌNH DẠNG `where` mà `OrdersService.list` dựng ra — hermetic, Prisma mock.
@@ -45,7 +46,11 @@ describe('OrdersService.list — phạm vi theo quyền nằm trong where.AND', 
       },
     } as unknown as PrismaService;
 
-    const service = new OrdersService(prisma, {} as unknown as EventBus);
+    const service = new OrdersService(
+      prisma,
+      {} as unknown as EventBus,
+      fakeStorage(),
+    );
     return { service, batDuoc };
   }
 

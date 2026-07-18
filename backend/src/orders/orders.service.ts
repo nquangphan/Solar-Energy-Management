@@ -17,14 +17,24 @@ import {
   CHIET_KHAU_DONG_Y,
   CHIET_KHAU_TU_CHOI,
 } from './domain/discount-approval-status';
+import { StoragePort } from '../storage/storage.port';
 import {
   SU_KIEN,
+  SU_KIEN_THU_CONG,
+  buocKeTiep,
   buocVongDoi,
   daTaiDich,
   evaluateTransition,
+  type BuocKeTiep,
   type BuocVongDoi,
   type TransitionEvent,
 } from './domain/allowed-transition';
+import {
+  duoiTuMime,
+  kiemTraAnh,
+  tenFileAnToan,
+  type AnhTaiLen,
+} from './domain/attachment-limits';
 import { diffDong, type ThayDoiBanUpdate } from './domain/version-diff';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
@@ -273,6 +283,13 @@ const DUYET_CK_GATE_THUA = new Error('duyet-ck-gate-thua');
  */
 const TU_DONG_GATE_THUA = new Error('tu-dong-gate-thua');
 
+/**
+ * Sentinel abort transaction lane THỦ CÔNG (Story 5.5). Khác `TU_DONG_GATE_THUA` ở đúng chỗ
+ * quan trọng nhất: thua cổng atomic ở đây là NGƯỜI BẤM HAI LẦN, và người bấm hai lần phải
+ * biết lần nào ăn ⇒ 409, KHÔNG nuốt thành no-op.
+ */
+const THU_CONG_GATE_THUA = new Error('thu-cong-gate-thua');
+
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
   return {
@@ -296,6 +313,11 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBus,
+    // Dependency THỨ BA, chỉ cho lane chuyển trạng thái thủ công (5.5): ảnh bằng chứng đi
+    // lên R2 qua port (AD-3). Nó ở ĐÂY chứ không ở một service riêng vì transition + ghi
+    // metadata ảnh là MỘT `$transaction`, mà `applyTransition()` là `private` của service
+    // này — tách ra buộc phải nới engine thành public, tức phá AD-11.
+    private readonly storage: StoragePort,
   ) {}
 
   /**
@@ -531,6 +553,200 @@ export class OrdersService {
   }
 
   /**
+   * CỬA VÀO CÔNG KHAI cho lane chuyển trạng thái THỦ CÔNG (Story 5.5, FR-9/FR-23) — màn
+   * "Chuyển trạng thái" gọi method NÀY.
+   *
+   * KHÔNG tái dùng `chuyenTrangThaiTuDong()`: lane đó nuốt "đã ở đích" thành no-op im lặng
+   * (đúng cho retry thanh toán), còn ở đây "đã ở đích" là người bấm hai lần và phải ăn 409.
+   *
+   * THỨ TỰ BẮT BUỘC — mỗi bước đứng trước bước sau vì một lý do, đảo là hỏng:
+   *  1. Đọc đơn qua `findScopedOrThrow` — phạm vi đóng ở ĐƯỜNG ĐỌC DÙNG CHUNG, endpoint
+   *     không thể quên. (`get()` KHÔNG scope, đường nội bộ, không dùng ở đây.)
+   *  2. Chặn sự kiện ngoài `SU_KIEN_THU_CONG` — TRƯỚC `evaluateTransition()`, vì năm sự kiện
+   *     kia HỢP LỆ với bảng: để engine trả `ok` rồi mới chặn là đã tin vào thứ tự may rủi.
+   *  3. Pre-check thuần `evaluateTransition()` — từ chối 403/409 TRƯỚC khi trả tiền bytes lên
+   *     R2. Đây KHÔNG phải lớp bảo mật thứ hai: engine dưới row lock vẫn là quyền lực cuối.
+   *  4. Validate file — sai định dạng/dung lượng ⇒ 400 và transition KHÔNG chạy (AC-9).
+   *  5. Upload R2.
+   *  6. `$transaction`: engine ghi status → `createMany` metadata ảnh với CÙNG `occurredAt`.
+   *     Transition bị từ chối trong tx ⇒ rollback ⇒ KHÔNG hàng `Attachment` nào (AC-7).
+   *  7. Publish SAU commit (AD-18).
+   *
+   * `occurredAt` là MỘT biến `Date` cho cả lượt — nó vừa là `occurredAt` của `StatusChanged`
+   * (tức của hàng audit mà subscriber ghi) vừa là cột `occurred_at` của mọi ảnh trong lượt.
+   * Đó chính là khoá nối ảnh vào bước, đúng bốn toạ độ FR-23. Hai lần `new Date()` sẽ đẻ ra
+   * hai "lúc" cho một việc và cắt đứt khoá đó.
+   */
+  async chuyenTrangThaiThuCong(input: {
+    readonly callerAccountId: string;
+    readonly quyen: ReadonlySet<string>;
+    readonly orderId: string;
+    readonly event: TransitionEvent;
+    readonly anh: readonly (AnhTaiLen & { readonly buffer: Buffer })[];
+  }): Promise<{
+    readonly status: OrderStatusKey;
+    readonly occurredAt: Date;
+    readonly soAnhDaLuu: number;
+  }> {
+    const before = await this.findScopedOrThrow(
+      input.callerAccountId,
+      input.quyen,
+      input.orderId,
+    );
+
+    if (!SU_KIEN_THU_CONG.includes(input.event)) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Bước này không chuyển được ở màn Chuyển trạng thái.',
+      );
+    }
+
+    const preCheck = evaluateTransition({
+      order: before,
+      event: input.event,
+      actorPermissions: input.quyen,
+      scopeFlags: {
+        thietBi: before.scopeThietBi,
+        thiCong: before.scopeThiCong,
+        vanChuyen: before.scopeVanChuyen,
+      },
+    });
+    if (!preCheck.ok) {
+      if (preCheck.reason === 'permission') {
+        throw new AppException(
+          ErrorCode.FORBIDDEN,
+          403,
+          'Bạn không có quyền thực hiện chuyển trạng thái này.',
+        );
+      }
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        preCheck.reason === 'scope'
+          ? 'Bước này không thuộc phạm vi của đơn.'
+          : 'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+      );
+    }
+
+    const loiFile = kiemTraAnh(input.anh);
+    if (loiFile.length > 0) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Ảnh đính kèm không hợp lệ.',
+        [...loiFile],
+      );
+    }
+
+    // Id sinh TRƯỚC upload: object key phải deterministic để hàng DB và bytes trên R2 trỏ
+    // đúng nhau, và để `createMany` (không trả id) vẫn ghi được đúng key đã upload.
+    const anhDaLen = input.anh.map((file) => {
+      const id = randomUUID();
+      return {
+        id,
+        file,
+        objectKey: `attachments/${input.orderId}/${id}.${duoiTuMime(file.mimetype)}`,
+      };
+    });
+    for (const item of anhDaLen) {
+      await this.storage.putObject(
+        item.objectKey,
+        item.file.buffer,
+        item.file.mimetype,
+      );
+    }
+
+    const occurredAt = new Date();
+    let statusChanged: StatusChanged;
+    try {
+      statusChanged = await this.prisma.$transaction(async (tx) => {
+        const event = await this.applyTransition(tx, {
+          order: before,
+          event: input.event,
+          actorPermissions: input.quyen,
+          actorAccountId: input.callerAccountId,
+          sentinel: THU_CONG_GATE_THUA,
+          occurredAt,
+        });
+        if (anhDaLen.length > 0) {
+          await tx.attachment.createMany({
+            data: anhDaLen.map((item) => ({
+              id: item.id,
+              orderId: input.orderId,
+              uploadedByAccountId: input.callerAccountId,
+              objectKey: item.objectKey,
+              // Dọn NGAY LÚC GHI, không lúc đọc: tên này còn đi vào gallery của 5.6 và mọi
+              // chỗ khác đọc cột. Một chỗ dọn, mọi consumer an toàn.
+              fileName: tenFileAnToan(item.file.originalname),
+              contentType: item.file.mimetype,
+              size: item.file.size,
+              statusFrom: before.status,
+              statusTo: preCheck.to,
+              occurredAt,
+            })),
+          });
+        }
+        return event;
+      });
+    } catch (error) {
+      if (error !== THU_CONG_GATE_THUA) throw error;
+      // Thua cổng atomic = một lượt chuyển khác đã commit trước trong khoảng giữa pre-check
+      // và row lock. Lane thủ công BÁO LỖI, không no-op: người bấm cần biết lần bấm của
+      // mình không phải lần ăn.
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+      );
+    }
+
+    await this.eventBus.publish(statusChanged);
+
+    return {
+      status: preCheck.to,
+      occurredAt,
+      soAnhDaLuu: anhDaLen.length,
+    };
+  }
+
+  /**
+   * Bytes của MỘT ảnh đính kèm, sau khi đã khẳng định đơn nằm trong phạm vi người gọi
+   * (AD-3: bucket không public, mọi byte đi qua backend).
+   *
+   * ⚠️ `findScopedOrThrow` chạy TRƯỚC khi chạm R2 — khác `getExportFile()` của
+   * `QuoteExportService`, vốn không nhận caller và không scope (nợ ghi nhận ở 5.4). Ảnh bằng
+   * chứng của công trường là dữ liệu của đơn, nên nó chịu ĐÚNG phạm vi của đơn.
+   *
+   * Ảnh không thuộc đơn này ⇒ 404 CÙNG thông điệp với ảnh không tồn tại: 403 sẽ xác nhận
+   * ảnh có thật, một bit rò ra cho người không được thấy nó.
+   */
+  async anhDinhKem(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+    attachmentId: string,
+  ): Promise<{
+    readonly body: Buffer;
+    readonly contentType: string;
+    readonly fileName: string;
+  }> {
+    await this.findScopedOrThrow(callerAccountId, quyen, orderId);
+    const row = await this.prisma.attachment.findFirst({
+      where: { id: attachmentId, orderId },
+    });
+    if (row === null) {
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        'Không tìm thấy ảnh đính kèm.',
+      );
+    }
+    const { body } = await this.storage.getObject(row.objectKey);
+    return { body, contentType: row.contentType, fileName: row.fileName };
+  }
+
+  /**
    * Tạo Đơn: MỘT `$transaction` array 3 bước với id sinh TRƯỚC (FK vòng
    * `Order.currentVersionId ↔ OrderVersion.orderId`): order tạo với pointer null → version 1
    * → repoint. Tách 3 lệnh rời là mở cửa cho đơn-không-version khi bước giữa chết.
@@ -702,13 +918,23 @@ export class OrdersService {
     callerAccountId: string,
     quyen: ReadonlySet<string>,
     id: string,
-  ): Promise<readonly BuocVongDoi[]> {
+  ): Promise<{
+    readonly buoc: readonly BuocVongDoi[];
+    readonly buocKeTiep: readonly BuocKeTiep[];
+  }> {
     const order = await this.findScopedOrThrow(callerAccountId, quyen, id);
-    return buocVongDoi(order.status as OrderStatusKey, {
+    const scopeFlags = {
       thietBi: order.scopeThietBi,
       thiCong: order.scopeThiCong,
       vanChuyen: order.scopeVanChuyen,
-    });
+    };
+    const status = order.status as OrderStatusKey;
+    // Hai câu trả lời cho CÙNG một lần đọc đơn: stepper vẽ gì (5.4) và người này bấm được
+    // bước nào (5.5). Đẻ route thứ hai cho vế sau là thêm một request cho cùng một câu hỏi.
+    return {
+      buoc: buocVongDoi(status, scopeFlags),
+      buocKeTiep: buocKeTiep(status, scopeFlags, quyen),
+    };
   }
 
   /**

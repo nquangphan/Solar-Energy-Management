@@ -9,6 +9,7 @@ import {
 import type { ListOrdersQueryDto } from '../src/orders/dto/list-orders-query.dto';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * Lane TÍCH HỢP trên Postgres THẬT cho danh sách đơn — sự thật mà mock KHÔNG chứng minh được:
@@ -100,6 +101,7 @@ moTa('Danh sách đơn: phạm vi theo quyền trên Postgres THẬT', () => {
     service = new OrdersService(
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+      fakeStorage(),
     );
 
     const facebook = await prisma.customerSource.findUnique({

@@ -10,9 +10,15 @@
 // Steps blocked by a scope flag are ABSENT from the response, so nothing is
 // filtered here and nothing renders dimmed (UX-DR-11).
 //
-// The status chip is READ-ONLY (UX-DR-23) and there are NO action buttons:
-// "Chuyển trạng thái" (5.5), "Huỷ đơn" (5.7) and "Share báo giá" all lead to
-// screens that do not exist yet.
+// The status chip is READ-ONLY (UX-DR-23): changing status is its own screen
+// (Story 5.5), reached by the one action button here. "Huỷ đơn" (5.7) and
+// "Share báo giá" still lead to screens that do not exist — they stay absent.
+//
+// THE BUTTON'S VISIBILITY IS NOT A PERMISSION CALCULATION. It shows exactly when
+// the backend returned a non-empty `buocKeTiep`, and is ABSENT otherwise — not
+// greyed (UX-DR-22). The branches need DIFFERENT permission keys, so an any-of
+// expression here would be a third copy of the rule and it would drift
+// (AD-2/AD-4).
 //
 // LABELS are byte-identical with the web twin (UX-DR-27) — including the tab and
 // frame labels. The mockup shortens them on mobile ("Lịch sử", "Vòng đời"); this
@@ -54,11 +60,15 @@ class OrderDetailScreen extends StatefulWidget {
     required this.port,
     required this.orderId,
     this.onBack,
+    this.onChangeStatus,
   });
 
   final OrdersPort port;
   final String orderId;
   final VoidCallback? onBack;
+
+  /// Opens the status-change screen (Story 5.5). Null = the button never renders.
+  final VoidCallback? onChangeStatus;
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -67,6 +77,7 @@ class OrderDetailScreen extends StatefulWidget {
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Order? _order;
   List<OrderLifecycleStep> _steps = const <OrderLifecycleStep>[];
+  List<OrderNextStep> _buocKeTiep = const <OrderNextStep>[];
   List<OrderVersionItem> _versions = const <OrderVersionItem>[];
   _LoadState _state = _LoadState.loading;
   String _tab = _kTabThongTin;
@@ -93,7 +104,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       if (!mounted || ticket != _latest) return;
       setState(() {
         _order = results[0] as Order;
-        _steps = results[1] as List<OrderLifecycleStep>;
+        final OrderLifecycle vongDoi = results[1] as OrderLifecycle;
+        _steps = vongDoi.buoc;
+        _buocKeTiep = vongDoi.buocKeTiep;
         _versions = results[2] as List<OrderVersionItem>;
         _state = _LoadState.ready;
       });
@@ -168,6 +181,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             _stepper(),
+            if (_buocKeTiep.isNotEmpty && widget.onChangeStatus != null) ...<Widget>[
+              const SizedBox(height: AppTokens.space12),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: AppButton(
+                  label: 'Chuyển trạng thái',
+                  variant: AppButtonVariant.primary,
+                  onPressed: widget.onChangeStatus,
+                ),
+              ),
+            ],
             const SizedBox(height: AppTokens.space16),
             AppTabs(
               tabs: _kTabs,

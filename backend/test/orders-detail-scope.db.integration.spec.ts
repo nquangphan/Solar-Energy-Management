@@ -4,6 +4,7 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * Lane TÍCH HỢP trên Postgres THẬT cho ĐƯỜNG ĐỌC-THEO-ID của màn chi tiết — sự thật mà mock
@@ -128,6 +129,7 @@ moTa(
       service = new OrdersService(
         prisma as unknown as PrismaService,
         { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+        fakeStorage(),
       );
 
       const facebook = await prisma.customerSource.findUnique({
@@ -262,8 +264,8 @@ moTa(
           false,
         );
         expect(view.id).toBe(donNguoiKhac);
-        const buoc = await service.lifecycle(TOI, XEM_TAT_CA, donNguoiKhac);
-        expect(buoc.length).toBeGreaterThan(0);
+        const vongDoi = await service.lifecycle(TOI, XEM_TAT_CA, donNguoiKhac);
+        expect(vongDoi.buoc.length).toBeGreaterThan(0);
       });
     });
 

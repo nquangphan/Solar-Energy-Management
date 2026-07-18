@@ -23,20 +23,26 @@ import type {
   CreateOrderInput,
   DiscountPendingItem,
   Order,
-  OrderLifecycleStep,
+  OrderLifecycle,
   OrderLine,
+  OrderNextStep,
+  OrderPortError,
   OrderTotals,
   OrderVersionItem,
   OrdersPort,
   PreviewTotalInput,
   QuoteExportFiles,
   ResolveDiscountInput,
+  StatusChangeResult,
   UpdateOrderLineInput,
   UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
 } from './orders-port';
 
 const NOW = '2026-07-16T00:00:00.000Z';
+
+/** Demo mirror of the backend's photo-count ceiling (`SO_ANH_TOI_DA`). */
+const DEMO_SO_ANH_TOI_DA = 10;
 
 /**
  * Demo rows for the order-list screen (Story 5.3) — used only when nothing was
@@ -516,7 +522,7 @@ export class FakeOrdersPort implements OrdersPort {
    *
    * Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
    */
-  getLifecycle(orderId: string): Promise<OrderLifecycleStep[]> {
+  getLifecycle(orderId: string): Promise<OrderLifecycle> {
     const order = this.orders.get(orderId);
     // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
     // full-length stepper (that is also the case that overflows on mobile).
@@ -532,8 +538,8 @@ export class FakeOrdersPort implements OrdersPort {
       'hoanthanh',
     ];
     const dangO = chuoi.indexOf(status);
-    return Promise.resolve(
-      chuoi.map((status, i) => ({
+    return Promise.resolve({
+      buoc: chuoi.map((status, i) => ({
         status,
         trangThai:
           dangO === -1 || i > dangO
@@ -542,7 +548,128 @@ export class FakeOrdersPort implements OrdersPort {
               ? ('current' as const)
               : ('done' as const),
       })),
-    );
+      buocKeTiep: this.buocKeTiepDemo(status, thiCong, vanChuyen),
+    });
+  }
+
+  /**
+   * Demo stand-in for the backend's `buocKeTiep()`. Like `getLifecycle` above it
+   * lives in the FAKE (the demo "server"), NEVER in a screen — the real one
+   * reads ALLOWED_TRANSITIONS and filters by the caller's real permissions
+   * (AD-2/AD-11).
+   *
+   * Only the five MANUAL-lane events appear. `chot`/`mo_lai`/`huy`/`du_coc`/
+   * `ap_chiet_khau` each own a separate endpoint carrying logic this screen does
+   * not run, so the demo must not offer them either — a demo that offers a step
+   * the real backend rejects teaches the wrong shape.
+   *
+   * An order at a terminal status yields an EMPTY array, which is what drives
+   * the hidden-button branch of the screen.
+   */
+  private buocKeTiepDemo(
+    status: string,
+    thiCong: boolean,
+    vanChuyen: boolean,
+  ): OrderNextStep[] {
+    const buoc: OrderNextStep[] = [];
+    if (status === 'dacoc' && thiCong) {
+      buoc.push({
+        event: 'bat_dau_thi_cong',
+        to: 'thicong',
+        requires: 'construction.transition',
+      });
+    }
+    if (status === 'dacoc' && vanChuyen) {
+      buoc.push({
+        event: 'bat_dau_giao',
+        to: 'danggiao',
+        requires: 'delivery.confirm',
+      });
+    }
+    if (status === 'thicong') {
+      buoc.push({
+        event: 'xong_thi_cong',
+        to: 'nghiemthu',
+        requires: 'construction.transition',
+      });
+    }
+    if (status === 'danggiao') {
+      buoc.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
+    }
+    if (status === 'nghiemthu') {
+      buoc.push({
+        event: 'hoan_thanh',
+        to: 'hoanthanh',
+        requires: 'construction.transition',
+      });
+    }
+    if (status === 'dagiao') {
+      buoc.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'delivery.confirm' });
+    }
+    return buoc;
+  }
+
+  /**
+   * Demo twin of `POST /orders/:id/chuyen-trang-thai` (Story 5.5). It applies the
+   * same three refusals the real backend applies, in the same order, so the
+   * screen's error branches are exercisable offline:
+   * unknown order → 404, step not offered for this status → 409, photo outside
+   * the limits → 400 with `fieldErrors`.
+   *
+   * Photos are COUNTED, not stored: the demo has no R2 and inventing a fake
+   * object key would teach the screen a shape the real port does not return.
+   */
+  chuyenTrangThai(
+    orderId: string,
+    event: string,
+    anh: File[],
+  ): Promise<StatusChangeResult> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.reject(
+        this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
+      );
+    }
+    const buoc = this.buocKeTiepDemo(
+      order.status,
+      order.scopeThiCong ?? true,
+      order.scopeVanChuyen ?? true,
+    ).find((b) => b.event === event);
+    if (buoc === undefined) {
+      return Promise.reject(
+        this.loi(
+          'CONFLICT',
+          'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+        ),
+      );
+    }
+    if (anh.length > DEMO_SO_ANH_TOI_DA) {
+      return Promise.reject(
+        this.loi('VALIDATION_ERROR', 'Ảnh đính kèm không hợp lệ.', [
+          {
+            field: 'anh',
+            message: `Tối đa ${DEMO_SO_ANH_TOI_DA} ảnh cho một lần chuyển trạng thái.`,
+          },
+        ]),
+      );
+    }
+    this.orders.set(orderId, { ...order, status: buoc.to });
+    return Promise.resolve({
+      status: buoc.to,
+      occurredAt: NOW,
+      soAnhDaLuu: anh.length,
+    });
+  }
+
+  /** AD-5 envelope shape the real port rejects with. */
+  private loi(
+    code: string,
+    message: string,
+    fieldErrors?: { field: string; message: string }[],
+  ): OrderPortError {
+    return fieldErrors === undefined
+      ? { code, message }
+      : { code, message, fieldErrors };
   }
 
   /**

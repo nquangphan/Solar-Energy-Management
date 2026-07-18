@@ -8,6 +8,11 @@ import { AccountsService } from '../src/accounts/accounts.service';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { SU_KIEN } from '../src/orders/domain/allowed-transition';
+import {
+  KICH_THUOC_TOI_DA_BYTE,
+  SO_ANH_TOI_DA,
+} from '../src/orders/domain/attachment-limits';
 import {
   TRANG_THAI_BAO_GIA,
   TRANG_THAI_DA_CHOT,
@@ -163,6 +168,9 @@ describe('/orders (e2e)', () => {
   // lần 2 đi nhánh update; findUnique đọc lại slot đó (2 route proxy + xuất lần n).
   let quoteExportRow: Record<string, unknown> | null = null;
   const quoteExportRepo = { findUnique: jest.fn(), upsert: jest.fn() };
+  // Ảnh đính kèm bước chuyển trạng thái (5.5): `createMany` chạy TRONG tx cùng
+  // `applyTransition`; `findFirst` là đường đọc của proxy bytes.
+  const attachmentRepo = { createMany: jest.fn(), findFirst: jest.fn() };
   // Storage in-memory + renderer stub (override provider) — e2e KHÔNG đụng Chromium/R2.
   const storageMap = new Map<string, { body: Buffer; contentType: string }>();
   const storageStub = {
@@ -204,6 +212,8 @@ describe('/orders (e2e)', () => {
     discountApproval: txDiscountRepo,
     // `confirm` resolve giá danh mục BÊN TRONG tx (đọc dòng sau khoá ⇒ tra product cũng ở đó).
     product: productRepo,
+    // Ảnh ghi cùng tx với transition — một `$transaction`, không hai lượt ghi.
+    attachment: attachmentRepo,
     $queryRaw: queryRaw,
   };
   const transaction = jest.fn(async (arg: unknown) =>
@@ -222,6 +232,7 @@ describe('/orders (e2e)', () => {
     systemSetting: systemSettingRepo,
     discountApproval: discountApprovalRepo,
     quoteExport: quoteExportRepo,
+    attachment: attachmentRepo,
     $transaction: transaction,
     $queryRaw: queryRaw,
   };
@@ -340,6 +351,9 @@ describe('/orders (e2e)', () => {
     discountApprovalRepo.findMany.mockResolvedValue([]);
     txDiscountRepo.create.mockResolvedValue({});
     txDiscountRepo.updateMany.mockResolvedValue({ count: 1 });
+    // Ảnh đính kèm (5.5): mặc định đơn chưa có ảnh nào.
+    attachmentRepo.createMany.mockResolvedValue({ count: 0 });
+    attachmentRepo.findFirst.mockResolvedValue(null);
     // Hồ sơ xuất báo giá (4.8): slot reset mỗi test; upsert giữ ngữ nghĩa unique orderId.
     quoteExportRow = null;
     storageMap.clear();
@@ -426,6 +440,15 @@ describe('/orders (e2e)', () => {
       {
         name: 'GET /orders/:id/bao-gia/pdf',
         call: () => request(server()).get(`/orders/${ORDER_ID}/bao-gia/pdf`),
+      },
+      {
+        name: 'POST /orders/:id/chuyen-trang-thai',
+        call: () =>
+          request(server()).post(`/orders/${ORDER_ID}/chuyen-trang-thai`),
+      },
+      {
+        name: 'GET /orders/:id/anh/:attachmentId',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/anh/att-1`),
       },
     ];
 
@@ -2970,6 +2993,426 @@ describe('/orders (e2e)', () => {
       for (const cam of ['unitPrice', 'amount', 'total', 'costPrice']) {
         expect(raw).not.toContain(cam);
       }
+    });
+  });
+
+  /**
+   * Story 5.5 — chuyển trạng thái thủ công + ảnh đính kèm, ĐO Ở TẦNG DÂY.
+   *
+   * Unit test của lane này gọi thẳng `OrdersService`, nên nó KHÔNG đi qua ba thứ chỉ tồn tại
+   * ở tầng HTTP — và cả ba đều là chỗ AC-9 có thể chết im lặng:
+   *
+   *  1. `FilesInterceptor` (multer). Trần cứng của interceptor đặt CAO HƠN giới hạn hợp đồng
+   *     một cách có chủ đích. Hạ nó xuống bằng hợp đồng trông như dọn dẹp hợp lý, nhưng khi
+   *     đó multer ném TRƯỚC handler ⇒ envelope `VALIDATION_ERROR` + `fieldErrors` mà AC-9
+   *     đòi biến mất. Không unit test nào thấy được điều đó vì multer không chạy ở đó.
+   *  2. `ValidationPipe` + `@IsIn(SU_KIEN_THU_CONG)` trên body multipart — field text của
+   *     form đi đường khác body JSON.
+   *  3. `StreamableFile` → header thật (`content-type`, `content-disposition`).
+   */
+  describe('Story 5.5 — POST /orders/:id/chuyen-trang-thai · GET /orders/:id/anh/:id', () => {
+    /** Đơn ở `dacoc`, bật cờ Thi công + Vận chuyển ⇒ hai bước kế cùng mở. */
+    const DON_DACOC = {
+      ...DON_BAOGIA,
+      status: 'dacoc',
+      scopeThiCong: true,
+      scopeVanChuyen: true,
+    };
+
+    /** Quyền đủ cho cả ba nhánh của lane thủ công + đọc đơn. */
+    function quyenDuLaneThuCong(): void {
+      givenPermissions(
+        PERM.ordersViewAll,
+        PERM.constructionTransition,
+        PERM.deliveryConfirm,
+        PERM.paymentsRecord,
+      );
+    }
+
+    function binaryParser(
+      res: request.Response,
+      callback: (err: Error | null, body: Buffer) => void,
+    ): void {
+      const stream = res as unknown as NodeJS.ReadableStream;
+      const chunks: Buffer[] = [];
+      stream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stream.on('end', () => callback(null, Buffer.concat(chunks)));
+    }
+
+    /** Một request multipart: field `event` + N file trên field `anh`. */
+    function post(
+      event: string,
+      files: readonly { name: string; mime: string; size: number }[] = [],
+    ): request.Test {
+      const req = request(server())
+        .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+        .set('Authorization', `Bearer ${token()}`)
+        .field('event', event);
+      for (const f of files) {
+        req.attach('anh', Buffer.alloc(f.size, 0x41), {
+          filename: f.name,
+          contentType: f.mime,
+        });
+      }
+      return req;
+    }
+
+    function anh(ghiDe: Partial<{ name: string; mime: string; size: number }> = {}) {
+      return {
+        name: ghiDe.name ?? 'cong-truong.jpg',
+        mime: ghiDe.mime ?? 'image/jpeg',
+        size: ghiDe.size ?? 1024,
+      };
+    }
+
+    beforeEach(() => {
+      orderRepo.findUnique.mockResolvedValue(DON_DACOC);
+      quyenDuLaneThuCong();
+    });
+
+    describe('đường hạnh phúc qua dây (AC-1, AC-2, AC-3)', () => {
+      it('không ảnh ⇒ 200, soAnhDaLuu 0 — upload LUÔN optional (FR-23)', async () => {
+        const res = await post(SU_KIEN.batDauThiCong);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('thicong');
+        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(typeof res.body.occurredAt).toBe('string');
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('kèm 2 ảnh ⇒ 200, bytes lên storage, metadata xuống DB, audit ghi StatusChanged', async () => {
+        const res = await post(SU_KIEN.batDauThiCong, [
+          anh(),
+          anh({ name: 'mai-nha.png', mime: 'image/png' }),
+        ]);
+
+        expect(res.status).toBe(200);
+        expect(res.body.soAnhDaLuu).toBe(2);
+        expect(storageMap.size).toBe(2);
+
+        // Metadata trỏ đúng object đã ghi — hàng DB mồ côi là ảnh vô hình.
+        const { data } = attachmentRepo.createMany.mock.calls[0][0];
+        expect(data).toHaveLength(2);
+        for (const hang of data) {
+          expect(storageMap.has(hang.objectKey)).toBe(true);
+          expect(hang.orderId).toBe(ORDER_ID);
+          expect(hang.uploadedByAccountId).toBe(ACCOUNT_ID);
+        }
+
+        // AD-18: producer không gọi audit trực tiếp — subscriber THẬT ghi sau commit.
+        expect(auditRepo.create).toHaveBeenCalledWith({
+          data: expect.objectContaining({
+            eventType: 'StatusChanged',
+            actorAccountId: ACCOUNT_ID,
+            targetType: 'Order',
+            targetId: ORDER_ID,
+          }),
+        });
+      });
+
+      it('ĐUÔI OBJECT KEY suy từ MIME, không từ đuôi client gửi', async () => {
+        // Cả hai file mang tên `.jpg`; file thứ hai khai `image/png`.
+        await post(SU_KIEN.batDauThiCong, [
+          anh(),
+          anh({ name: 'noi-dung-that-la-png.jpg', mime: 'image/png' }),
+        ]);
+
+        const keys = [...storageMap.keys()];
+        expect(keys.every((k) => k.startsWith(`attachments/${ORDER_ID}/`))).toBe(
+          true,
+        );
+        expect(keys.some((k) => k.endsWith('.png'))).toBe(true);
+      });
+    });
+
+    /**
+     * ĐÂY LÀ LÝ DO SUITE NÀY TỒN TẠI. Mỗi test dưới đây chết nếu trần cứng của interceptor
+     * bị hạ xuống bằng giới hạn hợp đồng — ca mà toàn bộ lane unit vẫn xanh.
+     */
+    describe('AC-9 giữ được envelope 400 dù đi qua multer', () => {
+      it(`${SO_ANH_TOI_DA + 1} ảnh ⇒ 400 VALIDATION_ERROR + fieldErrors, KHÔNG 500/413`, async () => {
+        const res = await post(
+          SU_KIEN.batDauThiCong,
+          Array.from({ length: SO_ANH_TOI_DA + 1 }, () => anh()),
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].code).toBe('maxCount');
+        expect(res.body.traceId).toBeDefined();
+        // Transition KHÔNG chạy và không byte nào nằm lại storage.
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('ảnh quá dung lượng hợp đồng ⇒ 400 `maxSize`, KHÔNG 413 của multer', async () => {
+        const res = await post(SU_KIEN.batDauThiCong, [
+          anh({ size: KICH_THUOC_TOI_DA_BYTE + 1 }),
+        ]);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors[0].code).toBe('maxSize');
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('mime ngoài allow-list ⇒ 400 `mimeType`, transition KHÔNG chạy', async () => {
+        const res = await post(SU_KIEN.batDauThiCong, [
+          anh({ name: 'ke-hoach.jpg', mime: 'application/pdf' }),
+        ]);
+
+        expect(res.status).toBe(400);
+        expect(res.body.fieldErrors[0].code).toBe('mimeType');
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('ValidationPipe trên field text của form multipart', () => {
+      it('event lạ ⇒ 400, không chạm service', async () => {
+        const res = await post('bay_len_troi');
+
+        expect(res.status).toBe(400);
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      });
+
+      it('thiếu hẳn field `event` ⇒ 400', async () => {
+        const res = await request(server())
+          .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+          .set('Authorization', `Bearer ${token()}`)
+          .field('khong-phai-event', 'x');
+
+        expect(res.status).toBe(400);
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      });
+    });
+
+    /**
+     * AC-13 đo ở tầng dây. Năm sự kiện này có cửa riêng mang theo logic riêng (snapshot giá,
+     * lý do huỷ, lane auto). Đi tắt qua đây là đổi status mà bỏ hết phần còn lại — đơn
+     * `dachot` có giá vẫn trôi theo danh mục. Điều BẤT BIẾN là: KHÔNG bao giờ 2xx, và
+     * `Order.status` không đổi. Mã lỗi cụ thể do tầng nào chặn trước quyết định.
+     */
+    describe('AC-13 — năm sự kiện có cửa riêng bị chặn qua dây', () => {
+      const CUA_RIENG = [
+        SU_KIEN.chot,
+        SU_KIEN.moLai,
+        SU_KIEN.huy,
+        SU_KIEN.duCoc,
+        SU_KIEN.apChietKhau,
+      ];
+
+      it.each(CUA_RIENG)(
+        '`%s` KHÔNG bao giờ 2xx và Order.status không đổi',
+        async (event) => {
+          // Quyền RỘNG nhất có thể — kể cả key của các cửa riêng. Nếu ca này lọt thì lọt
+          // vì logic, không vì thiếu quyền.
+          givenPermissions(
+            PERM.ordersViewAll,
+            PERM.constructionTransition,
+            PERM.deliveryConfirm,
+            PERM.paymentsRecord,
+            PERM.quotesCreateEdit,
+            PERM.ordersConfirm,
+          );
+
+          const res = await post(event, [anh()]);
+
+          expect(res.status).toBeGreaterThanOrEqual(400);
+          expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+          expect(storageMap.size).toBe(0);
+        },
+      );
+
+      /**
+       * MÃ LỖI, không chỉ "không 2xx". Sự kiện có cửa riêng là xung đột NGHIỆP VỤ: tên sự
+       * kiện có thật, bảng transition chấp nhận nó, chỉ riêng CỬA NÀY từ chối. AC-13 và
+       * `@ApiConflictResponse` của route đều gọi đó là 409 CONFLICT.
+       *
+       * Test này canh đúng chỗ từng lệch: siết `@IsIn` về `SU_KIEN_THU_CONG` khiến
+       * `ValidationPipe` nuốt thành 400 và whitelist 409 trong service không bao giờ tới
+       * lượt — unit test của service vẫn xanh vì nó gọi thẳng service, bỏ qua pipe.
+       */
+      it.each(CUA_RIENG)(
+        '`%s` trả 409 CONFLICT với thông điệp của lane thủ công (AC-13)',
+        async (event) => {
+          givenPermissions(
+            PERM.ordersViewAll,
+            PERM.constructionTransition,
+            PERM.deliveryConfirm,
+            PERM.paymentsRecord,
+            PERM.quotesCreateEdit,
+            PERM.ordersConfirm,
+          );
+
+          const res = await post(event);
+
+          expect(res.status).toBe(409);
+          expect(res.body.code).toBe(ErrorCode.CONFLICT);
+          expect(res.body.message).toBe(
+            'Bước này không chuyển được ở màn Chuyển trạng thái.',
+          );
+        },
+      );
+
+      /** Tên sự kiện KHÔNG TỒN TẠI vẫn là body sai cú pháp ⇒ 400, không phải 409. */
+      it('sự kiện không có trong bảng vẫn 400 tại ValidationPipe, không 409', async () => {
+        const res = await post('khong-co-that');
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      });
+    });
+
+    describe('từ chối qua dây (AC-5, AC-6, AC-7)', () => {
+      it('thiếu quyền của BƯỚC (vẫn qua được gate cửa) ⇒ 403, status không đổi', async () => {
+        // `delivery.confirm` mở được cửa route nhưng KHÔNG mở được `bat_dau_thi_cong`.
+        givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
+
+        const res = await post(SU_KIEN.batDauThiCong, [anh()]);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        expect(res.body.message).toBe(
+          'Bạn không có quyền thực hiện chuyển trạng thái này.',
+        );
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        // AC-7 + pre-check: không hàng Attachment, không byte nào lên storage.
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('BẤM HAI LẦN: đơn đã ở đích ⇒ 409, không no-op im lặng', async () => {
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'thicong',
+        });
+
+        const res = await post(SU_KIEN.batDauThiCong);
+
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe(ErrorCode.CONFLICT);
+        expect(res.body.message).toBe(
+          'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+        );
+      });
+
+      it('bước ngoài phạm vi đơn ⇒ 409 với thông điệp PHẠM VI', async () => {
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          scopeThiCong: false,
+        });
+
+        const res = await post(SU_KIEN.batDauThiCong);
+
+        expect(res.status).toBe(409);
+        expect(res.body.message).toBe('Bước này không thuộc phạm vi của đơn.');
+      });
+
+      it('đơn của NGƯỜI KHÁC (chỉ view_own) ⇒ 404, không rò việc đơn có tồn tại', async () => {
+        givenPermissions(PERM.ordersViewOwn, PERM.constructionTransition);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          ownerAccountId: 'acc-nguoi-khac',
+          assigneeAccountId: null,
+        });
+
+        const res = await post(SU_KIEN.batDauThiCong, [anh()]);
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(storageMap.size).toBe(0);
+      });
+    });
+
+    describe('AC-8 — proxy đọc bytes', () => {
+      const OBJECT_KEY = `attachments/${ORDER_ID}/att-1.jpg`;
+      const HANG_ANH = {
+        id: 'att-1',
+        orderId: ORDER_ID,
+        objectKey: OBJECT_KEY,
+        fileName: 'cong-truong.jpg',
+        contentType: 'image/jpeg',
+      };
+      const BYTES = Buffer.from('bytes-anh-cong-truong');
+
+      it('trả đúng bytes + content-type + disposition', async () => {
+        storageMap.set(OBJECT_KEY, {
+          body: BYTES,
+          contentType: 'image/jpeg',
+        });
+        attachmentRepo.findFirst.mockResolvedValue(HANG_ANH);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/anh/att-1`)
+          .set('Authorization', `Bearer ${token()}`)
+          .buffer(true)
+          .parse(binaryParser);
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('image/jpeg');
+        expect(res.headers['content-disposition']).toContain(
+          'cong-truong.jpg',
+        );
+        expect((res.body as Buffer).equals(BYTES)).toBe(true);
+      });
+
+      it('đơn NGOÀI PHẠM VI ⇒ 404 và KHÔNG rò một byte nào', async () => {
+        givenPermissions(PERM.ordersViewOwn);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          ownerAccountId: 'acc-nguoi-khac',
+          assigneeAccountId: null,
+        });
+        storageMap.set(OBJECT_KEY, { body: BYTES, contentType: 'image/jpeg' });
+        attachmentRepo.findFirst.mockResolvedValue(HANG_ANH);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/anh/att-1`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(JSON.stringify(res.body)).not.toContain(BYTES.toString());
+      });
+
+      it('ảnh không thuộc đơn ⇒ 404 CÙNG thông điệp — không xác nhận ảnh có thật', async () => {
+        attachmentRepo.findFirst.mockResolvedValue(null);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/anh/att-cua-don-khac`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+      });
+    });
+
+    describe('AC-4/AC-11 — `buocKeTiep` trên response /vong-doi', () => {
+      it('trả bước kế lọc theo quyền THẬT của actor', async () => {
+        givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.buocKeTiep.map((b: { event: string }) => b.event)).toEqual(
+          [SU_KIEN.batDauGiao],
+        );
+      });
+
+      it('AC-11: không còn bước nào ⇒ mảng RỖNG, stepper vẫn đủ (client ẩn hẳn nút)', async () => {
+        givenPermissions(PERM.ordersViewAll);
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.buocKeTiep).toEqual([]);
+        expect(res.body.buoc.length).toBeGreaterThan(0);
+      });
     });
   });
 });

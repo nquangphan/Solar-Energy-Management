@@ -113,3 +113,11 @@
 .od-version-diff {
   font-size: 12px;
 }
+
+/* The one action on this screen (Story 5.5). It renders only when the backend
+   offered a next step, so there is no disabled variant to style. */
+.od-actions {
+  display: flex;
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}

@@ -258,6 +258,74 @@ export function daTaiDich(status: string, event: TransitionEvent): boolean {
   );
 }
 
+/**
+ * NĂM sự kiện DUY NHẤT mà màn "Chuyển trạng thái" (Story 5.5) được phép phát. Đặt cạnh bảng
+ * để ai đọc bảng cũng thấy ngay lane thủ công chỉ chạm được một phần của nó.
+ *
+ * ⚠️ Đây KHÔNG phải một bảng transition thứ hai (AD-11 vẫn nguyên): nó không khai `from`,
+ * `to` hay `requires` — đích đến và quyền vẫn do `ALLOWED_TRANSITIONS` quyết. Nó chỉ nói
+ * "cửa nào phát được sự kiện nào".
+ *
+ * Sáu sự kiện còn lại bị loại vì mỗi cái có MỘT CỬA RIÊNG mang theo logic mà một
+ * `applyTransition` trần sẽ bỏ qua hoàn toàn:
+ *  - `chot` → `POST /:id/chot`: snapshot giá + đóng băng VAT + đẻ version. Đi tắt qua đây
+ *    ⇒ đơn `dachot` mà giá vẫn trôi theo danh mục. Hỏng DỮ LIỆU, không phải hỏng UX.
+ *  - `mo_lai` → `POST /:id/mo-lai`; `ap_chiet_khau` → `POST /:id/ap-chiet-khau`;
+ *    `tu_choi_chiet_khau` → đường duyệt chiết khấu.
+ *  - `huy` → Story 5.7: bắt buộc lý do + giải phóng tồn `reserved`.
+ *  - `du_coc` → lane AUTO (Story 5.2): hệ quả của sự kiện thanh toán, không phải nút người bấm.
+ */
+export const SU_KIEN_THU_CONG: readonly TransitionEvent[] = [
+  SU_KIEN.batDauThiCong,
+  SU_KIEN.xongThiCong,
+  SU_KIEN.batDauGiao,
+  SU_KIEN.xongGiao,
+  SU_KIEN.hoanThanh,
+];
+
+/** Một lựa chọn trên màn Chuyển trạng thái: phát sự kiện gì, đơn sẽ tới đâu, đòi quyền gì. */
+export interface BuocKeTiep {
+  readonly event: TransitionEvent;
+  readonly to: OrderStatusKey;
+  readonly requires: PermissionKey;
+}
+
+/**
+ * Các bước kế tiếp mà actor NÀY thực sự bấm được trên đơn NÀY (Story 5.5, AD-2: client
+ * không tự suy — backend đã lọc theo quyền thật). Hàm THUẦN: không async, không Prisma.
+ *
+ * ĐỌC bảng, KHÔNG chép bảng (AD-11). Thêm một cạnh vào `ALLOWED_TRANSITIONS` là bước mới tự
+ * hiện ra ở đây, miễn sự kiện của nó nằm trong `SU_KIEN_THU_CONG`.
+ *
+ * Bốn tầng lọc, thứ tự có ý nghĩa:
+ *  1. Whitelist lane thủ công — lọc TRƯỚC mọi thứ khác, xem `SU_KIEN_THU_CONG`.
+ *  2. `from === status` — chỉ cạnh xuất phát từ chỗ đơn đang đứng.
+ *  3. Cờ phạm vi — bước bị cờ chặn KHÔNG có mặt (UX-DR-22: ẩn hẳn, không vẽ xám).
+ *  4. Quyền thật của actor — thiếu quyền cũng ẩn hẳn, cùng lý do.
+ *
+ * ⚠️ KHÔNG dùng `daTaiDich()`: lane thủ công phải BÁO LỖI khi đơn đã ở đích (người bấm hai
+ * lần cần biết lần nào ăn), khác hẳn lane auto vốn nuốt retry thành no-op. Xem `:249-250`.
+ *
+ * Mảng rỗng = actor không còn bước nào ⇒ nút "Chuyển trạng thái" ẩn hẳn ở cả hai nền tảng.
+ */
+export function buocKeTiep(
+  status: OrderStatusKey,
+  scopeFlags: OrderScopeFlags,
+  actorPermissions: ReadonlySet<string>,
+): readonly BuocKeTiep[] {
+  return ALLOWED_TRANSITIONS.filter(
+    (rule) =>
+      SU_KIEN_THU_CONG.includes(rule.event) &&
+      rule.from === status &&
+      (rule.scopeGuard === undefined || scopeFlags[rule.scopeGuard]) &&
+      actorPermissions.has(rule.requires),
+  ).map((rule) => ({
+    event: rule.event,
+    to: rule.to,
+    requires: rule.requires,
+  }));
+}
+
 /** Một nấc của stepper vòng đời: bước nào, đơn đã qua / đang đứng / sắp tới. */
 export interface BuocVongDoi {
   readonly status: OrderStatusKey;

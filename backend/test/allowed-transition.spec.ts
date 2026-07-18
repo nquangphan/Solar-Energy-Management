@@ -2,6 +2,7 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import {
   ALLOWED_TRANSITIONS,
   SU_KIEN,
+  buocKeTiep,
   buocVongDoi,
   daTaiDich,
   evaluateTransition,
@@ -393,6 +394,109 @@ describe('allowed-transition (domain thuần)', () => {
         (rule) => rule.event === SU_KIEN.batDauThiCong,
       );
       expect(buoc.includes('thicong')).toBe(coCanhThiCong);
+    });
+  });
+
+  describe('buocKeTiep — bước kế của lane THỦ CÔNG, suy TỪ bảng', () => {
+    /** Bộ quyền của ba key mà lane thủ công thực sự cần. */
+    const QUYEN_THU_CONG: ReadonlySet<string> = new Set([
+      PERM.constructionTransition,
+      PERM.deliveryConfirm,
+      PERM.paymentsRecord,
+    ]);
+
+    function ke(
+      status: string,
+      scopeFlags: OrderScopeFlags = DU_CO,
+      quyen: ReadonlySet<string> = TOAN_QUYEN,
+    ) {
+      return buocKeTiep(status as OrderStatusKey, scopeFlags, quyen);
+    }
+
+    it('đơn `dacoc` đủ cả hai cờ ⇒ thấy CẢ hai nhánh thi công và giao hàng', () => {
+      expect(ke('dacoc').map((b) => b.event).sort()).toEqual(
+        [SU_KIEN.batDauGiao, SU_KIEN.batDauThiCong].sort(),
+      );
+    });
+
+    it('CỜ: đơn KHÔNG bật cờ Thi công ⇒ không thấy `bat_dau_thi_cong`', () => {
+      const buoc = ke('dacoc', {
+        thietBi: true,
+        thiCong: false,
+        vanChuyen: true,
+      });
+      expect(buoc.map((b) => b.event)).not.toContain(SU_KIEN.batDauThiCong);
+      expect(buoc.map((b) => b.event)).toContain(SU_KIEN.batDauGiao);
+    });
+
+    it('QUYỀN: actor thiếu `construction.transition` ⇒ không thấy bước của nhánh thi công', () => {
+      const buoc = ke('thicong', DU_CO, new Set([PERM.deliveryConfirm]));
+      expect(buoc).toEqual([]);
+    });
+
+    it('QUYỀN: actor CÓ `construction.transition` ⇒ thấy `xong_thi_cong` với đích `nghiemthu`', () => {
+      expect(ke('thicong', DU_CO, QUYEN_THU_CONG)).toEqual([
+        {
+          event: SU_KIEN.xongThiCong,
+          to: 'nghiemthu',
+          requires: PERM.constructionTransition,
+        },
+      ]);
+    });
+
+    it('WHITELIST: năm sự kiện có cửa riêng KHÔNG BAO GIỜ xuất hiện, ở BẤT KỲ trạng thái nào', () => {
+      const cuaRieng: readonly string[] = [
+        SU_KIEN.chot,
+        SU_KIEN.moLai,
+        SU_KIEN.huy,
+        SU_KIEN.duCoc,
+        SU_KIEN.apChietKhau,
+      ];
+      const moiTrangThai = new Set(
+        ALLOWED_TRANSITIONS.flatMap((rule) => [rule.from, rule.to]),
+      );
+      for (const status of moiTrangThai) {
+        for (const buoc of ke(status)) {
+          expect(cuaRieng).not.toContain(buoc.event);
+        }
+      }
+    });
+
+    it('WHITELIST: `baogia` có `chot`/`huy`/`ap_chiet_khau` trong bảng nhưng lane thủ công trả RỖNG', () => {
+      expect(ke('baogia')).toEqual([]);
+    });
+
+    it('WHITELIST: `dachot` có `du_coc`/`mo_lai`/`huy` trong bảng — lane thủ công chỉ còn `hoan_thanh` (cờ Thiết bị)', () => {
+      expect(ke('dachot').map((b) => b.event)).toEqual([SU_KIEN.hoanThanh]);
+    });
+
+    it('CỜ trên `hoan_thanh` từ `dachot`: tắt cờ Thiết bị ⇒ không còn bước nào', () => {
+      expect(
+        ke('dachot', { thietBi: false, thiCong: true, vanChuyen: true }),
+      ).toEqual([]);
+    });
+
+    it('KHÔNG no-op như lane auto: trạng thái cuối `hoanthanh` trả rỗng, không trả bước tự trỏ', () => {
+      expect(ke('hoanthanh')).toEqual([]);
+      expect(ke('huy')).toEqual([]);
+    });
+
+    it('MUTATION GUARD: mọi bước trả về phải là một DÒNG CÓ THẬT của bảng — không bảng thứ hai', () => {
+      const moiTrangThai = new Set(
+        ALLOWED_TRANSITIONS.flatMap((rule) => [rule.from, rule.to]),
+      );
+      for (const status of moiTrangThai) {
+        for (const buoc of ke(status)) {
+          const dong = ALLOWED_TRANSITIONS.find(
+            (rule) =>
+              rule.from === status &&
+              rule.event === buoc.event &&
+              rule.to === buoc.to &&
+              rule.requires === buoc.requires,
+          );
+          expect(dong).toBeDefined();
+        }
+      }
     });
   });
 });

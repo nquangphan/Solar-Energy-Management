@@ -20,6 +20,7 @@ import {
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * Unit test `OrdersService` — Prisma mock, EventBus mock.
@@ -179,7 +180,11 @@ describe('OrdersService', () => {
     $queryRaw: queryRaw,
   } as unknown as PrismaService;
   const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
-  const service = new OrdersService(prisma, eventBus as unknown as EventBus);
+  const service = new OrdersService(
+    prisma,
+    eventBus as unknown as EventBus,
+    fakeStorage(),
+  );
 
   /** Bắt `AppException` để assert `errorCode`/`fieldErrors`/status. */
   async function bat(promise: Promise<unknown>): Promise<AppException> {

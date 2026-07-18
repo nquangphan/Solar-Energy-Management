@@ -45,6 +45,7 @@ model Account {
   discountResolutions DiscountApproval[] @relation("DiscountResolvedBy")
   quoteExports        QuoteExport[]      @relation("QuoteExportCreatedBy")
   orderVersionsCreated OrderVersion[]    @relation("OrderVersionCreatedBy")
+  attachmentsUploaded  Attachment[]      @relation("AttachmentUploadedBy")
 
   @@map("accounts")
 }
@@ -353,6 +354,7 @@ model Order {
   versions          OrderVersion[]  @relation("OrderVersions")
   discountApprovals DiscountApproval[]
   quoteExport       QuoteExport?
+  attachments       Attachment[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -497,6 +499,38 @@ model QuoteExport {
 
   @@index([orderVersionId])
   @@map("quote_exports")
+}
+
+/// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2
+/// dưới key `attachments/{orderId}/{attachmentId}.{ext}`. Khuôn y hệt `QuoteExport`, khác
+/// một điểm: KHÔNG `@unique` trên `orderId` — một đơn có nhiều ảnh, nhiều lượt.
+///
+/// BỐN TOẠ ĐỘ CỦA MỘT BƯỚC (`orderId`, `statusFrom`→`statusTo`, `occurredAt`) là thứ nối ảnh
+/// vào hàng audit của chính bước đó — FR-23 định nghĩa ràng buộc đúng bằng bốn toạ độ này.
+/// KHÔNG dùng FK tới `audit_logs` được: `AuditService.record()` trả `void` và hàng audit do
+/// subscriber ghi SAU commit (AD-18), nên call-site không cầm id audit nào để trỏ tới.
+/// `applyTransition` dùng MỘT biến `Date` cho cả lượt ⇒ hai bên trùng khít.
+///
+/// Ba cột toạ độ NULLABLE có chủ đích: Story 5.6 thêm ảnh bổ sung NGOÀI luồng chuyển trạng
+/// thái — những hàng đó không thuộc bước nào và để `null`.
+model Attachment {
+  id                   String   @id @default(uuid())
+  orderId              String   @map("order_id")
+  order                Order    @relation(fields: [orderId], references: [id])
+  uploadedByAccountId  String   @map("uploaded_by_account_id")
+  uploadedBy           Account  @relation("AttachmentUploadedBy", fields: [uploadedByAccountId], references: [id])
+  objectKey            String   @unique @map("object_key")
+  fileName             String   @map("file_name")
+  contentType          String   @map("content_type")
+  size                 Int
+  statusFrom           String?  @map("status_from")
+  statusTo             String?  @map("status_to")
+  occurredAt           DateTime? @map("occurred_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([orderId, occurredAt])
+  @@map("attachments")
 }
 
 /// Phiên đăng nhập — nơi refresh token sống để THU HỒI ĐƯỢC (AD-12). Chỉ lưu HASH

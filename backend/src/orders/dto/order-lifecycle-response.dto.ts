@@ -25,7 +25,38 @@ export class OrderLifecycleStepDto {
  * Bước bị cờ chặn KHÔNG có trong mảng này (UX-DR-11: ẩn hẳn, không vẽ mờ) — client không lọc
  * gì thêm, và KHÔNG được tự suy bước từ cờ (AD-2: chuỗi bước là business logic của backend).
  */
+/**
+ * Một bước kế tiếp mà NGƯỜI GỌI NÀY bấm được trên đơn NÀY (Story 5.5) — đã lọc theo trạng
+ * thái hiện tại × cờ phạm vi × quyền THẬT của actor.
+ *
+ * Client vẽ nguyên mảng và KHÔNG tự tính quyền (AD-2/AD-4): các bước đòi những key KHÁC
+ * NHAU tuỳ nhánh, dựng biểu thức any-of ở client là bản sao luật thứ ba và nó sẽ lệch.
+ */
+export class OrderNextStepDto {
+  @ApiProperty({
+    description:
+      'Sự kiện phải gửi lên `POST /orders/{id}/chuyen-trang-thai` để đi bước này.',
+  })
+  event!: string;
+
+  @ApiProperty({
+    enum: ORDER_STATUS_KEYS,
+    description: 'Đơn sẽ tới trạng thái nào — do bảng transition quyết, không do client.',
+  })
+  to!: string;
+
+  @ApiProperty({ description: 'Quyền mà bước này đòi (thông tin hiển thị/chẩn đoán).' })
+  requires!: string;
+}
+
 export class OrderLifecycleResponseDto {
   @ApiProperty({ type: [OrderLifecycleStepDto] })
   buoc!: OrderLifecycleStepDto[];
+
+  @ApiProperty({
+    type: [OrderNextStepDto],
+    description:
+      'Bước kế tiếp NGƯỜI GỌI bấm được. MẢNG RỖNG ⇒ nút "Chuyển trạng thái" ẩn hẳn, không vẽ xám (UX-DR-22).',
+  })
+  buocKeTiep!: OrderNextStepDto[];
 }

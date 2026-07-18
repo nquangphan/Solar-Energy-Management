@@ -132,6 +132,46 @@ export interface OrderLifecycleStep {
   trangThai: 'done' | 'current' | 'upcoming';
 }
 
+/**
+ * One step the CALLER can actually take right now (Story 5.5) — mirrors the
+ * backend `OrderNextStepDto` field-for-field (AD-12).
+ *
+ * The BACKEND filters this by the order's current status, its scope flags and
+ * the caller's REAL permissions. The client never recomputes it: the branches
+ * require DIFFERENT permission keys, so an any-of expression on the client would
+ * be a third copy of the rule and it would drift (AD-2/AD-4).
+ *
+ * No Vietnamese label here either — the destination's label comes from
+ * `STATUS_LABELS`, which is parity-guarded against mobile byte-for-byte.
+ */
+export interface OrderNextStep {
+  event: string;
+  to: string;
+  requires: string;
+}
+
+/**
+ * The whole `GET /orders/:id/vong-doi` reply (Story 5.4 + 5.5): what the stepper
+ * draws, and what this caller can do next.
+ *
+ * Both come from ONE read of the order. A second route for `buocKeTiep` would be
+ * a second request asking the same question.
+ *
+ * `buocKeTiep` EMPTY means this caller has no legal step — the "Chuyển trạng
+ * thái" button is then hidden outright, not greyed (UX-DR-22).
+ */
+export interface OrderLifecycle {
+  buoc: OrderLifecycleStep[];
+  buocKeTiep: OrderNextStep[];
+}
+
+/** What one manual transition did — mirrors the backend `StatusChangeResponseDto`. */
+export interface StatusChangeResult {
+  status: string;
+  occurredAt: string;
+  soAnhDaLuu: number;
+}
+
 /** What changed between version N-1 and version N — lines and quantities only. */
 export interface OrderVersionChange {
   them: string[];
@@ -374,12 +414,13 @@ export interface OrdersPort {
   list(query: OrderListQuery): Promise<OrderPage>;
 
   /**
-   * Lifecycle steps of one order — `GET /orders/:id/vong-doi` (Story 5.4, FR-7).
-   * Already gated by the order's scope flags: steps that do not apply are ABSENT
-   * from the array, not dimmed (UX-DR-11). Rejects 404 (absent or out of the
+   * Lifecycle of one order — `GET /orders/:id/vong-doi` (Story 5.4 + 5.5, FR-7).
+   * Steps already gated by the order's scope flags: those that do not apply are
+   * ABSENT from the array, not dimmed (UX-DR-11). `buocKeTiep` is already
+   * filtered by the caller's real permissions. Rejects 404 (absent or out of the
    * caller's scope — the two are indistinguishable by design), 403.
    */
-  getLifecycle(orderId: string): Promise<OrderLifecycleStep[]>;
+  getLifecycle(orderId: string): Promise<OrderLifecycle>;
 
   /**
    * Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4, FR-6).
@@ -477,4 +518,27 @@ export interface OrdersPort {
    * Rejects 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
    */
   exportQuote(orderId: string): Promise<QuoteExportFiles>;
+
+  /**
+   * Move the order one step and attach evidence photos (Story 5.5, FR-9/FR-23) —
+   * `POST /orders/:id/chuyen-trang-thai` as `multipart/form-data`.
+   *
+   * `event` is one of the events `getLifecycle().buocKeTiep` handed back. The
+   * caller does NOT name a destination: the destination belongs to the backend's
+   * transition table, not to the client (AD-11).
+   *
+   * `anh` is ALWAYS optional — an empty array is the ordinary path, not an edge
+   * case (FR-23, UX-DR-25). Limits are the backend's: 10 photos, 10 MB each,
+   * jpeg/png/webp/heic.
+   *
+   * Rejects 400 (photo rejected — `fieldErrors` carries which one), 403 (missing
+   * the permission this step needs), 409 (step outside this screen's lane,
+   * outside the order's scope, or not reachable from the current status —
+   * including pressing twice), 404.
+   */
+  chuyenTrangThai(
+    orderId: string,
+    event: string,
+    anh: File[],
+  ): Promise<StatusChangeResult>;
 }

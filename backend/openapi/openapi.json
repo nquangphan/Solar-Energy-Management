@@ -3129,6 +3129,203 @@
         ]
       }
     },
+    "/orders/{id}/chuyen-trang-thai": {
+      "post": {
+        "operationId": "OrdersController_chuyenTrangThai",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đơn đã chuyển; ảnh (nếu có) đã ghi vào đúng bước qua bốn toạ độ (đơn, từ→đến, thời điểm).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusChangeResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Ảnh sai định dạng/quá lớn/quá nhiều (VALIDATION_ERROR) — transition KHÔNG chạy.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền cho bước đã chọn (FORBIDDEN) — Order.status không đổi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/anh/{attachmentId}": {
+      "get": {
+        "operationId": "OrdersController_downloadAttachment",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bytes của ảnh đính kèm.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/heic": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/heic": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Đơn ngoài phạm vi/không tồn tại, hoặc ảnh không thuộc đơn này (NOT_FOUND) — cùng một thông điệp, không xác nhận ảnh có thật.",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/webp": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              },
+              "image/heic": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/settings/vat-rate": {
       "get": {
         "operationId": "SettingsController_getVatRate",
@@ -4754,6 +4951,40 @@
           "trangThai"
         ]
       },
+      "OrderNextStepDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "Sự kiện phải gửi lên `POST /orders/{id}/chuyen-trang-thai` để đi bước này."
+          },
+          "to": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "description": "Đơn sẽ tới trạng thái nào — do bảng transition quyết, không do client."
+          },
+          "requires": {
+            "type": "string",
+            "description": "Quyền mà bước này đòi (thông tin hiển thị/chẩn đoán)."
+          }
+        },
+        "required": [
+          "event",
+          "to",
+          "requires"
+        ]
+      },
       "OrderLifecycleResponseDto": {
         "type": "object",
         "properties": {
@@ -4762,10 +4993,18 @@
             "items": {
               "$ref": "#/components/schemas/OrderLifecycleStepDto"
             }
+          },
+          "buocKeTiep": {
+            "description": "Bước kế tiếp NGƯỜI GỌI bấm được. MẢNG RỖNG ⇒ nút \"Chuyển trạng thái\" ẩn hẳn, không vẽ xám (UX-DR-22).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderNextStepDto"
+            }
           }
         },
         "required": [
-          "buoc"
+          "buoc",
+          "buocKeTiep"
         ]
       },
       "ThayDoiSoLuongDto": {
@@ -5076,6 +5315,61 @@
           "exportedAt",
           "image",
           "pdf"
+        ]
+      },
+      "StatusChangeRequestDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "bat_dau_thi_cong",
+              "xong_thi_cong",
+              "bat_dau_giao",
+              "xong_giao",
+              "hoan_thanh"
+            ],
+            "description": "Sự kiện chuyển trạng thái. CHỈ năm sự kiện của lane thủ công — `chot`/`mo_lai`/`huy`/`du_coc`/`ap_chiet_khau` có cửa riêng mang theo logic riêng và bị từ chối 409 ở đây.",
+            "example": "bat_dau_thi_cong"
+          }
+        },
+        "required": [
+          "event"
+        ]
+      },
+      "StatusChangeResponseDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "description": "Trạng thái đơn SAU khi chuyển — đích đến do bảng transition quyết."
+          },
+          "occurredAt": {
+            "type": "string",
+            "description": "Thời điểm của bước (ISO-8601 UTC). CÙNG một giá trị với `occurredAt` của hàng audit và của mọi ảnh trong lượt — đây là khoá nối ảnh vào bước (FR-23)."
+          },
+          "soAnhDaLuu": {
+            "type": "number",
+            "description": "Số ảnh bằng chứng đã ghi cho bước này (0 là hợp lệ — upload luôn optional).",
+            "example": 0
+          }
+        },
+        "required": [
+          "status",
+          "occurredAt",
+          "soAnhDaLuu"
         ]
       },
       "VatRateResponseDto": {

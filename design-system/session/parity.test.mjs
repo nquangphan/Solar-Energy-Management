@@ -256,6 +256,39 @@ test('the orders port carries the Story 4.8 quote-export surface on BOTH platfor
   assert.ok(mobPort.includes("import 'dart:typed_data';"), 'mobile orders port must import dart:typed_data for Uint8List');
 });
 
+test('the orders port carries the Story 5.5 status-change surface on BOTH platforms (twin re-check)', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+
+  // The transition method exists on both twins and takes the SAME three things:
+  // the order, the EVENT (never a destination — that belongs to the backend's
+  // transition table, AD-11), and a photo list that may be empty.
+  assert.match(webPort, /chuyenTrangThai\(/, 'web OrdersPort missing chuyenTrangThai (Story 5.5)');
+  assert.match(mobPort, /Future<StatusChangeResult> chuyenTrangThai\(/, 'mobile OrdersPort missing chuyenTrangThai (Story 5.5)');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    // No `to`/`status` input: a client that names its destination has an opinion
+    // about the lifecycle, and that is the one thing AD-11 reserves.
+    assert.ok(!/chuyenTrangThai\([^)]*\bto\b/.test(src), `${name} chuyenTrangThai must not take a destination`);
+  }
+
+  // Twin type tokens for the widened lifecycle read + the transition reply.
+  for (const token of ['OrderNextStep', 'OrderLifecycle', 'StatusChangeResult', 'buocKeTiep', 'soAnhDaLuu']) {
+    assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 5.5)`);
+    assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 5.5)`);
+  }
+
+  // `getLifecycle` returns the WIDENED shape on both — one read answers both
+  // "what does the stepper draw" and "what can this caller do next".
+  assert.match(webPort, /getLifecycle\(orderId: string\): Promise<OrderLifecycle>/, 'web getLifecycle must return OrderLifecycle (Story 5.5)');
+  assert.match(mobPort, /Future<OrderLifecycle> getLifecycle\(/, 'mobile getLifecycle must return OrderLifecycle (Story 5.5)');
+
+  // The photo payload is each platform's native picked-file type: File[] on web,
+  // XFile[] on mobile (what AppImageUpload emits).
+  assert.ok(webPort.includes('anh: File[]'), 'web chuyenTrangThai must take File[]');
+  assert.ok(mobPort.includes('List<XFile> anh'), 'mobile chuyenTrangThai must take List<XFile>');
+  assert.ok(mobPort.includes("import 'package:image_picker/image_picker.dart';"), 'mobile orders port must import image_picker for XFile');
+});
+
 test('the orders port carries the Story 4.9 warranty surface on BOTH platforms (twin re-check)', () => {
   const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
   const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');

@@ -14,6 +14,8 @@
 
 import 'dart:typed_data';
 
+import 'package:image_picker/image_picker.dart';
+
 /// The confirmed order status — the ONE status literal screens compare against
 /// (Story 4.6). Screens import this constant; the guard forbids the raw literal
 /// inside screen files, so the string lives here in the port file only.
@@ -186,6 +188,57 @@ class OrderLifecycleStep {
 
   /// `done` | `current` | `upcoming`.
   final String trangThai;
+}
+
+/// One step the CALLER can actually take right now (Story 5.5) — mirrors the
+/// backend `OrderNextStepDto` and the web `OrderNextStep` field-for-field
+/// (AD-12).
+///
+/// The BACKEND filters this by the order's current status, its scope flags and
+/// the caller's REAL permissions. The client never recomputes it: the branches
+/// require DIFFERENT permission keys, so an any-of expression on the client
+/// would be a third copy of the rule and it would drift (AD-2/AD-4).
+///
+/// No Vietnamese label here either — the destination's label comes from
+/// [kStatusLabels], parity-guarded byte-for-byte against web.
+class OrderNextStep {
+  const OrderNextStep({
+    required this.event,
+    required this.to,
+    required this.requires,
+  });
+
+  final String event;
+  final String to;
+  final String requires;
+}
+
+/// The whole `GET /orders/:id/vong-doi` reply (Story 5.4 + 5.5): what the
+/// stepper draws, and what this caller can do next.
+///
+/// Both come from ONE read of the order. A second route for [buocKeTiep] would
+/// be a second request asking the same question.
+///
+/// [buocKeTiep] EMPTY means this caller has no legal step — the "Chuyển trạng
+/// thái" button is then hidden outright, not greyed (UX-DR-22).
+class OrderLifecycle {
+  const OrderLifecycle({required this.buoc, required this.buocKeTiep});
+
+  final List<OrderLifecycleStep> buoc;
+  final List<OrderNextStep> buocKeTiep;
+}
+
+/// What one manual transition did — mirrors the backend `StatusChangeResponseDto`.
+class StatusChangeResult {
+  const StatusChangeResult({
+    required this.status,
+    required this.occurredAt,
+    required this.soAnhDaLuu,
+  });
+
+  final String status;
+  final String occurredAt;
+  final int soAnhDaLuu;
 }
 
 /// One quantity change between two versions.
@@ -569,11 +622,12 @@ abstract class OrdersPort {
     int? pageSize,
   });
 
-  /// Lifecycle steps of one order — `GET /orders/:id/vong-doi` (Story 5.4,
-  /// FR-7). Already gated by the order's scope flags: steps that do not apply
-  /// are ABSENT from the list, not dimmed (UX-DR-11). Throws 404 (absent or out
-  /// of the caller's scope — indistinguishable by design), 403.
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId);
+  /// Lifecycle of one order — `GET /orders/:id/vong-doi` (Story 5.4 + 5.5,
+  /// FR-7). Steps already gated by the order's scope flags: those that do not
+  /// apply are ABSENT from the list, not dimmed (UX-DR-11). `buocKeTiep` is
+  /// already filtered by the caller's real permissions. Throws 404 (absent or
+  /// out of the caller's scope — indistinguishable by design), 403.
+  Future<OrderLifecycle> getLifecycle(String orderId);
 
   /// Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4,
   /// FR-6). Every version, `versionNo` ascending; exactly one carries
@@ -651,4 +705,25 @@ abstract class OrdersPort {
   /// one pricing function, AD-16) and overwrites the order's latest file pair.
   /// Throws 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
   Future<QuoteExportFiles> exportQuote(String orderId);
+
+  /// Move the order one step and attach evidence photos (Story 5.5,
+  /// FR-9/FR-23) — `POST /orders/:id/chuyen-trang-thai` as `multipart/form-data`.
+  ///
+  /// [event] is one of the events `getLifecycle().buocKeTiep` handed back. The
+  /// caller does NOT name a destination: the destination belongs to the
+  /// backend's transition table, not to the client (AD-11).
+  ///
+  /// [anh] is ALWAYS optional — an empty list is the ordinary path, not an edge
+  /// case (FR-23, UX-DR-25). Limits are the backend's: 10 photos, 10 MB each,
+  /// jpeg/png/webp/heic.
+  ///
+  /// Throws 400 (photo rejected — `fieldErrors` carries which one), 403 (missing
+  /// the permission this step needs), 409 (step outside this screen's lane,
+  /// outside the order's scope, or not reachable from the current status —
+  /// including pressing twice), 404.
+  Future<StatusChangeResult> chuyenTrangThai(
+    String orderId,
+    String event,
+    List<XFile> anh,
+  );
 }

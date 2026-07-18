@@ -5,6 +5,7 @@ import { ErrorCode } from '../src/common/errors/error-code';
 import { EventBus } from '../src/events/event-bus';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrdersService } from '../src/orders/orders.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * HÌNH DẠNG `where` của ĐƯỜNG ĐỌC-THEO-ID — hermetic, Prisma mock.
@@ -52,7 +53,11 @@ describe('OrdersService — đọc theo id thu hẹp theo phạm vi quyền', ()
       discountApproval: { findFirst: () => null },
     } as unknown as PrismaService;
 
-    const service = new OrdersService(prisma, {} as unknown as EventBus);
+    const service = new OrdersService(
+      prisma,
+      {} as unknown as EventBus,
+      fakeStorage(),
+    );
     return { service, batDuoc };
   }
 

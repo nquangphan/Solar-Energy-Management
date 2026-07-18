@@ -63,23 +63,29 @@ class _StubPort extends FakeOrdersPort {
   _StubPort({
     required this.steps,
     this.versions = const <OrderVersionItem>[],
+    this.buocKeTiep = const <OrderNextStep>[],
   });
 
   final List<String> steps;
   final List<OrderVersionItem> versions;
 
+  /// Story 5.5: non-empty makes the "Chuyển trạng thái" button render.
+  final List<OrderNextStep> buocKeTiep;
+
   @override
   Future<Order> get(String id) async => _order();
 
   @override
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async =>
-      <OrderLifecycleStep>[
-        for (int i = 0; i < steps.length; i++)
-          OrderLifecycleStep(
-            status: steps[i],
-            trangThai: i == 0 ? 'current' : 'upcoming',
-          ),
-      ];
+  Future<OrderLifecycle> getLifecycle(String orderId) async => OrderLifecycle(
+        buoc: <OrderLifecycleStep>[
+          for (int i = 0; i < steps.length; i++)
+            OrderLifecycleStep(
+              status: steps[i],
+              trangThai: i == 0 ? 'current' : 'upcoming',
+            ),
+        ],
+        buocKeTiep: buocKeTiep,
+      );
 
   @override
   Future<List<OrderVersionItem>> listVersions(String orderId) async => versions;
@@ -96,7 +102,7 @@ class _FailingPort extends FakeOrdersPort {
   }
 
   @override
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async =>
+  Future<OrderLifecycle> getLifecycle(String orderId) async =>
       throw StateError('network down');
 
   @override
@@ -113,7 +119,7 @@ class _NotFoundPort extends FakeOrdersPort {
           code: 'NOT_FOUND');
 
   @override
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async =>
+  Future<OrderLifecycle> getLifecycle(String orderId) async =>
       throw const OrderPortException('Không tìm thấy đơn hàng: x',
           code: 'NOT_FOUND');
 
@@ -134,8 +140,11 @@ class _HangingPort extends FakeOrdersPort {
   Future<Order> get(String id) => cho.future;
 
   @override
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async =>
-      const <OrderLifecycleStep>[];
+  Future<OrderLifecycle> getLifecycle(String orderId) async =>
+      const OrderLifecycle(
+        buoc: <OrderLifecycleStep>[],
+        buocKeTiep: <OrderNextStep>[],
+      );
 
   @override
   Future<List<OrderVersionItem>> listVersions(String orderId) async =>
@@ -328,5 +337,85 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
+  });
+
+  // Story 5.5, AC-11 — the ONE action button on this screen.
+  //
+  // Visibility follows the backend's `buocKeTiep`, NOT a permission calculation
+  // here: the branches need DIFFERENT permission keys, so a client-side any-of
+  // would be a third copy of the rule and it would drift (AD-2/AD-4).
+
+  testWidgets('a non-empty buocKeTiep renders the "Chuyển trạng thái" button',
+      (WidgetTester tester) async {
+    bool daBam = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(
+            steps: const <String>['baogia', 'dachot'],
+            buocKeTiep: const <OrderNextStep>[
+              OrderNextStep(
+                event: 'bat_dau_thi_cong',
+                to: 'thicong',
+                requires: 'construction.transition',
+              ),
+            ],
+          ),
+          orderId: _kOrderId,
+          onChangeStatus: () => daBam = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chuyển trạng thái'), findsOneWidget);
+    await tester.tap(find.text('Chuyển trạng thái'));
+    await tester.pumpAndSettle();
+    expect(daBam, isTrue);
+  });
+
+  testWidgets('AC-11: an EMPTY buocKeTiep hides the button outright, not greyed',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onChangeStatus: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // ABSENT, not disabled: a greyed control invites a tap that can never work
+    // (UX-DR-22). `findsNothing` is the whole assertion — a disabled button
+    // would still be found.
+    expect(find.text('Chuyển trạng thái'), findsNothing);
+  });
+
+  testWidgets('no onChangeStatus wired ⇒ no button, even with steps available',
+      (WidgetTester tester) async {
+    // A button whose destination the host never provided is a button to nowhere
+    // — the same rule that keeps "Huỷ đơn" off this screen until 5.7.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(
+            steps: const <String>['baogia', 'dachot'],
+            buocKeTiep: const <OrderNextStep>[
+              OrderNextStep(
+                event: 'bat_dau_thi_cong',
+                to: 'thicong',
+                requires: 'construction.transition',
+              ),
+            ],
+          ),
+          orderId: _kOrderId,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chuyển trạng thái'), findsNothing);
   });
 }

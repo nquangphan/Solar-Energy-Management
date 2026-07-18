@@ -255,11 +255,15 @@ test('exactly the two owned tabs render — no placeholder tabs for future stori
   }
 });
 
-// (e.4) NO ACTION BUTTONS. "Chuyển trạng thái" (5.5), "Huỷ đơn" (5.7) and
-// "Share báo giá" all lead to screens that do not exist yet.
+// (e.4) NO BUTTON OWNED BY A STORY THAT HAS NOT SHIPPED. "Huỷ đơn" (5.7) and
+// "Share báo giá" still lead to screens that do not exist.
+//
+// "Chuyển trạng thái" LEFT this list in Story 5.5: that story shipped the screen
+// the button opens, so it now owns the button too. The rule did not weaken — it
+// still says "no button to nowhere"; one destination stopped being nowhere.
 test('the detail screen renders no button owned by a future story', () => {
   for (const [name, src] of allCode) {
-    for (const label of ['Chuyển trạng thái', 'Huỷ đơn', 'Share báo giá']) {
+    for (const label of ['Huỷ đơn', 'Share báo giá']) {
       assert.ok(!src.includes(label), `${name} must not render "${label}" — a later story owns that button`);
     }
   }
@@ -397,8 +401,11 @@ test('the version-history contract carries the same fields on backend, web and m
 test('both ports declare getLifecycle and listVersions (parity)', () => {
   const webPort = stripTsx(read(WEB_PORT));
   const dartPort = stripDart(read(MOBILE_PORT));
-  assert.match(webPort, /getLifecycle\(orderId: string\): Promise<OrderLifecycleStep\[\]>/, 'web port must declare getLifecycle');
+  // Story 5.5 widened `getLifecycle`'s return from a bare step list to
+  // `OrderLifecycle { buoc, buocKeTiep }` on BOTH platforms — one read answers
+  // both "what does the stepper draw" and "what can this caller do next".
+  assert.match(webPort, /getLifecycle\(orderId: string\): Promise<OrderLifecycle>/, 'web port must declare getLifecycle');
   assert.match(webPort, /listVersions\(orderId: string\): Promise<OrderVersionItem\[\]>/, 'web port must declare listVersions');
-  assert.match(dartPort, /Future<List<OrderLifecycleStep>> getLifecycle\(/, 'mobile port must declare getLifecycle');
+  assert.match(dartPort, /Future<OrderLifecycle> getLifecycle\(/, 'mobile port must declare getLifecycle');
   assert.match(dartPort, /Future<List<OrderVersionItem>> listVersions\(/, 'mobile port must declare listVersions');
 });

@@ -10,11 +10,15 @@ import {
   Post,
   Query,
   StreamableFile,
+  UploadedFiles,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiConflictResponse,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNoContentResponse,
@@ -35,6 +39,11 @@ import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { SettingsService } from '../settings/settings.service';
+import { type TransitionEvent } from './domain/allowed-transition';
+import {
+  KICH_THUOC_TOI_DA_BYTE,
+  SO_ANH_TOI_DA,
+} from './domain/attachment-limits';
 import { vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
@@ -50,6 +59,8 @@ import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { QuoteExportResponseDto } from './dto/quote-export-response.dto';
 import { ResolveDiscountRequestDto } from './dto/resolve-discount-request.dto';
+import { StatusChangeRequestDto } from './dto/status-change-request.dto';
+import { StatusChangeResponseDto } from './dto/status-change-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 import { OrdersService } from './orders.service';
@@ -71,6 +82,25 @@ import { QuoteExportService } from './quote-export.service';
  * Controller KHÔNG dựng envelope lỗi: service ném `AppException`, `AllExceptionsFilter` dựng
  * (AD-5).
  */
+/**
+ * TRẦN CỨNG chặn lạm dụng ở transport — CỐ Ý cao hơn giới hạn hợp đồng trong
+ * `attachment-limits.ts` (10 ảnh × 10 MB). Lý do ở docstring của `chuyenTrangThai()`.
+ */
+const TRAN_CUNG_SO_ANH = SO_ANH_TOI_DA * 2;
+const TRAN_CUNG_KICH_THUOC_BYTE = KICH_THUOC_TOI_DA_BYTE * 2;
+
+/**
+ * Một file nhận từ multer — khai TỐI THIỂU bốn trường thực sự dùng, thay vì kéo
+ * `@types/multer` vào chỉ để mượn `Express.Multer.File`. Shape này khớp cả runtime multer
+ * lẫn `AnhTaiLen` của domain (structural typing), nên service nhận thẳng không cần map.
+ */
+interface FileDaTaiLen {
+  readonly originalname: string;
+  readonly mimetype: string;
+  readonly size: number;
+  readonly buffer: Buffer;
+}
+
 @ApiTags('orders')
 @ApiBearerAuth()
 @Controller('orders')
@@ -267,14 +297,14 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<OrderLifecycleResponseDto> {
+    const vongDoi = await this.orders.lifecycle(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+    );
     return {
-      buoc: [
-        ...(await this.orders.lifecycle(
-          account.id,
-          await this.quyenCuaNguoiGoi(account.id),
-          id,
-        )),
-      ],
+      buoc: [...vongDoi.buoc],
+      buocKeTiep: [...vongDoi.buocKeTiep],
     };
   }
 
@@ -707,6 +737,124 @@ export class OrdersController {
   })
   async downloadQuotePdf(@Param('id') id: string): Promise<StreamableFile> {
     const file = await this.quoteExport.getExportFile(id, 'pdf');
+    return new StreamableFile(file.body, {
+      type: file.contentType,
+      disposition: `attachment; filename="${file.fileName}"`,
+    });
+  }
+
+  /**
+   * Chuyển trạng thái THỦ CÔNG + đính kèm ảnh bằng chứng (Story 5.5, FR-9/FR-23).
+   *
+   * `@HttpCode(OK)` — kỷ luật của file: action nghiệp vụ trên resource CÓ SẴN không trả 201
+   * (không có resource nào được tạo ở cấp URL này).
+   *
+   * GATE CỬA đúng BA key mà `SU_KIEN_THU_CONG` thực sự cần. KHÔNG liệt `quotes.create_edit`
+   * / `orders.confirm`: đó là key của `chot`/`mo_lai`/`huy` — chính những sự kiện endpoint
+   * này TỪ CHỐI. Mở cửa cho chúng là mời đúng ca hỏng dữ liệu mà whitelist vừa chặn.
+   * Gate thật vẫn là engine dưới row lock (hai tầng).
+   *
+   * GIỚI HẠN CHẶN DoS ở interceptor đặt CAO HƠN giới hạn hợp đồng (10 ảnh × 10 MB, ở
+   * `attachment-limits.ts`) một cách CÓ CHỦ ĐÍCH: multer ném `MulterError` TRƯỚC khi handler
+   * chạy, và lỗi đó lọt tới `AllExceptionsFilter` như lỗi không lường trước ⇒ 500 generic,
+   * mất envelope `VALIDATION_ERROR` + `fieldErrors` mà AC-9 đòi. Đặt cao hơn ⇒ mọi vi phạm
+   * của người dùng THẬT đi tới domain và nhận 400 đúng shape; chỉ request lạm dụng thật sự
+   * mới chạm trần cứng này.
+   *
+   * KHÔNG khai `storage` ⇒ multer dùng memory storage mặc định (bytes đi thẳng lên R2, không
+   * chạm đĩa máy chủ).
+   */
+  @Post(':id/chuyen-trang-thai')
+  @HttpCode(HttpStatus.OK)
+  @RequireAnyPermissions(
+    PERM.constructionTransition,
+    PERM.deliveryConfirm,
+    PERM.paymentsRecord,
+  )
+  @UseInterceptors(
+    FilesInterceptor('anh', TRAN_CUNG_SO_ANH, {
+      limits: { fileSize: TRAN_CUNG_KICH_THUOC_BYTE },
+    }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOkResponse({
+    type: StatusChangeResponseDto,
+    description:
+      'Đơn đã chuyển; ảnh (nếu có) đã ghi vào đúng bước qua bốn toạ độ (đơn, từ→đến, thời điểm).',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Ảnh sai định dạng/quá lớn/quá nhiều (VALIDATION_ERROR) — transition KHÔNG chạy.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu quyền cho bước đã chọn (FORBIDDEN) — Order.status không đổi.',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
+  })
+  async chuyenTrangThai(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Body() dto: StatusChangeRequestDto,
+    @UploadedFiles() anh?: FileDaTaiLen[],
+  ): Promise<StatusChangeResponseDto> {
+    const ketQua = await this.orders.chuyenTrangThaiThuCong({
+      callerAccountId: account.id,
+      quyen: await this.quyenCuaNguoiGoi(account.id),
+      orderId: id,
+      event: dto.event as TransitionEvent,
+      anh: anh ?? [],
+    });
+    return {
+      status: ketQua.status,
+      occurredAt: ketQua.occurredAt.toISOString(),
+      soAnhDaLuu: ketQua.soAnhDaLuu,
+    };
+  }
+
+  /**
+   * Proxy đọc bytes MỘT ảnh đính kèm (AD-3: bucket không public, byte nào cũng đi qua
+   * backend sau JWT + permission).
+   *
+   * Gate đọc giống bốn đường đọc đơn (`view_all` OR `view_own`) — ảnh của đơn là dữ liệu của
+   * đơn. ⚠️ Service `findScopedOrThrow` TRƯỚC khi chạm R2: khác `:id/bao-gia/anh` phía trên,
+   * vốn gọi `getExportFile(id, …)` không nhận caller và KHÔNG scope (nợ ghi nhận từ 5.4).
+   */
+  @Get(':id/anh/:attachmentId')
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiProduces('image/jpeg', 'image/png', 'image/webp', 'image/heic')
+  @ApiOkResponse({
+    schema: { type: 'string', format: 'binary' },
+    description: 'Bytes của ảnh đính kèm.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Đơn ngoài phạm vi/không tồn tại, hoặc ảnh không thuộc đơn này (NOT_FOUND) — cùng một thông điệp, không xác nhận ảnh có thật.',
+  })
+  async downloadAttachment(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+  ): Promise<StreamableFile> {
+    const file = await this.orders.anhDinhKem(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+      attachmentId,
+    );
     return new StreamableFile(file.body, {
       type: file.contentType,
       disposition: `attachment; filename="${file.fileName}"`,

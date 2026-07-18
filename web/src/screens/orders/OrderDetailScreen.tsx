@@ -12,14 +12,21 @@
 // filtered here and nothing renders dimmed (UX-DR-11).
 //
 // The status chip is READ-ONLY (UX-DR-23): changing status is its own screen
-// (Story 5.5). No action buttons at all here — "Chuyển trạng thái" (5.5), "Huỷ
-// đơn" (5.7) and "Share báo giá" all lead to screens that do not exist yet, and
-// a button to nowhere is worse than no button.
+// (Story 5.5), reached by the one action button here. "Huỷ đơn" (5.7) and
+// "Share báo giá" still lead to screens that do not exist, and a button to
+// nowhere is worse than no button — they stay absent.
+//
+// THE BUTTON'S VISIBILITY IS NOT A PERMISSION CALCULATION. It shows exactly when
+// the backend returned a non-empty `buocKeTiep`, and is ABSENT otherwise — not
+// greyed (UX-DR-22). The branches need DIFFERENT permission keys, so an any-of
+// expression here would be a third copy of the rule and it would drift
+// (AD-2/AD-4).
 //
 // No money math (AD-10/16): every number shown is one the backend computed.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  Button,
   EmptyState,
   ErrorState,
   Frame,
@@ -35,6 +42,7 @@ import { filterNav } from '../../design-system/gating/permissions';
 import type {
   Order,
   OrderLifecycleStep,
+  OrderNextStep,
   OrdersPort,
   OrderVersionItem,
 } from '../../design-system/session/orders-port';
@@ -47,6 +55,8 @@ export interface OrderDetailScreenProps {
   port: OrdersPort;
   orderId: string;
   onBack?: () => void;
+  /** Opens the status-change screen (Story 5.5). Absent = the button never renders. */
+  onChangeStatus?: () => void;
 }
 
 // 'notfound' is its own state, NOT a flavour of 'error': "this order does not
@@ -98,11 +108,17 @@ function summarise(version: OrderVersionItem): string {
   return parts.length === 0 ? 'Không đổi dòng nào' : parts.join(' · ');
 }
 
-export function OrderDetailScreen({ port, orderId, onBack }: OrderDetailScreenProps) {
+export function OrderDetailScreen({
+  port,
+  orderId,
+  onBack,
+  onChangeStatus,
+}: OrderDetailScreenProps) {
   const { perms } = usePermissions();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [steps, setSteps] = useState<OrderLifecycleStep[]>([]);
+  const [buocKeTiep, setBuocKeTiep] = useState<OrderNextStep[]>([]);
   const [versions, setVersions] = useState<OrderVersionItem[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [tab, setTab] = useState(TAB_THONG_TIN);
@@ -124,7 +140,8 @@ export function OrderDetailScreen({ port, orderId, onBack }: OrderDetailScreenPr
       ]);
       if (ticket !== latest.current) return;
       setOrder(don);
-      setSteps(buoc);
+      setSteps(buoc.buoc);
+      setBuocKeTiep(buoc.buocKeTiep);
       setVersions(banUpdate);
       setState('ready');
     } catch (err) {
@@ -169,6 +186,13 @@ export function OrderDetailScreen({ port, orderId, onBack }: OrderDetailScreenPr
           <>
             <Frame label="Vòng đời đơn" onBg>
               <Stepper steps={toStepItems(steps)} />
+              {buocKeTiep.length > 0 && onChangeStatus && (
+                <div className="od-actions">
+                  <Button variant="primary" onClick={onChangeStatus}>
+                    Chuyển trạng thái
+                  </Button>
+                </div>
+              )}
             </Frame>
 
             <Tabs tabs={TABS} activeKey={tab} onSelect={setTab} />

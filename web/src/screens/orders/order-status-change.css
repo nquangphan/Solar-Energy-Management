@@ -1,0 +1,66 @@
+/* hand-authored — Story 5.5 status-change layout wrappers. Composition-level
+   styling only: the frames, buttons, chips, image picker, error state and
+   skeletons are all shipped design-system components. Token vars for every
+   colour and radius; flat borders, no elevation effects (Viền nét, UX-DR-4).
+   Load AFTER tokens.css / components.css / shell.css. */
+
+.sc-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+/* Stacked skeleton rows + the loading caption — twin of `.od-state`. */
+.sc-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.sc-state-msg {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* The one-step-per-row chooser. A vertical list, not a row of chips: the rows
+   are consequential choices and each needs a hit target the width of the frame. */
+.sc-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sc-step-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+/* "No step available" is an ANSWER, not an error — muted prose, no retry. */
+.sc-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* The backend's refusal message, rendered verbatim above the actions so it sits
+   next to the button that produced it. */
+.sc-err {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.sc-actions {
+  display: flex;
+  gap: var(--space-8);
+}

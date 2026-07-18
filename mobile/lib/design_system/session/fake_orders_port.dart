@@ -10,6 +10,8 @@
 
 import 'dart:typed_data';
 
+import 'package:image_picker/image_picker.dart';
+
 import 'catalog_port.dart';
 import 'customers_port.dart';
 import 'fake_catalog_port.dart';
@@ -17,6 +19,9 @@ import 'fake_customers_port.dart';
 import 'orders_port.dart';
 
 const String _now = '2026-07-16T00:00:00.000Z';
+
+/// Demo mirror of the backend's photo-count ceiling (`SO_ANH_TOI_DA`).
+const int _kDemoSoAnhToiDa = 10;
 
 /// STATIC demo bytes for `exportQuote` (Story 4.8) — the real backend renders
 /// PDF/PNG from the quote template; the demo just hands back a valid 1×1 PNG
@@ -288,7 +293,7 @@ class FakeOrdersPort implements OrdersPort {
   ///
   /// Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
   @override
-  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async {
+  Future<OrderLifecycle> getLifecycle(String orderId) async {
     final Order? order = _orders[orderId];
     // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
     // full-length stepper (also the case that overflows a phone width).
@@ -304,17 +309,125 @@ class FakeOrdersPort implements OrdersPort {
       'hoanthanh',
     ];
     final int dangO = chuoi.indexOf(status);
-    return <OrderLifecycleStep>[
-      for (int i = 0; i < chuoi.length; i++)
-        OrderLifecycleStep(
-          status: chuoi[i],
-          trangThai: dangO == -1 || i > dangO
-              ? 'upcoming'
-              : i == dangO
-                  ? 'current'
-                  : 'done',
+    return OrderLifecycle(
+      buoc: <OrderLifecycleStep>[
+        for (int i = 0; i < chuoi.length; i++)
+          OrderLifecycleStep(
+            status: chuoi[i],
+            trangThai: dangO == -1 || i > dangO
+                ? 'upcoming'
+                : i == dangO
+                    ? 'current'
+                    : 'done',
+          ),
+      ],
+      buocKeTiep: _buocKeTiepDemo(status, thiCong, vanChuyen),
+    );
+  }
+
+  /// Demo stand-in for the backend's `buocKeTiep()`. Like `getLifecycle` above
+  /// it lives in the FAKE (the demo "server"), NEVER in a screen — the real one
+  /// reads ALLOWED_TRANSITIONS and filters by the caller's real permissions
+  /// (AD-2/AD-11).
+  ///
+  /// Only the five MANUAL-lane events appear. `chot`/`mo_lai`/`huy`/`du_coc`/
+  /// `ap_chiet_khau` each own a separate endpoint carrying logic this screen
+  /// does not run, so the demo must not offer them either — a demo that offers
+  /// a step the real backend rejects teaches the wrong shape.
+  ///
+  /// An order at a terminal status yields an EMPTY list, which is what drives
+  /// the hidden-button branch of the screen.
+  List<OrderNextStep> _buocKeTiepDemo(
+    String status,
+    bool thiCong,
+    bool vanChuyen,
+  ) {
+    return <OrderNextStep>[
+      if (status == 'dacoc' && thiCong)
+        const OrderNextStep(
+          event: 'bat_dau_thi_cong',
+          to: 'thicong',
+          requires: 'construction.transition',
+        ),
+      if (status == 'dacoc' && vanChuyen)
+        const OrderNextStep(
+          event: 'bat_dau_giao',
+          to: 'danggiao',
+          requires: 'delivery.confirm',
+        ),
+      if (status == 'thicong')
+        const OrderNextStep(
+          event: 'xong_thi_cong',
+          to: 'nghiemthu',
+          requires: 'construction.transition',
+        ),
+      if (status == 'danggiao')
+        const OrderNextStep(
+          event: 'xong_giao',
+          to: 'dagiao',
+          requires: 'delivery.confirm',
+        ),
+      if (status == 'nghiemthu')
+        const OrderNextStep(
+          event: 'hoan_thanh',
+          to: 'hoanthanh',
+          requires: 'construction.transition',
+        ),
+      if (status == 'dagiao')
+        const OrderNextStep(
+          event: 'hoan_thanh',
+          to: 'hoanthanh',
+          requires: 'delivery.confirm',
         ),
     ];
+  }
+
+  /// Demo twin of `POST /orders/:id/chuyen-trang-thai` (Story 5.5). It applies
+  /// the same three refusals the real backend applies, in the same order, so
+  /// the screen's error branches are exercisable offline: unknown order → 404,
+  /// step not offered for this status → 409, too many photos → 400 with
+  /// `fieldErrors`.
+  ///
+  /// Photos are COUNTED, not stored: the demo has no R2 and inventing a fake
+  /// object key would teach the screen a shape the real port does not return.
+  @override
+  Future<StatusChangeResult> chuyenTrangThai(
+    String orderId,
+    String event,
+    List<XFile> anh,
+  ) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      throw OrderPortException(
+        'Không tìm thấy đơn hàng: $orderId',
+        code: 'NOT_FOUND',
+      );
+    }
+    final List<OrderNextStep> buoc = _buocKeTiepDemo(
+      order.status,
+      order.scopeThiCong,
+      order.scopeVanChuyen,
+    ).where((OrderNextStep b) => b.event == event).toList();
+    if (buoc.isEmpty) {
+      throw const OrderPortException(
+        'Không chuyển được trạng thái đơn từ trạng thái hiện tại.',
+        code: 'CONFLICT',
+      );
+    }
+    if (anh.length > _kDemoSoAnhToiDa) {
+      throw const OrderPortException(
+        'Ảnh đính kèm không hợp lệ.',
+        code: 'VALIDATION_ERROR',
+        fieldErrors: <String, String>{
+          'anh': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần chuyển trạng thái.',
+        },
+      );
+    }
+    return StatusChangeResult(
+      status: buoc.first.to,
+      occurredAt: _now,
+      soAnhDaLuu: anh.length,
+    );
   }
 
   /// Demo history. Two shapes on purpose so the screen's empty and populated

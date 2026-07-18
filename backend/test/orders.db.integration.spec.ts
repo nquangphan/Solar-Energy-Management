@@ -5,6 +5,7 @@ import type { EventBus } from '../src/events/event-bus';
 import { SU_KIEN } from '../src/orders/domain/allowed-transition';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { fakeStorage } from './util/fake-storage';
 
 /**
  * Lane TÍCH HỢP trên Postgres THẬT cho Story 4.1 — ba sự thật mà mock KHÔNG chứng minh được:
@@ -72,6 +73,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
     service = new OrdersService(
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+      fakeStorage(),
     );
 
     const facebook = await prisma.customerSource.findUnique({
@@ -391,6 +393,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
           },
           subscribe: () => {},
         } as unknown as EventBus,
+        fakeStorage(),
       );
     });
 
