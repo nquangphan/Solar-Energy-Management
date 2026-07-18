@@ -216,6 +216,79 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
       }
     });
 
+    /**
+     * CẠNH THỨ HAI CỦA NHÁNH THI CÔNG. Mọi case trên đi `bat_dau_thi_cong`; cạnh
+     * `thicong → nghiemthu` chưa từng chạy qua executor ở lane hermetic nào. Một nhánh có
+     * cạnh vào mà không ai chạy cạnh ra là nhánh cụt chờ tới lượt.
+     */
+    describe('cạnh `thicong` → `nghiemthu`', () => {
+      /** Đơn đứng giữa nhánh, cờ Thi công vẫn bật (điều kiện để vào được `thicong`). */
+      function goiXongThiCong(anhKem: ReturnType<typeof anh>[] = []) {
+        orderRepo.findFirst.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'thicong',
+        });
+        return goi({ event: SU_KIEN.xongThiCong, anh: anhKem });
+      }
+
+      it('ghi status qua CỔNG ATOMIC theo status quan sát được', async () => {
+        const ketQua = await goiXongThiCong();
+
+        expect(ketQua.status).toBe('nghiemthu');
+        expect(orderRepo.updateMany).toHaveBeenCalledWith({
+          where: { id: ORDER_ID, status: 'thicong' },
+          data: { status: 'nghiemthu' },
+        });
+      });
+
+      it('publish `StatusChanged` mang đúng cặp trạng thái của bước', async () => {
+        await goiXongThiCong();
+
+        // ĐÚNG MỘT lần: `AuditSubscriber` ghi log off event (AD-18), nên publish hai lần
+        // là hai dòng audit cho một bước có thật một lần.
+        expect(eventBus.publish).toHaveBeenCalledTimes(1);
+        const [event] = eventBus.publish.mock.calls[0] as [StatusChanged];
+        expect(event).toBeInstanceOf(StatusChanged);
+        expect(event.before.status).toBe('thicong');
+        expect(event.after.status).toBe('nghiemthu');
+      });
+
+      it('ảnh của bước mang cặp khoá `thicong`→`nghiemthu` và CHUNG `occurredAt` với event', async () => {
+        await goiXongThiCong([anh()]);
+
+        const [event] = eventBus.publish.mock.calls[0] as [StatusChanged];
+        const [hang] = attachmentRepo.createMany.mock.calls[0][0].data;
+        expect(hang.statusFrom).toBe('thicong');
+        expect(hang.statusTo).toBe('nghiemthu');
+        // Cùng MỘT instance Date: đây là khoá nối ảnh vào hàng audit của bước (FR-23).
+        expect(hang.occurredAt).toBe(event.occurredAt);
+      });
+
+      /**
+       * THỨ TỰ, không chỉ kết quả. Publish TRONG transaction ⇒ consumer (audit, FCM) thấy
+       * một bước chưa commit; tx rollback sau đó thì audit ghi một bước KHÔNG BAO GIỜ xảy ra.
+       *
+       * ⚠️ Mock phải CHẠY THÂN tx rồi mới ném. `mockRejectedValue` trần không chạy callback,
+       * nên test vẫn xanh kể cả khi `publish` bị dời vào trong tx — xanh mà không chứng minh gì.
+       */
+      it('tx ném SAU khi thân đã chạy ⇒ KHÔNG publish — publish nằm ngoài, sau commit', async () => {
+        const thanTxDaChay = jest.fn();
+        transaction.mockImplementation(
+          async (fn: (tx: typeof txMock) => Promise<unknown>) => {
+            await fn(txMock);
+            thanTxDaChay();
+            throw new Error('commit hỏng');
+          },
+        );
+
+        await bat(goiXongThiCong([anh()]));
+
+        expect(thanTxDaChay).toHaveBeenCalled();
+        expect(orderRepo.updateMany).toHaveBeenCalled();
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      });
+    });
+
     it('nhánh giao hàng dùng key quyền KHÁC — `bat_dau_giao` đi được với delivery.confirm', async () => {
       const ketQua = await goi({
         event: SU_KIEN.batDauGiao,

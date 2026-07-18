@@ -67,7 +67,9 @@ Microcopy tiếng Việt: **ngắn gọn, minh bạch, không hô hào**. Nhãn 
 | "SĐT chưa có trong hệ thống." + nút "Tạo khách hàng mới" | "Không tìm thấy kết quả" |
 | Con số + động từ: "3 đơn chờ duyệt chiết khấu". | Câu cảm thán, streak, huy hiệu, động viên. |
 
-Nhãn Trạng thái là **danh từ nghiệp vụ verbatim theo Glossary**: Báo giá · Chờ duyệt chiết khấu · Đã chốt · Đã cọc · Lên lịch thi công · Đang thi công · Nghiệm thu · Đang giao hàng · Đã giao · Hoàn thành · Huỷ.
+Nhãn Trạng thái là **danh từ nghiệp vụ verbatim theo Glossary**: Báo giá · Chờ duyệt chiết khấu · Đã chốt · Đã cọc · Đang thi công · Nghiệm thu · Đang giao hàng · Đã giao · Hoàn thành · Huỷ.
+
+> Bước **Lên lịch thi công** đã bị bỏ khỏi vòng đời: nhánh Thi công đi thẳng Đã cọc → Đang thi công → Nghiệm thu. Bộ trạng thái chính tắc còn 10 khoá.
 
 ## Component Patterns
 
@@ -95,7 +97,7 @@ Khảo sát / Báo giá (nháp)
   → [nếu có chiết khấu] Chờ duyệt chiết khấu → (duyệt) →
 Đã chốt  ── Chốt: snapshot giá mọi Dòng (FR-5) ──
   → Đã cọc            (auto khi ghi nhận đủ đợt cọc đầu — FR-8)
-  → [cờ Thi công]  Lên lịch thi công → Đang thi công → Nghiệm thu
+  → [cờ Thi công]  Đang thi công → Nghiệm thu
   → [cờ Vận chuyển] Đang giao hàng → Đã giao
 Hoàn thành           (thanh toán đủ + nghiệm thu/đã giao xong)
 Huỷ                  (có thể từ nhiều trạng thái, kèm lý do)

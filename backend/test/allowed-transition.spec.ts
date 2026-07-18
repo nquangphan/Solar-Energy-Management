@@ -51,6 +51,57 @@ describe('allowed-transition (domain thuần)', () => {
     });
   }
 
+  /**
+   * HÌNH DẠNG của vòng đời, khoá bằng test chứ không bằng lời hứa.
+   *
+   * Bảng là bản thiết kế duy nhất của vòng đời (AD-11). Thêm một dòng vào đây là thêm một
+   * đường đi thật cho mọi đơn — kể cả đường không ai định mở. Số dòng là con số duy nhất
+   * nhìn thấy được điều đó từ bên ngoài.
+   */
+  describe('hình dạng bảng', () => {
+    it('bảng có đúng 16 dòng — thêm/bớt một cạnh phải là quyết định có chủ ý', () => {
+      expect(ALLOWED_TRANSITIONS).toHaveLength(16);
+    });
+
+    it('vòng đời KHÔNG có bước lên lịch: không trạng thái nào trong bảng mang tên đó', () => {
+      const TEN_BUOC_DA_BO = /l[eê]n.?l[iị]ch/i;
+      for (const rule of ALLOWED_TRANSITIONS) {
+        expect(rule.from).not.toMatch(TEN_BUOC_DA_BO);
+        expect(rule.to).not.toMatch(TEN_BUOC_DA_BO);
+      }
+      // Và không lẻn vào bộ khoá chính tắc bằng một trạng thái chưa có cạnh nào.
+      for (const key of ORDER_STATUS_KEYS) {
+        expect(key).not.toMatch(TEN_BUOC_DA_BO);
+      }
+    });
+
+    /**
+     * Hai cạnh DỰNG NÊN nhánh thi công phải cùng gate theo cờ Thi công.
+     *
+     * Cờ tắt mà chỉ một trong hai cạnh còn gate thì nhánh vẫn nửa mở: đơn không thi công
+     * không vào được `thicong`, nhưng cạnh không gate vẫn là một đường đi hợp lệ trong bảng
+     * — và bảng là thứ mọi thứ khác (stepper, bước kế, executor) suy ra. Gate phải nằm trên
+     * CẢ HAI cạnh, và điều đó chỉ nhìn thấy được từ chính bảng.
+     *
+     * Cạnh RA (`nghiemthu → hoanthanh`) cố ý KHÔNG gate: tới được `nghiemthu` nghĩa là cờ đã
+     * bật từ đầu nhánh, và một đơn đang dở không được phép mất lối ra vì cờ bị đổi về sau.
+     */
+    it('cả hai cạnh dựng nhánh thi công đều gate theo cờ Thi công', () => {
+      const canhDungNhanh = [SU_KIEN.batDauThiCong, SU_KIEN.xongThiCong];
+
+      for (const event of canhDungNhanh) {
+        // MỌI dòng mang sự kiện này, không chỉ dòng đầu: bảng cho phép nhiều dòng cùng một
+        // sự kiện (`hoanThanh` có ba, `huy` có ba). Một dòng anh em không gate là một đường
+        // đi hợp lệ mà cờ tắt không chặn được.
+        const cacDong = ALLOWED_TRANSITIONS.filter((r) => r.event === event);
+        expect(cacDong.length).toBeGreaterThan(0);
+        for (const rule of cacDong) {
+          expect(rule.scopeGuard).toBe('thiCong');
+        }
+      }
+    });
+  });
+
   describe('mỗi cặp hợp lệ trong bảng đều đi qua', () => {
     it.each(
       ALLOWED_TRANSITIONS.map((rule) => [rule.from, rule.event, rule.to]),
@@ -444,6 +495,21 @@ describe('allowed-transition (domain thuần)', () => {
         {
           event: SU_KIEN.xongThiCong,
           to: 'nghiemthu',
+          requires: PERM.constructionTransition,
+        },
+      ]);
+    });
+
+    /**
+     * LỐI RA của nhánh thi công. Cạnh vào (`dacoc → thicong`) và cạnh giữa
+     * (`thicong → nghiemthu`) vô nghĩa nếu đơn tới `nghiemthu` rồi đứng đó mãi. Một phần tử,
+     * không nhiều hơn: `nghiemthu` chỉ có duy nhất một đường đi tiếp.
+     */
+    it('LỐI RA: `nghiemthu` chỉ còn ĐÚNG MỘT bước — `hoan_thanh` về `hoanthanh`', () => {
+      expect(ke('nghiemthu', DU_CO, QUYEN_THU_CONG)).toEqual([
+        {
+          event: SU_KIEN.hoanThanh,
+          to: 'hoanthanh',
           requires: PERM.constructionTransition,
         },
       ]);

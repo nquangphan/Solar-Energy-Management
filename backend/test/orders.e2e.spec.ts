@@ -3684,6 +3684,108 @@ describe('/orders (e2e)', () => {
         expect(res.body.buoc.length).toBeGreaterThan(0);
       });
     });
+
+    /**
+     * NHÁNH THI CÔNG ĐI HẾT CHUỖI QUA DÂY: `thicong → nghiemthu → hoanthanh`.
+     *
+     * Cạnh vào nhánh (`dacoc → thicong`) đã được canh ở các describe trên. Hai cạnh CÒN LẠI
+     * chưa từng chạy qua lane HTTP nào: mọi case cũ dừng ở `bat_dau_thi_cong`. Đó là chỗ
+     * nhánh có thể cụt mà toàn bộ suite vẫn xanh — đơn vào được `thicong` rồi không còn
+     * đường ra, và chỉ người dùng thật phát hiện.
+     *
+     * Lane này là lane DUY NHẤT đo được mã HTTP: `ValidationPipe` + `@IsIn(SU_KIEN_THU_CONG)`
+     * chạy TRƯỚC service, nên một unit test khẳng định "service trả nghiemthu" không khẳng
+     * định người dùng nhận được 200.
+     */
+    describe('nhánh thi công đi hết chuỗi qua dây', () => {
+      /** Đơn đứng giữa nhánh; mọi cờ + quyền của `beforeEach` giữ nguyên. */
+      function donDangO(status: string): void {
+        orderRepo.findUnique.mockResolvedValue({ ...DON_DACOC, status });
+      }
+
+      it('`thicong` --xong_thi_cong--> 200 `nghiemthu`, soAnhDaLuu 0 (ảnh optional)', async () => {
+        donDangO('thicong');
+
+        const res = await post(SU_KIEN.xongThiCong);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('nghiemthu');
+        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(typeof res.body.occurredAt).toBe('string');
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('kèm 1 ảnh ⇒ 200, ảnh mang CẶP KHOÁ `thicong`→`nghiemthu` của đúng bước này', async () => {
+        donDangO('thicong');
+
+        const res = await post(SU_KIEN.xongThiCong, [anh()]);
+
+        expect(res.status).toBe(200);
+        expect(res.body.soAnhDaLuu).toBe(1);
+
+        const { data } = attachmentRepo.createMany.mock.calls[0][0];
+        expect(data).toHaveLength(1);
+        // Cặp (statusFrom, statusTo) là cách ảnh nối vào đúng bước ở gallery (FR-23).
+        // Ghi nhầm cặp của bước khác thì ảnh vẫn lưu nhưng hiện sai chỗ.
+        expect(data[0].statusFrom).toBe('thicong');
+        expect(data[0].statusTo).toBe('nghiemthu');
+        expect(storageMap.has(data[0].objectKey)).toBe(true);
+      });
+
+      it('thiếu `construction.transition` ở `thicong` ⇒ 403, KHÔNG ghi status', async () => {
+        // `delivery.confirm` mở được cửa route nhưng không mở được bước của nhánh thi công.
+        givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
+        donDangO('thicong');
+
+        const res = await post(SU_KIEN.xongThiCong, [anh()]);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        // `updateMany` là CỔNG DUY NHẤT ghi `Order.status` (AD-11); không gọi = status
+        // không đổi. Đọc lại đơn ở đây chỉ đọc lại chính mock, không chứng minh gì thêm.
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('actor thiếu quyền ⇒ `buocKeTiep` RỖNG, client ẩn hẳn nút (UX-DR-22)', async () => {
+        givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
+        donDangO('thicong');
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.buocKeTiep).toEqual([]);
+      });
+
+      it('LỐI RA: `nghiemthu` chỉ còn ĐÚNG MỘT bước kế — nhánh không cụt', async () => {
+        donDangO('nghiemthu');
+
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.buocKeTiep).toEqual([
+          {
+            event: SU_KIEN.hoanThanh,
+            to: 'hoanthanh',
+            requires: PERM.constructionTransition,
+          },
+        ]);
+      });
+
+      it('LỐI RA: `nghiemthu` --hoan_thanh--> 200 `hoanthanh`', async () => {
+        donDangO('nghiemthu');
+
+        const res = await post(SU_KIEN.hoanThanh);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('hoanthanh');
+      });
+    });
   });
 
   /**
