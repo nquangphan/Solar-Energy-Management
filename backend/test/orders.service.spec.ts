@@ -261,8 +261,14 @@ describe('OrdersService', () => {
       const orderId = (
         orderRepo.create.mock.calls[0][0] as { data: { id: string } }
       ).data.id;
+      // `createdByAccountId` = người gọi: lịch sử bản update phải trả lời được "ai".
       expect(orderVersionRepo.create).toHaveBeenCalledWith({
-        data: { id: expect.any(String), orderId, versionNo: 1 },
+        data: {
+          id: expect.any(String),
+          orderId,
+          versionNo: 1,
+          createdByAccountId: ACTOR,
+        },
       });
 
       // Op 3 — repoint `currentVersionId` về đúng version vừa sinh.
@@ -1853,11 +1859,14 @@ describe('OrdersService', () => {
 
       // Op 2 — version MỚI: versionNo = 3 + 1 (đọc từ bản hiệu lực, không hardcode);
       // KHÔNG ghi vatRate/vatMode/chotAt — bản đang sửa chưa đóng băng thuế.
+      // `createdByAccountId` phải có Ở CẢ ĐÂY: ghi actor chỉ ở `create()` làm lịch sử thủng
+      // đúng nửa — mọi bản sinh từ mở-lại sẽ vô danh mà không ai báo lỗi.
       expect(txVersionRepo.create).toHaveBeenCalledWith({
         data: {
           id: expect.any(String),
           orderId: DON_BAOGIA.id,
           versionNo: 4,
+          createdByAccountId: ACTOR,
         },
       });
       const verMoi = versionIdMoi();
@@ -2079,6 +2088,7 @@ describe('OrdersService', () => {
           id: expect.any(String),
           orderId: DON_BAOGIA.id,
           versionNo: 4,
+          createdByAccountId: ACTOR,
         },
       });
       expect(txLineRepo.createMany).not.toHaveBeenCalled();

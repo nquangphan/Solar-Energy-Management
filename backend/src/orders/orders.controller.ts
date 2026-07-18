@@ -41,9 +41,11 @@ import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { DiscountPendingItemDto } from './dto/discount-pending-item.dto';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import { OrderLifecycleResponseDto } from './dto/order-lifecycle-response.dto';
 import { OrderListResponseDto } from './dto/order-list-response.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
+import { OrderVersionsResponseDto } from './dto/order-versions-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { QuoteExportResponseDto } from './dto/quote-export-response.dto';
@@ -56,9 +58,12 @@ import { QuoteExportService } from './quote-export.service';
 /**
  * Tạo Đơn + giỏ hàng dòng báo giá (Story 4.1, FR-1). MỌI handler khai
  * `@RequirePermissions(PERM.quotesCreateEdit)` — key ĐÃ TỒN TẠI trong registry 21 key, KHÔNG
- * key mới. `GET /orders/:id` cũng gate `quotes.create_edit` (luồng người dựng đơn).
- * `GET /orders` (danh sách) gate bằng `@RequireAnyPermissions(ordersViewAll, ordersViewOwn)` —
- * OR, vì preset cấp `view_all` KHÔNG kèm `view_own`; phạm vi dữ liệu do service thu hẹp.
+ * key mới. NGOẠI LỆ là bốn đường ĐỌC đơn (`GET /orders`, `GET /orders/:id`, `/:id/vong-doi`,
+ * `/:id/phien-ban`): gate `@RequireAnyPermissions(ordersViewAll, ordersViewOwn)` — OR, vì
+ * preset cấp `view_all` KHÔNG kèm `view_own`, và vì KE_TOAN/THI_CONG/KHO_GIAO xem được đơn mà
+ * KHÔNG có `quotes.create_edit` (bắt họ có nó nghĩa là danh sách dẫn tới một cánh cửa khoá).
+ * Phạm vi dữ liệu do service thu hẹp — đọc-theo-id đi qua ĐÚNG MỘT đường `findScopedOrThrow`.
+ * Mọi đường GHI vẫn giữ `quotes.create_edit` / quyền riêng của chúng.
  *
  * Cờ giá phân tầng resolve TƯƠI mỗi request rồi truyền boolean xuống service (khuôn
  * `ProductsController.tieredPricingEnabled` — service giữ đúng 2 dependency, CẤM hardcode cờ).
@@ -216,7 +221,7 @@ export class OrdersController {
   }
 
   @Get(':id')
-  @RequirePermissions(PERM.quotesCreateEdit)
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiOkResponse({
     type: OrderResponseDto,
     description:
@@ -224,17 +229,83 @@ export class OrdersController {
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
-    description: 'Thiếu quotes.create_edit (FORBIDDEN).',
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description:
+      'Không có đơn với id này, HOẶC đơn ngoài phạm vi người gọi (NOT_FOUND — hai ca không phân biệt được từ ngoài).',
   })
-  async findOne(@Param('id') id: string): Promise<OrderResponseDto> {
-    return (await this.orders.get(
+  async findOne(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<OrderResponseDto> {
+    return (await this.orders.getScoped(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
       id,
       await this.tieredPricingEnabled(),
     )) as OrderResponseDto;
+  }
+
+  @Get(':id/vong-doi')
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiOkResponse({
+    type: OrderLifecycleResponseDto,
+    description:
+      'Chuỗi bước vòng đời ĐÃ GATE theo cờ phạm vi của đơn (FR-7). Bước bị cờ chặn không có trong mảng — client vẽ nguyên mảng, không lọc, không tự suy từ cờ (AD-2).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
+  })
+  async lifecycle(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<OrderLifecycleResponseDto> {
+    return {
+      buoc: [
+        ...(await this.orders.lifecycle(
+          account.id,
+          await this.quyenCuaNguoiGoi(account.id),
+          id,
+        )),
+      ],
+    };
+  }
+
+  @Get(':id/phien-ban')
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiOkResponse({
+    type: OrderVersionsResponseDto,
+    description:
+      'MỌI bản update của đơn theo versionNo tăng dần (FR-6); `laBanHienLuc` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
+  })
+  async listVersions(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<OrderVersionsResponseDto> {
+    return {
+      items: [
+        ...(await this.orders.listVersions(
+          account.id,
+          await this.quyenCuaNguoiGoi(account.id),
+          id,
+        )),
+      ],
+    } as OrderVersionsResponseDto;
   }
 
   @Patch(':id')

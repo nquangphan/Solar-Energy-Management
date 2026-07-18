@@ -44,6 +44,7 @@ model Account {
   discountRequests    DiscountApproval[] @relation("DiscountRequestedBy")
   discountResolutions DiscountApproval[] @relation("DiscountResolvedBy")
   quoteExports        QuoteExport[]      @relation("QuoteExportCreatedBy")
+  orderVersionsCreated OrderVersion[]    @relation("OrderVersionCreatedBy")
 
   @@map("accounts")
 }
@@ -369,6 +370,10 @@ model Order {
 /// `updatedAt` cần vì 4.5/4.6 sẽ ghi `chotAt`/`vatRate` lên row này.
 /// `discountAmount` = snapshot chiết khấu ĐÃ DUYỆT ghi lúc Chốt (null = không chiết khấu);
 /// version mới từ mở-lại KHÔNG mang chiết khấu — muốn giảm tiếp phải áp + duyệt lại.
+///
+/// `createdByAccountId` = ai sinh ra bản này (khuôn `QuoteExport.createdBy`). NULLABLE vì
+/// version tạo trước cột này không có actor — bịa một actor là nói dối trong sổ lịch sử;
+/// UI hiện `—`.
 model OrderVersion {
   id             String          @id @default(uuid())
   orderId        String          @map("order_id")
@@ -380,6 +385,8 @@ model OrderVersion {
   discountAmount Int?            @map("discount_amount")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdByAccountId String?     @map("created_by_account_id")
+  createdBy          Account?    @relation("OrderVersionCreatedBy", fields: [createdByAccountId], references: [id])
   lineItems      OrderLineItem[]
   currentOf      Order?          @relation("OrderCurrentVersion")
   discountApprovals DiscountApproval[]

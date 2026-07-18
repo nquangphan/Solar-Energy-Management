@@ -168,6 +168,86 @@ class OrderListItem {
   final String updatedAt;
 }
 
+/// One step of the order lifecycle stepper (Story 5.4) — mirrors the backend
+/// `OrderLifecycleStepDto` and the web `OrderLifecycleStep` (AD-12).
+///
+/// The BACKEND decides which steps exist for this order (gated by its scope
+/// flags, FR-7) and which one it stands on. The screen renders the list as
+/// given: it does not filter it and it does not derive steps from flags — a
+/// second copy of the transition table on the client would drift the first time
+/// Epic 6 changes the real one (AD-2/AD-11).
+///
+/// No Vietnamese label here: labels live in [kStatusLabels] and are
+/// parity-guarded byte-for-byte against web.
+class OrderLifecycleStep {
+  const OrderLifecycleStep({required this.status, required this.trangThai});
+
+  final String status;
+
+  /// `done` | `current` | `upcoming`.
+  final String trangThai;
+}
+
+/// One quantity change between two versions.
+class OrderVersionQtyChange {
+  const OrderVersionQtyChange({
+    required this.ten,
+    required this.tu,
+    required this.den,
+  });
+
+  final String ten;
+  final int tu;
+  final int den;
+}
+
+/// What changed between version N-1 and version N — lines and quantities only.
+/// Never money: before Chốt a price is resolved live from the catalogue, so
+/// diffing prices would report "changed" on a version nobody touched.
+class OrderVersionChange {
+  const OrderVersionChange({
+    required this.them,
+    required this.xoa,
+    required this.doiSoLuong,
+  });
+
+  final List<String> them;
+  final List<String> xoa;
+  final List<OrderVersionQtyChange> doiSoLuong;
+}
+
+/// One update version in the order history (Story 5.4, FR-6) — mirrors the
+/// backend `OrderVersionItemDto` and the web `OrderVersionItem`.
+///
+/// [laBanHienLuc] is resolved by the BACKEND through `Order.currentVersionId`
+/// (AD-6) — the screen must NOT re-derive it from the highest [versionNo].
+///
+/// [createdByDisplayName] is null for a version created before the actor column
+/// existed; the screen shows `—` rather than inventing a name.
+class OrderVersionItem {
+  const OrderVersionItem({
+    required this.id,
+    required this.versionNo,
+    required this.laBanHienLuc,
+    required this.createdAt,
+    required this.chotAt,
+    required this.createdByAccountId,
+    required this.createdByDisplayName,
+    required this.soDong,
+    required this.thayDoi,
+  });
+
+  final String id;
+  final int versionNo;
+  final bool laBanHienLuc;
+  final String createdAt;
+  final String? chotAt;
+  final String? createdByAccountId;
+  final String? createdByDisplayName;
+  final int soDong;
+  final OrderVersionChange thayDoi;
+}
+
 /// Paged envelope of `GET /orders` — `total` counts the whole scoped+filtered
 /// set, never the length of this page.
 class OrderPage {
@@ -437,7 +517,18 @@ class PreviewTotalLine {
 /// transport failures the backend never saw.
 /// [fieldErrors] maps `field` → `message` so each one lands on the input it names.
 class OrderPortException implements Exception {
-  const OrderPortException(this.message, {this.fieldErrors = const {}});
+  const OrderPortException(
+    this.message, {
+    this.code,
+    this.fieldErrors = const {},
+  });
+
+  /// The envelope's `code` (AD-5). Screens branch on THIS, never on [message]:
+  /// "đơn không tồn tại / ngoài phạm vi" is an ANSWER and a retry button will
+  /// never change it, while a transport failure is worth retrying — telling the
+  /// two apart by matching Vietnamese prose breaks the day someone rewords it.
+  /// Null when the request never reached the backend (network failure).
+  final String? code;
 
   /// The backend's `message`, shown to the user as-is.
   final String message;
@@ -477,6 +568,17 @@ abstract class OrdersPort {
     int? page,
     int? pageSize,
   });
+
+  /// Lifecycle steps of one order — `GET /orders/:id/vong-doi` (Story 5.4,
+  /// FR-7). Already gated by the order's scope flags: steps that do not apply
+  /// are ABSENT from the list, not dimmed (UX-DR-11). Throws 404 (absent or out
+  /// of the caller's scope — indistinguishable by design), 403.
+  Future<List<OrderLifecycleStep>> getLifecycle(String orderId);
+
+  /// Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4,
+  /// FR-6). Every version, `versionNo` ascending; exactly one carries
+  /// `laBanHienLuc`. Throws 404 / 403 like [getLifecycle].
+  Future<List<OrderVersionItem>> listVersions(String orderId);
 
   /// Append a line (catalogue or free). Throws 400/404/409 per the backend rules.
   Future<OrderLine> addLine(String orderId, AddOrderLineInput input);

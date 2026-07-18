@@ -281,6 +281,86 @@ class FakeOrdersPort implements OrdersPort {
     return _copy(order);
   }
 
+  /// Demo stand-in for the backend's `buocVongDoi()` — it lives in the FAKE (the
+  /// demo "server"), never in a screen, exactly like the scope preset above. The
+  /// real sequence is derived from ALLOWED_TRANSITIONS server-side
+  /// (AD-2/AD-11); this one only needs the right shape to draw.
+  ///
+  /// Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
+  @override
+  Future<List<OrderLifecycleStep>> getLifecycle(String orderId) async {
+    final Order? order = _orders[orderId];
+    // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
+    // full-length stepper (also the case that overflows a phone width).
+    final bool thiCong = order?.scopeThiCong ?? true;
+    final bool vanChuyen = order?.scopeVanChuyen ?? true;
+    final String status = order?.status ?? 'baogia';
+    final List<String> chuoi = <String>[
+      'baogia',
+      'dachot',
+      'dacoc',
+      if (thiCong) ...<String>['thicong', 'nghiemthu'],
+      if (vanChuyen) ...<String>['danggiao', 'dagiao'],
+      'hoanthanh',
+    ];
+    final int dangO = chuoi.indexOf(status);
+    return <OrderLifecycleStep>[
+      for (int i = 0; i < chuoi.length; i++)
+        OrderLifecycleStep(
+          status: chuoi[i],
+          trangThai: dangO == -1 || i > dangO
+              ? 'upcoming'
+              : i == dangO
+                  ? 'current'
+                  : 'done',
+        ),
+    ];
+  }
+
+  /// Demo history. Two shapes on purpose so the screen's empty and populated
+  /// branches both have data: an order whose id ends in `-1` gets several
+  /// versions, every other order stays at its original version.
+  @override
+  Future<List<OrderVersionItem>> listVersions(String orderId) async {
+    final OrderVersionItem goc = OrderVersionItem(
+      id: '$orderId-v1',
+      versionNo: 1,
+      laBanHienLuc: !orderId.endsWith('-1'),
+      createdAt: _now,
+      chotAt: null,
+      createdByAccountId: 'acc-demo',
+      createdByDisplayName: 'Nguyễn Văn Quản Lý',
+      soDong: 3,
+      thayDoi: const OrderVersionChange(
+        them: <String>[],
+        xoa: <String>[],
+        doiSoLuong: <OrderVersionQtyChange>[],
+      ),
+    );
+    if (!orderId.endsWith('-1')) return <OrderVersionItem>[goc];
+    return <OrderVersionItem>[
+      goc,
+      OrderVersionItem(
+        id: '$orderId-v2',
+        versionNo: 2,
+        laBanHienLuc: true,
+        createdAt: _now,
+        chotAt: null,
+        // Bản cũ không có actor ⇒ null; màn hiện `—`, không bịa tên.
+        createdByAccountId: null,
+        createdByDisplayName: null,
+        soDong: 4,
+        thayDoi: const OrderVersionChange(
+          them: <String>['Tủ điện DC 2 string'],
+          xoa: <String>[],
+          doiSoLuong: <OrderVersionQtyChange>[
+            OrderVersionQtyChange(ten: 'Tấm pin JA Solar 580W', tu: 8, den: 12),
+          ],
+        ),
+      ),
+    ];
+  }
+
   @override
   Future<OrderLine> addLine(String orderId, AddOrderLineInput input) async {
     final Order? order = _orders[orderId];

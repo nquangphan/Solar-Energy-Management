@@ -1,4 +1,4 @@
-// Barrel for the mobile app-shell module (Story 1.8). Exports the four shell
+// Barrel for the mobile app-shell module (Story 1.8). Exports the shell
 // widgets only — tokens/icons/components are imported directly (same policy as
 // components.dart, Story 1.7).
 //
@@ -11,4 +11,5 @@
 export 'app_bottom_nav.dart';
 export 'app_mobile_shell.dart';
 export 'app_phone_frame.dart';
+export 'app_tabs.dart';
 export 'app_topbar.dart';

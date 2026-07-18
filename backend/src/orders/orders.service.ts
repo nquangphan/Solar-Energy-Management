@@ -19,10 +19,13 @@ import {
 } from './domain/discount-approval-status';
 import {
   SU_KIEN,
+  buocVongDoi,
   daTaiDich,
   evaluateTransition,
+  type BuocVongDoi,
   type TransitionEvent,
 } from './domain/allowed-transition';
+import { diffDong, type ThayDoiBanUpdate } from './domain/version-diff';
 import { lineAmount } from './domain/line-amount';
 import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
 import {
@@ -44,6 +47,7 @@ import {
   TRANG_THAI_BAO_GIA,
   TRANG_THAI_CHO_DUYET,
   TRANG_THAI_DA_CHOT,
+  type OrderStatusKey,
 } from './domain/order-status';
 import { scopePresetFor } from './domain/scope-preset';
 import { VAT_MODE, vatApplies } from './domain/vat-mode';
@@ -181,6 +185,22 @@ export interface OrderListRow {
   readonly assigneeAccountId: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+}
+
+/**
+ * Một bản update trong lịch sử đơn (Story 5.4, FR-6) — KHÔNG có tiền/giá: lịch sử trả lời
+ * "bản nào/ai/khi nào/đổi gì", tiền chỉ đi qua `preview-total` (AD-10).
+ */
+export interface OrderVersionRow {
+  readonly id: string;
+  readonly versionNo: number;
+  readonly laBanHienLuc: boolean;
+  readonly createdAt: Date;
+  readonly chotAt: Date | null;
+  readonly createdByAccountId: string | null;
+  readonly createdByDisplayName: string | null;
+  readonly soDong: number;
+  readonly thayDoi: ThayDoiBanUpdate;
 }
 
 /** Một item danh sách chờ duyệt chiết khấu (FR-18/FR-37) — số backend tính (AD-16). */
@@ -554,7 +574,12 @@ export class OrdersService {
         },
       }),
       this.prisma.orderVersion.create({
-        data: { id: versionId, orderId, versionNo: 1 },
+        data: {
+          id: versionId,
+          orderId,
+          versionNo: 1,
+          createdByAccountId: actorAccountId,
+        },
       }),
       this.prisma.order.update({
         where: { id: orderId },
@@ -610,10 +635,120 @@ export class OrdersService {
     return totals;
   }
 
-  /** Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính. */
+  /**
+   * Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính.
+   *
+   * ⚠️ KHÔNG scope — đường đọc NỘI BỘ, chỉ còn `QuoteExportService` dùng. Mọi đường HTTP đọc
+   * đơn theo id phải đi qua `getScoped()`.
+   */
   async get(id: string, tieredPricingEnabled: boolean): Promise<OrderView> {
     const order = await this.findOrThrow(id);
     return this.viewOf(order, tieredPricingEnabled);
+  }
+
+  /**
+   * ĐƯỜNG ĐỌC SCOPED DÙNG CHUNG DUY NHẤT cho mọi endpoint đọc-theo-id của màn chi tiết
+   * (`GET /:id`, `/:id/vong-doi`, `/:id/phien-ban`). Một chỗ đóng phạm vi ⇒ endpoint mới
+   * KHÔNG THỂ quên nó.
+   *
+   * Ngoài phạm vi và không tồn tại trả CÙNG một 404 với CÙNG thông điệp: 403 sẽ xác nhận đơn
+   * có tồn tại — một bit rò ra cho người không được thấy nó (AD-4/AD-15).
+   *
+   * Gom `where.AND` như `list()`: gán thẳng `where.OR` sẽ bị mệnh đề lọc khác chiếm chỗ.
+   */
+  private async findScopedOrThrow(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    id: string,
+  ): Promise<Order> {
+    const dieuKien: Prisma.OrderWhereInput[] = [{ id }];
+    if (!quyen.has(PERM.ordersViewAll)) {
+      dieuKien.push({
+        OR: [
+          { ownerAccountId: callerAccountId },
+          { assigneeAccountId: callerAccountId },
+        ],
+      });
+    }
+    const order = await this.prisma.order.findFirst({
+      where: { AND: dieuKien },
+    });
+    if (order === null) {
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        `Không tìm thấy đơn hàng: ${id}`,
+      );
+    }
+    return order;
+  }
+
+  /** `GET /orders/:id` — đơn trong phạm vi người gọi, kèm dòng của bản hiệu lực. */
+  async getScoped(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    id: string,
+    tieredPricingEnabled: boolean,
+  ): Promise<OrderView> {
+    const order = await this.findScopedOrThrow(callerAccountId, quyen, id);
+    return this.viewOf(order, tieredPricingEnabled);
+  }
+
+  /**
+   * Chuỗi bước vòng đời của đơn (Story 5.4) — KHÔNG đi qua `viewOf()`: endpoint này không
+   * trả dòng và không trả tiền, kéo `toViews` vào là gánh live-resolve giá vô ích.
+   */
+  async lifecycle(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    id: string,
+  ): Promise<readonly BuocVongDoi[]> {
+    const order = await this.findScopedOrThrow(callerAccountId, quyen, id);
+    return buocVongDoi(order.status as OrderStatusKey, {
+      thietBi: order.scopeThietBi,
+      thiCong: order.scopeThiCong,
+      vanChuyen: order.scopeVanChuyen,
+    });
+  }
+
+  /**
+   * Lịch sử MỌI bản update của đơn theo `versionNo` tăng dần (FR-6, AD-6).
+   *
+   * `laBanHienLuc` so CON TRỎ `Order.currentVersionId` — AD-6 cấm suy bằng `versionNo` lớn
+   * nhất hay timestamp: sau mở-lại/hoàn tác con trỏ có thể trỏ bản KHÔNG phải bản mới nhất.
+   *
+   * KHÔNG trả tiền/giá (AD-10 + fence `costs.view`).
+   */
+  async listVersions(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<readonly OrderVersionRow[]> {
+    const order = await this.findScopedOrThrow(callerAccountId, quyen, orderId);
+    const versions = await this.prisma.orderVersion.findMany({
+      where: { orderId },
+      orderBy: { versionNo: 'asc' },
+      include: {
+        createdBy: true,
+        lineItems: { orderBy: { displayOrder: 'asc' } },
+      },
+    });
+
+    return versions.map((version, i) => ({
+      id: version.id,
+      versionNo: version.versionNo,
+      laBanHienLuc: version.id === order.currentVersionId,
+      createdAt: version.createdAt,
+      chotAt: version.chotAt,
+      createdByAccountId: version.createdByAccountId,
+      createdByDisplayName: version.createdBy?.displayName ?? null,
+      soDong: version.lineItems.length,
+      // Bản đầu tiên không có gì để so — ba mảng rỗng.
+      thayDoi: diffDong(
+        i === 0 ? [] : versions[i - 1].lineItems,
+        i === 0 ? [] : version.lineItems,
+      ),
+    }));
   }
 
   /** Bản ghi Order ⇒ view response: nạp dòng của bản hiệu lực rồi phân giải qua `toViews`. */
@@ -1066,6 +1201,7 @@ export class OrdersService {
             id: newVersionId,
             orderId: before.id,
             versionNo: currentVersion.versionNo + 1,
+            createdByAccountId: actorAccountId,
           },
         });
         // Đơn đã chốt luôn ≥ 1 dòng nên copies rỗng là logic-impossible — nhưng Prisma 7

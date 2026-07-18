@@ -114,6 +114,53 @@ export interface OrderListItem {
   updatedAt: string;
 }
 
+/**
+ * One step of the order lifecycle stepper (Story 5.4) — mirrors the backend
+ * `OrderLifecycleStepDto` field-for-field (AD-12).
+ *
+ * The BACKEND decides which steps exist for this order (it gates them by the
+ * order's scope flags, FR-7) and which one the order is standing on. The screen
+ * renders the array as given: it does not filter it, and it does not derive
+ * steps from flags — a second copy of the transition table on the client would
+ * drift the first time Epic 6 changes the real one (AD-2/AD-11).
+ *
+ * No Vietnamese label here: labels live in `STATUS_LABELS` and are parity-guarded
+ * byte-for-byte against mobile.
+ */
+export interface OrderLifecycleStep {
+  status: string;
+  trangThai: 'done' | 'current' | 'upcoming';
+}
+
+/** What changed between version N-1 and version N — lines and quantities only. */
+export interface OrderVersionChange {
+  them: string[];
+  xoa: string[];
+  doiSoLuong: { ten: string; tu: number; den: number }[];
+}
+
+/**
+ * One update version in the order history (Story 5.4, FR-6) — mirrors the backend
+ * `OrderVersionItemDto`.
+ *
+ * `laBanHienLuc` is resolved by the backend through `Order.currentVersionId`
+ * (AD-6) — the screen must NOT re-derive it from the highest `versionNo`.
+ *
+ * Carries NO money: history answers which/who/when/what-changed, and money only
+ * ever travels through `previewTotal` (AD-10).
+ */
+export interface OrderVersionItem {
+  id: string;
+  versionNo: number;
+  laBanHienLuc: boolean;
+  createdAt: string;
+  chotAt: string | null;
+  createdByAccountId: string | null;
+  createdByDisplayName: string | null;
+  soDong: number;
+  thayDoi: OrderVersionChange;
+}
+
 /** Paged envelope of `GET /orders` — `total` counts the whole scoped+filtered set. */
 export interface OrderPage {
   items: OrderListItem[];
@@ -289,6 +336,14 @@ export interface PreviewTotalInput {
  * transport failures the backend never saw.
  */
 export interface OrderPortError {
+  /**
+   * The envelope's `code` (AD-5). Screens branch on THIS, never on `message`:
+   * "đơn không tồn tại / ngoài phạm vi" is an ANSWER and a retry button will
+   * never change it, while a transport failure is worth retrying — telling the
+   * two apart by matching Vietnamese prose breaks the day someone reworded it.
+   * Absent when the request never reached the backend (network failure).
+   */
+  code?: string;
   message: string;
   fieldErrors?: { field: string; message: string }[];
 }
@@ -317,6 +372,21 @@ export interface OrdersPort {
    * `status`), 403 (holds NEITHER order-view key).
    */
   list(query: OrderListQuery): Promise<OrderPage>;
+
+  /**
+   * Lifecycle steps of one order — `GET /orders/:id/vong-doi` (Story 5.4, FR-7).
+   * Already gated by the order's scope flags: steps that do not apply are ABSENT
+   * from the array, not dimmed (UX-DR-11). Rejects 404 (absent or out of the
+   * caller's scope — the two are indistinguishable by design), 403.
+   */
+  getLifecycle(orderId: string): Promise<OrderLifecycleStep[]>;
+
+  /**
+   * Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4, FR-6).
+   * Every version, `versionNo` ascending; exactly one carries `laBanHienLuc`.
+   * Rejects 404 / 403 like `getLifecycle`.
+   */
+  listVersions(orderId: string): Promise<OrderVersionItem[]>;
 
   /** Append a line (catalogue or free). Rejects 400/404/409 per the backend rules. */
   addLine(orderId: string, input: AddOrderLineInput): Promise<OrderLine>;

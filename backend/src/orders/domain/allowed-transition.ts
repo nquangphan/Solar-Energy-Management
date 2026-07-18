@@ -3,6 +3,7 @@ import {
   type PermissionKey,
 } from '../../accounts/domain/permission-registry';
 import {
+  ORDER_STATUS_KEYS,
   TRANG_THAI_BAO_GIA,
   TRANG_THAI_CHO_DUYET,
   TRANG_THAI_DA_CHOT,
@@ -255,4 +256,105 @@ export function daTaiDich(status: string, event: TransitionEvent): boolean {
   return ALLOWED_TRANSITIONS.some(
     (row) => row.event === event && row.to === status,
   );
+}
+
+/** Một nấc của stepper vòng đời: bước nào, đơn đã qua / đang đứng / sắp tới. */
+export interface BuocVongDoi {
+  readonly status: OrderStatusKey;
+  readonly trangThai: 'done' | 'current' | 'upcoming';
+}
+
+/**
+ * Sự kiện KHÔNG phải một bước tiến của vòng đời — loại khỏi đồ thị dùng để phân loại bước.
+ *
+ * `huy` là kết thúc bất thường (hiện bằng chip, không phải một nấc).
+ *
+ * `moLai` (`dachot → baogia`) và `tuChoiChietKhau` (`choduyet → baogia`) là cạnh QUAY LUI:
+ * giữ chúng lại thì đồ thị có CHU TRÌNH và "có đường tới status" mất hết ý nghĩa — đơn mới
+ * tinh ở `baogia` sẽ bị đánh `dachot: done` vì `dachot → baogia` tồn tại, tức stepper khoe
+ * một bước chưa hề xảy ra. Vòng đời tiến lên là một DAG; undo không nằm trong đó.
+ */
+const SU_KIEN_KHONG_PHAI_BUOC_TIEN: readonly TransitionEvent[] = [
+  SU_KIEN.huy,
+  SU_KIEN.moLai,
+  SU_KIEN.tuChoiChietKhau,
+];
+
+/** Tập cạnh TIẾN còn đi được với bộ cờ này. */
+function canhDaGate(
+  scopeFlags: OrderScopeFlags,
+): readonly { readonly from: OrderStatusKey; readonly to: OrderStatusKey }[] {
+  return ALLOWED_TRANSITIONS.filter(
+    (rule) =>
+      !SU_KIEN_KHONG_PHAI_BUOC_TIEN.includes(rule.event) &&
+      (rule.scopeGuard === undefined || scopeFlags[rule.scopeGuard]),
+  );
+}
+
+/** Có đường đi (≥ 1 cạnh) từ `tu` tới `den` trên đồ thị đã gate? BFS, đồ thị 10 đỉnh. */
+function coDuongToi(
+  canh: readonly { readonly from: OrderStatusKey; readonly to: OrderStatusKey }[],
+  tu: OrderStatusKey,
+  den: OrderStatusKey,
+): boolean {
+  const daTham = new Set<OrderStatusKey>();
+  const hangDoi: OrderStatusKey[] = [tu];
+  while (hangDoi.length > 0) {
+    const hienTai = hangDoi.shift() as OrderStatusKey;
+    for (const canhRa of canh.filter((c) => c.from === hienTai)) {
+      if (canhRa.to === den) return true;
+      if (!daTham.has(canhRa.to)) {
+        daTham.add(canhRa.to);
+        hangDoi.push(canhRa.to);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Chuỗi bước vòng đời của MỘT đơn — suy TỪ `ALLOWED_TRANSITIONS` (AD-11: không bảng thứ
+ * hai). Hàm THUẦN: không async, không Prisma. Đây là thứ stepper vẽ ra (AD-2: client không
+ * tự suy bước từ cờ).
+ *
+ * ⚠️ VÒNG ĐỜI RẼ NHÁNH SONG SONG — phân loại theo KHẢ NĂNG TỚI trên đồ thị đã gate, KHÔNG
+ * theo chỉ số trong `ORDER_STATUS_KEYS` (mảng đó là thứ tự LIỆT KÊ, không phải thứ tự ĐI).
+ * `dacoc` có hai cạnh ra cùng tồn tại (thi công / giao hàng) và `hoanthanh` có hai nguồn:
+ * đơn đang `danggiao` chưa từng thi công — đánh `thicong` là `done` vì chỉ số nhỏ hơn là
+ * để màn hình nói dối.
+ *
+ * Bước bị cờ chặn ⇒ KHÔNG có mặt trong chuỗi (UX-DR-11: ẩn hẳn, không vẽ mờ).
+ *
+ * `huy`/`choduyet` không phải một nấc của vòng đời chính (kết thúc bất thường / nhánh phụ
+ * của chiết khấu) — NGOẠI LỆ DUY NHẤT: khi đơn ĐANG Ở chính nó, bước đó vẫn được chèn với
+ * `current`, vì stepper thiếu chính bước đang đứng là một màn nói dối.
+ */
+export function buocVongDoi(
+  status: OrderStatusKey,
+  scopeFlags: OrderScopeFlags,
+): readonly BuocVongDoi[] {
+  const canh = canhDaGate(scopeFlags);
+  const ngoaiVongDoiChinh: readonly OrderStatusKey[] = [
+    TRANG_THAI_HUY,
+    TRANG_THAI_CHO_DUYET,
+  ];
+
+  const buoc: BuocVongDoi[] = [];
+  // Duyệt theo thứ tự canonical — CHỈ để hiển thị, sau khi đã phân loại xong từng bước.
+  for (const buocXet of ORDER_STATUS_KEYS) {
+    if (buocXet === status) {
+      buoc.push({ status: buocXet, trangThai: 'current' });
+      continue;
+    }
+    if (ngoaiVongDoiChinh.includes(buocXet)) continue;
+    if (coDuongToi(canh, buocXet, status)) {
+      buoc.push({ status: buocXet, trangThai: 'done' });
+      continue;
+    }
+    if (coDuongToi(canh, status, buocXet)) {
+      buoc.push({ status: buocXet, trangThai: 'upcoming' });
+    }
+    // Không thuộc ba nhóm ⇒ nhánh này đơn không đi ⇒ loại khỏi chuỗi.
+  }
+  return buoc;
 }

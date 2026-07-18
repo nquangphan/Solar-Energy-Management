@@ -2177,7 +2177,7 @@
             }
           },
           "403": {
-            "description": "Thiếu quotes.create_edit (FORBIDDEN).",
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2187,7 +2187,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này, HOẶC đơn ngoài phạm vi người gọi (NOT_FOUND — hai ca không phân biệt được từ ngoài).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2271,6 +2271,116 @@
           },
           "409": {
             "description": "Đơn không còn ở trạng thái 'baogia' — cờ gate máy trạng thái, không đổi giữa vòng đời (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/vong-doi": {
+      "get": {
+        "operationId": "OrdersController_lifecycle",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chuỗi bước vòng đời ĐÃ GATE theo cờ phạm vi của đơn (FR-7). Bước bị cờ chặn không có trong mảng — client vẽ nguyên mảng, không lọc, không tự suy từ cờ (AD-2).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderLifecycleResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/phien-ban": {
+      "get": {
+        "operationId": "OrdersController_listVersions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MỌI bản update của đơn theo versionNo tăng dần (FR-6); `laBanHienLuc` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderVersionsResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4608,6 +4718,171 @@
           "total",
           "page",
           "pageSize"
+        ]
+      },
+      "OrderLifecycleStepDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "example": "baogia"
+          },
+          "trangThai": {
+            "type": "string",
+            "enum": [
+              "done",
+              "current",
+              "upcoming"
+            ],
+            "description": "Đơn đã qua bước này / đang đứng ở đây / sắp tới."
+          }
+        },
+        "required": [
+          "status",
+          "trangThai"
+        ]
+      },
+      "OrderLifecycleResponseDto": {
+        "type": "object",
+        "properties": {
+          "buoc": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderLifecycleStepDto"
+            }
+          }
+        },
+        "required": [
+          "buoc"
+        ]
+      },
+      "ThayDoiSoLuongDto": {
+        "type": "object",
+        "properties": {
+          "ten": {
+            "type": "string",
+            "description": "Tên dòng ở bản mới."
+          },
+          "tu": {
+            "type": "number",
+            "description": "Số lượng ở bản trước."
+          },
+          "den": {
+            "type": "number",
+            "description": "Số lượng ở bản này."
+          }
+        },
+        "required": [
+          "ten",
+          "tu",
+          "den"
+        ]
+      },
+      "ThayDoiBanUpdateDto": {
+        "type": "object",
+        "properties": {
+          "them": {
+            "description": "Tên các dòng mới thêm.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "xoa": {
+            "description": "Tên các dòng bị xoá.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "doiSoLuong": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThayDoiSoLuongDto"
+            }
+          }
+        },
+        "required": [
+          "them",
+          "xoa",
+          "doiSoLuong"
+        ]
+      },
+      "OrderVersionItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản, bắt đầu từ 1.",
+            "example": 1
+          },
+          "laBanHienLuc": {
+            "type": "boolean",
+            "description": "Bản đang hiệu lực (theo currentVersionId)."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "chotAt": {
+            "type": "object",
+            "description": "Thời điểm bản này được Chốt; null nếu chưa chốt.",
+            "nullable": true
+          },
+          "createdByAccountId": {
+            "type": "object",
+            "nullable": true
+          },
+          "createdByDisplayName": {
+            "type": "object",
+            "description": "Tên hiển thị người tạo bản; null với bản cũ không có actor.",
+            "nullable": true
+          },
+          "soDong": {
+            "type": "number",
+            "description": "Số dòng của chính bản này."
+          },
+          "thayDoi": {
+            "$ref": "#/components/schemas/ThayDoiBanUpdateDto"
+          }
+        },
+        "required": [
+          "id",
+          "versionNo",
+          "laBanHienLuc",
+          "createdAt",
+          "soDong",
+          "thayDoi"
+        ]
+      },
+      "OrderVersionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderVersionItemDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "UpdateOrderRequestDto": {

@@ -16,7 +16,8 @@ export 'status_chip.dart'
         StatusKey,
         StatusChipColors,
         kStatusLabels,
-        kStatusColors;
+        kStatusColors,
+        statusKeyOf;
 
 // Data / feedback (mirror Story 1.5): Banner, Table, Stepper, KPI.
 export 'banner.dart' show AppBanner, AppBannerTone;

@@ -1,0 +1,115 @@
+/* hand-authored — Story 5.4 order-detail layout wrappers. Composition-level
+   styling only: the stepper, tabs, table, chips, empty/error states and
+   skeletons are all shipped design-system components. Token vars for every
+   colour and radius; flat borders, no elevation effects (Viền nét, UX-DR-4).
+   Load AFTER tokens.css / components.css / shell.css. */
+
+.od-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+/* Stacked skeleton rows + the loading caption. */
+.od-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.od-state-msg {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Ids, phone numbers and money are read digit by digit, not as prose. */
+.od-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.od-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* Label/value pairs on one line: the label column is fixed so values line up
+   down the list instead of drifting with label length. */
+.od-kv {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.od-k {
+  flex: 0 0 140px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.od-v {
+  font-size: 13px;
+}
+
+.od-scope {
+  display: flex;
+  gap: var(--space-8);
+}
+
+/* One version per row. A list, not a table: the rows have different shapes
+   (a badge only on the effective one) and no column alignment to keep. */
+.od-versions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.od-version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-12);
+  border: 1.5px solid var(--ink);
+  background: var(--surface);
+}
+
+.od-version-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.od-version-no {
+  font-weight: 800;
+  font-size: 13px;
+}
+
+/* The effective-version marker. Teal because it answers "which one counts",
+   the same question the current step answers on the stepper. */
+.od-badge {
+  padding: 2px var(--space-8);
+  border: 1.5px solid var(--teal-700);
+  color: var(--teal-700);
+  font-size: 11px;
+  font-weight: 800;
+  /* No text-transform: mobile has no equivalent, and a label that reads
+     differently on the two platforms is exactly what UX-DR-27 forbids. */
+}
+
+.od-version-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.od-version-diff {
+  font-size: 12px;
+}

@@ -2,10 +2,12 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import {
   ALLOWED_TRANSITIONS,
   SU_KIEN,
+  buocVongDoi,
   daTaiDich,
   evaluateTransition,
   type OrderScopeFlags,
 } from '../src/orders/domain/allowed-transition';
+import { type OrderStatusKey } from '../src/orders/domain/order-status';
 
 /**
  * Unit DOMAIN THUẦN — không mock gì (hàm không async, không side effect). Bảng chuyển trạng
@@ -263,6 +265,134 @@ describe('allowed-transition (domain thuần)', () => {
       expect(daTaiDich('hoanthanh', SU_KIEN.duCoc)).toBe(false);
       // Và một status không tồn tại trong bảng thì đương nhiên không phải đích của gì cả.
       expect(daTaiDich('khong_ton_tai', SU_KIEN.hoanThanh)).toBe(false);
+    });
+  });
+
+  describe('buocVongDoi — chuỗi bước stepper suy TỪ bảng', () => {
+    /** Preset Thương mại: chỉ bán thiết bị, không thi công không vận chuyển. */
+    const CHI_THIET_BI: OrderScopeFlags = {
+      thietBi: true,
+      thiCong: false,
+      vanChuyen: false,
+    };
+
+    /** Map tiện tra: `status → trangThai`; bước vắng mặt ⇒ `undefined`. */
+    function bang(
+      status: OrderStatusKey,
+      scopeFlags: OrderScopeFlags,
+    ): Record<string, string | undefined> {
+      return Object.fromEntries(
+        buocVongDoi(status, scopeFlags).map((b) => [b.status, b.trangThai]),
+      );
+    }
+
+    it('đơn ca_nhan ở `dachot`: bước trước là done, chính nó current, phần sau upcoming', () => {
+      const b = bang('dachot', DU_CO);
+      expect(b.baogia).toBe('done');
+      expect(b.dachot).toBe('current');
+      expect(b.dacoc).toBe('upcoming');
+      expect(b.thicong).toBe('upcoming');
+      expect(b.nghiemthu).toBe('upcoming');
+      expect(b.danggiao).toBe('upcoming');
+      expect(b.dagiao).toBe('upcoming');
+      expect(b.hoanthanh).toBe('upcoming');
+    });
+
+    it('bước được sắp theo thứ tự canonical của ORDER_STATUS_KEYS', () => {
+      const chuoi = buocVongDoi('dachot', DU_CO).map((b) => b.status);
+      expect(chuoi).toEqual([
+        'baogia',
+        'dachot',
+        'dacoc',
+        'thicong',
+        'nghiemthu',
+        'danggiao',
+        'dagiao',
+        'hoanthanh',
+      ]);
+    });
+
+    it('đơn thuong_mai (chỉ Thiết bị): nhánh thi công VÀ nhánh giao VẮNG MẶT HOÀN TOÀN', () => {
+      const b = bang('dachot', CHI_THIET_BI);
+      // Không phải "có mà mờ" — không có mặt trong chuỗi (UX-DR-11).
+      expect(b.thicong).toBeUndefined();
+      expect(b.nghiemthu).toBeUndefined();
+      expect(b.danggiao).toBeUndefined();
+      expect(b.dagiao).toBeUndefined();
+      // Đơn chỉ thiết bị vẫn đóng được: `dachot → hoanthanh` gate cờ Thiết bị.
+      expect(b.hoanthanh).toBe('upcoming');
+    });
+
+    it('AC-11: bật Thiết bị + TẮT Vận chuyển ⇒ KHÔNG có `danggiao`/`dagiao` — hệ quả của bảng transition HIỆN TẠI (không có cạnh dacoc→dagiao); Story 6.1 sẽ thêm cạnh đó', () => {
+      const b = bang('dacoc', {
+        thietBi: true,
+        thiCong: true,
+        vanChuyen: false,
+      });
+      expect(b.danggiao).toBeUndefined();
+      expect(b.dagiao).toBeUndefined();
+      expect(b.thicong).toBe('upcoming');
+    });
+
+    it('RẼ NHÁNH: đơn ở `danggiao` KHÔNG đánh done cho `thicong`/`nghiemthu` — đơn chưa từng thi công', () => {
+      const b = bang('danggiao', DU_CO);
+      expect(b.thicong).toBeUndefined();
+      expect(b.nghiemthu).toBeUndefined();
+      expect(b.dacoc).toBe('done');
+      expect(b.danggiao).toBe('current');
+      expect(b.dagiao).toBe('upcoming');
+    });
+
+    it('RẼ NHÁNH: đơn ở `nghiemthu` KHÔNG vẽ `danggiao`/`dagiao` — từ nghiemthu chỉ còn cạnh hoanThanh', () => {
+      const b = bang('nghiemthu', DU_CO);
+      expect(b.danggiao).toBeUndefined();
+      expect(b.dagiao).toBeUndefined();
+      expect(b.thicong).toBe('done');
+      expect(b.hoanthanh).toBe('upcoming');
+    });
+
+    it('`huy` không phải một nấc khi đơn đang chạy bình thường', () => {
+      expect(bang('dacoc', DU_CO).huy).toBeUndefined();
+    });
+
+    it('`choduyet` không phải một nấc khi đơn đang ở `baogia` — nhánh phụ của chiết khấu', () => {
+      expect(bang('baogia', DU_CO).choduyet).toBeUndefined();
+    });
+
+    it('NGOẠI LỆ: đơn ĐANG ở `huy` ⇒ bước `huy` có mặt với current', () => {
+      expect(bang('huy', DU_CO).huy).toBe('current');
+    });
+
+    it('NGOẠI LỆ: đơn ĐANG ở `choduyet` ⇒ bước đó có mặt với current, `baogia` là done', () => {
+      const b = bang('choduyet', DU_CO);
+      expect(b.choduyet).toBe('current');
+      expect(b.baogia).toBe('done');
+      expect(b.dachot).toBe('upcoming');
+    });
+
+    it('CẠNH QUAY LUI không được tính là tiến: đơn mới ở `baogia` KHÔNG khoe `dachot` là done', () => {
+      // `moLai` (dachot → baogia) và `tuChoiChietKhau` (choduyet → baogia) tạo chu trình;
+      // nếu đồ thị giữ chúng thì mọi bước sau đều "có đường tới baogia" ⇒ done giả.
+      const b = bang('baogia', DU_CO);
+      expect(b.dachot).toBe('upcoming');
+      expect(b.dacoc).toBe('upcoming');
+      expect(b.hoanthanh).toBe('upcoming');
+      expect(Object.values(b)).not.toContain('done');
+    });
+
+    it('MUTATION GUARD: chuỗi bước phải suy TỪ ALLOWED_TRANSITIONS, không từ bảng chép tay — mọi bước trả về (trừ chính status) phải nối được với status qua một cạnh của bảng', () => {
+      // Xoá dòng `batDauThiCong` khỏi bảng ⇒ `thicong` phải biến mất khỏi chuỗi. Test này
+      // khẳng định quan hệ đó bằng chính bảng, nên nó ĐỎ nếu hàm đọc nguồn khác.
+      const buoc = buocVongDoi('dacoc', DU_CO).map((b) => b.status);
+      const coTrongBang = new Set(
+        ALLOWED_TRANSITIONS.flatMap((rule) => [rule.from, rule.to]),
+      );
+      for (const b of buoc) expect(coTrongBang.has(b)).toBe(true);
+      // `thicong` chỉ tới được qua cạnh `batDauThiCong`; nếu cạnh đó còn thì bước còn.
+      const coCanhThiCong = ALLOWED_TRANSITIONS.some(
+        (rule) => rule.event === SU_KIEN.batDauThiCong,
+      );
+      expect(buoc.includes('thicong')).toBe(coCanhThiCong);
     });
   });
 });

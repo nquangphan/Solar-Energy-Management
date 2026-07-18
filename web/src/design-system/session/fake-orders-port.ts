@@ -23,8 +23,10 @@ import type {
   CreateOrderInput,
   DiscountPendingItem,
   Order,
+  OrderLifecycleStep,
   OrderLine,
   OrderTotals,
+  OrderVersionItem,
   OrdersPort,
   PreviewTotalInput,
   QuoteExportFiles,
@@ -504,6 +506,82 @@ export class FakeOrdersPort implements OrdersPort {
       page,
       pageSize,
     });
+  }
+
+  /**
+   * Demo stand-in for the backend's `buocVongDoi()` — it lives in the FAKE (the
+   * demo "server"), never in a screen, exactly like `presetFor` above. The real
+   * sequence is derived from ALLOWED_TRANSITIONS server-side (AD-2/AD-11); this
+   * one only needs to be shaped right so the screen has something to draw.
+   *
+   * Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
+   */
+  getLifecycle(orderId: string): Promise<OrderLifecycleStep[]> {
+    const order = this.orders.get(orderId);
+    // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
+    // full-length stepper (that is also the case that overflows on mobile).
+    const status = order?.status ?? DEMO_ORDER_ROWS[0].status;
+    const thiCong = order?.scopeThiCong ?? true;
+    const vanChuyen = order?.scopeVanChuyen ?? true;
+    const chuoi = [
+      'baogia',
+      'dachot',
+      'dacoc',
+      ...(thiCong ? ['thicong', 'nghiemthu'] : []),
+      ...(vanChuyen ? ['danggiao', 'dagiao'] : []),
+      'hoanthanh',
+    ];
+    const dangO = chuoi.indexOf(status);
+    return Promise.resolve(
+      chuoi.map((status, i) => ({
+        status,
+        trangThai:
+          dangO === -1 || i > dangO
+            ? ('upcoming' as const)
+            : i === dangO
+              ? ('current' as const)
+              : ('done' as const),
+      })),
+    );
+  }
+
+  /**
+   * Demo history. Two shapes on purpose so the screen's empty/populated branches
+   * both have data: an order whose id ends in `-1` gets several versions, every
+   * other order stays at its original version.
+   */
+  listVersions(orderId: string): Promise<OrderVersionItem[]> {
+    const goc: OrderVersionItem = {
+      id: `${orderId}-v1`,
+      versionNo: 1,
+      laBanHienLuc: !orderId.endsWith('-1'),
+      createdAt: NOW,
+      chotAt: null,
+      createdByAccountId: 'acc-demo',
+      createdByDisplayName: 'Nguyễn Văn Quản Lý',
+      soDong: 3,
+      thayDoi: { them: [], xoa: [], doiSoLuong: [] },
+    };
+    if (!orderId.endsWith('-1')) return Promise.resolve([goc]);
+    return Promise.resolve([
+      goc,
+      {
+        id: `${orderId}-v2`,
+        versionNo: 2,
+        laBanHienLuc: true,
+        createdAt: NOW,
+        chotAt: null,
+        // Bản cũ không có actor ⇒ null; màn hiện `—`, không bịa tên.
+        createdByAccountId: null,
+        createdByDisplayName: null,
+        soDong: 4,
+        thayDoi: {
+          them: ['Tủ điện DC 2 string'],
+          xoa: [],
+          doiSoLuong: [{ ten: 'Tấm pin JA Solar 580W', tu: 8, den: 12 }],
+        },
+      },
+    ]);
   }
 
   private buildLine(

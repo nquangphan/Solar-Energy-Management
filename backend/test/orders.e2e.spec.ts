@@ -122,6 +122,7 @@ describe('/orders (e2e)', () => {
 
   const orderRepo = {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     findMany: jest.fn(),
     count: jest.fn(),
     create: jest.fn(),
@@ -131,6 +132,7 @@ describe('/orders (e2e)', () => {
   const orderVersionRepo = {
     create: jest.fn(),
     findUnique: jest.fn(),
+    findMany: jest.fn(),
     update: jest.fn(),
   };
   const lineRepo = {
@@ -268,6 +270,38 @@ describe('/orders (e2e)', () => {
     jest.clearAllMocks();
     customerRepo.findUnique.mockResolvedValue(KHACH);
     orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
+    // Đường đọc scoped (`findScopedOrThrow`) dùng `findFirst` với `where.AND`. Fake này ĐỌC
+    // LẠI qua `findUnique` để mọi test stateful (đơn đổi status trong bài) vẫn thấy đúng một
+    // sự thật, rồi áp CHÍNH mệnh đề phạm vi mà service gửi xuống — nếu service quên gửi, ca
+    // "đơn người khác ⇒ 404" sẽ xanh giả.
+    orderRepo.findFirst.mockImplementation(
+      async (args: {
+        where?: { AND?: Array<Record<string, unknown>> };
+      }): Promise<unknown> => {
+        const don = (await orderRepo.findUnique({
+          where: { id: ORDER_ID },
+        })) as {
+          ownerAccountId?: string | null;
+          assigneeAccountId?: string | null;
+        } | null;
+        if (don === null) return null;
+        const menhDe = args.where?.AND ?? [];
+        for (const dieu of menhDe) {
+          const or = dieu.OR as
+            Array<Record<string, string | null>> | undefined;
+          if (or === undefined) continue;
+          const khop = or.some(
+            (nhanh) =>
+              (nhanh.ownerAccountId !== undefined &&
+                nhanh.ownerAccountId === don.ownerAccountId) ||
+              (nhanh.assigneeAccountId !== undefined &&
+                nhanh.assigneeAccountId === don.assigneeAccountId),
+          );
+          if (!khop) return null;
+        }
+        return don;
+      },
+    );
     orderRepo.create.mockResolvedValue({
       ...DON_BAOGIA,
       currentVersionId: null,
@@ -300,6 +334,7 @@ describe('/orders (e2e)', () => {
     txLineRepo.createMany.mockResolvedValue({ count: 0 });
     queryRaw.mockResolvedValue([{ id: ORDER_ID }]);
     orderVersionRepo.findUnique.mockResolvedValue(null);
+    orderVersionRepo.findMany.mockResolvedValue([]);
     // Mặc định: đơn chưa từng áp chiết khấu.
     discountApprovalRepo.findFirst.mockResolvedValue(null);
     discountApprovalRepo.findMany.mockResolvedValue([]);
@@ -440,7 +475,7 @@ describe('/orders (e2e)', () => {
     });
 
     it('GET /orders/:id ⇒ 200, dòng kèm amount server tính', async () => {
-      givenPermissions(PERM.quotesCreateEdit);
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
 
       const res = await request(server())
         .get(`/orders/${ORDER_ID}`)
@@ -604,7 +639,7 @@ describe('/orders (e2e)', () => {
     });
 
     it('GET /orders/:id KHÔNG lộ warrantyStartAt (mốc nội bộ — 5.9 mới expose)', async () => {
-      givenPermissions(PERM.quotesCreateEdit);
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
       // Dòng đã có mốc bảo hành nội bộ — response tuyệt đối không chứa field.
       lineRepo.findMany.mockResolvedValue([
         { ...DONG_CATALOG, warrantyStartAt: new Date('2026-07-10T00:00:00Z') },
@@ -1236,7 +1271,11 @@ describe('/orders (e2e)', () => {
     });
 
     it('retry trên đơn đã chốt ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm', async () => {
-      givenPermissions(PERM.ordersConfirm, PERM.quotesCreateEdit);
+      givenPermissions(
+        PERM.ordersConfirm,
+        PERM.quotesCreateEdit,
+        PERM.ordersViewOwn,
+      );
       const DON_DA_CHOT = { ...DON_BAOGIA, status: 'dachot' };
       const DONG_DA_CHOT = {
         ...DONG_CATALOG,
@@ -1261,7 +1300,7 @@ describe('/orders (e2e)', () => {
     });
 
     it('sửa giá danh mục SAU chốt ⇒ GET trả đơn giá dòng KHÔNG đổi (snapshot thắng giá sống — FR-5)', async () => {
-      givenPermissions(PERM.quotesCreateEdit);
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
       // Dòng đã đóng băng 2_450_000; danh mục hiện hành đã nhảy lên 9_999_999.
       orderRepo.findUnique.mockResolvedValue({
         ...DON_BAOGIA,
@@ -1333,7 +1372,11 @@ describe('/orders (e2e)', () => {
     });
 
     it('vòng đời FR-6 đầy đủ: tạo → thêm dòng → chốt → giá danh mục đổi → mở lại (giá SỐNG mới, bản cũ nguyên snapshot, audit) → sửa dòng → re-chốt (snapshot MỚI trên bản mới, bản cũ vẫn cũ)', async () => {
-      givenPermissions(PERM.quotesCreateEdit, PERM.ordersConfirm);
+      givenPermissions(
+        PERM.quotesCreateEdit,
+        PERM.ordersConfirm,
+        PERM.ordersViewOwn,
+      );
 
       // ===== Mock STATEFUL: DB giả trong bộ nhớ — mọi op đọc/ghi cùng một sự thật. =====
       let orderState: Record<string, unknown> | null = null;
@@ -1597,7 +1640,7 @@ describe('/orders (e2e)', () => {
     });
 
     it("retry mo-lai khi đơn ĐANG 'baogia' ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm", async () => {
-      givenPermissions(PERM.quotesCreateEdit);
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
       orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
       lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
 
@@ -2099,7 +2142,11 @@ describe('/orders (e2e)', () => {
     });
 
     it('retry duyệt CÙNG decision trên approval đã dong_y ⇒ 200 body y hệt GET, KHÔNG audit thêm', async () => {
-      givenPermissions(PERM.discountsApprove, PERM.quotesCreateEdit);
+      givenPermissions(
+        PERM.discountsApprove,
+        PERM.quotesCreateEdit,
+        PERM.ordersViewOwn,
+      );
       orderRepo.findUnique.mockResolvedValue({
         ...DON_BAOGIA,
         status: 'choduyet',
@@ -2422,7 +2469,7 @@ describe('/orders (e2e)', () => {
     });
 
     it('đơn không tồn tại ⇒ 404 envelope chuẩn (code/message/traceId)', async () => {
-      givenPermissions(PERM.quotesCreateEdit);
+      givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
       orderRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
@@ -2702,6 +2749,226 @@ describe('/orders (e2e)', () => {
             ],
           },
         ]);
+      }
+    });
+  });
+
+  describe('GET /orders/:id · /vong-doi · /phien-ban — màn chi tiết (Story 5.4)', () => {
+    /** Đơn của NGƯỜI KHÁC: không phải owner, không phải assignee của người gọi. */
+    const DON_NGUOI_KHAC = {
+      ...DON_BAOGIA,
+      ownerAccountId: 'acc-nguoi-khac',
+      assigneeAccountId: 'acc-nguoi-khac-2',
+    };
+
+    it('AC-4: chỉ view_own + đơn của người khác ⇒ 404 GIỐNG HỆT ca đơn không tồn tại', async () => {
+      // 403 ở đây sẽ xác nhận "đơn này có tồn tại" cho người không được thấy nó. Hai body
+      // phải không phân biệt được: so cả `code` lẫn `message`.
+      givenPermissions(PERM.ordersViewOwn);
+
+      orderRepo.findUnique.mockResolvedValue(DON_NGUOI_KHAC);
+      const ngoaiPhamVi = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      orderRepo.findUnique.mockResolvedValue(null);
+      const khongTonTai = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(ngoaiPhamVi.status).toBe(404);
+      expect(khongTonTai.status).toBe(404);
+      expect(ngoaiPhamVi.body.code).toBe(khongTonTai.body.code);
+      expect(ngoaiPhamVi.body.message).toBe(khongTonTai.body.message);
+      expect(ngoaiPhamVi.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it('AC-4: view_all ⇒ đọc được đơn của người khác', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      orderRepo.findUnique.mockResolvedValue(DON_NGUOI_KHAC);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(ORDER_ID);
+    });
+
+    it('AC-5: có orders.view_own nhưng KHÔNG có quotes.create_edit ⇒ 200 (preset KE_TOAN/THI_CONG/KHO_GIAO)', async () => {
+      // Trước 5.4 ba preset này bị 403: 5.3 cho họ thấy đơn trong danh sách, bấm vào thì
+      // cửa khoá. Đây chính là ca đó.
+      givenPermissions(PERM.ordersViewOwn);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+    });
+
+    it('không có CẢ HAI orders.view_* ⇒ 403 ở cả ba route (quotes.create_edit KHÔNG còn mở được cửa đọc)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      for (const duong of ['', '/vong-doi', '/phien-ban']) {
+        const res = await request(server())
+          .get(`/orders/${ORDER_ID}${duong}`)
+          .set('Authorization', `Bearer ${token()}`);
+        expect(res.status).toBe(403);
+      }
+    });
+
+    it('/vong-doi: đơn thuong_mai (chỉ Thiết bị) KHÔNG có bước thicong; đơn ca_nhan thì có', async () => {
+      givenPermissions(PERM.ordersViewOwn);
+
+      orderRepo.findUnique.mockResolvedValue(DON_BAOGIA); // thiCong=false, vanChuyen=false
+      const thuongMai = await request(server())
+        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        scopeThiCong: true,
+        scopeVanChuyen: true,
+      });
+      const caNhan = await request(server())
+        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(thuongMai.status).toBe(200);
+      const buocThuongMai = (
+        thuongMai.body.buoc as Array<{ status: string }>
+      ).map((b) => b.status);
+      expect(buocThuongMai).not.toContain('thicong');
+      expect(buocThuongMai).not.toContain('danggiao');
+
+      const buocCaNhan = (caNhan.body.buoc as Array<{ status: string }>).map(
+        (b) => b.status,
+      );
+      expect(buocCaNhan).toContain('thicong');
+      // Bước đơn đang đứng phải được đánh dấu — stepper thiếu `current` là stepper câm.
+      expect(
+        (caNhan.body.buoc as Array<{ status: string; trangThai: string }>).find(
+          (b) => b.status === 'baogia',
+        )?.trangThai,
+      ).toBe('current');
+    });
+
+    it('/phien-ban: mọi bản theo versionNo tăng dần, ĐÚNG MỘT bản laBanHienLuc — và nó theo CON TRỎ, không theo versionNo lớn nhất', async () => {
+      // ⚠️ Fixture cố ý trỏ `currentVersionId` vào bản CŨ hơn. Với fixture "tự nhiên"
+      // (con trỏ luôn ở bản mới nhất) thì một cài đặt sai theo `max(versionNo)` vẫn xanh —
+      // ca này là chốt chặn của AD-6.
+      givenPermissions(PERM.ordersViewOwn);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        currentVersionId: 'ver-1',
+      });
+      orderVersionRepo.findMany.mockResolvedValue([
+        {
+          id: 'ver-1',
+          versionNo: 1,
+          createdAt: new Date('2026-07-16T01:00:00Z'),
+          chotAt: null,
+          createdByAccountId: ACCOUNT_ID,
+          createdBy: { displayName: 'Nguyễn Quản Lý' },
+          lineItems: [
+            {
+              productId: 'prod-pin',
+              name: 'Tấm pin',
+              unit: 'tấm',
+              qty: 8,
+              displayOrder: 0,
+            },
+          ],
+        },
+        {
+          id: 'ver-2',
+          versionNo: 2,
+          createdAt: new Date('2026-07-17T01:00:00Z'),
+          chotAt: null,
+          createdByAccountId: null,
+          createdBy: null,
+          // ⚠️ Bản 2 có SỐ DÒNG KHÁC bản 1 có chủ đích: với hai bản cùng số dòng,
+          // `soDong` lấy nhầm từ bản khác (hoặc từ bản đầu) vẫn xanh ở mọi assert.
+          lineItems: [
+            {
+              productId: 'prod-pin',
+              name: 'Tấm pin',
+              unit: 'tấm',
+              qty: 12,
+              displayOrder: 0,
+            },
+            {
+              productId: 'prod-inverter',
+              name: 'Inverter',
+              unit: 'bộ',
+              qty: 1,
+              displayOrder: 1,
+            },
+          ],
+        },
+      ]);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}/phien-ban`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      const items = res.body.items as Array<{
+        versionNo: number;
+        laBanHienLuc: boolean;
+        createdByDisplayName: string | null;
+        soDong: number;
+        thayDoi: {
+          them: string[];
+          xoa: string[];
+          doiSoLuong: Array<{ tu: number; den: number }>;
+        };
+      }>;
+      expect(items.map((v) => v.versionNo)).toEqual([1, 2]);
+      expect(items.filter((v) => v.laBanHienLuc)).toHaveLength(1);
+      // Bản HIỆU LỰC là bản CŨ (con trỏ), không phải bản versionNo lớn nhất.
+      expect(items[0].laBanHienLuc).toBe(true);
+      expect(items[1].laBanHienLuc).toBe(false);
+
+      // Bản gốc: không có gì để so. Bản 2: đổi số lượng 8 → 12.
+      expect(items[0].thayDoi).toEqual({ them: [], xoa: [], doiSoLuong: [] });
+      expect(items[1].thayDoi.doiSoLuong).toEqual([
+        { ten: 'Tấm pin', tu: 8, den: 12 },
+      ]);
+      // Chiều diff: bản N so với bản N-1. Đảo hai đối số thì dòng mới thành "xoá" —
+      // lịch sử kể ngược chuyện đã xảy ra, và không assert nào khác thấy được.
+      expect(items[1].thayDoi.them).toEqual(['Inverter']);
+      expect(items[1].thayDoi.xoa).toEqual([]);
+
+      // Bản cũ không có actor ⇒ null, KHÔNG bịa tên.
+      expect(items[0].createdByDisplayName).toBe('Nguyễn Quản Lý');
+      expect(items[1].createdByDisplayName).toBeNull();
+      // `soDong` là số dòng của CHÍNH bản đó — hai giá trị khác nhau, không một hằng chép.
+      expect(items.map((v) => v.soDong)).toEqual([1, 2]);
+    });
+
+    it('/phien-ban: KHÔNG trả tiền/giá (AD-10 — tiền chỉ qua preview-total)', async () => {
+      givenPermissions(PERM.ordersViewOwn);
+      orderVersionRepo.findMany.mockResolvedValue([
+        {
+          id: VERSION_ID,
+          versionNo: 1,
+          createdAt: new Date('2026-07-16T01:00:00Z'),
+          chotAt: null,
+          createdByAccountId: null,
+          createdBy: null,
+          lineItems: [],
+        },
+      ]);
+
+      const res = await request(server())
+        .get(`/orders/${ORDER_ID}/phien-ban`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      const raw = JSON.stringify(res.body);
+      for (const cam of ['unitPrice', 'amount', 'total', 'costPrice']) {
+        expect(raw).not.toContain(cam);
       }
     });
   });

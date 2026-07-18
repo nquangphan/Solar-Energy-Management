@@ -27,6 +27,20 @@ enum StatusKey {
   huy,
 }
 
+/// Reverse lookup for the backend's `String` status. Ports mirror the backend
+/// DTO (a string), this chip takes the strict [StatusKey] enum — every screen
+/// showing a status needs this bridge, so it lives HERE, next to the enum, not
+/// re-typed privately in each screen (the second copy is where drift starts).
+///
+/// Returns null for an unknown value so a caller can render plain text instead
+/// of crashing the screen.
+StatusKey? statusKeyOf(String raw) {
+  for (final StatusKey key in StatusKey.values) {
+    if (key.name == raw) return key;
+  }
+  return null;
+}
+
 /// Canonical Vietnamese labels, verbatim from web STATUS_LABELS / DESIGN.md.
 const Map<StatusKey, String> kStatusLabels = {
   StatusKey.baogia: 'Báo giá',

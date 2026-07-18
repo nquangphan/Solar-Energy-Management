@@ -38,16 +38,6 @@ const String _kFollowUp = 'FOLLOW_UP';
 
 enum _LoadState { loading, ready, error }
 
-/// Reverse lookup for the port's `String` status. The port mirrors the backend
-/// DTO (a string), the chip takes the strict [StatusKey] enum — an unknown value
-/// renders as plain text rather than crashing the whole list.
-StatusKey? _statusKeyOf(String raw) {
-  for (final StatusKey key in StatusKey.values) {
-    if (key.name == raw) return key;
-  }
-  return null;
-}
-
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({
     super.key,
@@ -298,7 +288,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   /// One order row. The web twin renders the same three facts as table columns:
   /// `Khách hàng` · `SĐT` · `Trạng thái`, plus the `Xem` action.
   Widget _row(OrderListItem order) {
-    final StatusKey? key = _statusKeyOf(order.status);
+    final StatusKey? key = statusKeyOf(order.status);
     return AppCard(
       padding: const EdgeInsets.all(AppTokens.space12),
       child: Row(
