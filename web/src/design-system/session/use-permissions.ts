@@ -14,8 +14,12 @@ import type { SessionStatus } from './session';
 export interface UsePermissions {
   status: SessionStatus;
   perms: PermissionSet;
-  /** Order-list scope selector (AC-3, FR-18): `'all'` vs `'mine'`, ready for Epic 5. */
-  orderScope: 'all' | 'mine';
+  /**
+   * Order-list scope selector (AC-3, FR-18): `'all'` vs `'mine'` vs `'none'`.
+   * `'none'` (Story 5.3) = holds NEITHER order-view key, which is what lets the
+   * Đơn hàng nav item be hidden rather than shown-and-broken.
+   */
+  orderScope: 'all' | 'mine' | 'none';
   /** Raw `/me` identity for the Hồ sơ screen (Story 2.8); `null` unless `status === 'ready'`. */
   me: MeResponse | null;
 }

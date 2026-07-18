@@ -1,0 +1,47 @@
+/* hand-authored — Story 5.3 order-list layout wrappers. Composition-level
+   styling only: the table, buttons, chips, empty/error states and skeletons are
+   all shipped design-system components. Token vars for every colour and radius;
+   flat borders, no elevation effects (Viền nét, UX-DR-4). Load AFTER tokens.css
+   / components.css / shell.css. */
+
+.ord-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+/* The phone key is data to be read digit by digit, not prose: tabular figures
+   make the digits line up down the column. Deliberately NOT the shipped `.mono`
+   utility — that one also right-aligns, which is right for money and wrong for a
+   left-aligned identity column. */
+.ord-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* Stacked skeleton rows + the loading caption. The skeletons stand in for table
+   rows, so they inherit the row rhythm rather than inventing one. */
+.ord-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.ord-state-msg {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ord-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+.ord-pager-label {
+  color: var(--muted);
+  font-size: 13px;
+}

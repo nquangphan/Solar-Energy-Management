@@ -10,6 +10,7 @@ import { ErrorCode } from '../common/errors/error-code';
 import type { CustType } from '../customers/domain/customer-type';
 import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
+import { PERM } from '../accounts/domain/permission-registry';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CHIET_KHAU_CHO_DUYET,
@@ -47,6 +48,7 @@ import {
 import { scopePresetFor } from './domain/scope-preset';
 import { VAT_MODE, vatApplies } from './domain/vat-mode';
 import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
+import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
@@ -164,6 +166,21 @@ export interface DiscountPendingLineView {
   readonly qty: number;
   readonly unitPrice: number;
   readonly estimatedMarginPct: number | null;
+}
+
+/**
+ * Một dòng của danh sách đơn (Story 5.3) — đủ để vẽ list, KHÔNG có tổng tiền và KHÔNG có bất
+ * cứ dữ liệu giá vốn nào (AD-4/AD-10).
+ */
+export interface OrderListRow {
+  readonly id: string;
+  readonly status: string;
+  readonly customerSdt: string;
+  readonly customerName: string;
+  readonly ownerAccountId: string;
+  readonly assigneeAccountId: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
 }
 
 /** Một item danh sách chờ duyệt chiết khấu (FR-18/FR-37) — số backend tính (AD-16). */
@@ -1351,6 +1368,97 @@ export class OrdersService {
     // CHỈ nhánh từ chối đổi status ⇒ chỉ nó có vết `StatusChanged`.
     if (statusChanged !== null) await this.eventBus.publish(statusChanged);
     return this.viewOf(after, tieredPricingEnabled);
+  }
+
+  /**
+   * Danh sách đơn có PHẠM VI theo quyền (Story 5.3, FR-10/AC-1/AC-5).
+   *
+   * Phạm vi là chuyện SERVER quyết, không phải tham số client gửi lên (AD-4): thiếu
+   * `orders.view_all` ⇒ chỉ thấy đơn mình `owner` HOẶC mình `assignee` — đúng HAI trường
+   * phân giải phạm vi (AD-15), không suy diễn trường thứ ba.
+   *
+   * BẪY TRUNG TÂM — mọi mệnh đề gom vào `where.AND`, KHÔNG gán thẳng `where.OR`. `where.OR`
+   * chỉ có ĐÚNG MỘT chỗ: bộ lọc thứ hai nào cũng cần `OR` (search, tương lai) sẽ GHI ĐÈ mệnh
+   * đề phạm vi và làm RÒ đơn của người khác — chính cái bẫy đang chờ ở `customers.service.ts`
+   * nơi `where.OR` đã bị search chiếm chỗ.
+   *
+   * Follow-up KHÔNG phải cột DB, không phải reminder, không phải job: nó là đơn ở trạng thái
+   * `baogia` (chưa chốt) — một bộ lọc DẪN XUẤT, hết (FR-10).
+   */
+  async list(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    query: ListOrdersQueryDto,
+  ): Promise<{
+    items: OrderListRow[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }> {
+    // Hai bộ lọc trạng thái mâu thuẫn nhau ⇒ 400 tường minh. KHÔNG AND thầm lặng thành tập
+    // rỗng: một danh sách rỗng câm khiến người dùng tin là "không có đơn nào" trong khi thật
+    // ra họ vừa gửi một truy vấn vô nghĩa.
+    if (query.followUp === true && query.status !== undefined) {
+      throw new AppException(
+        ErrorCode.VALIDATION_ERROR,
+        400,
+        'Không dùng đồng thời `followUp` và `status` — follow-up đã là bộ lọc trạng thái (đơn chưa chốt).',
+      );
+    }
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+
+    const where: Prisma.OrderWhereInput = {};
+    const dieuKien: Prisma.OrderWhereInput[] = [];
+
+    if (!quyen.has(PERM.ordersViewAll)) {
+      dieuKien.push({
+        OR: [
+          { ownerAccountId: callerAccountId },
+          { assigneeAccountId: callerAccountId },
+        ],
+      });
+    }
+
+    if (query.followUp === true) {
+      dieuKien.push({ status: TRANG_THAI_BAO_GIA });
+    } else if (query.status !== undefined) {
+      dieuKien.push({ status: query.status });
+    }
+
+    if (dieuKien.length > 0) {
+      where.AND = dieuKien;
+    }
+
+    // Một `$transaction` để trang và TỔNG đọc trên cùng một ảnh chụp — đếm riêng ngoài
+    // transaction cho phép một đơn chen vào giữa hai truy vấn ⇒ tổng lệch với danh sách.
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.order.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { customer: { select: { name: true } } },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      items: items.map((don) => ({
+        id: don.id,
+        status: don.status,
+        customerSdt: don.customerSdt,
+        customerName: don.customer.name,
+        ownerAccountId: don.ownerAccountId,
+        assigneeAccountId: don.assigneeAccountId,
+        createdAt: don.createdAt,
+        updatedAt: don.updatedAt,
+      })),
+      total,
+      page,
+      pageSize,
+    };
   }
 
   /**

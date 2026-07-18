@@ -8,6 +8,10 @@ import { AccountsService } from '../src/accounts/accounts.service';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import {
+  TRANG_THAI_BAO_GIA,
+  TRANG_THAI_DA_CHOT,
+} from '../src/orders/domain/order-status';
 import { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { StoragePort } from '../src/storage/storage.port';
@@ -118,6 +122,8 @@ describe('/orders (e2e)', () => {
 
   const orderRepo = {
     findUnique: jest.fn(),
+    findMany: jest.fn(),
+    count: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
@@ -267,6 +273,8 @@ describe('/orders (e2e)', () => {
       currentVersionId: null,
     });
     orderRepo.update.mockResolvedValue(DON_BAOGIA);
+    orderRepo.findMany.mockResolvedValue([]);
+    orderRepo.count.mockResolvedValue(0);
     orderVersionRepo.create.mockResolvedValue({ id: VERSION_ID });
     // Giỏ rỗng mặc định ⇒ displayOrder dòng mới bắt đầu từ 0 (max + 1).
     lineRepo.findFirst.mockResolvedValue(null);
@@ -2454,6 +2462,247 @@ describe('/orders (e2e)', () => {
 
       expect(res.status).toBe(404);
       expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+  });
+
+  /**
+   * `GET /orders` — danh sách + follow-up + phạm vi theo QUYỀN (Story 5.3).
+   *
+   * Phạm vi ở đây là bề mặt bảo mật, không phải tiện nghi UI: một người chỉ có
+   * `orders.view_own` mà đọc được đơn người khác là rò dữ liệu khách hàng, và triệu chứng
+   * duy nhất là "danh sách hơi dài" — nên ma trận phạm vi được khẳng định ở tầng HTTP thật,
+   * nơi guard + pipe + service cùng chạy.
+   */
+  describe('GET /orders — danh sách, follow-up, phạm vi theo quyền (Story 5.3)', () => {
+    const DON_LIST = {
+      ...DON_BAOGIA,
+      customer: { name: KHACH.name },
+    };
+
+    /** `where` mà service thực sự đưa xuống Prisma ở lần gọi `findMany` đầu tiên. */
+    function whereDaDung(): Record<string, unknown> {
+      const args = orderRepo.findMany.mock.calls[0][0] as {
+        where?: Record<string, unknown>;
+      };
+      return args.where ?? {};
+    }
+
+    it('actor CHỈ có view_own ⇒ 200 và where thu hẹp về owner HOẶC assignee của chính mình', async () => {
+      givenPermissions(PERM.ordersViewOwn);
+      orderRepo.findMany.mockResolvedValue([DON_LIST]);
+      orderRepo.count.mockResolvedValue(1);
+
+      const res = await request(server())
+        .get('/orders')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(whereDaDung().AND).toEqual([
+        {
+          OR: [
+            { ownerAccountId: ACCOUNT_ID },
+            { assigneeAccountId: ACCOUNT_ID },
+          ],
+        },
+      ]);
+    });
+
+    it('actor có view_all ⇒ 200 và KHÔNG mệnh đề phạm vi nào (thấy toàn bộ)', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      orderRepo.findMany.mockResolvedValue([DON_LIST]);
+      orderRepo.count.mockResolvedValue(1);
+
+      const res = await request(server())
+        .get('/orders')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(whereDaDung().AND).toBeUndefined();
+      expect(whereDaDung().OR).toBeUndefined();
+    });
+
+    it('actor KHÔNG có key xem đơn nào ⇒ 403, và KHÔNG chạm DB', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .get('/orders')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      expect(orderRepo.findMany).not.toHaveBeenCalled();
+    });
+
+    it('trả ENVELOPE { items, total, page, pageSize }, item KHÔNG có tiền/giá vốn', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      orderRepo.findMany.mockResolvedValue([DON_LIST]);
+      orderRepo.count.mockResolvedValue(1);
+
+      const res = await request(server())
+        .get('/orders')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ total: 1, page: 1, pageSize: 20 });
+      const item = res.body.items[0] as Record<string, unknown>;
+      expect(item).toMatchObject({
+        id: DON_BAOGIA.id,
+        status: DON_BAOGIA.status,
+        customerSdt: SDT_E164,
+        customerName: KHACH.name,
+      });
+      // Fence tiền/giá vốn: list KHÔNG được lộ tổng tiền hay costPrice (AD-4/AD-10).
+      for (const cam of [
+        'total',
+        'subtotal',
+        'amount',
+        'costPrice',
+        'unitPrice',
+      ]) {
+        expect(item[cam]).toBeUndefined();
+      }
+    });
+
+    it('`total` là TỔNG tập đã lọc, KHÔNG phải items.length (nhiều hơn một trang)', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      orderRepo.findMany.mockResolvedValue([DON_LIST]);
+      orderRepo.count.mockResolvedValue(57);
+
+      const res = await request(server())
+        .get('/orders?pageSize=1')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.items).toHaveLength(1);
+      expect(res.body.total).toBe(57);
+    });
+
+    it('followUp=true ⇒ chỉ lọc trạng thái baogia (đơn chưa chốt, FR-10)', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      orderRepo.findMany.mockResolvedValue([DON_LIST]);
+      orderRepo.count.mockResolvedValue(1);
+
+      const res = await request(server())
+        .get('/orders?followUp=true')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(whereDaDung().AND).toEqual([{ status: TRANG_THAI_BAO_GIA }]);
+    });
+
+    it('followUp=true + status=dachot ⇒ 400 (hai bộ lọc mâu thuẫn, KHÔNG im lặng trả rỗng)', async () => {
+      givenPermissions(PERM.ordersViewAll);
+
+      const res = await request(server())
+        .get(`/orders?followUp=true&status=${TRANG_THAI_DA_CHOT}`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(orderRepo.findMany).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Trần + KIỂU của query — `ValidationPipe` là thứ DUY NHẤT đứng giữa query string và
+     * Prisma. Thiếu `@Type(() => Number)` thì một CHUỖI lọt xuống `skip`/`take`; thiếu
+     * `@Max` thì một request kéo trọn bảng đơn.
+     */
+    describe('trần + KIỂU của query (AC-7)', () => {
+      beforeEach(() => {
+        givenPermissions(PERM.ordersViewAll);
+        orderRepo.findMany.mockResolvedValue([]);
+        orderRepo.count.mockResolvedValue(0);
+      });
+
+      it.each([
+        ['status rác ngoài 10 khoá', '/orders?status=dangthicong'],
+        ['status là khoá cũ đã bỏ', '/orders?status=khong-ton-tai'],
+        ['page = 0', '/orders?page=0'],
+        ['page âm', '/orders?page=-3'],
+        ['pageSize = 101 (vượt trần)', '/orders?pageSize=101'],
+        ['pageSize = 0', '/orders?pageSize=0'],
+        ['pageSize không phải số', '/orders?pageSize=abc'],
+        ['followUp không phải boolean', '/orders?followUp=xyz'],
+      ])('%s ⇒ 400 VALIDATION_ERROR và KHÔNG chạm DB', async (_ten, url) => {
+        const res = await request(server())
+          .get(url)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(orderRepo.findMany).not.toHaveBeenCalled();
+      });
+
+      it("page='2' (chuỗi số từ query) ⇒ 200 và `skip` xuống Prisma là NUMBER", async () => {
+        const res = await request(server())
+          .get('/orders?page=2&pageSize=20')
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        const args = orderRepo.findMany.mock.calls[0][0] as {
+          skip: unknown;
+          take: unknown;
+        };
+        expect(typeof args.skip).toBe('number');
+        expect(typeof args.take).toBe('number');
+        expect(args.skip).toBe(20);
+        expect(args.take).toBe(20);
+      });
+
+      it('followUp=false kèm status ⇒ 200 và lọc theo status (chỉ followUp=true mới mâu thuẫn)', async () => {
+        // Màn lọc gửi cả hai field khi người dùng đang tắt follow-up. Coi mọi `followUp` có
+        // mặt là xung đột sẽ chặn oan đúng luồng bình thường của UI.
+        const res = await request(server())
+          .get(`/orders?followUp=false&status=${TRANG_THAI_DA_CHOT}`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(whereDaDung().AND).toEqual([{ status: TRANG_THAI_DA_CHOT }]);
+      });
+
+      it('page/pageSize trong body PHẢN CHIẾU tham số đã gửi, không phải hằng số', async () => {
+        // Pager của cả hai màn suy `totalPages` và nút Trước/Sau từ `page`+`pageSize` trong
+        // body. Trả cứng `page: 1` làm pager kẹt ở trang đầu dù dữ liệu đã sang trang khác.
+        const res = await request(server())
+          .get('/orders?page=3&pageSize=5')
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ page: 3, pageSize: 5 });
+      });
+
+      it('status hợp lệ ⇒ 200 và mệnh đề status nằm trong where.AND', async () => {
+        const res = await request(server())
+          .get(`/orders?status=${TRANG_THAI_DA_CHOT}`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(200);
+        expect(whereDaDung().AND).toEqual([{ status: TRANG_THAI_DA_CHOT }]);
+      });
+    });
+
+    it('KHÔNG nhận tham số phạm vi từ client (ownerId bị whitelist cắt, không rò đơn người khác)', async () => {
+      // Phạm vi là QUYỀN, không phải input. Nếu tham số này có tác dụng, bất kỳ ai cũng đọc
+      // được sổ đơn của người khác bằng cách đổi một chữ trên URL.
+      givenPermissions(PERM.ordersViewOwn);
+      orderRepo.findMany.mockResolvedValue([]);
+      orderRepo.count.mockResolvedValue(0);
+
+      const res = await request(server())
+        .get('/orders?ownerAccountId=acc-nguoi-khac')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect([200, 400]).toContain(res.status);
+      if (res.status === 200) {
+        expect(whereDaDung().AND).toEqual([
+          {
+            OR: [
+              { ownerAccountId: ACCOUNT_ID },
+              { assigneeAccountId: ACCOUNT_ID },
+            ],
+          },
+        ]);
+      }
     });
   });
 });

@@ -27,6 +27,15 @@ export interface NavLink {
    * exactly the sections it is handed.
    */
   requires?: PermissionKey;
+  /**
+   * Any-of gate: the link survives when the Account holds AT LEAST ONE of these
+   * keys. For an action whose permission is split across several keys, where no
+   * single key is a correct gate — Đơn hàng is readable by `orders.view_all`
+   * holders OR `orders.view_own` holders, and the role presets grant the first
+   * without the second, so either key alone would hide the item from people who
+   * may use it.
+   */
+  requiresAny?: readonly PermissionKey[];
 }
 
 export interface NavSection {
@@ -52,7 +61,12 @@ export const SIDEBAR_NAV: NavSection[] = [
   {
     links: [
       { key: 'home', icon: 'ic-home', label: 'Trang chủ' },
-      { key: 'orders', icon: 'ic-orders', label: 'Đơn hàng' },
+      {
+        key: 'orders',
+        icon: 'ic-orders',
+        label: 'Đơn hàng',
+        requiresAny: [PERM.ordersViewAll, PERM.ordersViewOwn],
+      },
       { key: 'customers', icon: 'ic-customer', label: 'Khách hàng', requires: PERM.customersManage },
       { key: 'catalog', icon: 'ic-catalog', label: 'Danh mục' },
       { key: 'inventory', icon: 'ic-warehouse', label: 'Kho' },

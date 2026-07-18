@@ -1956,6 +1956,105 @@
         "tags": [
           "orders"
         ]
+      },
+      "get": {
+        "operationId": "OrdersController_list",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái đơn. Bỏ trống ⇒ lấy mọi trạng thái.",
+            "schema": {
+              "example": "baogia",
+              "type": "string",
+              "enum": [
+                "baogia",
+                "choduyet",
+                "dachot",
+                "dacoc",
+                "thicong",
+                "nghiemthu",
+                "danggiao",
+                "dagiao",
+                "hoanthanh",
+                "huy"
+              ]
+            }
+          },
+          {
+            "name": "followUp",
+            "required": false,
+            "in": "query",
+            "description": "Chỉ lấy đơn CHƯA CHỐT để follow-up (trạng thái 'baogia', FR-10). Không dùng chung với `status`.",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Trang, bắt đầu từ 1.",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Số bản ghi mỗi trang — tối đa 100.",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách đơn ĐÃ thu hẹp theo quyền người gọi: orders.view_all thấy toàn bộ, chỉ orders.view_own thấy đơn mình owner HOẶC assignee. `total` đếm toàn bộ tập đã lọc + đã scope, đọc cùng ảnh chụp với `items`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`status` ngoài 10 khoá, `page` < 1, `pageSize` ngoài 1..100, hoặc gửi đồng thời `followUp` và `status` (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
       }
     },
     "/orders/preview-total": {
@@ -4414,6 +4513,101 @@
           "subtotal",
           "afterDiscount",
           "lines"
+        ]
+      },
+      "OrderListItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0b7f1f6e-1d7a-4c1e-9a4a-6a5e2f0c1b33"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "example": "baogia"
+          },
+          "customerSdt": {
+            "type": "string",
+            "description": "SĐT khách dạng E.164 (PK khách).",
+            "example": "+84903176968"
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Tên khách, đọc qua relation.",
+            "example": "Nguyễn Văn A"
+          },
+          "ownerAccountId": {
+            "type": "string",
+            "description": "Người tạo/sở hữu đơn."
+          },
+          "assigneeAccountId": {
+            "type": "object",
+            "description": "Người được giao chăm đơn; null nếu chưa giao.",
+            "nullable": true
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "ISO-8601 UTC."
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "customerSdt",
+          "customerName",
+          "ownerAccountId",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "OrderListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderListItemDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng số đơn khớp bộ lọc và trong phạm vi quyền (KHÔNG phải số dòng của trang này).",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "Trang hiện tại (bắt đầu từ 1).",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Số bản ghi mỗi trang.",
+            "example": 20
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
         ]
       },
       "UpdateOrderRequestDto": {

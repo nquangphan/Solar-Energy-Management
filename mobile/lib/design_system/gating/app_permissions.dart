@@ -21,10 +21,19 @@ typedef PermissionKey = String;
 bool can(Set<PermissionKey> perms, PermissionKey key) => perms.contains(key);
 
 /// Order list scope (AD-17, FR-18): `'all'` when the Account may see every
-/// order, else `'mine'`. "View all orders" and "own orders only" are two
-/// EXPLICIT keys in the registry — this drives the Order list scope in Epic 5.
-String orderScope(Set<PermissionKey> perms) =>
-    can(perms, AppPerm.ordersViewAll) ? 'all' : 'mine';
+/// order, `'mine'` when it may see only its own, `'none'` when it holds NEITHER
+/// key. "View all orders" and "own orders only" are two EXPLICIT keys in the
+/// registry.
+///
+/// `'none'` (Story 5.3) mirrors web byte-for-byte — the parity drift-guard
+/// compares both helpers. On mobile it does NOT hide a tab: the bottom nav is a
+/// LOCKED 5-tab contract (UX-DR-15), so an account without either key still sees
+/// Đơn hàng and gets the screen's error state from the backend 403 (AD-4).
+String orderScope(Set<PermissionKey> perms) {
+  if (can(perms, AppPerm.ordersViewAll)) return 'all';
+  if (can(perms, AppPerm.ordersViewOwn)) return 'mine';
+  return 'none';
+}
 
 /// A nav link carrying an optional permission gate (parity with web `NavLink`).
 /// The mobile bottom-nav is LOCKED to 5 tabs (UX-DR-15) and is never filtered;
@@ -67,7 +76,8 @@ List<AppNavSection> filterNav(
   return sections
       .map((section) => section.copyWithLinks(
             section.links
-                .where((link) => link.requires == null || can(perms, link.requires!))
+                .where((link) =>
+                    link.requires == null || can(perms, link.requires!))
                 .toList(),
           ))
       .where((section) => section.links.isNotEmpty)

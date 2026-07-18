@@ -139,6 +139,51 @@ class OrderDiscount {
   final String? resolvedAt;
 }
 
+/// One row of `GET /orders` (Story 5.3) — mirrors the backend `OrderListItemDto`
+/// field-for-field and the web `OrderListItem` (AD-12: the contract comes FROM
+/// the backend).
+///
+/// Deliberately carries NO money: a list total would need the version + pricing
+/// join, and a wrong number on a list row is a money regression. No `costPrice`
+/// either (the `costs.view` fence, AD-4).
+class OrderListItem {
+  const OrderListItem({
+    required this.id,
+    required this.status,
+    required this.customerSdt,
+    required this.customerName,
+    required this.ownerAccountId,
+    required this.assigneeAccountId,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String status;
+  final String customerSdt;
+  final String customerName;
+  final String ownerAccountId;
+  final String? assigneeAccountId;
+  final String createdAt;
+  final String updatedAt;
+}
+
+/// Paged envelope of `GET /orders` — `total` counts the whole scoped+filtered
+/// set, never the length of this page.
+class OrderPage {
+  const OrderPage({
+    required this.items,
+    required this.total,
+    required this.page,
+    required this.pageSize,
+  });
+
+  final List<OrderListItem> items;
+  final int total;
+  final int page;
+  final int pageSize;
+}
+
 /// Body of `POST /orders` — the customer phone, RAW or E.164 (backend normalises, AD-9).
 class CreateOrderInput {
   const CreateOrderInput({required this.customerSdt});
@@ -417,6 +462,21 @@ abstract class OrdersPort {
 
   /// Read an order + the lines of its current version. Throws NOT_FOUND if absent.
   Future<Order> get(String id);
+
+  /// List orders — `GET /orders` (Story 5.3, FR-10). The BACKEND narrows the set
+  /// to what the caller may see (`orders.view_all` ⇒ every order; only
+  /// `orders.view_own` ⇒ orders they own or are assigned) and owns `total`.
+  ///
+  /// There is deliberately NO scope argument: "all orders" vs "my orders" is a
+  /// PERMISSION resolved server-side, never a client parameter (AD-4, FR-18).
+  /// `followUp` and `status` are mutually exclusive — sending both is a 400, not
+  /// a silently-empty list. Throws 403 when the caller holds NEITHER view key.
+  Future<OrderPage> list({
+    String? status,
+    bool? followUp,
+    int? page,
+    int? pageSize,
+  });
 
   /// Append a line (catalogue or free). Throws 400/404/409 per the backend rules.
   Future<OrderLine> addLine(String orderId, AddOrderLineInput input);

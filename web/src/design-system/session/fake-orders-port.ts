@@ -16,6 +16,9 @@ import { DEMO_CUSTOMERS } from './fake-customers-port';
 import type { Customer } from './customers-port';
 import type {
   AddOrderLineInput,
+  OrderListItem,
+  OrderListQuery,
+  OrderPage,
   ApplyDiscountInput,
   CreateOrderInput,
   DiscountPendingItem,
@@ -32,6 +35,51 @@ import type {
 } from './orders-port';
 
 const NOW = '2026-07-16T00:00:00.000Z';
+
+/**
+ * Demo rows for the order-list screen (Story 5.3) — used only when nothing was
+ * created in this session, so the list screen is demoable standalone. Spread
+ * across statuses so the follow-up filter ('baogia') and the "filtered but
+ * empty" state are both reachable without a backend.
+ */
+const DEMO_ORDER_ROWS = [
+  {
+    id: 'ord-demo-1',
+    status: 'baogia',
+    customerSdt: '+84903176968',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: null,
+    createdAt: '2026-07-17T09:00:00.000Z',
+    updatedAt: '2026-07-17T09:00:00.000Z',
+  },
+  {
+    id: 'ord-demo-2',
+    status: 'baogia',
+    customerSdt: '+84912345678',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: 'acc-demo',
+    createdAt: '2026-07-16T08:00:00.000Z',
+    updatedAt: '2026-07-16T08:00:00.000Z',
+  },
+  {
+    id: 'ord-demo-3',
+    status: 'dachot',
+    customerSdt: '+84903176968',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: null,
+    createdAt: '2026-07-15T07:00:00.000Z',
+    updatedAt: '2026-07-15T07:00:00.000Z',
+  },
+  {
+    id: 'ord-demo-4',
+    status: 'thicong',
+    customerSdt: '+84912345678',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: 'acc-demo',
+    createdAt: '2026-07-14T06:00:00.000Z',
+    updatedAt: '2026-07-14T06:00:00.000Z',
+  },
+];
 
 /**
  * STATIC demo bytes for `exportQuote` (Story 4.8) — the real backend renders
@@ -405,6 +453,57 @@ export class FakeOrdersPort implements OrdersPort {
       order.status = 'baogia';
     }
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
+  }
+
+  /**
+   * `GET /orders` stand-in (Story 5.3). Plays the BACKEND's role for the demo:
+   * it filters and pages, and it reports `total` over the whole filtered set —
+   * a screen that counted rows itself would show one page and lose the rest.
+   *
+   * It does NOT model permission scope: scope is a server decision (AD-4), and
+   * a fake that pretended to enforce it would teach the screen to expect a
+   * client-side scope knob that must never exist.
+   */
+  list(query: OrderListQuery): Promise<OrderPage> {
+    if (query.followUp === true && query.status !== undefined) {
+      return Promise.reject(
+        new Error(
+          'Không dùng đồng thời `followUp` và `status` — follow-up đã là bộ lọc trạng thái (đơn chưa chốt).',
+        ),
+      );
+    }
+
+    const seeded = this.orders.size > 0 ? [...this.orders.values()] : DEMO_ORDER_ROWS;
+    const rows = seeded.map(
+      (order): OrderListItem => ({
+        id: order.id,
+        status: order.status,
+        customerSdt: order.customerSdt,
+        customerName:
+          this.customers.find((c) => c.sdt === order.customerSdt)?.name ??
+          'Khách lẻ',
+        ownerAccountId: order.ownerAccountId,
+        assigneeAccountId: order.assigneeAccountId,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+      }),
+    );
+
+    const wanted =
+      query.followUp === true ? 'baogia' : (query.status ?? null);
+    const filtered =
+      wanted === null ? rows : rows.filter((row) => row.status === wanted);
+
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const start = (page - 1) * pageSize;
+
+    return Promise.resolve({
+      items: filtered.slice(start, start + pageSize),
+      total: filtered.length,
+      page,
+      pageSize,
+    });
   }
 
   private buildLine(

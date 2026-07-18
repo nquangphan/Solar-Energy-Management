@@ -46,6 +46,53 @@ String _digits(String raw) =>
   return (scopeThietBi: true, scopeThiCong: caNhan, scopeVanChuyen: caNhan);
 }
 
+/// Demo rows for the order-list screen (Story 5.3) — used only when nothing was
+/// created in this session, so the list screen is demoable standalone. Spread
+/// across statuses so the follow-up filter ('baogia') and the "filtered but
+/// empty" state are both reachable without a backend. Mirrors the web fake.
+const List<OrderListItem> kDemoOrderRows = <OrderListItem>[
+  OrderListItem(
+    id: 'ord-demo-1',
+    status: 'baogia',
+    customerSdt: '+84903176968',
+    customerName: 'Khách lẻ',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: null,
+    createdAt: '2026-07-17T09:00:00.000Z',
+    updatedAt: '2026-07-17T09:00:00.000Z',
+  ),
+  OrderListItem(
+    id: 'ord-demo-2',
+    status: 'baogia',
+    customerSdt: '+84912345678',
+    customerName: 'Khách lẻ',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: 'acc-demo',
+    createdAt: '2026-07-16T08:00:00.000Z',
+    updatedAt: '2026-07-16T08:00:00.000Z',
+  ),
+  OrderListItem(
+    id: 'ord-demo-3',
+    status: 'dachot',
+    customerSdt: '+84903176968',
+    customerName: 'Khách lẻ',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: null,
+    createdAt: '2026-07-15T07:00:00.000Z',
+    updatedAt: '2026-07-15T07:00:00.000Z',
+  ),
+  OrderListItem(
+    id: 'ord-demo-4',
+    status: 'thicong',
+    customerSdt: '+84912345678',
+    customerName: 'Khách lẻ',
+    ownerAccountId: 'acc-demo',
+    assigneeAccountId: 'acc-demo',
+    createdAt: '2026-07-14T06:00:00.000Z',
+    updatedAt: '2026-07-14T06:00:00.000Z',
+  ),
+];
+
 /// An [OrdersPort] backed by an in-memory store — TEST/DEMO ONLY.
 class FakeOrdersPort implements OrdersPort {
   FakeOrdersPort({
@@ -57,6 +104,65 @@ class FakeOrdersPort implements OrdersPort {
   final List<Customer> customers;
   final Map<String, Order> _orders = <String, Order>{};
   int _seq = 0;
+
+  /// `GET /orders` stand-in (Story 5.3). Plays the BACKEND's role for the demo:
+  /// it filters and pages, and it reports [OrderPage.total] over the whole
+  /// filtered set — a screen that counted rows itself would show one page and
+  /// lose the rest.
+  ///
+  /// It does NOT model permission scope: scope is a server decision (AD-4), and
+  /// a fake that pretended to enforce it would teach the screen to expect a
+  /// client-side scope knob that must never exist.
+  @override
+  Future<OrderPage> list({
+    String? status,
+    bool? followUp,
+    int? page,
+    int? pageSize,
+  }) async {
+    if (followUp == true && status != null) {
+      throw const OrderPortException(
+        'Không dùng đồng thời `followUp` và `status` — follow-up đã là bộ lọc trạng thái (đơn chưa chốt).',
+      );
+    }
+
+    final List<OrderListItem> rows = _orders.isEmpty
+        ? kDemoOrderRows
+        : _orders.values
+            .map(
+              (Order o) => OrderListItem(
+                id: o.id,
+                status: o.status,
+                customerSdt: o.customerSdt,
+                customerName: 'Khách lẻ',
+                ownerAccountId: o.ownerAccountId,
+                assigneeAccountId: o.assigneeAccountId,
+                createdAt: o.createdAt,
+                updatedAt: o.updatedAt,
+              ),
+            )
+            .toList();
+
+    final String? wanted = followUp == true ? 'baogia' : status;
+    final List<OrderListItem> filtered = wanted == null
+        ? rows
+        : rows.where((OrderListItem r) => r.status == wanted).toList();
+
+    final int p = page ?? 1;
+    final int size = pageSize ?? 20;
+    final int start = (p - 1) * size;
+    final int end = start + size;
+
+    return OrderPage(
+      items: start >= filtered.length
+          ? const <OrderListItem>[]
+          : filtered.sublist(
+              start, end > filtered.length ? filtered.length : end),
+      total: filtered.length,
+      page: p,
+      pageSize: size,
+    );
+  }
 
   @override
   Future<Order> create(CreateOrderInput input) async {
@@ -263,11 +369,11 @@ class FakeOrdersPort implements OrdersPort {
     // line is a catalogue install/labour line (productId set + priceEditable) — those ignore
     // the field silently. Free lines (productId null) DO accept warranty. NO `?? before` —
     // that would drop a legitimate null-clear. Mirrors backend `warrantyLocked` guard.
-    final bool warrantyLocked = before.productId != null && before.priceEditable;
-    final int? warrantyMonths =
-        input.hasWarrantyMonths && !warrantyLocked
-            ? input.warrantyMonths
-            : before.warrantyMonths;
+    final bool warrantyLocked =
+        before.productId != null && before.priceEditable;
+    final int? warrantyMonths = input.hasWarrantyMonths && !warrantyLocked
+        ? input.warrantyMonths
+        : before.warrantyMonths;
     final OrderLine updated = OrderLine(
       id: before.id,
       productId: before.productId,

@@ -95,6 +95,48 @@ export interface OrderDiscount {
   resolvedAt: string | null;
 }
 
+/**
+ * One row of `GET /orders` (Story 5.3) — mirrors the backend `OrderListItemDto`
+ * field-for-field (AD-12: the contract comes FROM the backend).
+ *
+ * Deliberately carries NO money: a list total would need the version + pricing
+ * join, and a wrong number on a list row is a money regression. No `costPrice`
+ * either (the `costs.view` fence, AD-4).
+ */
+export interface OrderListItem {
+  id: string;
+  status: string;
+  customerSdt: string;
+  customerName: string;
+  ownerAccountId: string;
+  assigneeAccountId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Paged envelope of `GET /orders` — `total` counts the whole scoped+filtered set. */
+export interface OrderPage {
+  items: OrderListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Query of `GET /orders` (Story 5.3). There is deliberately NO scope field:
+ * "all orders" vs "my orders" is a PERMISSION resolved server-side, never a
+ * client parameter — accepting one here would be an IDOR hole (AD-4, FR-18).
+ *
+ * `followUp` and `status` are mutually exclusive; sending both is a 400 from the
+ * backend, not a silently-empty list.
+ */
+export interface OrderListQuery {
+  status?: string;
+  followUp?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 /** Body of `POST /orders` — the customer phone, RAW or E.164 (backend normalises, AD-9). */
 export interface CreateOrderInput {
   customerSdt: string;
@@ -266,6 +308,15 @@ export interface OrdersPort {
 
   /** Read an order + the lines of its current version. Rejects NOT_FOUND if absent. */
   get(id: string): Promise<Order>;
+
+  /**
+   * List orders — `GET /orders` (Story 5.3, FR-10). The BACKEND narrows the set
+   * to what the caller may see (`orders.view_all` ⇒ every order; only
+   * `orders.view_own` ⇒ orders they own or are assigned) and owns `total`.
+   * Rejects 400 (bad status/page/pageSize, or `followUp` sent together with
+   * `status`), 403 (holds NEITHER order-view key).
+   */
+  list(query: OrderListQuery): Promise<OrderPage>;
 
   /** Append a line (catalogue or free). Rejects 400/404/409 per the backend rules. */
   addLine(orderId: string, input: AddOrderLineInput): Promise<OrderLine>;

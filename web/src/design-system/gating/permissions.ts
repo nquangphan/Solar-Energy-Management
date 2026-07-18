@@ -26,16 +26,26 @@ export function can(perms: PermissionSet, key: PermissionKey): boolean {
 
 /**
  * Order list scope (AD-17, FR-18): `'all'` when the Account may see every order,
- * else `'mine'`. "View all orders" and "own orders only" are two EXPLICIT keys in
- * the registry — this drives the Order list scope in Epic 5.
+ * `'mine'` when it may see only its own, `'none'` when it holds NEITHER key.
+ * "View all orders" and "own orders only" are two EXPLICIT keys in the registry.
+ *
+ * `'none'` is what makes this usable for nav gating (Story 5.3, UX-DR-22):
+ * collapsing "no permission at all" into `'mine'` would claim every signed-in
+ * account may see some orders, so the Đơn hàng nav item could never be hidden.
+ * Scope is still UX only — the backend answers `GET /orders` with 403 (AD-4).
  */
-export function orderScope(perms: PermissionSet): 'all' | 'mine' {
-  return can(perms, PERM.ordersViewAll) ? 'all' : 'mine';
+export function orderScope(perms: PermissionSet): 'all' | 'mine' | 'none' {
+  if (can(perms, PERM.ordersViewAll)) return 'all';
+  if (can(perms, PERM.ordersViewOwn)) return 'mine';
+  return 'none';
 }
 
 /** A nav link carrying an optional permission gate. Structural — matches `NavLink`. */
 interface GatedLink {
   requires?: PermissionKey;
+  /** Any-of gate: the link survives when the Account holds AT LEAST ONE of these keys. */
+  requiresAny?: readonly PermissionKey[];
+  key?: string;
 }
 
 /** A nav section with gated links. Structural — matches `NavSection`. */
@@ -44,9 +54,22 @@ interface GatedSection<L extends GatedLink> {
 }
 
 /**
- * Filter a nav tree by permission (UX-DR-22): drop any link whose `requires` is
- * not in `perms`, then drop any section left with zero links (no orphan group
- * header). Pure — returns a new array, never mutates the input.
+ * Filter a nav tree by permission (UX-DR-22): drop any link the Account cannot
+ * satisfy, then drop any section left with zero links (no orphan group header).
+ * Pure — returns a new array, never mutates the input.
+ *
+ * TWO gate shapes, mirroring the backend's two permission decorators:
+ * - `requires` (ALL-of, one key): the ordinary case.
+ * - `requiresAny` (ANY-of): for an action split across several permission keys,
+ *   where no single key is a correct gate. Đơn hàng is the case that forced it —
+ *   `orders.view_all` would hide the item from exactly the people the list is
+ *   for, and `orders.view_own` would hide it from admins, because the role
+ *   presets grant `view_all` WITHOUT `view_own`.
+ *
+ * The gate lives on the LINK DATA, not in a caller: every screen already routes
+ * its sidebar through `filterNav`, so a per-screen wrapper would gate only the
+ * screens that remembered to call it — and the item would stay visible on every
+ * other screen, which is where a user without the permission actually is.
  *
  * Generic over the concrete link/section shape so `permissions.ts` stays
  * independent of the shell (`Sidebar` imports the `PermissionKey` type from here,
@@ -59,7 +82,11 @@ export function filterNav<L extends GatedLink, S extends GatedSection<L>>(
   return sections
     .map((section) => ({
       ...section,
-      links: section.links.filter((link) => link.requires == null || can(perms, link.requires)),
+      links: section.links.filter(
+        (link) =>
+          (link.requires == null || can(perms, link.requires)) &&
+          (link.requiresAny == null || link.requiresAny.some((key) => can(perms, key))),
+      ),
     }))
     .filter((section) => section.links.length > 0);
 }

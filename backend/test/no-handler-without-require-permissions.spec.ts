@@ -36,8 +36,15 @@ describe('source-guard: mọi handler không @Public phải khai quyền (AD-4)'
   const CLASS_DECLARATION =
     /^\s*(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s/;
   const CLASS_END = /^\}/;
+  /**
+   * `@RequireAnyPermissions(` KHÔNG chứa chuỗi con `@RequirePermissions(` (`Any` chèn vào
+   * giữa), nên `declared()` dùng `includes` vẫn phân biệt được hai khai báo. Cảnh báo cho
+   * người thêm decorator sau: một tên dạng `@RequirePermissionsAny(` SẼ false-PASS qua mục
+   * `@RequirePermissions(` — đặt token phân biệt ở giữa, đừng nối đuôi.
+   */
   const DECLARATIONS = [
     '@RequirePermissions(',
+    '@RequireAnyPermissions(',
     '@AuthenticatedOnly(',
     '@Public(',
   ];
@@ -161,6 +168,29 @@ describe('source-guard: mọi handler không @Public phải khai quyền (AD-4)'
         `  @Get('things')\n  @RequirePermissions(PERM.ordersViewAll)\n  async things() {\n    return [];\n  }`,
       );
       expect(findOffenders(source)).toEqual([]);
+    });
+
+    it('handler có @RequireAnyPermissions → không offender', () => {
+      const source = wrap(
+        `  @Get()\n  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)\n  async list() {\n    return [];\n  }`,
+      );
+      expect(findOffenders(source)).toEqual([]);
+    });
+
+    it('@RequireAnyPermissions CHỈ nằm trong comment → VẪN offender (stripComments che cả đường mới)', () => {
+      // Nới lỏng guard bằng một mục DECLARATIONS mới chỉ an toàn nếu đường mới cũng bị
+      // stripComments che: nếu không, một docstring nhắc tên decorator là đủ giả PASS.
+      const source = wrap(
+        `  @Get()\n  // @RequireAnyPermissions(PERM.ordersViewAll)\n  async list() {\n    return [];\n  }`,
+      );
+      expect(findOffenders(source)).toEqual(['async list() {']);
+    });
+
+    it('handler trần KHÔNG "mượn" được @RequireAnyPermissions của handler bên dưới', () => {
+      const source = wrap(
+        `  @Get('things')\n  async things() {\n    return [];\n  }\n\n  @Get()\n  @RequireAnyPermissions(PERM.ordersViewAll)\n  async list() {\n    return [];\n  }`,
+      );
+      expect(findOffenders(source)).toEqual(['async things() {']);
     });
 
     it('handler có @AuthenticatedOnly → không offender', () => {

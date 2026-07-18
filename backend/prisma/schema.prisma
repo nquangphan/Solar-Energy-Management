@@ -356,6 +356,11 @@ model Order {
   @@index([customerSdt])
   @@index([ownerAccountId])
   @@index([sourceId])
+  // Hai cột danh sách đơn thực sự lọc: trạng thái (kể cả bộ lọc follow-up = 'baogia') và
+  // người được giao — nhánh `assigneeAccountId` của phạm vi "đơn của mình" không có index
+  // thì mỗi lần mở danh sách là một seq scan trên toàn bảng đơn.
+  @@index([status])
+  @@index([assigneeAccountId])
   @@map("orders")
 }
 

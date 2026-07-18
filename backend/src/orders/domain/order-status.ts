@@ -53,3 +53,26 @@ export const TRANG_THAI_HOAN_THANH: OrderStatusKey = 'hoanthanh';
 
 /** Đơn bị huỷ — trạng thái kết thúc thất bại. */
 export const TRANG_THAI_HUY: OrderStatusKey = 'huy';
+
+/**
+ * 10 khoá trạng thái dạng MẢNG runtime — `@IsIn` cần GIÁ TRỊ để so, còn `OrderStatusKey`
+ * là union type nên bị xoá sạch lúc compile.
+ *
+ * Dựng từ CHÍNH 10 hằng bên trên, không gõ lại literal: đổi tên một hằng thành compile
+ * error thay vì trôi âm thầm. Thêm hằng mới mà quên mảng thì `order-status.spec.ts` đỏ —
+ * mảng và tập hằng `TRANG_THAI_*` được đối chiếu hai chiều ở đó, vì mọi hằng đều được
+ * annotate `: OrderStatusKey` nên kiểu của chúng đã nới rộng thành cả union và KHÔNG có
+ * cách nào bắt thiếu phần tử lúc compile.
+ */
+export const ORDER_STATUS_KEYS = [
+  TRANG_THAI_BAO_GIA,
+  TRANG_THAI_CHO_DUYET,
+  TRANG_THAI_DA_CHOT,
+  TRANG_THAI_DA_COC,
+  TRANG_THAI_THI_CONG,
+  TRANG_THAI_NGHIEM_THU,
+  TRANG_THAI_DANG_GIAO,
+  TRANG_THAI_DA_GIAO,
+  TRANG_THAI_HOAN_THANH,
+  TRANG_THAI_HUY,
+] as const satisfies readonly OrderStatusKey[];

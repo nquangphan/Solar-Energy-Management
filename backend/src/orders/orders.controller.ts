@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   StreamableFile,
 } from '@nestjs/common';
 import {
@@ -28,6 +29,7 @@ import {
   CurrentAccount,
   type AuthenticatedAccount,
 } from '../auth/current-account.decorator';
+import { RequireAnyPermissions } from '../auth/require-any-permission.decorator';
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
@@ -38,6 +40,8 @@ import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
 import { DiscountPendingItemDto } from './dto/discount-pending-item.dto';
+import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
+import { OrderListResponseDto } from './dto/order-list-response.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
@@ -52,9 +56,9 @@ import { QuoteExportService } from './quote-export.service';
 /**
  * Tạo Đơn + giỏ hàng dòng báo giá (Story 4.1, FR-1). MỌI handler khai
  * `@RequirePermissions(PERM.quotesCreateEdit)` — key ĐÃ TỒN TẠI trong registry 21 key, KHÔNG
- * key mới. `GET /orders/:id` cũng gate `quotes.create_edit` ở story này (luồng người dựng
- * đơn); scope xem theo `orders.view_all`/`orders.view_own` là Story 5.3 — guard hiện AND-only,
- * không diễn đạt OR được.
+ * key mới. `GET /orders/:id` cũng gate `quotes.create_edit` (luồng người dựng đơn).
+ * `GET /orders` (danh sách) gate bằng `@RequireAnyPermissions(ordersViewAll, ordersViewOwn)` —
+ * OR, vì preset cấp `view_all` KHÔNG kèm `view_own`; phạm vi dữ liệu do service thu hẹp.
  *
  * Cờ giá phân tầng resolve TƯƠI mỗi request rồi truyền boolean xuống service (khuôn
  * `ProductsController.tieredPricingEnabled` — service giữ đúng 2 dependency, CẤM hardcode cờ).
@@ -174,6 +178,41 @@ export class OrdersController {
       permissions.has(PERM.costsView),
       await this.tieredPricingEnabled(),
     )) as DiscountPendingItemDto[];
+  }
+
+  /**
+   * Route TĨNH `@Get()` root — khai TRƯỚC `@Get(':id')` theo kỷ luật thứ tự route của file này.
+   *
+   * Cửa vào là OR (`view_all` HOẶC `view_own`) chứ không AND: `role-presets.ts` cấp
+   * `orders.view_all` KHÔNG kèm `orders.view_own`, nên đặt `view_own` làm sàn AND sẽ khoá
+   * chính admin ra ngoài. Guard chỉ mở CỬA; phạm vi DỮ LIỆU do service thu hẹp theo cùng bộ
+   * quyền (AD-4 — backend enforce, không tin tham số phạm vi từ client).
+   */
+  @Get()
+  @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
+  @ApiOkResponse({
+    type: OrderListResponseDto,
+    description:
+      'Danh sách đơn ĐÃ thu hẹp theo quyền người gọi: orders.view_all thấy toàn bộ, chỉ orders.view_own thấy đơn mình owner HOẶC assignee. `total` đếm toàn bộ tập đã lọc + đã scope, đọc cùng ảnh chụp với `items`.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      '`status` ngoài 10 khoá, `page` < 1, `pageSize` ngoài 1..100, hoặc gửi đồng thời `followUp` và `status` (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
+  })
+  async list(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Query() query: ListOrdersQueryDto,
+  ): Promise<OrderListResponseDto> {
+    return (await this.orders.list(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      query,
+    )) as OrderListResponseDto;
   }
 
   @Get(':id')

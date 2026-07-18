@@ -131,7 +131,14 @@ test('(3) every SIDEBAR_NAV requires is a canonical registry key', () => {
     [...(webPerms.match(/export const PERM =\s*\{([\s\S]*?)\}\s*as const;/)?.[1] ?? '').matchAll(/(\w+):\s*'([^']+)'/g)]
       .map((m) => [m[1], m[2]]),
   );
-  const requiresRefs = [...webSidebar.matchAll(/requires:\s*PERM\.(\w+)/g)].map((m) => m[1]);
+  // Both gate shapes are scanned: `requires:` (one key) and `requiresAny: [...]`
+  // (any-of). A key that only ever appears in the any-of list must be canonical too.
+  const requiresRefs = [
+    ...[...webSidebar.matchAll(/requires:\s*PERM\.(\w+)/g)].map((m) => m[1]),
+    ...[...webSidebar.matchAll(/requiresAny:\s*\[([^\]]*)\]/g)].flatMap((m) =>
+      [...m[1].matchAll(/PERM\.(\w+)/g)].map((k) => k[1]),
+    ),
+  ];
   assert.ok(requiresRefs.length >= 2, 'SIDEBAR_NAV must gate at least Audit + Phân quyền');
   for (const ref of requiresRefs) {
     const key = webPermMap[ref];

@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-18 (story 5-2 → done)
+# last_updated: 2026-07-18 (story 5-3 → done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-18 (story 5-2 → done)
+last_updated: 2026-07-18 (story 5-3 → done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -72,7 +72,7 @@ development_status:
   epic-5: in-progress
   5-1-engine-applytransition-enum-bang-transition-guard-audit: done
   5-2-auto-transition-theo-su-kien-nghiep-vu: done
-  5-3-danh-sach-don-follow-up-trang-thai-list: backlog
+  5-3-danh-sach-don-follow-up-trang-thai-list: done
   5-4-chi-tiet-don-stepper-gate-tabs-lich-su-ban-update: backlog
   5-5-chuyen-trang-thai-thu-cong-dinh-kem-anh-optional: backlog
   5-6-dinh-kem-anh-bo-sung-trong-chi-tiet-don: backlog
