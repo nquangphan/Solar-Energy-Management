@@ -46,6 +46,7 @@ model Account {
   quoteExports        QuoteExport[]      @relation("QuoteExportCreatedBy")
   orderVersionsCreated OrderVersion[]    @relation("OrderVersionCreatedBy")
   attachmentsUploaded  Attachment[]      @relation("AttachmentUploadedBy")
+  stockVouchersCreated StockVoucher[]    @relation("StockVoucherCreatedBy")
 
   @@map("accounts")
 }
@@ -140,6 +141,7 @@ model Product {
   groupItems     ProductGroupItem[]
   orderLineItems OrderLineItem[]
   stockItem      StockItem?
+  voucherLines   StockVoucherLine[]
 
   @@map("products")
 }
@@ -156,6 +158,9 @@ model Product {
 /// `SELECT … FOR UPDATE`.
 ///
 /// `onDelete: Restrict` — `Product` soft-delete; xoá cứng sản phẩm còn sổ tồn phải bị chặn.
+///
+/// CHECK `stock_items_on_hand_non_negative` (`on_hand >= 0`) chỉ có trong `migration.sql` —
+/// Prisma không mô hình hoá CHECK; lưới cuối dưới lớp kiểm "xuất quá tồn" của service.
 model StockItem {
   id        String          @id @default(uuid())
   productId String          @unique @map("product_id")
@@ -190,6 +195,50 @@ model StockMovement {
 
   @@index([stockItemId])
   @@map("stock_movements")
+}
+
+/// Phiếu kho nhập/xuất (FR-25) — HIỆU LỰC NGAY KHI LƯU: không nháp, không sửa/xoá. Sai thì
+/// gõ phiếu ngược chiều.
+///
+/// `seq` (SERIAL) chỉ để ghép mã phiếu hiển thị (`inventory/domain/gia-von.ts#maPhieu`).
+/// Chưa có `orderId`/`status`: luồng xuất gắn đơn (nháp → xác nhận) thêm chúng; liên kết phiếu
+/// gốc của phiếu nhập trả cũng thêm sau.
+///
+/// HỢP ĐỒNG KHOÁ cho MỌI đường ghi tồn (phiếu, xuất gắn đơn, giữ chỗ, nhập trả): khoá dòng
+/// `products` bằng `SELECT … WHERE id = ANY(…) ORDER BY id FOR UPDATE` là lệnh ĐẦU TIÊN của
+/// transaction — cùng bảng, cùng thứ tự. Khoá `stock_items` không đủ vì dòng sinh lười.
+model StockVoucher {
+  id                 String             @id @default(uuid())
+  seq                Int                @unique @default(autoincrement())
+  type               String
+  note               String?
+  createdByAccountId String             @map("created_by_account_id")
+  createdBy          Account            @relation("StockVoucherCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  lines              StockVoucherLine[]
+
+  @@index([createdAt])
+  @@map("stock_vouchers")
+}
+
+/// Dòng của phiếu kho. `qty` LUÔN DƯƠNG — chiều (cộng/trừ `onHand`) do `StockVoucher.type`
+/// quyết. `unitCost` Int đồng (AD-10): phiếu nhập = giá người gõ; phiếu xuất = snapshot
+/// `Product.costPrice` lúc xuất (server đặt, client không gửi).
+///
+/// CHECK `stock_voucher_lines_qty_positive` (`qty > 0`) và
+/// `stock_voucher_lines_unit_cost_non_negative` (`unit_cost >= 0`) chỉ có trong `migration.sql`.
+model StockVoucherLine {
+  id             String       @id @default(uuid())
+  stockVoucherId String       @map("stock_voucher_id")
+  stockVoucher   StockVoucher @relation(fields: [stockVoucherId], references: [id], onDelete: Restrict)
+  productId      String       @map("product_id")
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qty            Int
+  unitCost       Int          @map("unit_cost")
+
+  @@unique([stockVoucherId, productId])
+  @@index([productId])
+  @@map("stock_voucher_lines")
 }
 
 /// Bậc thang giá theo SỐ LƯỢNG (FR-15). `minQty` = mua TỪ bao nhiêu trở lên thì ăn mức này;

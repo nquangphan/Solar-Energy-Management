@@ -1,0 +1,112 @@
+/* hand-authored — screen-local layout for Phiếu kho (Story 6.3).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class — this file invents no palette (AD-13). The type pill
+   reuses the shipped `.chip`; its colour arrives as an inline token reference
+   (`--ok` / `--warn`). The mockup's `kv` list is composed here rather than added
+   to the design-system. */
+
+.pk-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.pk-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* List on the left, the selected voucher on the right (mockup 1.15fr / 1fr). */
+.pk-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: var(--space-16);
+  align-items: start;
+}
+
+.pk-row {
+  cursor: pointer;
+}
+
+.pk-row--active {
+  background: var(--bg);
+}
+
+/* One colour token drives the whole pill: border follows the text colour. */
+.pk-chip {
+  border-color: currentColor;
+  background: transparent;
+}
+
+.pk-detail {
+  overflow: hidden;
+}
+
+.pk-detail-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border-bottom: 1.5px solid var(--line);
+}
+
+.pk-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-12);
+}
+
+.pk-sp {
+  flex: 1;
+}
+
+.pk-kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-4) var(--space-12);
+  margin: 0;
+}
+
+.pk-kv dd {
+  margin: 0;
+}
+
+.pk-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.pk-goi-y {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+}
+
+.pk-dong {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8) 0;
+  border-top: 1.5px solid var(--line);
+}
+
+.pk-dong-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.pk-dong-fields {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.pk-loi {
+  color: var(--danger);
+}

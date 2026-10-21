@@ -10,11 +10,17 @@
 //
 // A negative Khả dụng is never shown bare: it reads "Cần nhập N".
 //
+// Stock moves only through vouchers (Phiếu kho screen). The optional
+// `onOpenVouchers` callback is the way there — shown only when [perms] holds
+// `inventory.manage`; the backend enforces it anyway.
+//
 // LABELS are byte-identical with the web twin (UX-DR-27).
 
 import 'package:flutter/widgets.dart';
 
 import '../../design_system/components/components.dart';
+import '../../design_system/gating/app_permission_keys.g.dart';
+import '../../design_system/gating/app_permissions.dart';
 import '../../design_system/session/inventory_port.dart';
 import '../../design_system/shell/app_bottom_nav.dart';
 import '../../design_system/shell/app_mobile_shell.dart';
@@ -28,9 +34,21 @@ const int kInventoryTabIndex = 3;
 enum _LoadState { loading, ready, error }
 
 class InventoryScreen extends StatefulWidget {
-  const InventoryScreen({super.key, required this.port});
+  const InventoryScreen({
+    super.key,
+    required this.port,
+    this.onOpenVouchers,
+    this.perms = const <PermissionKey>{},
+  });
 
   final InventoryPort port;
+
+  /// Opens the Phiếu kho screen. No router yet ⇒ a callback; null ⇒ no entry point.
+  final VoidCallback? onOpenVouchers;
+
+  /// Effective permission set (mobile has no permissions context yet, so the
+  /// host injects it). Default `{}` = the Phiếu kho entry hidden — fail-closed.
+  final Set<PermissionKey> perms;
 
   @override
   State<InventoryScreen> createState() => _InventoryScreenState();
@@ -225,7 +243,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget build(BuildContext context) {
     return AppPhoneFrame(
       child: AppMobileShell(
-        topbar: const AppTopbar(eyebrow: 'KHO · 1 KHO', title: 'Tồn kho'),
+        topbar: widget.onOpenVouchers != null &&
+                widget.perms.contains(AppPermissionKeys.inventoryManage)
+            ? AppTopbar(
+                eyebrow: 'KHO · 1 KHO',
+                title: 'Tồn kho',
+                action: const Text(
+                  'Phiếu kho',
+                  style: TextStyle(
+                    color: AppTokens.teal,
+                    fontFamily: AppTokens.fontFamily,
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                onAction: widget.onOpenVouchers,
+              )
+            : const AppTopbar(eyebrow: 'KHO · 1 KHO', title: 'Tồn kho'),
         bottomNav: const AppBottomNav(activeIndex: kInventoryTabIndex),
         body: SingleChildScrollView(child: _than()),
       ),

@@ -320,16 +320,19 @@ erDiagram
     }
     STOCK_VOUCHER {
         uuid id PK
-        uuid orderId FK
-        string type
-        string status
+        int seq "UNIQUE SERIAL - ghép mã phiếu PK-N/PK-X"
+        uuid orderId FK "thêm ở luồng xuất gắn đơn"
+        string type "nhap | xuat"
+        string status "thêm ở luồng xuất gắn đơn"
+        string note
+        uuid createdByAccountId FK
         datetime createdAt
     }
     STOCK_VOUCHER_LINE {
         uuid id PK
         uuid stockVoucherId FK
         uuid productId FK
-        int qty
+        int qty "luôn dương, chiều theo type"
         int unitCost
     }
     NOTIFICATION {

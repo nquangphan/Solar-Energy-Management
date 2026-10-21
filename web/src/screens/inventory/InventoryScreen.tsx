@@ -11,8 +11,9 @@
 // A negative Khả dụng is never shown bare: it reads "Cần nhập N" — a number to
 // act on, not a number to panic about.
 //
-// READ-ONLY: stock-in / stock-out vouchers are later stories, so the mockup's
-// Phiếu nhập / Phiếu xuất buttons are deliberately absent.
+// READ-ONLY: stock moves only through vouchers, which live on their own screen
+// (Phiếu kho). The optional `onOpenVouchers` callback is the way there — shown
+// only to callers holding `inventory.manage`; the backend enforces it anyway.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -23,7 +24,7 @@ import {
   Skeleton,
   Table,
 } from '../../design-system/components';
-import { filterNav } from '../../design-system/gating/permissions';
+import { can, filterNav, PERM } from '../../design-system/gating/permissions';
 import type {
   InventoryPort,
   StockItemView,
@@ -36,6 +37,8 @@ import './inventory.css';
 
 export interface InventoryScreenProps {
   port: InventoryPort;
+  /** Opens the Phiếu kho screen. No router yet ⇒ a callback; absent ⇒ no entry point. */
+  onOpenVouchers?: () => void;
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -60,7 +63,7 @@ function tomTat(item: StockItemView): string {
   return `${dau} · Khả dụng ${item.khaDung} ${item.donVi}`;
 }
 
-export function InventoryScreen({ port }: InventoryScreenProps) {
+export function InventoryScreen({ port, onOpenVouchers }: InventoryScreenProps) {
   const { perms } = usePermissions();
 
   const [q, setQ] = useState('');
@@ -98,7 +101,19 @@ export function InventoryScreen({ port }: InventoryScreenProps) {
     <WebShell
       url="app.phuongnamsolar.vn/ton-kho"
       sidebar={<Sidebar sections={filterNav(SIDEBAR_NAV, perms)} activeKey="inventory" />}
-      topbar={<Topbar eyebrow="KHO · 1 KHO" title="Tồn kho" />}
+      topbar={
+        onOpenVouchers && can(perms, PERM.inventoryManage) ? (
+          <Topbar
+            eyebrow="KHO · 1 KHO"
+            title="Tồn kho"
+            action="Phiếu kho"
+            actionLabel="Phiếu kho"
+            onAction={onOpenVouchers}
+          />
+        ) : (
+          <Topbar eyebrow="KHO · 1 KHO" title="Tồn kho" />
+        )
+      }
     >
       <div className="tk-wrap">
         <Toolbar>

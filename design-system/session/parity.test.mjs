@@ -34,6 +34,8 @@ test('the session module ships on BOTH platforms (twin files)', () => {
     'fake-warranty-port.ts': 'fake_warranty_port.dart',
     'inventory-port.ts': 'inventory_port.dart',
     'fake-inventory-port.ts': 'fake_inventory_port.dart',
+    'stock-vouchers-port.ts': 'stock_vouchers_port.dart',
+    'fake-stock-vouchers-port.ts': 'fake_stock_vouchers_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',
@@ -523,5 +525,46 @@ test('the inventory port is the SAME one-method read contract on both platforms 
   }
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
     assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} inventory port must not carry costPrice — sale reads this payload`);
+  }
+});
+
+test('the stock-vouchers port is the SAME three-method contract on both platforms, field for field with openapi.json (Story 6.3)', () => {
+  const webPort = readFileSync(resolve(webDir, 'stock-vouchers-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'stock_vouchers_port.dart'), 'utf8');
+  assert.match(webPort, /listVouchers\(query\?: StockVoucherListQuery\): Promise<StockVoucherList>/, 'web listVouchers(query?) => StockVoucherList');
+  assert.match(mobPort, /Future<StockVoucherList> listVouchers\(\{String\? type\}\)/, 'mobile listVouchers({type}) => StockVoucherList');
+  assert.match(webPort, /getVoucher\(id: string\): Promise<StockVoucherDetail>/, 'web getVoucher(id) => StockVoucherDetail');
+  assert.match(mobPort, /Future<StockVoucherDetail> getVoucher\(String id\)/, 'mobile getVoucher(id) => StockVoucherDetail');
+  assert.match(webPort, /createVoucher\(input: CreateStockVoucherInput\): Promise<StockVoucherDetail>/, 'web createVoucher(input) => StockVoucherDetail');
+  assert.match(mobPort, /Future<StockVoucherDetail> createVoucher\(CreateStockVoucherInput input\)/, 'mobile createVoucher(input) => StockVoucherDetail');
+
+  // Every property of every voucher DTO in the backend's generated spec is named in
+  // BOTH ports — parity with the contract, not only between the twins.
+  const spec = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'));
+  const dtos = [
+    'StockVoucherCreatorDto',
+    'StockVoucherSummaryDto',
+    'StockVoucherListResponseDto',
+    'StockVoucherLineResponseDto',
+    'StockVoucherDetailDto',
+    'StockVoucherLineRequestDto',
+    'CreateStockVoucherRequestDto',
+  ];
+  const fields = new Set();
+  for (const dto of dtos) {
+    const schema = spec.components.schemas[dto];
+    assert.ok(schema, `openapi.json missing ${dto}`);
+    const props = { ...(schema.properties ?? {}) };
+    for (const part of schema.allOf ?? []) Object.assign(props, part.properties ?? {});
+    for (const key of Object.keys(props)) fields.add(key);
+  }
+  assert.ok(fields.size >= 15, `extracted only ${fields.size} DTO fields — the spec reader went blind`);
+  for (const field of fields) {
+    assert.ok(new RegExp(`\\b${field}\\b`).test(webPort), `web stock-vouchers port missing ${field}`);
+    assert.ok(new RegExp(`\\b${field}\\b`).test(mobPort), `mobile stock-vouchers port missing ${field}`);
+  }
+  // The voucher payload never carries the product's current cost price.
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} stock-vouchers port must not carry costPrice`);
   }
 });

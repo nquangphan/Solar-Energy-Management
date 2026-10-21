@@ -19,6 +19,9 @@ export 'warranty_port.dart';
 // Inventory seam (Story 6.2): READ-ONLY — the backend computes availability,
 // the purchase list and the status; the screen only renders them.
 export 'inventory_port.dart';
+// Stock-voucher seam (Story 6.3): the only write path for `onHand`. The backend
+// owns the voucher code, the weighted-average cost and the stock-out refusal.
+export 'stock_vouchers_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
@@ -31,3 +34,4 @@ export 'fake_orders_port.dart';
 export 'fake_catalog_port.dart';
 export 'fake_warranty_port.dart';
 export 'fake_inventory_port.dart';
+export 'fake_stock_vouchers_port.dart';

@@ -63,6 +63,21 @@ export type {
   CanMuaView,
   TinhTrangTon,
 } from './inventory-port';
+// Stock-voucher seam (Story 6.3): the only write path for `onHand`. The backend
+// owns the voucher code, the weighted-average cost and the stock-out refusal.
+export type {
+  StockVouchersPort,
+  StockVoucherSummary,
+  StockVoucherDetail,
+  StockVoucherLine,
+  StockVoucherList,
+  StockVoucherListQuery,
+  StockVoucherCreator,
+  StockVoucherPortError,
+  CreateStockVoucherInput,
+  CreateStockVoucherLineInput,
+  LoaiPhieu,
+} from './stock-vouchers-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -95,6 +110,12 @@ export { FakeOrdersPort } from './fake-orders-port';
 export { FakeSettingsPort } from './fake-settings-port';
 export { FakeWarrantyPort, DEMO_WARRANTY_ORDERS } from './fake-warranty-port';
 export { FakeInventoryPort, DEMO_STOCK_LIST } from './fake-inventory-port';
+export {
+  FakeStockVouchersPort,
+  DEMO_STOCK_VOUCHERS,
+  FAKE_OUT_OF_STOCK_PRODUCT_ID,
+  FAKE_INSUFFICIENT_STOCK_ERROR,
+} from './fake-stock-vouchers-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

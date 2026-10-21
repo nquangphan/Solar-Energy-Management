@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-21 (story 6.2 review)
+# last_updated: 2026-10-21 (story 6.3 review)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-21 (story 6.2 review)
+last_updated: 2026-10-21 (story 6.3 review)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -83,7 +83,7 @@ development_status:
   epic-6: in-progress
   6-1-nhanh-giao-hang-dang-giao-da-giao: done
   6-2-ton-kho-hien-tai-theo-san-pham: done
-  6-3-phieu-nhap-xuat-kho: backlog
+  6-3-phieu-nhap-xuat-kho: done
   6-4-xuat-kho-gan-don: backlog
   6-5-chan-khi-thieu-ton: backlog
   6-6-giu-cho-ton-khi-chot-don-stock-movement: backlog

@@ -8,15 +8,22 @@ import { stripToCode } from './util/strip-to-code';
  * (a) VĨNH VIỄN: KHÔNG model nào có cột `reserved`. Hàng đã hứa là `SUM(StockMovement.qty)`
  *     (AD-19); một cột cộng-trừ trôi khi retry chốt/xuất. ERD vẽ cột đó trên `StockItem` — guard
  *     này chặn người "làm theo ERD", kể cả khi đặt cột sang `Product`.
- * (b) TẠM THỜI: `src/inventory/**` chưa có lệnh ghi Prisma nào — kể cả SQL thô (`$queryRaw`
- *     chạy được `UPDATE`, và `stripToCode` xoá nội dung template nên không soi được câu SQL).
- *     Khi đường phiếu kho tới, nới (b) cho đúng những file ghi dưới `SELECT … FOR UPDATE` —
- *     KHÔNG xoá (a).
+ * (b) Trong `src/inventory/**`, lệnh ghi Prisma — kể cả SQL thô (`$queryRaw` chạy được `UPDATE`)
+ *     và `$transaction` — CHỈ được nằm ở các file trong `FILE_DUOC_GHI`. Mỗi file đó PHẢI ghi
+ *     dưới khoá: chứa `FOR UPDATE` và dạng interactive `$transaction(async` (dạng mảng không đọc
+ *     được trạng thái sau khoá). Đường đọc `stock-items.service.ts` mãi đọc thuần. Thêm một
+ *     đường ghi tồn mới ⇒ thêm file vào `FILE_DUOC_GHI`, nó tự chịu cùng luật khoá. Lệnh ghi
+ *     trong file đó phải đi qua `tx` của transaction: một `this.prisma.<model>.<ghi>(` nằm NGOÀI
+ *     khoá, nên khoá có cũng như không.
+ * (c) `src/inventory/**` KHÔNG ghi aggregate đơn (đơn/version/dòng/chiết khấu/ảnh/xuất báo giá).
+ *     Ghi đơn phải đi qua `src/orders` — nơi `no-unscoped-order-write` buộc kiểm phạm vi người
+ *     gọi trước; guard đó chỉ quét `src/orders`, nên một lệnh ghi đơn ở đây sẽ lọt.
  *
  * (a) đọc schema RAW (không strip — `stripToCode` là bộ quét TS, không hiểu Prisma); (b) quét
- * code đã strip comment/string để docstring nhắc `create(` không làm đỏ oan.
+ * code đã strip comment/string để docstring nhắc `create(` không làm đỏ oan — NGOẠI TRỪ luật
+ * `FOR UPDATE`: câu SQL nằm trong template literal mà `stripToCode` xoá, nên đọc RAW.
  */
-describe('source-guard: tồn kho đọc thuần, không cột reserved', () => {
+describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved', () => {
   const SCHEMA = resolve(__dirname, '../prisma/schema.prisma');
   const INVENTORY = resolve(__dirname, '../src/inventory');
 
@@ -73,13 +80,27 @@ describe('source-guard: tồn kho đọc thuần, không cột reserved', () => 
     });
   });
 
-  describe('(b) src/inventory không có lệnh ghi Prisma', () => {
-    it('chống guard rỗng: quét được file service', () => {
+  describe('(b) src/inventory chỉ ghi ở file được phép, dưới khoá FOR UPDATE', () => {
+    /** Tên file (basename) được phép ghi tồn. */
+    const FILE_DUOC_GHI = ['stock-vouchers.service.ts'];
+    const DOC_THUAN = 'stock-items.service.ts';
+
+    const laFileDuocGhi = (f: string): boolean =>
+      FILE_DUOC_GHI.some((ten) => f.endsWith(`/${ten}`));
+
+    /** Câu khoá trong template SQL — đọc trên mã RAW. */
+    const KHOA_FOR_UPDATE = /\bFOR\s+UPDATE\b/;
+    const TX_INTERACTIVE = /\$transaction\(\s*async\b/;
+    /** Ghi thẳng trên client gốc — tức là ngoài transaction đang giữ khoá. */
+    const GHI_NGOAI_TX =
+      /this\.prisma\.\w+\.(?:create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(|this\.prisma\.\$(?:executeRaw|queryRaw)/;
+
+    it('chống guard rỗng: tập quét gồm cả đường đọc và mọi file được phép ghi', () => {
       const files = fileTs(INVENTORY);
-      expect(files.length).toBeGreaterThan(0);
-      expect(files.some((f) => f.endsWith('stock-items.service.ts'))).toBe(
-        true,
-      );
+      expect(files.some((f) => f.endsWith(`/${DOC_THUAN}`))).toBe(true);
+      for (const ten of FILE_DUOC_GHI) {
+        expect(files.some((f) => f.endsWith(`/${ten}`))).toBe(true);
+      }
     });
 
     it('bộ dò bắt được lệnh ghi giả, bỏ qua lệnh ghi nằm trong comment/chuỗi', () => {
@@ -101,9 +122,92 @@ describe('source-guard: tồn kho đọc thuần, không cột reserved', () => 
       ).toBe(false);
     });
 
-    it('mọi file src/inventory: không lệnh ghi, không transaction', () => {
+    it('bộ dò khoá: bắt thiếu FOR UPDATE và transaction dạng mảng', () => {
+      expect(
+        KHOA_FOR_UPDATE.test(
+          'tx.$queryRaw`SELECT id FROM products FOR UPDATE`',
+        ),
+      ).toBe(true);
+      expect(
+        KHOA_FOR_UPDATE.test('tx.$queryRaw`SELECT id FROM products`'),
+      ).toBe(false);
+      expect(
+        TX_INTERACTIVE.test('this.prisma.$transaction(async (tx) =>'),
+      ).toBe(true);
+      expect(TX_INTERACTIVE.test('this.prisma.$transaction([a, b])')).toBe(
+        false,
+      );
+    });
+
+    it('bộ dò ghi ngoài tx: bắt this.prisma.<model>.<ghi>, bỏ qua tx.<ghi> và đọc', () => {
+      expect(
+        GHI_NGOAI_TX.test('await this.prisma.stockItem.updateMany({})'),
+      ).toBe(true);
+      expect(GHI_NGOAI_TX.test('await this.prisma.$executeRaw`UPDATE`')).toBe(
+        true,
+      );
+      expect(GHI_NGOAI_TX.test('await tx.stockItem.upsert({})')).toBe(false);
+      expect(
+        GHI_NGOAI_TX.test('await this.prisma.stockVoucher.findMany({})'),
+      ).toBe(false);
+      expect(
+        GHI_NGOAI_TX.test('await this.prisma.$transaction(async (tx) =>'),
+      ).toBe(false);
+    });
+
+    it('ngoài file được phép: không lệnh ghi, không transaction', () => {
+      const viPham = fileTs(INVENTORY).filter(
+        (f) =>
+          !laFileDuocGhi(f) &&
+          LENH_GHI.test(stripToCode(readFileSync(f, 'utf8'))),
+      );
+      expect(viPham).toEqual([]);
+    });
+
+    it('file được phép ghi: khoá FOR UPDATE + transaction interactive', () => {
+      for (const f of fileTs(INVENTORY).filter(laFileDuocGhi)) {
+        const raw = readFileSync(f, 'utf8');
+        const code = stripToCode(raw);
+        expect(LENH_GHI.test(code)).toBe(true);
+        expect(TX_INTERACTIVE.test(code)).toBe(true);
+        // Khoá phải nằm trong một câu `$queryRaw` thật, không chỉ trong docstring.
+        const cauKhoa = raw.match(/\$queryRaw[^`]*`[^`]*`/g) ?? [];
+        expect(cauKhoa.some((c) => KHOA_FOR_UPDATE.test(c))).toBe(true);
+      }
+    });
+
+    it('file được phép ghi: mọi lệnh ghi đi qua tx, không ghi trên this.prisma', () => {
+      const viPham = fileTs(INVENTORY).filter(
+        (f) =>
+          laFileDuocGhi(f) &&
+          GHI_NGOAI_TX.test(stripToCode(readFileSync(f, 'utf8'))),
+      );
+      expect(viPham).toEqual([]);
+    });
+  });
+
+  describe('(c) src/inventory không ghi aggregate đơn', () => {
+    const GHI_DON =
+      /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(/;
+
+    it('chống guard rỗng: quét được file ghi tồn', () => {
+      expect(
+        fileTs(INVENTORY).some((f) => f.endsWith('/stock-vouchers.service.ts')),
+      ).toBe(true);
+    });
+
+    it('bộ dò bắt được lệnh ghi đơn giả, bỏ qua đọc và model khác', () => {
+      expect(GHI_DON.test('await tx.order.updateMany({})')).toBe(true);
+      expect(GHI_DON.test('await this.prisma.orderLineItem.create({})')).toBe(
+        true,
+      );
+      expect(GHI_DON.test('await tx.order.findUnique({})')).toBe(false);
+      expect(GHI_DON.test('await tx.stockVoucher.create({})')).toBe(false);
+    });
+
+    it('mọi file src/inventory: không lệnh ghi đơn', () => {
       const viPham = fileTs(INVENTORY).filter((f) =>
-        LENH_GHI.test(stripToCode(readFileSync(f, 'utf8'))),
+        GHI_DON.test(stripToCode(readFileSync(f, 'utf8'))),
       );
       expect(viPham).toEqual([]);
     });

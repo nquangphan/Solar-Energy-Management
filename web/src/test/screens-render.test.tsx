@@ -25,6 +25,7 @@ import {
   FakeOrdersPort,
   FakePasswordPort,
   FakeSettingsPort,
+  FakeStockVouchersPort,
   FakeWarrantyPort,
   PermissionsProvider,
 } from '../design-system/session';
@@ -35,6 +36,7 @@ import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen'
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
+import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { CreateQuoteScreen } from '../screens/orders/CreateQuoteScreen';
 import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
@@ -200,7 +202,21 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(screen.getByText('Danh sách cần mua · gộp mọi khả dụng âm')).toBeTruthy();
     expect(document.body.textContent).not.toContain('-15');
   });
+
+  it('StockVouchersScreen — danh sách phiếu, bấm dòng hiện chi tiết', async () => {
+    renderScreen(
+      <StockVouchersScreen
+        port={new FakeStockVouchersPort()}
+        inventoryPort={new FakeInventoryPort()}
+      />,
+    );
+    expect(await screen.findByText('PK-N-0119')).toBeTruthy();
+    expect(screen.getByText('Danh sách phiếu')).toBeTruthy();
+    fireEvent.click(screen.getByText('PK-N-0119'));
+    expect(await screen.findByText('06/07/2026 · 08:05')).toBeTruthy();
+    expect(screen.getByText('+40')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 14;
+const SCREEN_COUNT = 15;
