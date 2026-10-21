@@ -178,7 +178,7 @@ test('the orders port carries confirmOrder on BOTH platforms (Story 4.5 twin re-
   assert.match(webPort, /confirmOrder\(orderId: string\): Promise<Order>;/, 'web OrdersPort missing confirmOrder (Story 4.5)');
   assert.match(mobPort, /Future<Order> confirmOrder\(String orderId\);/, 'mobile OrdersPort missing confirmOrder (Story 4.5)');
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
-    assert.ok(!/ConfirmOrderInput/.test(src), `${name} must not declare a ConfirmOrderInput — POST :id/chot carries no body`);
+    assert.ok(!/ConfirmOrderInput/.test(src), `${name} must not declare a ConfirmOrderInput — POST :id/confirm carries no body`);
   }
 });
 
@@ -191,7 +191,7 @@ test('the orders port carries reviseOrder on BOTH platforms (Story 4.6 twin re-c
   assert.match(webPort, /reviseOrder\(orderId: string\): Promise<Order>;/, 'web OrdersPort missing reviseOrder (Story 4.6)');
   assert.match(mobPort, /Future<Order> reviseOrder\(String orderId\);/, 'mobile OrdersPort missing reviseOrder (Story 4.6)');
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
-    assert.ok(!/ReviseOrderInput/.test(src), `${name} must not declare a ReviseOrderInput — POST :id/mo-lai carries no body`);
+    assert.ok(!/ReviseOrderInput/.test(src), `${name} must not declare a ReviseOrderInput — POST :id/reopen carries no body`);
   }
   // The status constant the screens compare against lives in the PORT file on
   // both twins — the guard forbids the literal inside screens (orders.test.mjs n).
@@ -248,7 +248,7 @@ test('the orders port carries the Story 4.8 quote-export surface on BOTH platfor
   assert.match(webPort, /exportQuote\(orderId: string\): Promise<QuoteExportFiles>;/, 'web OrdersPort missing exportQuote (Story 4.8)');
   assert.match(mobPort, /Future<QuoteExportFiles> exportQuote\(String orderId\);/, 'mobile OrdersPort missing exportQuote (Story 4.8)');
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
-    assert.ok(!/ExportQuoteInput/.test(src), `${name} must not declare an ExportQuoteInput — POST :id/xuat-bao-gia carries no body`);
+    assert.ok(!/ExportQuoteInput/.test(src), `${name} must not declare an ExportQuoteInput — POST :id/export-quote carries no body`);
   }
 
   // Twin type tokens: the file pair + the single file shape (fileName/mimeType/

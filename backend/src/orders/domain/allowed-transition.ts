@@ -299,11 +299,11 @@ export function daTaiDich(status: string, event: TransitionEvent): boolean {
  *
  * Sáu sự kiện còn lại bị loại vì mỗi cái có MỘT CỬA RIÊNG mang theo logic mà một
  * `applyTransition` trần sẽ bỏ qua hoàn toàn:
- *  - `chot` → `POST /:id/chot`: snapshot giá + đóng băng VAT + đẻ version. Đi tắt qua đây
+ *  - `chot` → `POST /:id/confirm`: snapshot giá + đóng băng VAT + đẻ version. Đi tắt qua đây
  *    ⇒ đơn `dachot` mà giá vẫn trôi theo danh mục. Hỏng DỮ LIỆU, không phải hỏng UX.
- *  - `mo_lai` → `POST /:id/mo-lai`; `ap_chiet_khau` → `POST /:id/ap-chiet-khau`;
+ *  - `mo_lai` → `POST /:id/reopen`; `ap_chiet_khau` → `POST /:id/apply-discount`;
  *    `tu_choi_chiet_khau` → đường duyệt chiết khấu.
- *  - `huy` → `POST /:id/huy` (Story 5.7): lý do là BẮT BUỘC và `huyDon()` là nơi enforce nó.
+ *  - `huy` → `POST /:id/cancel` (Story 5.7): lý do là BẮT BUỘC và `huyDon()` là nơi enforce nó.
  *    Đưa `huy` vào danh sách này sẽ mở đúng một đường huỷ đơn KHÔNG cần lý do. Việc giải
  *    phóng tồn giữ chỗ thuộc Epic 6.7, nối vào qua event `OrderCancelled` — không phải việc
  *    của lane thủ công.

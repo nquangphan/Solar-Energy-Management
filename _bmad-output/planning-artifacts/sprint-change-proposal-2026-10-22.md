@@ -147,6 +147,21 @@ Chèn vào **Epic List** và **Epic Details** ngay sau Epic 7, trước Epic 8, 
 | `GET /orders/{id}/vong-doi` | `GET /orders/{id}/lifecycle` |
 | `GET\|PATCH /customers/{sdt}` | `GET\|PATCH /customers/{phone}` |
 
+**Tinh chỉnh 10.1** (ghi theo luật G-5, cùng commit story 10.1):
+
+- Tham số query thứ ba bảng trên sót: `GET /customers/lookup?sdt=` → `?phone=`. Query DTO không sinh `components.schemas` nên guard field của 10.2 không thấy được — thuộc 10.1.
+- Lỗi chuẩn hoá SĐT ở service (`isPhoneNumber`) trỏ `fieldErrors[].field = 'phone'` cho input path/query (`/customers/{phone}`, `customers/lookup`, `orders/warranty-lookup`), khớp lỗi của ValidationPipe trên cùng endpoint; body `POST /customers` vẫn `sdt` tới 10.2.
+- Sáu `operationId` tiếng Việt (bộ sinh client đặt tên method theo nó) đổi bằng tên method handler controller; tên method service giữ:
+
+| Handler cũ | `operationId` mới |
+|---|---|
+| `OrdersController.traCuuBaoHanh` | `OrdersController_warrantyLookup` |
+| `OrdersController.chuyenTrangThai` | `OrdersController_transition` |
+| `OrdersController.huyDon` | `OrdersController_cancel` |
+| `StockItemsController.lietKe` | `StockItemsController_list` |
+| `StockVouchersController.lietKe` | `StockVouchersController_list` |
+| `StockVouchersController.chiTiet` | `StockVouchersController_findOne` |
+
 **Field và schema DTO (10.2)** — chỉ tên trên contract; cột DB và enum value giữ nguyên:
 
 | Cũ | Mới | Cũ | Mới |

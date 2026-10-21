@@ -173,14 +173,14 @@ describe('/customers (e2e)', () => {
       },
       {
         name: 'GET /customers/lookup',
-        call: () => request(server()).get('/customers/lookup?sdt=0912345678'),
+        call: () => request(server()).get('/customers/lookup?phone=0912345678'),
       },
       {
-        name: 'GET /customers/:sdt',
+        name: 'GET /customers/:phone',
         call: () => request(server()).get(`/customers/${SDT_E164}`),
       },
       {
-        name: 'PATCH /customers/:sdt',
+        name: 'PATCH /customers/:phone',
         call: () => request(server()).patch(`/customers/${SDT_E164}`),
       },
       {
@@ -270,7 +270,7 @@ describe('/customers (e2e)', () => {
       });
     }
 
-    it('GET /customers/:sdt với SĐT rác ⇒ 400 (KHÔNG phải 404 — chưa từng là khoá hợp lệ)', async () => {
+    it('GET /customers/:phone với SĐT rác ⇒ 400 (KHÔNG phải 404 — chưa từng là khoá hợp lệ)', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
@@ -279,10 +279,25 @@ describe('/customers (e2e)', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('phone');
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
 
-    it('GET /customers/:sdt bằng dạng THÔ ⇒ tra bằng E.164 (cùng bộ chuẩn hoá)', async () => {
+    it('PATCH /customers/:phone with an unparseable phone ⇒ 400 on field `phone`, no write', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .patch('/customers/abc')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ name: 'Tên mới' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('phone');
+      expect(customerRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('GET /customers/:phone bằng dạng THÔ ⇒ tra bằng E.164 (cùng bộ chuẩn hoá)', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
@@ -295,7 +310,7 @@ describe('/customers (e2e)', () => {
       });
     });
 
-    it('GET /customers/:sdt không tồn tại ⇒ 404', async () => {
+    it('GET /customers/:phone không tồn tại ⇒ 404', async () => {
       givenPermissions(PERM.customersManage);
       customerRepo.findUnique.mockResolvedValue(null);
 
@@ -400,14 +415,14 @@ describe('/customers (e2e)', () => {
   });
 
   describe('GET /customers/lookup — tra SĐT (Story 3.4, AC-1)', () => {
-    it('🔴 KHÔNG bị route `:sdt` nuốt — "lookup" là ROUTE, không phải một SĐT', async () => {
-      // Nest so route theo THỨ TỰ KHAI. Khai `@Get('lookup')` sau `@Get(':sdt')` ⇒ request này
+    it('🔴 KHÔNG bị route `:phone` nuốt — "lookup" là ROUTE, không phải một SĐT', async () => {
+      // Nest so route theo THỨ TỰ KHAI. Khai `@Get('lookup')` sau `@Get(':phone')` ⇒ request này
       // rơi vào findOne với sdt="lookup" ⇒ 400 "SĐT không hợp lệ". Test này là thứ duy nhất
       // đứng giữa hai cách khai đó.
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
-        .get('/customers/lookup?sdt=0912345678')
+        .get('/customers/lookup?phone=0912345678')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -419,7 +434,7 @@ describe('/customers (e2e)', () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
-        .get('/customers/lookup?sdt=0912345678')
+        .get('/customers/lookup?phone=0912345678')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -436,7 +451,7 @@ describe('/customers (e2e)', () => {
       customerRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
-        .get('/customers/lookup?sdt=0912345678')
+        .get('/customers/lookup?phone=0912345678')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -458,7 +473,7 @@ describe('/customers (e2e)', () => {
       ]) {
         const res = await request(server())
           .get('/customers/lookup')
-          .query({ sdt: raw })
+          .query({ phone: raw })
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
@@ -468,22 +483,22 @@ describe('/customers (e2e)', () => {
     });
 
     for (const rac of ['abc', '123', '+16505550123']) {
-      it(`SĐT rác "${rac}" ⇒ 400 VALIDATION_ERROR field sdt, KHÔNG chạm DB`, async () => {
+      it(`SĐT rác "${rac}" ⇒ 400 VALIDATION_ERROR field phone, KHÔNG chạm DB`, async () => {
         givenPermissions(PERM.customersManage);
 
         const res = await request(server())
           .get('/customers/lookup')
-          .query({ sdt: rac })
+          .query({ phone: rac })
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(400);
         expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-        expect(res.body.fieldErrors[0].field).toBe('sdt');
+        expect(res.body.fieldErrors[0].field).toBe('phone');
         expect(customerRepo.findUnique).not.toHaveBeenCalled();
       });
     }
 
-    it('thiếu hẳn `sdt` ⇒ 400 (không tra rỗng hộ người dùng)', async () => {
+    it('thiếu hẳn `phone` ⇒ 400 (không tra rỗng hộ người dùng)', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
@@ -491,7 +506,22 @@ describe('/customers (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
+
+    // The query was renamed with no alias: whitelist strips the unknown `sdt`, so the request
+    // arrives without `phone` and is rejected rather than silently looked up.
+    it('old query name ?sdt= ⇒ 400 VALIDATION_ERROR, fieldErrors point at `phone`', async () => {
+      givenPermissions(PERM.customersManage);
+
+      const res = await request(server())
+        .get('/customers/lookup?sdt=0903176968')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('phone');
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
   });
@@ -505,30 +535,30 @@ describe('/customers (e2e)', () => {
     // và một mảng đều bị `normalizeVnPhone` từ chối ⇒ 400 `isPhoneNumber` NGAY CẢ KHI gỡ hết
     // decorator khỏi DTO. Chỉ kiểm status là kiểm nhầm hàng rào: cái trần biến mất mà test vẫn
     // xanh. Mã lỗi là thứ nói cho ta biết request bị chặn Ở ĐÂU.
-    it('lookup: sdt dài quá trần 32 ký tự ⇒ 400 maxLength (pipe chặn), KHÔNG chạm DB', async () => {
+    it('lookup: phone dài quá trần 32 ký tự ⇒ 400 maxLength (pipe chặn), KHÔNG chạm DB', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
         .get('/customers/lookup')
-        .query({ sdt: '0'.repeat(33) })
+        .query({ phone: '0'.repeat(33) })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
       expect(res.body.fieldErrors[0].code).toBe('maxLength');
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
 
-    it('lookup: sdt lặp key (?sdt=a&sdt=b ⇒ MẢNG) ⇒ 400 isString — mảng không tới nổi tầng chuẩn hoá', async () => {
+    it('lookup: phone lặp key (?phone=a&phone=b ⇒ MẢNG) ⇒ 400 isString — mảng không tới nổi tầng chuẩn hoá', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
-        .get('/customers/lookup?sdt=0912345678&sdt=0987654321')
+        .get('/customers/lookup?phone=0912345678&phone=0987654321')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(400);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
       // Một mảng vi phạm NHIỀU ràng buộc cùng lúc (thứ tự không phải hợp đồng) — điều phải
       // khẳng định là `isString` CÓ MẶT, tức mảng bị chặn vì nó không phải chuỗi.
       expect(

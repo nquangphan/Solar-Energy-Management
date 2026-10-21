@@ -5,7 +5,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * object thường, KHÔNG instantiate class này.
  *
  * `sdt` LUÔN là chuỗi đã chuẩn hoá E.164 — client gửi thô, nhận về chuẩn. Đây cũng chính là
- * khoá chính dùng ở `GET /customers/:sdt` và `PATCH /customers/:sdt`.
+ * khoá chính dùng ở `GET /customers/:phone` và `PATCH /customers/:phone`.
  */
 export class CustomerResponseDto {
   @ApiProperty({

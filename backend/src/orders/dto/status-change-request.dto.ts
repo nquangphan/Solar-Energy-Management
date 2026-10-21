@@ -6,7 +6,7 @@ import { SU_KIEN, SU_KIEN_THU_CONG } from '../domain/allowed-transition';
 const SU_KIEN_CO_THAT = Object.values(SU_KIEN);
 
 /**
- * Body của `POST /orders/:id/chuyen-trang-thai` (Story 5.5, FR-9) — gửi kèm ảnh dưới dạng
+ * Body của `POST /orders/:id/transition` (Story 5.5, FR-9) — gửi kèm ảnh dưới dạng
  * `multipart/form-data`, nên đây là các field TEXT của form.
  *
  * Caller chọn một SỰ KIỆN CÓ TÊN, KHÔNG tự khai đích đến: đích đến là của

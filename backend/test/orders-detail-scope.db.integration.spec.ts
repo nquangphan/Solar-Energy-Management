@@ -249,7 +249,7 @@ moTa(
         expect(khongTonTai).toBe('Không tìm thấy đơn hàng: khong-ton-tai-544');
       });
 
-      it('`/vong-doi` và `/phien-ban` chịu CÙNG phạm vi — không endpoint nào quên', async () => {
+      it('`/lifecycle` và `/versions` chịu CÙNG phạm vi — không endpoint nào quên', async () => {
         await expect(
           service.lifecycle(TOI, CHI_XEM_CUA_MINH, donNguoiKhac),
         ).rejects.toMatchObject({ status: 404 });

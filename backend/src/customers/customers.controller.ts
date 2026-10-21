@@ -39,7 +39,7 @@ import { UpdateCustomerRequestDto } from './dto/update-customer-request.dto';
  * KHÔNG `@Public()`: đây là dữ liệu khách hàng (SĐT, CCCD, MST, tài khoản ngân hàng), và một
  * route quên guard là đường để mọi người đã đăng nhập đọc trọn danh bạ khách.
  *
- * `:sdt` nhận SĐT ở dạng THÔ hay E.164 đều được — service chạy CÙNG bộ chuẩn hoá với lúc ghi
+ * `:phone` nhận SĐT ở dạng THÔ hay E.164 đều được — service chạy CÙNG bộ chuẩn hoá với lúc ghi
  * (AD-9), nên `GET /customers/0912345678` và `GET /customers/+84912345678` trỏ về cùng một khách.
  *
  * KHÔNG có `DELETE`: xoá khách chưa nằm trong phạm vi story này (Epic 4 sẽ FK vào bảng này, nên
@@ -99,7 +99,7 @@ export class CustomersController {
   }
 
   /**
-   * PHẢI khai TRƯỚC `@Get(':sdt')`. Nest so route THEO THỨ TỰ KHAI: đặt sau, `:sdt` nuốt luôn
+   * PHẢI khai TRƯỚC `@Get(':phone')`. Nest so route THEO THỨ TỰ KHAI: đặt sau, `:phone` nuốt luôn
    * chuỗi `"lookup"` và endpoint này trả 404 "không tìm thấy khách hàng `lookup`" — một lỗi trông
    * như lỗi dữ liệu nhưng thật ra là lỗi thứ tự. Có e2e khẳng định đúng chuyện này.
    */
@@ -122,14 +122,14 @@ export class CustomersController {
     @Query() query: LookupCustomerQueryDto,
   ): Promise<CustomerLookupResponseDto> {
     return (await this.customers.lookup(
-      query.sdt,
+      query.phone,
     )) as CustomerLookupResponseDto;
   }
 
-  @Get(':sdt')
+  @Get(':phone')
   @RequirePermissions(PERM.customersManage)
   @ApiParam({
-    name: 'sdt',
+    name: 'phone',
     description:
       'SĐT — thô hay E.164 đều được; backend chuẩn hoá trước khi tra (AD-9).',
     example: '0912345678',
@@ -147,13 +147,13 @@ export class CustomersController {
     type: ErrorEnvelopeDto,
     description: 'Không có khách hàng với SĐT này (NOT_FOUND).',
   })
-  async findOne(@Param('sdt') sdt: string): Promise<CustomerResponseDto> {
-    return (await this.customers.findOne(sdt)) as CustomerResponseDto;
+  async findOne(@Param('phone') phone: string): Promise<CustomerResponseDto> {
+    return (await this.customers.findOne(phone)) as CustomerResponseDto;
   }
 
-  @Patch(':sdt')
+  @Patch(':phone')
   @RequirePermissions(PERM.customersManage)
-  @ApiParam({ name: 'sdt', example: '0912345678' })
+  @ApiParam({ name: 'phone', example: '0912345678' })
   @ApiOkResponse({
     type: CustomerResponseDto,
     description: 'Khách hàng sau khi sửa. `sdt` KHÔNG sửa được qua đây.',
@@ -173,12 +173,12 @@ export class CustomersController {
   })
   async update(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('sdt') sdt: string,
+    @Param('phone') phone: string,
     @Body() body: UpdateCustomerRequestDto,
   ): Promise<CustomerResponseDto> {
     return (await this.customers.update(
       account.id,
-      sdt,
+      phone,
       body,
     )) as CustomerResponseDto;
   }

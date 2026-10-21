@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CustomerResponseDto } from './customer-response.dto';
 
 /**
- * Response của `GET /customers/lookup?sdt=<thô>` (AD-9, FR-29).
+ * Response của `GET /customers/lookup?phone=<thô>` (AD-9, FR-29).
  *
  * "Không tìm thấy" ⇒ `200 { found: false, customer: null }`, KHÔNG phải 404: một phép TRA có hai
  * kết quả bình thường, và "chưa có khách này" chính là NỬA KIA của tính năng — nó là thứ mở ra

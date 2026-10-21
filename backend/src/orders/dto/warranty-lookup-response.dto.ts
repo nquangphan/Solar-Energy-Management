@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
- * Response của `GET /orders/tra-cuu-bao-hanh?sdt=<thô>` — chỉ để OpenAPI có schema thật
+ * Response của `GET /orders/warranty-lookup?phone=<thô>` — chỉ để OpenAPI có schema thật
  * (AD-12); service trả object thường, KHÔNG instantiate class nào ở đây.
  *
  * Field nullable khai `type` TƯỜNG MINH: union `string | null` sinh `"type":"object"` làm hỏng

@@ -276,7 +276,7 @@ export interface WarrantyOrderView {
   readonly lineItems: readonly WarrantyLineView[];
 }
 
-/** Kết quả `GET /orders/tra-cuu-bao-hanh` — "không có khách" là kết quả, không phải lỗi. */
+/** Kết quả `GET /orders/warranty-lookup` — "không có khách" là kết quả, không phải lỗi. */
 export interface WarrantyLookupView {
   readonly found: boolean;
   readonly sdt: string;
@@ -1322,7 +1322,7 @@ export class OrdersService {
   }
 
   /**
-   * CỬA VÀO CÔNG KHAI DUY NHẤT cho HUỶ ĐƠN kèm lý do (Story 5.7, FR-9) — `POST /:id/huy`.
+   * CỬA VÀO CÔNG KHAI DUY NHẤT cho HUỶ ĐƠN kèm lý do (Story 5.7, FR-9) — `POST /:id/cancel`.
    *
    * Vì sao là một cửa riêng chứ không phải một sự kiện của lane thủ công: lý do là BẮT BUỘC,
    * và một `applyTransition` trần không có chỗ nào enforce điều đó. Đưa `huy` vào
@@ -1485,7 +1485,7 @@ export class OrdersService {
   }
 
   /**
-   * `GET /orders/:id/anh` — DANH SÁCH PHẲNG mọi ảnh của đơn: cả ảnh gắn vào một bước (5.5,
+   * `GET /orders/:id/attachments` — DANH SÁCH PHẲNG mọi ảnh của đơn: cả ảnh gắn vào một bước (5.5,
    * `statusTo != null`) lẫn ảnh bổ sung (5.6, `statusTo == null`), FR-24.
    *
    * Sắp theo `createdAt` giảm dần chứ KHÔNG theo `occurredAt`: cột đó `null` cho mọi ảnh bổ
@@ -1554,7 +1554,7 @@ export class OrdersService {
   }
 
   /**
-   * `POST /orders/:id/anh` — thêm ảnh bổ sung NGOÀI luồng chuyển trạng thái (FR-24).
+   * `POST /orders/:id/attachments` — thêm ảnh bổ sung NGOÀI luồng chuyển trạng thái (FR-24).
    *
    * THỨ TỰ BẮT BUỘC: phạm vi → validate → upload R2 → ghi DB → publish. Validate đứng TRƯỚC
    * R2 vì một lượt 400 mà bytes đã lên bucket là rác vĩnh viễn không hàng DB nào trỏ tới.
@@ -1653,7 +1653,7 @@ export class OrdersService {
   }
 
   /**
-   * `DELETE /orders/:id/anh/:attachmentId` — xoá HẲN một ảnh (hard delete, FR-24).
+   * `DELETE /orders/:id/attachments/:attachmentId` — xoá HẲN một ảnh (hard delete, FR-24).
    *
    * Vết xoá nằm ở `audit_logs` (append-only) qua `AttachmentRemoved`, nên không cần cột
    * soft-delete — thêm nó là thêm một trạng thái phải lọc ở mọi truy vấn về sau.
@@ -1817,7 +1817,7 @@ export class OrdersService {
 
   /**
    * ĐƯỜNG ĐỌC SCOPED DÙNG CHUNG DUY NHẤT cho mọi endpoint đọc-theo-id của màn chi tiết
-   * (`GET /:id`, `/:id/vong-doi`, `/:id/phien-ban`) VÀ là lần đọc ĐẦU TIÊN của mọi đường
+   * (`GET /:id`, `/:id/lifecycle`, `/:id/versions`) VÀ là lần đọc ĐẦU TIÊN của mọi đường
    * GHI do người gọi kích hoạt (sửa/chốt/mở lại/chiết khấu/dòng/xuất báo giá…): không xem
    * được đơn thì cũng không sửa được nó. Một chỗ đóng phạm vi ⇒ endpoint mới KHÔNG THỂ quên
    * nó — source-guard `no-unscoped-order-write.spec.ts` canh điều đó.
@@ -2023,7 +2023,7 @@ export class OrdersService {
         'Số điện thoại không hợp lệ.',
         [
           {
-            field: 'sdt',
+            field: 'phone',
             code: 'isPhoneNumber',
             message:
               'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).',
@@ -2517,7 +2517,7 @@ export class OrdersService {
    *
    * Idempotent kiểu 4.5: đơn ĐANG `baogia` (retry/double-tap, hoặc đơn chưa từng chốt) ⇒ 200
    * view hiện tại — KHÔNG version mới, KHÔNG event. Trạng thái khác `dachot`/`baogia` ⇒ 409.
-   * Race mo-lai ↔ chot: hai cổng `updateMany` điều kiện NGƯỢC nhau trên cùng row — Postgres
+   * Race reopen ↔ confirm: hai cổng `updateMany` điều kiện NGƯỢC nhau trên cùng row — Postgres
    * READ COMMITTED re-check WHERE sau row lock ⇒ đúng một bên thắng.
    *
    * Publish `OrderRevised` SAU commit, CHỈ nhánh mở-lại thật (NFR-1, AD-18) — audit ghi
@@ -2541,7 +2541,7 @@ export class OrdersService {
       orderId,
     );
     if (before.status === TRANG_THAI_BAO_GIA) {
-      // Đơn đang mở sẵn (retry mo-lai, hoặc đơn chưa từng chốt): no-op vô hại.
+      // Đơn đang mở sẵn (retry reopen, hoặc đơn chưa từng chốt): no-op vô hại.
       return this.viewOf(before, tieredPricingEnabled);
     }
     if (before.status !== TRANG_THAI_DA_CHOT) {

@@ -799,11 +799,11 @@ describe('/orders/:id/contracts (e2e)', () => {
   });
 
   describe('existing order routes still work beside the new controller', () => {
-    it('POST /orders/:id/xuat-bao-gia ⇒ 200', async () => {
+    it('POST /orders/:id/export-quote ⇒ 200', async () => {
       givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewAll);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .post(`/orders/${ORDER_ID}/export-quote`)
         .set('Authorization', auth());
 
       expect(res.status).toBe(200);

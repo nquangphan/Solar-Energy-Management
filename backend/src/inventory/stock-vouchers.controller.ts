@@ -149,7 +149,7 @@ export class StockVouchersController {
     type: ErrorEnvelopeDto,
     description: 'Thiếu inventory.manage (FORBIDDEN).',
   })
-  async lietKe(
+  async list(
     @Query() query: StockVoucherListQueryDto,
   ): Promise<StockVoucherListResponseDto> {
     return (await this.stockVouchers.lietKePhieu(
@@ -175,7 +175,7 @@ export class StockVouchersController {
     type: ErrorEnvelopeDto,
     description: 'Không có phiếu này (NOT_FOUND).',
   })
-  async chiTiet(
+  async findOne(
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<StockVoucherDetailDto> {

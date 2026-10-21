@@ -96,7 +96,7 @@ describe('OrdersService.traCuuBaoHanh', () => {
     return { service, batDuoc };
   }
 
-  it('SĐT rác ⇒ AppException 400 với fieldErrors trỏ đúng `sdt`', async () => {
+  it('SĐT rác ⇒ AppException 400 với fieldErrors trỏ đúng `phone`', async () => {
     const { service } = dungService({});
     expect.assertions(4);
     try {
@@ -106,7 +106,7 @@ describe('OrdersService.traCuuBaoHanh', () => {
       expect(err).toBeInstanceOf(AppException);
       expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
       expect(err.getStatus()).toBe(400);
-      expect(err.fieldErrors?.[0].field).toBe('sdt');
+      expect(err.fieldErrors?.[0].field).toBe('phone');
     }
   });
 

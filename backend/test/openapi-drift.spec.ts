@@ -115,7 +115,7 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     const document = buildOpenApiDocument(app);
     expect(document.paths['/customers']).toBeDefined();
     expect(document.paths['/customers/lookup']).toBeDefined();
-    expect(document.paths['/customers/{sdt}']).toBeDefined();
+    expect(document.paths['/customers/{phone}']).toBeDefined();
     expect(document.paths['/customer-sources']).toBeDefined();
 
     const schemas = document.components?.schemas ?? {};
@@ -230,8 +230,8 @@ describe('OpenAPI drift-guard (AD-12)', () => {
       document.paths['/customers'].post,
       document.paths['/customers'].get,
       document.paths['/customers/lookup'].get,
-      document.paths['/customers/{sdt}'].get,
-      document.paths['/customers/{sdt}'].patch,
+      document.paths['/customers/{phone}'].get,
+      document.paths['/customers/{phone}'].patch,
       document.paths['/customer-sources'].get,
       document.paths['/customer-sources'].post,
       document.paths['/customer-sources/{id}'].patch,
@@ -355,27 +355,27 @@ describe('OpenAPI drift-guard (AD-12)', () => {
 
   it('spec chứa 3 route xuất/tải báo giá + 2 DTO metadata; 2 route GET khai binary (FR-21, AD-3)', () => {
     const document = buildOpenApiDocument(app);
-    expect(document.paths['/orders/{id}/xuat-bao-gia']?.post).toBeDefined();
+    expect(document.paths['/orders/{id}/export-quote']?.post).toBeDefined();
     expect(document.components?.schemas?.QuoteExportResponseDto).toBeDefined();
     expect(document.components?.schemas?.QuoteExportFileDto).toBeDefined();
 
     // 2 route proxy trả bytes: content-type đúng loại file + schema binary — FE gen client
     // biết đây là download, không phải JSON.
-    const anhGet = document.paths['/orders/{id}/bao-gia/anh']?.get as {
+    const imageGet = document.paths['/orders/{id}/quote/image']?.get as {
       responses: Record<
         string,
         { content?: Record<string, { schema?: { format?: string } }> }
       >;
     };
-    const pdfGet = document.paths['/orders/{id}/bao-gia/pdf']?.get as {
+    const pdfGet = document.paths['/orders/{id}/quote/pdf']?.get as {
       responses: Record<
         string,
         { content?: Record<string, { schema?: { format?: string } }> }
       >;
     };
-    expect(anhGet.responses['200'].content?.['image/png']?.schema?.format).toBe(
-      'binary',
-    );
+    expect(
+      imageGet.responses['200'].content?.['image/png']?.schema?.format,
+    ).toBe('binary');
     expect(
       pdfGet.responses['200'].content?.['application/pdf']?.schema?.format,
     ).toBe('binary');

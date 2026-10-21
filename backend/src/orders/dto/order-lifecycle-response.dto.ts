@@ -20,7 +20,7 @@ export class OrderLifecycleStepDto {
 }
 
 /**
- * Response của `GET /orders/:id/vong-doi` — chuỗi bước ĐÃ GATE theo cờ phạm vi của đơn.
+ * Response của `GET /orders/:id/lifecycle` — chuỗi bước ĐÃ GATE theo cờ phạm vi của đơn.
  *
  * Bước bị cờ chặn KHÔNG có trong mảng này (UX-DR-11: ẩn hẳn, không vẽ mờ) — client không lọc
  * gì thêm, và KHÔNG được tự suy bước từ cờ (AD-2: chuỗi bước là business logic của backend).
@@ -35,7 +35,7 @@ export class OrderLifecycleStepDto {
 export class OrderNextStepDto {
   @ApiProperty({
     description:
-      'Sự kiện phải gửi lên `POST /orders/{id}/chuyen-trang-thai` để đi bước này.',
+      'Sự kiện phải gửi lên `POST /orders/{id}/transition` để đi bước này.',
   })
   event!: string;
 

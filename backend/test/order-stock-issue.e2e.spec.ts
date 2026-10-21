@@ -147,7 +147,7 @@ describe('/orders/:id/stock-issue (e2e)', () => {
     stockMovement: stockMovementRepo,
     stockVoucher: stockVoucherRepo,
     auditLog: auditRepo,
-    // `mo-lai` reads the tiered-pricing flag before the service runs.
+    // `reopen` reads the tiered-pricing flag before the service runs.
     featureFlag: { findUnique: jest.fn().mockResolvedValue(null) },
     $queryRaw: queryRaw,
   };
@@ -515,7 +515,7 @@ describe('/orders/:id/stock-issue (e2e)', () => {
 
     function close() {
       return request(server())
-        .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+        .post(`/orders/${ORDER_ID}/transition`)
         .set('Authorization', `Bearer ${token()}`)
         .field('event', 'hoan_thanh');
     }
@@ -589,12 +589,12 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     });
 
-    it('re-opening (mo-lai) an issued order ⇒ 409, no new version', async () => {
+    it('re-opening (reopen) an issued order ⇒ 409, no new version', async () => {
       givenPermissions(...ROLE_PRESETS.QUAN_LY);
       expect((await post()).status).toBe(201);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .post(`/orders/${ORDER_ID}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(409);
@@ -611,7 +611,7 @@ describe('/orders/:id/stock-issue (e2e)', () => {
 
     function close() {
       return request(server())
-        .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+        .post(`/orders/${ORDER_ID}/transition`)
         .set('Authorization', `Bearer ${token()}`)
         .field('event', 'hoan_thanh');
     }

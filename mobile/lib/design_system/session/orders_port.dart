@@ -229,7 +229,7 @@ class OrderNextStep {
   final String requires;
 }
 
-/// The whole `GET /orders/:id/vong-doi` reply (Story 5.4 + 5.5): what the
+/// The whole `GET /orders/:id/lifecycle` reply (Story 5.4 + 5.5): what the
 /// stepper draws, and what this caller can do next.
 ///
 /// Both come from ONE read of the order. A second route for [buocKeTiep] would
@@ -630,7 +630,7 @@ class OrderTotals {
   final bool applyVat;
 }
 
-/// Body of `POST /orders/:id/ap-chiet-khau` (Story 4.7) — one integer đồng
+/// Body of `POST /orders/:id/apply-discount` (Story 4.7) — one integer đồng
 /// amount on the ORDER.
 class ApplyDiscountInput {
   const ApplyDiscountInput({required this.amount, this.note});
@@ -639,7 +639,7 @@ class ApplyDiscountInput {
   final String? note;
 }
 
-/// Body of `POST /orders/:id/duyet-chiet-khau` (Story 4.7) — [reason] REQUIRED
+/// Body of `POST /orders/:id/resolve-discount` (Story 4.7) — [reason] REQUIRED
 /// when rejecting.
 class ResolveDiscountInput {
   const ResolveDiscountInput({required this.approve, this.reason});
@@ -690,7 +690,7 @@ class DiscountPendingLine {
   final int? estimatedMarginPct;
 }
 
-/// One item of `GET /orders/cho-duyet-chiet-khau` (Story 4.7, FR-18/FR-37) —
+/// One item of `GET /orders/pending-discount-approvals` (Story 4.7, FR-18/FR-37) —
 /// [subtotal]/[afterDiscount] are BACKEND numbers (AD-16), the screen displays
 /// them as-is.
 class DiscountPendingItem {
@@ -802,14 +802,14 @@ abstract class OrdersPort {
     int? pageSize,
   });
 
-  /// Lifecycle of one order — `GET /orders/:id/vong-doi` (Story 5.4 + 5.5,
+  /// Lifecycle of one order — `GET /orders/:id/lifecycle` (Story 5.4 + 5.5,
   /// FR-7). Steps already gated by the order's scope flags: those that do not
   /// apply are ABSENT from the list, not dimmed (UX-DR-11). `buocKeTiep` is
   /// already filtered by the caller's real permissions. Throws 404 (absent or
   /// out of the caller's scope — indistinguishable by design), 403.
   Future<OrderLifecycle> getLifecycle(String orderId);
 
-  /// Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4,
+  /// Update history of one order — `GET /orders/:id/versions` (Story 5.4,
   /// FR-6). Every version, `versionNo` ascending; exactly one carries
   /// `laBanHienLuc`. Throws 404 / 403 like [getLifecycle].
   Future<List<OrderVersionItem>> listVersions(String orderId);
@@ -841,7 +841,7 @@ abstract class OrdersPort {
   /// computer's subtotal/VAT/total back. No order is read or written.
   Future<OrderTotals> previewTotal(PreviewTotalInput input);
 
-  /// Confirm ("Chốt") the order — `POST /orders/:id/chot` (Story 4.5, FR-5).
+  /// Confirm ("Chốt") the order — `POST /orders/:id/confirm` (Story 4.5, FR-5).
   /// The BACKEND freezes every line price into snapshots and flips the status
   /// to `'dachot'`; the screen just renders the returned order (whose line
   /// `unitPrice` is now the frozen number). Idempotent on the server: retrying
@@ -849,7 +849,7 @@ abstract class OrdersPort {
   /// quote), 403 (`orders.confirm` missing), 404, 409 (non-confirmable status).
   Future<Order> confirmOrder(String orderId);
 
-  /// Reopen ("Mở lại") a confirmed order for editing — `POST /orders/:id/mo-lai`
+  /// Reopen ("Mở lại") a confirmed order for editing — `POST /orders/:id/reopen`
   /// (Story 4.6, FR-6). The BACKEND creates a NEW version (copying the lines,
   /// snapshots reset) and flips the status back to `'baogia'`; the old version
   /// stays untouched in history. The screen just renders the returned order —
@@ -858,14 +858,14 @@ abstract class OrdersPort {
   /// 403 (`quotes.create_edit` missing), 404, 409 (non-reopenable status).
   Future<Order> reviseOrder(String orderId);
 
-  /// Apply a discount and send it for approval — `POST /orders/:id/ap-chiet-khau`
+  /// Apply a discount and send it for approval — `POST /orders/:id/apply-discount`
   /// (Story 4.7, FR-18). The BACKEND flips the status to `'choduyet'` (content
   /// frozen until resolved) and records the approval request. Throws 400 (amount
   /// over subtotal / empty quote), 403 (`discounts.apply` missing), 404, 409
   /// (non-`'baogia'` status — applying is NOT idempotent).
   Future<Order> applyDiscount(String orderId, ApplyDiscountInput input);
 
-  /// Approve or reject the pending discount — `POST /orders/:id/duyet-chiet-khau`
+  /// Approve or reject the pending discount — `POST /orders/:id/resolve-discount`
   /// (Story 4.7, FR-18). Approve keeps the order `'choduyet'` (confirming is a
   /// separate [confirmOrder] action); reject returns it to `'baogia'` with the
   /// reason on `discount.resolveNote`. Throws 400 (missing reason on reject),
@@ -873,21 +873,21 @@ abstract class OrdersPort {
   /// decision). Retrying the SAME decision is idempotent on the server.
   Future<Order> resolveDiscount(String orderId, ResolveDiscountInput input);
 
-  /// List the orders awaiting discount approval — `GET /orders/cho-duyet-chiet-khau`
+  /// List the orders awaiting discount approval — `GET /orders/pending-discount-approvals`
   /// (Story 4.7, FR-18/FR-37). Every number (subtotal, afterDiscount, margins)
   /// is backend-computed; margins are null when the caller lacks `costs.view`.
   /// Throws 403 (`discounts.approve` missing).
   Future<List<DiscountPendingItem>> listPendingDiscounts();
 
   /// Export the quote as PDF + image and fetch both files (Story 4.8, FR-21) —
-  /// `POST /orders/:id/xuat-bao-gia` then the two `GET /orders/:id/bao-gia/*`
+  /// `POST /orders/:id/export-quote` then the two `GET /orders/:id/quote/*`
   /// proxy routes. The BACKEND renders both from ONE template (totals from the
   /// one pricing function, AD-16) and overwrites the order's latest file pair.
   /// Throws 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
   Future<QuoteExportFiles> exportQuote(String orderId);
 
   /// Move the order one step and attach evidence photos (Story 5.5,
-  /// FR-9/FR-23) — `POST /orders/:id/chuyen-trang-thai` as `multipart/form-data`.
+  /// FR-9/FR-23) — `POST /orders/:id/transition` as `multipart/form-data`.
   ///
   /// [event] is one of the events `getLifecycle().buocKeTiep` handed back. The
   /// caller does NOT name a destination: the destination belongs to the
@@ -907,7 +907,7 @@ abstract class OrdersPort {
     List<XFile> anh,
   );
 
-  /// Cancel the order with a REASON — `POST /orders/:id/huy` (Story 5.7, FR-9).
+  /// Cancel the order with a REASON — `POST /orders/:id/cancel` (Story 5.7, FR-9).
   ///
   /// Its own endpoint, not an `event` of [chuyenTrangThai]: the reason is
   /// mandatory and only this path enforces it.
@@ -922,7 +922,7 @@ abstract class OrdersPort {
   Future<void> huyDon(String orderId, String lyDo);
 
   /// Every photo of the order — step photos AND supplementary ones, in ONE flat
-  /// list newest first (Story 5.6, FR-24) — `GET /orders/:id/anh`.
+  /// list newest first (Story 5.6, FR-24) — `GET /orders/:id/attachments`.
   ///
   /// The order is the backend's (`createdAt` descending); the screen does not
   /// re-sort. Throws 403 (neither `orders.view_all` nor `orders.view_own`), 404
@@ -930,14 +930,14 @@ abstract class OrdersPort {
   Future<List<AttachmentItem>> listAnh(String orderId);
 
   /// Attach supplementary photos OUTSIDE the transition flow (Story 5.6,
-  /// FR-24) — `POST /orders/:id/anh` as `multipart/form-data`. The rows land
+  /// FR-24) — `POST /orders/:id/attachments` as `multipart/form-data`. The rows land
   /// with all three step coordinates null: they belong to no step.
   ///
   /// Limits are the backend's: 10 photos per upload, 10 MB each,
   /// jpeg/png/webp/heic. Throws 400 (`fieldErrors` says which photo), 403, 404.
   Future<void> themAnh(String orderId, List<XFile> files);
 
-  /// Delete ONE photo — `DELETE /orders/:id/anh/:attachmentId` (Story 5.6,
+  /// Delete ONE photo — `DELETE /orders/:id/attachments/:attachmentId` (Story 5.6,
   /// FR-24). Hard delete; the trail lives in the audit log.
   ///
   /// Call this only for items whose [AttachmentItem.coTheXoa] is true — the
@@ -945,7 +945,7 @@ abstract class OrdersPort {
   /// hiding the button is UX, not security). Throws 403, 404.
   Future<void> xoaAnh(String orderId, String attachmentId);
 
-  /// Bytes of ONE photo for preview — `GET /orders/:id/anh/:attachmentId`
+  /// Bytes of ONE photo for preview — `GET /orders/:id/attachments/:attachmentId`
   /// (Story 5.5 proxy route, AD-3: the bucket is not public, every byte comes
   /// through the backend behind JWT).
   ///

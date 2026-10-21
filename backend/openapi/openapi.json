@@ -1387,7 +1387,7 @@
         "operationId": "CustomersController_lookup",
         "parameters": [
           {
-            "name": "sdt",
+            "name": "phone",
             "required": true,
             "in": "query",
             "description": "SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.",
@@ -1439,12 +1439,12 @@
         ]
       }
     },
-    "/customers/{sdt}": {
+    "/customers/{phone}": {
       "get": {
         "operationId": "CustomersController_findOne",
         "parameters": [
           {
-            "name": "sdt",
+            "name": "phone",
             "required": true,
             "in": "path",
             "description": "SĐT — thô hay E.164 đều được; backend chuẩn hoá trước khi tra (AD-9).",
@@ -1509,7 +1509,7 @@
         "operationId": "CustomersController_update",
         "parameters": [
           {
-            "name": "sdt",
+            "name": "phone",
             "required": true,
             "in": "path",
             "schema": {
@@ -2113,7 +2113,7 @@
         ]
       }
     },
-    "/orders/cho-duyet-chiet-khau": {
+    "/orders/pending-discount-approvals": {
       "get": {
         "operationId": "OrdersController_listPendingDiscounts",
         "parameters": [],
@@ -2152,12 +2152,12 @@
         ]
       }
     },
-    "/orders/tra-cuu-bao-hanh": {
+    "/orders/warranty-lookup": {
       "get": {
-        "operationId": "OrdersController_traCuuBaoHanh",
+        "operationId": "OrdersController_warrantyLookup",
         "parameters": [
           {
-            "name": "sdt",
+            "name": "phone",
             "required": true,
             "in": "query",
             "description": "SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.",
@@ -2347,7 +2347,7 @@
         ]
       }
     },
-    "/orders/{id}/vong-doi": {
+    "/orders/{id}/lifecycle": {
       "get": {
         "operationId": "OrdersController_lifecycle",
         "parameters": [
@@ -2402,7 +2402,7 @@
         ]
       }
     },
-    "/orders/{id}/phien-ban": {
+    "/orders/{id}/versions": {
       "get": {
         "operationId": "OrdersController_listVersions",
         "parameters": [
@@ -2457,7 +2457,7 @@
         ]
       }
     },
-    "/orders/{id}/chot": {
+    "/orders/{id}/confirm": {
       "post": {
         "operationId": "OrdersController_confirm",
         "parameters": [
@@ -2532,7 +2532,7 @@
         ]
       }
     },
-    "/orders/{id}/mo-lai": {
+    "/orders/{id}/reopen": {
       "post": {
         "operationId": "OrdersController_revise",
         "parameters": [
@@ -2597,7 +2597,7 @@
         ]
       }
     },
-    "/orders/{id}/ap-chiet-khau": {
+    "/orders/{id}/apply-discount": {
       "post": {
         "operationId": "OrdersController_applyDiscount",
         "parameters": [
@@ -2622,7 +2622,7 @@
         },
         "responses": {
           "200": {
-            "description": "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /duyet-chiet-khau.",
+            "description": "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /resolve-discount.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2682,7 +2682,7 @@
         ]
       }
     },
-    "/orders/{id}/duyet-chiet-khau": {
+    "/orders/{id}/resolve-discount": {
       "post": {
         "operationId": "OrdersController_resolveDiscount",
         "parameters": [
@@ -2707,7 +2707,7 @@
         },
         "responses": {
           "200": {
-            "description": "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /chot); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
+            "description": "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /confirm); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3009,7 +3009,7 @@
         ]
       }
     },
-    "/orders/{id}/xuat-bao-gia": {
+    "/orders/{id}/export-quote": {
       "post": {
         "operationId": "OrdersController_exportQuote",
         "parameters": [
@@ -3024,7 +3024,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/bao-gia/anh|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.",
+            "description": "Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/quote/image|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3074,7 +3074,7 @@
         ]
       }
     },
-    "/orders/{id}/bao-gia/anh": {
+    "/orders/{id}/quote/image": {
       "get": {
         "operationId": "OrdersController_downloadQuoteImage",
         "parameters": [
@@ -3130,7 +3130,7 @@
         ]
       }
     },
-    "/orders/{id}/bao-gia/pdf": {
+    "/orders/{id}/quote/pdf": {
       "get": {
         "operationId": "OrdersController_downloadQuotePdf",
         "parameters": [
@@ -3186,9 +3186,9 @@
         ]
       }
     },
-    "/orders/{id}/chuyen-trang-thai": {
+    "/orders/{id}/transition": {
       "post": {
-        "operationId": "OrdersController_chuyenTrangThai",
+        "operationId": "OrdersController_transition",
         "parameters": [
           {
             "name": "id",
@@ -3271,9 +3271,9 @@
         ]
       }
     },
-    "/orders/{id}/huy": {
+    "/orders/{id}/cancel": {
       "post": {
-        "operationId": "OrdersController_huyDon",
+        "operationId": "OrdersController_cancel",
         "parameters": [
           {
             "name": "id",
@@ -3569,7 +3569,7 @@
         ]
       }
     },
-    "/orders/{id}/anh": {
+    "/orders/{id}/attachments": {
       "get": {
         "operationId": "OrdersController_listAttachments",
         "parameters": [
@@ -3687,7 +3687,7 @@
         ]
       }
     },
-    "/orders/{id}/anh/{attachmentId}": {
+    "/orders/{id}/attachments/{attachmentId}": {
       "delete": {
         "operationId": "OrdersController_removeAttachment",
         "parameters": [
@@ -4035,7 +4035,7 @@
     },
     "/stock-items": {
       "get": {
-        "operationId": "StockItemsController_lietKe",
+        "operationId": "StockItemsController_list",
         "parameters": [
           {
             "name": "q",
@@ -4176,7 +4176,7 @@
         ]
       },
       "get": {
-        "operationId": "StockVouchersController_lietKe",
+        "operationId": "StockVouchersController_list",
         "parameters": [
           {
             "name": "type",
@@ -4329,7 +4329,7 @@
     },
     "/stock-vouchers/{id}": {
       "get": {
-        "operationId": "StockVouchersController_chiTiet",
+        "operationId": "StockVouchersController_findOne",
         "parameters": [
           {
             "name": "id",
@@ -6896,7 +6896,7 @@
         "properties": {
           "event": {
             "type": "string",
-            "description": "Sự kiện phải gửi lên `POST /orders/{id}/chuyen-trang-thai` để đi bước này."
+            "description": "Sự kiện phải gửi lên `POST /orders/{id}/transition` để đi bước này."
           },
           "to": {
             "type": "string",
@@ -7123,7 +7123,7 @@
         "properties": {
           "approve": {
             "type": "boolean",
-            "description": "true = đồng ý (đơn Ở NGUYÊN choduyet — được Chốt qua /chot); false = từ chối (đơn về baogia)."
+            "description": "true = đồng ý (đơn Ở NGUYÊN choduyet — được Chốt qua /confirm); false = từ chối (đơn về baogia)."
           },
           "reason": {
             "type": "string",

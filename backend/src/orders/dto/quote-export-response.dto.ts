@@ -13,9 +13,9 @@ export class QuoteExportFileDto {
 }
 
 /**
- * Response của `POST /orders/{id}/xuat-bao-gia` — metadata bộ file MỚI NHẤT của Đơn
+ * Response của `POST /orders/{id}/export-quote` — metadata bộ file MỚI NHẤT của Đơn
  * (AD-3: DB/response chỉ metadata, bytes sống ở R2 và tải qua
- * `GET /orders/{id}/bao-gia/anh|pdf`).
+ * `GET /orders/{id}/quote/image|pdf`).
  */
 export class QuoteExportResponseDto {
   @ApiProperty({ type: String, description: 'Id Đơn.' })

@@ -660,7 +660,7 @@ class FakeOrdersPort implements OrdersPort {
     ];
   }
 
-  /// Demo twin of `POST /orders/:id/chuyen-trang-thai` (Story 5.5). It applies
+  /// Demo twin of `POST /orders/:id/transition` (Story 5.5). It applies
   /// the same three refusals the real backend applies, in the same order, so
   /// the screen's error branches are exercisable offline: unknown order → 404,
   /// step not offered for this status → 409, too many photos → 400 with
@@ -721,7 +721,7 @@ class FakeOrdersPort implements OrdersPort {
     );
   }
 
-  /// Demo twin of `POST /orders/:id/huy` (Story 5.7). Applies the same three
+  /// Demo twin of `POST /orders/:id/cancel` (Story 5.7). Applies the same three
   /// refusals in the same order as the real backend so the dialog's error
   /// branch is exercisable offline: unknown order → 404, status with no cancel
   /// edge (including one already cancelled) → 409, reason too short → 400 with

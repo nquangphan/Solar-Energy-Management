@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ORDER_STATUS_KEYS } from '../domain/order-status';
 
 /**
- * Response của `POST /orders/:id/chuyen-trang-thai` (Story 5.5).
+ * Response của `POST /orders/:id/transition` (Story 5.5).
  *
  * KHÔNG trả metadata từng ảnh: danh sách/gallery ảnh là FR-24 → Story 5.6. Ở đây chỉ cần
  * khẳng định đơn đã tới đâu và bao nhiêu ảnh đã ghi cho bước vừa rồi.

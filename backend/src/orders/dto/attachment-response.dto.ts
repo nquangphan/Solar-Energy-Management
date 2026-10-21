@@ -4,7 +4,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  * MỘT ảnh của đơn — cả ảnh gắn vào một bước (5.5) lẫn ảnh bổ sung (5.6), trong CÙNG một shape.
  *
  * ⚠️ KHÔNG có `objectKey`: key R2 là chi tiết hạ tầng và không rời backend (AD-3). Client tải
- * bytes qua `GET /orders/:id/anh/:attachmentId` — proxy đã scope, sau JWT.
+ * bytes qua `GET /orders/:id/attachments/:attachmentId` — proxy đã scope, sau JWT.
  *
  * `statusFrom`/`statusTo` là cặp toạ độ bước: cả hai `null` nghĩa là ảnh BỔ SUNG, không thuộc
  * lần chuyển trạng thái nào. Client đọc cặp này để chọn badge, không suy từ chỗ khác.
@@ -50,7 +50,7 @@ export class AttachmentItemDto {
 }
 
 /**
- * Response của `GET /orders/:id/anh` — danh sách PHẲNG theo `createdAt` giảm dần.
+ * Response của `GET /orders/:id/attachments` — danh sách PHẲNG theo `createdAt` giảm dần.
  *
  * Không phân trang: trần thực tế là vài chục ảnh một đơn. Bọc trong `items` thay vì trả mảng
  * trần để còn chỗ thêm metadata sau mà không phá contract (khuôn `OrderVersionsResponseDto`).
@@ -60,7 +60,7 @@ export class AttachmentListResponseDto {
   items!: AttachmentItemDto[];
 }
 
-/** Response của `POST /orders/:id/anh` — id các ảnh vừa lưu, để client refresh đúng chỗ. */
+/** Response của `POST /orders/:id/attachments` — id các ảnh vừa lưu, để client refresh đúng chỗ. */
 export class AttachmentUploadResponseDto {
   @ApiProperty({ description: 'Số ảnh đã lưu trong lượt này.' })
   soAnhDaLuu!: number;

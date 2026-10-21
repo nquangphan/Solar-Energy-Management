@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsString, MaxLength } from 'class-validator';
 
 /**
- * Body của `POST /orders/:id/huy` (Story 5.7, FR-9).
+ * Body của `POST /orders/:id/cancel` (Story 5.7, FR-9).
  *
  * ⚠️ CỐ Ý KHÔNG có `@IsNotEmpty()` / `@MinLength(3)`. Luật "lý do rỗng sau trim là không hợp
  * lệ" là luật NGHIỆP VỤ và nó sống ở `OrdersService.huyDon()`: để decorator bắt trước thì

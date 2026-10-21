@@ -168,7 +168,7 @@ export interface OrderNextStep {
 }
 
 /**
- * The whole `GET /orders/:id/vong-doi` reply (Story 5.4 + 5.5): what the stepper
+ * The whole `GET /orders/:id/lifecycle` reply (Story 5.4 + 5.5): what the stepper
  * draws, and what this caller can do next.
  *
  * Both come from ONE read of the order. A second route for `buocKeTiep` would be
@@ -426,13 +426,13 @@ export interface OrderTotals {
   applyVat: boolean;
 }
 
-/** Body of `POST /orders/:id/ap-chiet-khau` (Story 4.7) — one integer đồng amount on the ORDER. */
+/** Body of `POST /orders/:id/apply-discount` (Story 4.7) — one integer đồng amount on the ORDER. */
 export interface ApplyDiscountInput {
   amount: number;
   note?: string;
 }
 
-/** Body of `POST /orders/:id/duyet-chiet-khau` (Story 4.7) — `reason` REQUIRED when rejecting. */
+/** Body of `POST /orders/:id/resolve-discount` (Story 4.7) — `reason` REQUIRED when rejecting. */
 export interface ResolveDiscountInput {
   approve: boolean;
   reason?: string;
@@ -470,7 +470,7 @@ export interface DiscountPendingLine {
 }
 
 /**
- * One item of `GET /orders/cho-duyet-chiet-khau` (Story 4.7, FR-18/FR-37) —
+ * One item of `GET /orders/pending-discount-approvals` (Story 4.7, FR-18/FR-37) —
  * `subtotal`/`afterDiscount` are BACKEND numbers (AD-16), the screen displays
  * them as-is.
  */
@@ -547,7 +547,7 @@ export interface OrdersPort {
   list(query: OrderListQuery): Promise<OrderPage>;
 
   /**
-   * Lifecycle of one order — `GET /orders/:id/vong-doi` (Story 5.4 + 5.5, FR-7).
+   * Lifecycle of one order — `GET /orders/:id/lifecycle` (Story 5.4 + 5.5, FR-7).
    * Steps already gated by the order's scope flags: those that do not apply are
    * ABSENT from the array, not dimmed (UX-DR-11). `buocKeTiep` is already
    * filtered by the caller's real permissions. Rejects 404 (absent or out of the
@@ -556,7 +556,7 @@ export interface OrdersPort {
   getLifecycle(orderId: string): Promise<OrderLifecycle>;
 
   /**
-   * Update history of one order — `GET /orders/:id/phien-ban` (Story 5.4, FR-6).
+   * Update history of one order — `GET /orders/:id/versions` (Story 5.4, FR-6).
    * Every version, `versionNo` ascending; exactly one carries `laBanHienLuc`.
    * Rejects 404 / 403 like `getLifecycle`.
    */
@@ -596,7 +596,7 @@ export interface OrdersPort {
   previewTotal(input: PreviewTotalInput): Promise<OrderTotals>;
 
   /**
-   * Confirm ("Chốt") the order — `POST /orders/:id/chot` (Story 4.5, FR-5).
+   * Confirm ("Chốt") the order — `POST /orders/:id/confirm` (Story 4.5, FR-5).
    * The BACKEND freezes every line price into snapshots and flips the status
    * to `'dachot'`; the screen just renders the returned order (whose line
    * `unitPrice` is now the frozen number). Idempotent on the server: retrying
@@ -606,7 +606,7 @@ export interface OrdersPort {
   confirmOrder(orderId: string): Promise<Order>;
 
   /**
-   * Reopen ("Mở lại") a confirmed order for editing — `POST /orders/:id/mo-lai`
+   * Reopen ("Mở lại") a confirmed order for editing — `POST /orders/:id/reopen`
    * (Story 4.6, FR-6). The BACKEND creates a NEW version (copying the lines,
    * snapshots reset) and flips the status back to `'baogia'`; the old version
    * stays untouched in history. The screen just renders the returned order —
@@ -617,7 +617,7 @@ export interface OrdersPort {
   reviseOrder(orderId: string): Promise<Order>;
 
   /**
-   * Apply a discount and send it for approval — `POST /orders/:id/ap-chiet-khau`
+   * Apply a discount and send it for approval — `POST /orders/:id/apply-discount`
    * (Story 4.7, FR-18). The BACKEND flips the status to `'choduyet'` (content
    * frozen until resolved) and records the approval request. Rejects 400 (amount
    * over subtotal / empty quote), 403 (`discounts.apply` missing), 404, 409
@@ -626,7 +626,7 @@ export interface OrdersPort {
   applyDiscount(orderId: string, input: ApplyDiscountInput): Promise<Order>;
 
   /**
-   * Approve or reject the pending discount — `POST /orders/:id/duyet-chiet-khau`
+   * Approve or reject the pending discount — `POST /orders/:id/resolve-discount`
    * (Story 4.7, FR-18). Approve keeps the order `'choduyet'` (confirming is a
    * separate `confirmOrder` action); reject returns it to `'baogia'` with the
    * reason on `discount.resolveNote`. Rejects 400 (missing reason on reject),
@@ -636,7 +636,7 @@ export interface OrdersPort {
   resolveDiscount(orderId: string, input: ResolveDiscountInput): Promise<Order>;
 
   /**
-   * List the orders awaiting discount approval — `GET /orders/cho-duyet-chiet-khau`
+   * List the orders awaiting discount approval — `GET /orders/pending-discount-approvals`
    * (Story 4.7, FR-18/FR-37). Every number (subtotal, afterDiscount, margins) is
    * backend-computed; margins are null when the caller lacks `costs.view`.
    * Rejects 403 (`discounts.approve` missing).
@@ -645,7 +645,7 @@ export interface OrdersPort {
 
   /**
    * Export the quote as PDF + image and fetch both files (Story 4.8, FR-21) —
-   * `POST /orders/:id/xuat-bao-gia` then the two `GET /orders/:id/bao-gia/*`
+   * `POST /orders/:id/export-quote` then the two `GET /orders/:id/quote/*`
    * proxy routes. The BACKEND renders both from ONE template (totals from the
    * one pricing function, AD-16) and overwrites the order's latest file pair.
    * Rejects 400 (empty quote), 403 (`quotes.create_edit` missing), 404.
@@ -654,7 +654,7 @@ export interface OrdersPort {
 
   /**
    * Move the order one step and attach evidence photos (Story 5.5, FR-9/FR-23) —
-   * `POST /orders/:id/chuyen-trang-thai` as `multipart/form-data`.
+   * `POST /orders/:id/transition` as `multipart/form-data`.
    *
    * `event` is one of the events `getLifecycle().buocKeTiep` handed back. The
    * caller does NOT name a destination: the destination belongs to the backend's
@@ -676,7 +676,7 @@ export interface OrdersPort {
   ): Promise<StatusChangeResult>;
 
   /**
-   * Cancel the order with a REASON — `POST /orders/:id/huy` (Story 5.7, FR-9).
+   * Cancel the order with a REASON — `POST /orders/:id/cancel` (Story 5.7, FR-9).
    *
    * Its own endpoint, not an `event` of `chuyenTrangThai`: the reason is
    * mandatory and only this path enforces it.
@@ -692,7 +692,7 @@ export interface OrdersPort {
 
   /**
    * Every photo of the order — step photos AND supplementary ones, in ONE flat
-   * list newest first (Story 5.6, FR-24) — `GET /orders/:id/anh`.
+   * list newest first (Story 5.6, FR-24) — `GET /orders/:id/attachments`.
    *
    * The order is the backend's (`createdAt` descending); the screen does not
    * re-sort. Rejects 403 (neither `orders.view_all` nor `orders.view_own`), 404
@@ -702,7 +702,7 @@ export interface OrdersPort {
 
   /**
    * Attach supplementary photos OUTSIDE the transition flow (Story 5.6, FR-24) —
-   * `POST /orders/:id/anh` as `multipart/form-data`. The rows land with all three
+   * `POST /orders/:id/attachments` as `multipart/form-data`. The rows land with all three
    * step coordinates null: they belong to no step.
    *
    * Limits are the backend's: 10 photos per upload, 10 MB each,
@@ -711,7 +711,7 @@ export interface OrdersPort {
   themAnh(orderId: string, files: File[]): Promise<void>;
 
   /**
-   * Delete ONE photo — `DELETE /orders/:id/anh/:attachmentId` (Story 5.6, FR-24).
+   * Delete ONE photo — `DELETE /orders/:id/attachments/:attachmentId` (Story 5.6, FR-24).
    * Hard delete; the trail lives in the audit log.
    *
    * Call this only for items whose `coTheXoa` is true — the backend enforces the
@@ -721,7 +721,7 @@ export interface OrdersPort {
   xoaAnh(orderId: string, attachmentId: string): Promise<void>;
 
   /**
-   * Bytes of ONE photo for preview — `GET /orders/:id/anh/:attachmentId`
+   * Bytes of ONE photo for preview — `GET /orders/:id/attachments/:attachmentId`
    * (Story 5.5 proxy route, AD-3: the bucket is not public, every byte comes
    * through the backend behind JWT).
    *

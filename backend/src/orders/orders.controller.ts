@@ -86,8 +86,8 @@ import { QuoteExportService } from './quote-export.service';
 /**
  * Tạo Đơn + giỏ hàng dòng báo giá (Story 4.1, FR-1). MỌI handler khai
  * `@RequirePermissions(PERM.quotesCreateEdit)` — key ĐÃ TỒN TẠI trong registry 21 key, KHÔNG
- * key mới. NGOẠI LỆ là bốn đường ĐỌC đơn (`GET /orders`, `GET /orders/:id`, `/:id/vong-doi`,
- * `/:id/phien-ban`): gate `@RequireAnyPermissions(ordersViewAll, ordersViewOwn)` — OR, vì
+ * key mới. NGOẠI LỆ là bốn đường ĐỌC đơn (`GET /orders`, `GET /orders/:id`, `/:id/lifecycle`,
+ * `/:id/versions`): gate `@RequireAnyPermissions(ordersViewAll, ordersViewOwn)` — OR, vì
  * preset cấp `view_all` KHÔNG kèm `view_own`, và vì KE_TOAN/THI_CONG/KHO_GIAO xem được đơn mà
  * KHÔNG có `quotes.create_edit` (bắt họ có nó nghĩa là danh sách dẫn tới một cánh cửa khoá).
  * Phạm vi dữ liệu do service thu hẹp — đọc-theo-id đi qua ĐÚNG MỘT đường `findScopedOrThrow`.
@@ -206,7 +206,7 @@ export class OrdersController {
   }
 
   // Route TĨNH khai TRƯỚC `:id` (kỷ luật 3.4 — GET này CÓ collision thật với `GET /orders/:id`).
-  @Get('cho-duyet-chiet-khau')
+  @Get('pending-discount-approvals')
   @RequirePermissions(PERM.discountsApprove)
   @ApiOkResponse({
     type: [DiscountPendingItemDto],
@@ -236,14 +236,14 @@ export class OrdersController {
 
   /**
    * Tra cứu bảo hành theo SĐT khách (Story 5.9, FR-36) — route TĨNH, khai TRƯỚC `@Get(':id')`
-   * theo kỷ luật thứ tự route của file này: đặt sau, `:id` nuốt chuỗi `"tra-cuu-bao-hanh"` và
+   * theo kỷ luật thứ tự route của file này: đặt sau, `:id` nuốt chuỗi `"warranty-lookup"` và
    * endpoint trả 404 "Không tìm thấy đơn hàng" — một lỗi trông như lỗi dữ liệu.
    *
    * Gate = cùng cặp quyền ĐỌC ĐƠN (OR): dữ liệu trả về LÀ nội dung đơn, nên quyền đọc đơn là
    * đúng loại quyền — không đẻ khoá quyền mới cho một đường đọc thứ n. Phạm vi DỮ LIỆU do
    * service thu hẹp theo cùng bộ quyền (AD-4).
    */
-  @Get('tra-cuu-bao-hanh')
+  @Get('warranty-lookup')
   @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiOkResponse({
     type: WarrantyLookupResponseDto,
@@ -258,14 +258,14 @@ export class OrdersController {
     type: ErrorEnvelopeDto,
     description: 'Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).',
   })
-  async traCuuBaoHanh(
+  async warrantyLookup(
     @CurrentAccount() account: AuthenticatedAccount,
     @Query() query: WarrantyLookupQueryDto,
   ): Promise<WarrantyLookupResponseDto> {
     return (await this.orders.traCuuBaoHanh(
       account.id,
       await this.quyenCuaNguoiGoi(account.id),
-      query.sdt,
+      query.phone,
     )) as WarrantyLookupResponseDto;
   }
 
@@ -332,7 +332,7 @@ export class OrdersController {
     )) as OrderResponseDto;
   }
 
-  @Get(':id/vong-doi')
+  @Get(':id/lifecycle')
   @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiOkResponse({
     type: OrderLifecycleResponseDto,
@@ -363,7 +363,7 @@ export class OrdersController {
     };
   }
 
-  @Get(':id/phien-ban')
+  @Get(':id/versions')
   @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiOkResponse({
     type: OrderVersionsResponseDto,
@@ -432,10 +432,10 @@ export class OrdersController {
     )) as OrderResponseDto;
   }
 
-  // Action nghiệp vụ là sub-resource POST (`/orders/{id}/chot` — spine Consistency
+  // Action nghiệp vụ là sub-resource POST (`/orders/{id}/confirm` — spine Consistency
   // Conventions verbatim). Body rỗng, không DTO request; response giữ nguyên OrderResponseDto
   // — chotAt/snapshot chi tiết để màn 5.4/4.7 tự mở khi cần.
-  @Post(':id/chot')
+  @Post(':id/confirm')
   @RequirePermissions(PERM.ordersConfirm)
   // Transition trên resource có sẵn, không tạo resource mới — 201 mặc định của @Post sai
   // ngữ nghĩa (khuôn preview-total).
@@ -480,13 +480,13 @@ export class OrdersController {
   }
 
   // Mở lại đơn đã chốt để sửa (Story 4.6, FR-6) — action nghiệp vụ là sub-resource POST
-  // (khuôn `:id/chot`). Body rỗng, không DTO request; response giữ nguyên OrderResponseDto.
+  // (khuôn `:id/confirm`). Body rỗng, không DTO request; response giữ nguyên OrderResponseDto.
   // Quyền = quotes.create_edit (mở lại chỉ có MỘT tác dụng là cho phép sửa — mọi endpoint sửa
   // đều gate key này; re-chốt vẫn cần orders.confirm).
-  @Post(':id/mo-lai')
+  @Post(':id/reopen')
   @RequirePermissions(PERM.quotesCreateEdit)
   // Transition trên resource có sẵn, không tạo resource mới theo nghĩa REST — 201 mặc định
-  // của @Post sai ngữ nghĩa (khuôn :id/chot).
+  // của @Post sai ngữ nghĩa (khuôn :id/confirm).
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     type: OrderResponseDto,
@@ -511,7 +511,7 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<OrderResponseDto> {
-    // KHÔNG resolve vatRate — mở lại không ghi thuế; re-chốt qua :id/chot mới đóng băng lại.
+    // KHÔNG resolve vatRate — mở lại không ghi thuế; re-chốt qua :id/confirm mới đóng băng lại.
     return (await this.orders.revise(
       account.id,
       id,
@@ -521,15 +521,15 @@ export class OrdersController {
   }
 
   // Áp chiết khấu + gửi duyệt (Story 4.7, FR-18) — action nghiệp vụ là sub-resource POST
-  // (khuôn `:id/chot`). Trong 'choduyet' mọi mutation dòng/meta/scope bị assertMutable chặn.
-  @Post(':id/ap-chiet-khau')
+  // (khuôn `:id/confirm`). Trong 'choduyet' mọi mutation dòng/meta/scope bị assertMutable chặn.
+  @Post(':id/apply-discount')
   @RequirePermissions(PERM.discountsApply)
-  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/chot).
+  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/confirm).
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     type: OrderResponseDto,
     description:
-      "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /duyet-chiet-khau.",
+      "Đơn sau khi áp: status 'choduyet' + `discount.status: 'cho_duyet'` — nội dung đơn đóng băng suốt kỳ duyệt; người có discounts.approve quyết qua /resolve-discount.",
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
@@ -565,15 +565,15 @@ export class OrdersController {
     )) as OrderResponseDto;
   }
 
-  // Duyệt / từ chối chiết khấu (Story 4.7, FR-18) — sub-resource POST (khuôn `:id/chot`).
-  @Post(':id/duyet-chiet-khau')
+  // Duyệt / từ chối chiết khấu (Story 4.7, FR-18) — sub-resource POST (khuôn `:id/confirm`).
+  @Post(':id/resolve-discount')
   @RequirePermissions(PERM.discountsApprove)
-  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/chot).
+  // Transition trên resource có sẵn — 201 mặc định của @Post sai ngữ nghĩa (khuôn :id/confirm).
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     type: OrderResponseDto,
     description:
-      "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /chot); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
+      "Đơn sau khi quyết: đồng ý ⇒ vẫn 'choduyet' + `discount.status: 'dong_y'` (Chốt là hành động riêng qua /confirm); từ chối ⇒ về 'baogia' + `discount.status: 'tu_choi'` kèm resolveNote. Retry CÙNG decision: 200 view hiện tại, không audit thêm (idempotent, NFR-1).",
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
@@ -719,16 +719,16 @@ export class OrdersController {
   }
 
   // Xuất báo giá PDF + ảnh (Story 4.8, FR-21) — action nghiệp vụ là sub-resource POST
-  // (khuôn `:id/chot`). Body rỗng; response CHỈ metadata — bytes tải qua 2 route proxy dưới.
-  @Post(':id/xuat-bao-gia')
+  // (khuôn `:id/confirm`). Body rỗng; response CHỈ metadata — bytes tải qua 2 route proxy dưới.
+  @Post(':id/export-quote')
   @RequirePermissions(PERM.quotesCreateEdit)
   // Render + đè bộ file mới nhất của đơn, không tạo resource định danh mới — 201 mặc định
-  // của @Post sai ngữ nghĩa (khuôn :id/chot).
+  // của @Post sai ngữ nghĩa (khuôn :id/confirm).
   @HttpCode(HttpStatus.OK)
   @ApiOkResponse({
     type: QuoteExportResponseDto,
     description:
-      'Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/bao-gia/anh|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.',
+      'Metadata bộ file MỚI NHẤT của Đơn (AD-3 — bytes ở R2, tải qua GET /orders/{id}/quote/image|pdf). Xuất lần n đè bộ file cũ — MỘT bộ file mỗi Đơn, phản ánh nội dung hiện tại.',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
@@ -747,7 +747,7 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<QuoteExportResponseDto> {
-    // vatRate + cờ tier resolve TƯƠI mỗi request rồi truyền xuống (khuôn :id/chot) —
+    // vatRate + cờ tier resolve TƯƠI mỗi request rồi truyền xuống (khuôn :id/confirm) —
     // dùng khi đơn CHƯA chốt (chưa có snapshot thuế trên version).
     return (await this.quoteExport.exportQuote(
       account.id,
@@ -761,7 +761,7 @@ export class OrdersController {
   // 2 route proxy tải file đã xuất (AD-3): backend stream bytes từ R2 sau JWT + permission
   // guard — KHÔNG presigned URL công khai, không public bucket. Sub-resource của `:id` —
   // không collision static-route.
-  @Get(':id/bao-gia/anh')
+  @Get(':id/quote/image')
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiProduces('image/png')
   @ApiOkResponse({
@@ -793,7 +793,7 @@ export class OrdersController {
     });
   }
 
-  @Get(':id/bao-gia/pdf')
+  @Get(':id/quote/pdf')
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiProduces('application/pdf')
   @ApiOkResponse({
@@ -846,7 +846,7 @@ export class OrdersController {
    * KHÔNG khai `storage` ⇒ multer dùng memory storage mặc định (bytes đi thẳng lên R2, không
    * chạm đĩa máy chủ).
    */
-  @Post(':id/chuyen-trang-thai')
+  @Post(':id/transition')
   @HttpCode(HttpStatus.OK)
   @RequireAnyPermissions(
     PERM.constructionTransition,
@@ -882,7 +882,7 @@ export class OrdersController {
     type: ErrorEnvelopeDto,
     description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
-  async chuyenTrangThai(
+  async transition(
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
     @Body() dto: StatusChangeRequestDto,
@@ -905,14 +905,14 @@ export class OrdersController {
   /**
    * Huỷ đơn KÈM LÝ DO (Story 5.7, FR-9).
    *
-   * Cửa RIÊNG chứ không phải một sự kiện của `chuyen-trang-thai`: lý do là bắt buộc, và
+   * Cửa RIÊNG chứ không phải một sự kiện của `transition`: lý do là bắt buộc, và
    * `huy` bị loại khỏi `SU_KIEN_THU_CONG` chính vì thế. Không nhận ảnh — người dùng chỉ gõ
    * một dòng lý do trong Dialog, kéo multipart vào đây là kéo theo cả picker ảnh và một tầng
    * overlay thứ hai (UX-DR-20).
    *
    * `@HttpCode(OK)` — kỷ luật của file: action nghiệp vụ trên resource CÓ SẴN không trả 201.
    */
-  @Post(':id/huy')
+  @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions(PERM.quotesCreateEdit)
   @ApiOkResponse({
@@ -938,7 +938,7 @@ export class OrdersController {
     type: ErrorEnvelopeDto,
     description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
-  async huyDon(
+  async cancel(
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
     @Body() dto: CancelOrderRequestDto,
@@ -1090,7 +1090,7 @@ export class OrdersController {
    * Gate đọc giống bốn đường đọc đơn (`view_all` OR `view_own`): ảnh của đơn là dữ liệu của
    * đơn, và người xem được đơn thì xem được bằng chứng của nó.
    */
-  @Get(':id/anh')
+  @Get(':id/attachments')
   @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiOkResponse({
     type: AttachmentListResponseDto,
@@ -1127,7 +1127,7 @@ export class OrdersController {
    * ⚠️ Trần cứng multer CỐ Ý cao hơn ngưỡng hợp đồng: đặt bằng nhau thì `MulterError` bắn
    * TRƯỚC handler ⇒ 500 thay vì 400 + `fieldErrors` mà hợp đồng đòi.
    */
-  @Post(':id/anh')
+  @Post(':id/attachments')
   @RequireAnyPermissions(
     PERM.quotesCreateEdit,
     PERM.constructionTransition,
@@ -1183,7 +1183,7 @@ export class OrdersController {
    * quyền chỉnh sửa đơn) — bốn key ở đây đều mở được cửa ngoài, nhưng chỉ luật hàng quyết
    * định ai xoá được ảnh nào.
    */
-  @Delete(':id/anh/:attachmentId')
+  @Delete(':id/attachments/:attachmentId')
   @RequireAnyPermissions(
     PERM.quotesCreateEdit,
     PERM.constructionTransition,
@@ -1220,10 +1220,10 @@ export class OrdersController {
    * backend sau JWT + permission).
    *
    * Gate đọc giống bốn đường đọc đơn (`view_all` OR `view_own`) — ảnh của đơn là dữ liệu của
-   * đơn. ⚠️ Service `findScopedOrThrow` TRƯỚC khi chạm R2: khác `:id/bao-gia/anh` phía trên,
+   * đơn. ⚠️ Service `findScopedOrThrow` TRƯỚC khi chạm R2: khác `:id/quote/image` phía trên,
    * vốn gọi `getExportFile(id, …)` không nhận caller và KHÔNG scope (nợ ghi nhận từ 5.4).
    */
-  @Get(':id/anh/:attachmentId')
+  @Get(':id/attachments/:attachmentId')
   @RequireAnyPermissions(PERM.ordersViewAll, PERM.ordersViewOwn)
   @ApiProduces('image/jpeg', 'image/png', 'image/webp', 'image/heic')
   @ApiOkResponse({

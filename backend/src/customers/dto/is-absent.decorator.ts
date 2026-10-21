@@ -1,7 +1,7 @@
 import { ValidateIf, registerDecorator } from 'class-validator';
 
 /**
- * "Field này CÓ MẶT trong body là sai" — dùng cho field BẤT BIẾN (`sdt` ở `PATCH /customers/:sdt`).
+ * "Field này CÓ MẶT trong body là sai" — dùng cho field BẤT BIẾN (`sdt` ở `PATCH /customers/:phone`).
  *
  * Vì sao không chỉ… bỏ field ra khỏi DTO: `ValidationPipe({ whitelist: true })` **âm thầm
  * cắt** field không khai báo. Client gửi `{"sdt": "+84…"}` sẽ nhận 200 và tin rằng mình vừa đổi

@@ -471,58 +471,60 @@ describe('/orders (e2e)', () => {
         call: () => request(server()).post('/orders/preview-total'),
       },
       {
-        name: 'POST /orders/:id/mo-lai',
-        call: () => request(server()).post(`/orders/${ORDER_ID}/mo-lai`),
+        name: 'POST /orders/:id/reopen',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/reopen`),
       },
       {
-        name: 'POST /orders/:id/ap-chiet-khau',
-        call: () => request(server()).post(`/orders/${ORDER_ID}/ap-chiet-khau`),
-      },
-      {
-        name: 'POST /orders/:id/duyet-chiet-khau',
+        name: 'POST /orders/:id/apply-discount',
         call: () =>
-          request(server()).post(`/orders/${ORDER_ID}/duyet-chiet-khau`),
+          request(server()).post(`/orders/${ORDER_ID}/apply-discount`),
       },
       {
-        name: 'GET /orders/cho-duyet-chiet-khau',
-        call: () => request(server()).get('/orders/cho-duyet-chiet-khau'),
-      },
-      {
-        name: 'POST /orders/:id/xuat-bao-gia',
-        call: () => request(server()).post(`/orders/${ORDER_ID}/xuat-bao-gia`),
-      },
-      {
-        name: 'GET /orders/:id/bao-gia/anh',
-        call: () => request(server()).get(`/orders/${ORDER_ID}/bao-gia/anh`),
-      },
-      {
-        name: 'GET /orders/:id/bao-gia/pdf',
-        call: () => request(server()).get(`/orders/${ORDER_ID}/bao-gia/pdf`),
-      },
-      {
-        name: 'POST /orders/:id/chuyen-trang-thai',
+        name: 'POST /orders/:id/resolve-discount',
         call: () =>
-          request(server()).post(`/orders/${ORDER_ID}/chuyen-trang-thai`),
+          request(server()).post(`/orders/${ORDER_ID}/resolve-discount`),
       },
       {
-        name: 'POST /orders/:id/huy',
-        call: () => request(server()).post(`/orders/${ORDER_ID}/huy`),
+        name: 'GET /orders/pending-discount-approvals',
+        call: () => request(server()).get('/orders/pending-discount-approvals'),
       },
       {
-        name: 'GET /orders/:id/anh/:attachmentId',
-        call: () => request(server()).get(`/orders/${ORDER_ID}/anh/att-1`),
+        name: 'POST /orders/:id/export-quote',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/export-quote`),
       },
       {
-        name: 'GET /orders/:id/anh',
-        call: () => request(server()).get(`/orders/${ORDER_ID}/anh`),
+        name: 'GET /orders/:id/quote/image',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/quote/image`),
       },
       {
-        name: 'POST /orders/:id/anh',
-        call: () => request(server()).post(`/orders/${ORDER_ID}/anh`),
+        name: 'GET /orders/:id/quote/pdf',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/quote/pdf`),
       },
       {
-        name: 'DELETE /orders/:id/anh/:attachmentId',
-        call: () => request(server()).delete(`/orders/${ORDER_ID}/anh/att-1`),
+        name: 'POST /orders/:id/transition',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/transition`),
+      },
+      {
+        name: 'POST /orders/:id/cancel',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/cancel`),
+      },
+      {
+        name: 'GET /orders/:id/attachments/:attachmentId',
+        call: () =>
+          request(server()).get(`/orders/${ORDER_ID}/attachments/att-1`),
+      },
+      {
+        name: 'GET /orders/:id/attachments',
+        call: () => request(server()).get(`/orders/${ORDER_ID}/attachments`),
+      },
+      {
+        name: 'POST /orders/:id/attachments',
+        call: () => request(server()).post(`/orders/${ORDER_ID}/attachments`),
+      },
+      {
+        name: 'DELETE /orders/:id/attachments/:attachmentId',
+        call: () =>
+          request(server()).delete(`/orders/${ORDER_ID}/attachments/att-1`),
       },
     ];
 
@@ -547,6 +549,147 @@ describe('/orders (e2e)', () => {
         expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
       });
     }
+  });
+
+  describe('old Vietnamese routes are gone (renamed with no alias) ⇒ 404 envelope', () => {
+    function prismaCallCount(): number {
+      return Object.values(prismaMock)
+        .flatMap((repo) =>
+          jest.isMockFunction(repo) ? [repo] : Object.values(repo),
+        )
+        .filter((fn) => jest.isMockFunction(fn))
+        .reduce((n, fn) => n + fn.mock.calls.length, 0);
+    }
+
+    // Multi-segment old routes match no handler at all: Nest's own NotFoundException goes
+    // through the global filter, guards never run, nothing reads the DB. A valid token is sent
+    // so a 401 can never be mistaken for the 404 under test.
+    it.each([
+      ['post', 'anh'],
+      ['get', 'anh'],
+      ['get', 'anh/att-1'],
+      ['delete', 'anh/att-1'],
+      ['post', 'ap-chiet-khau'],
+      ['post', 'duyet-chiet-khau'],
+      ['get', 'bao-gia/anh'],
+      ['get', 'bao-gia/pdf'],
+      ['post', 'xuat-bao-gia'],
+      ['post', 'chot'],
+      ['post', 'chuyen-trang-thai'],
+      ['post', 'huy'],
+      ['post', 'mo-lai'],
+      ['get', 'phien-ban'],
+      ['get', 'vong-doi'],
+    ] as const)(
+      '%s /orders/:id/%s ⇒ 404 NOT_FOUND, no permission lookup and no DB call',
+      async (method, suffix) => {
+        givenPermissions(...Object.values(PERM));
+
+        const res = await request(server())
+          [method](`/orders/${ORDER_ID}/${suffix}`)
+          .set('Authorization', `Bearer ${token()}`)
+          .send({});
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(typeof res.body.traceId).toBe('string');
+        expect(accountPermissionsMock.listForAccount).not.toHaveBeenCalled();
+        expect(prismaCallCount()).toBe(0);
+      },
+    );
+
+    // The two old single-segment static routes now fall into `@Get(':id')` (id = the old
+    // segment), so they need a token with read permission to reach the handler; the lookup
+    // finds no such order ⇒ the standard "order not found" 404, not a routing error.
+    it.each(['cho-duyet-chiet-khau', 'tra-cuu-bao-hanh?sdt=0903176968'])(
+      'GET /orders/%s ⇒ 404 NOT_FOUND (swallowed by GET /orders/:id, no order with that id)',
+      async (oldPath) => {
+        givenPermissions(PERM.ordersViewAll, PERM.discountsApprove);
+        orderRepo.findUnique.mockResolvedValue(null);
+
+        const res = await request(server())
+          .get(`/orders/${oldPath}`)
+          .set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(typeof res.body.traceId).toBe('string');
+        // The 404 comes from the scoped order lookup with the old segment as the id — no
+        // alias handler answered first.
+        expect(orderRepo.findFirst).toHaveBeenCalledWith(
+          expect.objectContaining({
+            where: {
+              AND: expect.arrayContaining([{ id: oldPath.split('?')[0] }]),
+            },
+          }),
+        );
+      },
+    );
+
+    it('old query name ?sdt= on GET /orders/warranty-lookup ⇒ 400, fieldErrors point at `phone`', async () => {
+      givenPermissions(PERM.ordersViewAll);
+
+      const res = await request(server())
+        .get('/orders/warranty-lookup?sdt=0903176968')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(
+        (res.body.fieldErrors as { field: string }[]).map((e) => e.field),
+      ).toContain('phone');
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
+
+    // No route matches, so the auth guard never runs: the old URL is gone even for an
+    // anonymous caller, rather than hiding behind a 401.
+    it('old multi-segment route without a token ⇒ still 404, not 401', async () => {
+      const res = await request(server()).post(`/orders/${ORDER_ID}/chot`);
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+  });
+
+  describe('GET /orders/warranty-lookup?phone= — renamed query reaches the lookup', () => {
+    it('raw phone ⇒ 200, the customer is looked up by its E.164 key', async () => {
+      givenPermissions(PERM.ordersViewAll);
+      customerRepo.findUnique.mockResolvedValue(null);
+
+      const res = await request(server())
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0903176968' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        found: false,
+        sdt: '+84903176968',
+        customer: null,
+        orders: [],
+      });
+      expect(customerRepo.findUnique).toHaveBeenCalledWith({
+        where: { sdt: '+84903176968' },
+      });
+    });
+
+    // The pipe accepts any non-empty string; the service's own phone check must report the
+    // same input name the client sent, not the DB column name.
+    it('unparseable phone ⇒ 400 isPhoneNumber on field `phone`, no DB read', async () => {
+      givenPermissions(PERM.ordersViewAll);
+
+      const res = await request(server())
+        .get('/orders/warranty-lookup')
+        .query({ phone: 'abc' })
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors).toEqual([
+        expect.objectContaining({ field: 'phone', code: 'isPhoneNumber' }),
+      ]);
+      expect(customerRepo.findUnique).not.toHaveBeenCalled();
+    });
   });
 
   describe('happy path 4 endpoint (giỏ hàng đầy đủ vòng đời)', () => {
@@ -1257,9 +1400,9 @@ describe('/orders (e2e)', () => {
     });
   });
 
-  describe('POST /orders/:id/chot — Chốt Đơn + snapshot giá (Story 4.5)', () => {
+  describe('POST /orders/:id/confirm — Chốt Đơn + snapshot giá (Story 4.5)', () => {
     it('không token ⇒ 401', async () => {
-      const res = await request(server()).post(`/orders/${ORDER_ID}/chot`);
+      const res = await request(server()).post(`/orders/${ORDER_ID}/confirm`);
 
       expect(res.status).toBe(401);
     });
@@ -1268,7 +1411,7 @@ describe('/orders (e2e)', () => {
       givenPermissions(PERM.quotesCreateEdit);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(403);
@@ -1280,7 +1423,7 @@ describe('/orders (e2e)', () => {
       givenPermissions(PERM.ordersConfirm);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -1333,7 +1476,7 @@ describe('/orders (e2e)', () => {
       ]);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -1365,7 +1508,7 @@ describe('/orders (e2e)', () => {
       });
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -1378,7 +1521,7 @@ describe('/orders (e2e)', () => {
       givenPermissions(PERM.ordersConfirm);
 
       await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       const vet = auditRepo.create.mock.calls
@@ -1400,7 +1543,7 @@ describe('/orders (e2e)', () => {
       });
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -1431,7 +1574,7 @@ describe('/orders (e2e)', () => {
       lineRepo.findMany.mockResolvedValue([DONG_DA_CHOT]);
 
       const retry = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
       const get = await request(server())
         .get(`/orders/${ORDER_ID}`)
@@ -1476,7 +1619,7 @@ describe('/orders (e2e)', () => {
       lineRepo.findMany.mockResolvedValue([]);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/chot`)
+        .post(`/orders/${ORDER_ID}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(400);
@@ -1489,7 +1632,7 @@ describe('/orders (e2e)', () => {
       orderRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
-        .post('/orders/khong-co/chot')
+        .post('/orders/khong-co/confirm')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(404);
@@ -1497,9 +1640,9 @@ describe('/orders (e2e)', () => {
     });
   });
 
-  describe('POST /orders/:id/mo-lai — Mở lại Đơn đã chốt (Story 4.6, FR-6)', () => {
+  describe('POST /orders/:id/reopen — Mở lại Đơn đã chốt (Story 4.6, FR-6)', () => {
     it('không token ⇒ 401', async () => {
-      const res = await request(server()).post(`/orders/${ORDER_ID}/mo-lai`);
+      const res = await request(server()).post(`/orders/${ORDER_ID}/reopen`);
 
       expect(res.status).toBe(401);
     });
@@ -1508,7 +1651,7 @@ describe('/orders (e2e)', () => {
       givenPermissions(PERM.ordersConfirm);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .post(`/orders/${ORDER_ID}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(403);
@@ -1711,7 +1854,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 3. Chốt — snapshot đóng băng 2_450_000 =====
       const chot = await request(server())
-        .post(`/orders/${tao.body.id}/chot`)
+        .post(`/orders/${tao.body.id}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
       expect(chot.status).toBe(200);
       expect(chot.body.status).toBe('dachot');
@@ -1724,7 +1867,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 5. Mở lại — 200 baogia, version MỚI, giá dòng = giá danh mục MỚI (live) =====
       const moLai = await request(server())
-        .post(`/orders/${tao.body.id}/mo-lai`)
+        .post(`/orders/${tao.body.id}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
       expect(moLai.status).toBe(200);
       expect(moLai.body.status).toBe('baogia');
@@ -1757,9 +1900,9 @@ describe('/orders (e2e)', () => {
       expect(suaDong.status).toBe(200);
       expect(suaDong.body.qty).toBe(12);
 
-      // ===== 7. Re-chốt qua /chot HIỆN CÓ — snapshot MỚI lên bản MỚI, bản cũ vẫn CŨ =====
+      // ===== 7. Re-chốt qua /confirm HIỆN CÓ — snapshot MỚI lên bản MỚI, bản cũ vẫn CŨ =====
       const reChot = await request(server())
-        .post(`/orders/${tao.body.id}/chot`)
+        .post(`/orders/${tao.body.id}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
       expect(reChot.status).toBe(200);
       expect(reChot.body.status).toBe('dachot');
@@ -1784,13 +1927,13 @@ describe('/orders (e2e)', () => {
       expect(getSauReChot.body.lineItems[0].amount).toBe(2_600_000 * 12);
     });
 
-    it("retry mo-lai khi đơn ĐANG 'baogia' ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm", async () => {
+    it("retry reopen khi đơn ĐANG 'baogia' ⇒ 200 body y hệt GET, KHÔNG ghi, audit KHÔNG ghi thêm", async () => {
       givenPermissions(PERM.quotesCreateEdit, PERM.ordersViewOwn);
       orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
       lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
 
       const retry = await request(server())
-        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .post(`/orders/${ORDER_ID}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
       const get = await request(server())
         .get(`/orders/${ORDER_ID}`)
@@ -1809,7 +1952,7 @@ describe('/orders (e2e)', () => {
       orderRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
-        .post('/orders/khong-co/mo-lai')
+        .post('/orders/khong-co/reopen')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(404);
@@ -1824,7 +1967,7 @@ describe('/orders (e2e)', () => {
       });
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/mo-lai`)
+        .post(`/orders/${ORDER_ID}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(409);
@@ -1840,7 +1983,7 @@ describe('/orders (e2e)', () => {
     it('403 chéo: áp với CHỈ quotes.create_edit; duyệt + list với CHỈ discounts.apply (nghịch đảo proof)', async () => {
       givenPermissions(PERM.quotesCreateEdit);
       const ap = await request(server())
-        .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/apply-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ amount: 1_000_000 });
       expect(ap.status).toBe(403);
@@ -1848,12 +1991,12 @@ describe('/orders (e2e)', () => {
 
       givenPermissions(PERM.discountsApply);
       const duyet = await request(server())
-        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: true });
       expect(duyet.status).toBe(403);
       const list = await request(server())
-        .get('/orders/cho-duyet-chiet-khau')
+        .get('/orders/pending-discount-approvals')
         .set('Authorization', `Bearer ${token()}`);
       expect(list.status).toBe(403);
       expect(transaction).not.toHaveBeenCalled();
@@ -2093,7 +2236,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 2. Áp vượt subtotal ⇒ 400 fieldErrors amount =====
       const apVuot = await request(server())
-        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .post(`/orders/${tao.body.id}/apply-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ amount: 19_600_001 });
       expect(apVuot.status).toBe(400);
@@ -2103,7 +2246,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 3. Áp 1_000_000 ⇒ 200 choduyet + discount cho_duyet + audit =====
       const ap = await request(server())
-        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .post(`/orders/${tao.body.id}/apply-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ amount: 1_000_000, note: 'Khách quen' });
       expect(ap.status).toBe(200);
@@ -2134,14 +2277,14 @@ describe('/orders (e2e)', () => {
 
       // ===== 5. Áp LẦN HAI khi đang choduyet ⇒ 409 (áp KHÔNG idempotent) =====
       const apLan2 = await request(server())
-        .post(`/orders/${tao.body.id}/ap-chiet-khau`)
+        .post(`/orders/${tao.body.id}/apply-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ amount: 2_000_000 });
       expect(apLan2.status).toBe(409);
 
       // ===== 6. List chờ duyệt — CÓ costs.view: margin đúng số =====
       const listCo = await request(server())
-        .get('/orders/cho-duyet-chiet-khau')
+        .get('/orders/pending-discount-approvals')
         .set('Authorization', `Bearer ${token()}`);
       expect(listCo.status).toBe(200);
       expect(listCo.body).toHaveLength(1);
@@ -2161,7 +2304,7 @@ describe('/orders (e2e)', () => {
       // ===== 7. List — KHÔNG costs.view: margin null toàn bộ, body sạch costPrice (FR-37) =====
       givenPermissions(PERM.quotesCreateEdit, PERM.discountsApprove);
       const listKhong = await request(server())
-        .get('/orders/cho-duyet-chiet-khau')
+        .get('/orders/pending-discount-approvals')
         .set('Authorization', `Bearer ${token()}`);
       expect(listKhong.status).toBe(200);
       expect(listKhong.body[0].lines[0].estimatedMarginPct).toBeNull();
@@ -2176,7 +2319,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 8. Duyệt đồng ý ⇒ 200 VẪN choduyet + discount dong_y + audit =====
       const duyet = await request(server())
-        .post(`/orders/${tao.body.id}/duyet-chiet-khau`)
+        .post(`/orders/${tao.body.id}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: true });
       expect(duyet.status).toBe(200);
@@ -2190,7 +2333,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 9. Chốt từ choduyet ⇒ 200 dachot; version snapshot mang discountAmount =====
       const chot = await request(server())
-        .post(`/orders/${tao.body.id}/chot`)
+        .post(`/orders/${tao.body.id}/confirm`)
         .set('Authorization', `Bearer ${token()}`);
       expect(chot.status).toBe(200);
       expect(chot.body.status).toBe('dachot');
@@ -2218,7 +2361,7 @@ describe('/orders (e2e)', () => {
 
       // ===== 11. Mở lại ⇒ version MỚI KHÔNG mang chiết khấu =====
       const moLai = await request(server())
-        .post(`/orders/${tao.body.id}/mo-lai`)
+        .post(`/orders/${tao.body.id}/reopen`)
         .set('Authorization', `Bearer ${token()}`);
       expect(moLai.status).toBe(200);
       expect(moLai.body.status).toBe('baogia');
@@ -2250,7 +2393,7 @@ describe('/orders (e2e)', () => {
       discountApprovalRepo.findFirst.mockResolvedValue(APPROVAL_PENDING);
 
       const thieuReason = await request(server())
-        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: false });
       expect(thieuReason.status).toBe(400);
@@ -2270,7 +2413,7 @@ describe('/orders (e2e)', () => {
           resolvedAt: new Date('2026-07-17T04:00:00Z'),
         });
       const tuChoi = await request(server())
-        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: false, reason: 'Biên quá mỏng' });
       expect(tuChoi.status).toBe(200);
@@ -2312,7 +2455,7 @@ describe('/orders (e2e)', () => {
       });
 
       const retry = await request(server())
-        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: true });
       const get = await request(server())
@@ -2331,14 +2474,14 @@ describe('/orders (e2e)', () => {
       orderRepo.findUnique.mockResolvedValue(null);
 
       const ap = await request(server())
-        .post('/orders/khong-co/ap-chiet-khau')
+        .post('/orders/khong-co/apply-discount')
         .set('Authorization', `Bearer ${token()}`)
         .send({ amount: 1 });
       expect(ap.status).toBe(404);
       expect(ap.body.code).toBe(ErrorCode.NOT_FOUND);
 
       const duyet = await request(server())
-        .post('/orders/khong-co/duyet-chiet-khau')
+        .post('/orders/khong-co/resolve-discount')
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: true });
       expect(duyet.status).toBe(404);
@@ -2350,7 +2493,7 @@ describe('/orders (e2e)', () => {
 
       for (const body of [{ amount: 0 }, { amount: 100.5 }, {}]) {
         const res = await request(server())
-          .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+          .post(`/orders/${ORDER_ID}/apply-discount`)
           .set('Authorization', `Bearer ${token()}`)
           .send(body);
         expect(res.status).toBe(400);
@@ -2396,12 +2539,12 @@ describe('/orders (e2e)', () => {
       orderVersionRepo.findUnique.mockResolvedValue(VERSION_CHUA_CHOT);
     });
 
-    it('flow: POST xuat-bao-gia 200 metadata → GET anh (PNG magic) → GET pdf (%PDF) → audit QuoteExported', async () => {
+    it('flow: POST export-quote 200 metadata → GET anh (PNG magic) → GET pdf (%PDF) → audit QuoteExported', async () => {
       givenPermissions(PERM.quotesCreateEdit);
       const fileBase = `bao-gia-${ORDER_ID.slice(0, 8)}`;
 
       const xuat = await request(server())
-        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .post(`/orders/${ORDER_ID}/export-quote`)
         .set('Authorization', `Bearer ${token()}`)
         .send();
 
@@ -2422,7 +2565,7 @@ describe('/orders (e2e)', () => {
       expect(new Date(xuat.body.exportedAt as string).getTime()).not.toBeNaN();
 
       const anh = await request(server())
-        .get(`/orders/${ORDER_ID}/bao-gia/anh`)
+        .get(`/orders/${ORDER_ID}/quote/image`)
         .set('Authorization', `Bearer ${token()}`)
         .buffer(true)
         .parse(binaryParser);
@@ -2436,7 +2579,7 @@ describe('/orders (e2e)', () => {
       );
 
       const pdf = await request(server())
-        .get(`/orders/${ORDER_ID}/bao-gia/pdf`)
+        .get(`/orders/${ORDER_ID}/quote/pdf`)
         .set('Authorization', `Bearer ${token()}`)
         .buffer(true)
         .parse(binaryParser);
@@ -2461,24 +2604,24 @@ describe('/orders (e2e)', () => {
       givenPermissions(PERM.quotesCreateEdit);
 
       const anh = await request(server())
-        .get(`/orders/${ORDER_ID}/bao-gia/anh`)
+        .get(`/orders/${ORDER_ID}/quote/image`)
         .set('Authorization', `Bearer ${token()}`);
       expect(anh.status).toBe(404);
       expect(anh.body.code).toBe(ErrorCode.NOT_FOUND);
 
       const pdf = await request(server())
-        .get(`/orders/${ORDER_ID}/bao-gia/pdf`)
+        .get(`/orders/${ORDER_ID}/quote/pdf`)
         .set('Authorization', `Bearer ${token()}`);
       expect(pdf.status).toBe(404);
       expect(pdf.body.code).toBe(ErrorCode.NOT_FOUND);
     });
 
-    it('đơn 0 dòng → POST xuat-bao-gia 400 VALIDATION_ERROR, KHÔNG render/ghi', async () => {
+    it('đơn 0 dòng → POST export-quote 400 VALIDATION_ERROR, KHÔNG render/ghi', async () => {
       givenPermissions(PERM.quotesCreateEdit);
       lineRepo.findMany.mockResolvedValue([]);
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .post(`/orders/${ORDER_ID}/export-quote`)
         .set('Authorization', `Bearer ${token()}`)
         .send();
 
@@ -2493,11 +2636,11 @@ describe('/orders (e2e)', () => {
       const auth = { Authorization: `Bearer ${token()}` };
 
       const lan1 = await request(server())
-        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .post(`/orders/${ORDER_ID}/export-quote`)
         .set(auth)
         .send();
       const lan2 = await request(server())
-        .post(`/orders/${ORDER_ID}/xuat-bao-gia`)
+        .post(`/orders/${ORDER_ID}/export-quote`)
         .set(auth)
         .send();
 
@@ -2898,7 +3041,7 @@ describe('/orders (e2e)', () => {
     });
   });
 
-  describe('GET /orders/:id · /vong-doi · /phien-ban — màn chi tiết (Story 5.4)', () => {
+  describe('GET /orders/:id · /lifecycle · /versions — màn chi tiết (Story 5.4)', () => {
     /** Đơn của NGƯỜI KHÁC: không phải owner, không phải assignee của người gọi. */
     const DON_NGUOI_KHAC = {
       ...DON_BAOGIA,
@@ -2955,7 +3098,7 @@ describe('/orders (e2e)', () => {
     it('không có CẢ HAI orders.view_* ⇒ 403 ở cả ba route (quotes.create_edit KHÔNG còn mở được cửa đọc)', async () => {
       givenPermissions(PERM.quotesCreateEdit);
 
-      for (const duong of ['', '/vong-doi', '/phien-ban']) {
+      for (const duong of ['', '/lifecycle', '/versions']) {
         const res = await request(server())
           .get(`/orders/${ORDER_ID}${duong}`)
           .set('Authorization', `Bearer ${token()}`);
@@ -2963,12 +3106,12 @@ describe('/orders (e2e)', () => {
       }
     });
 
-    it('/vong-doi: đơn thuong_mai (chỉ Thiết bị) KHÔNG có bước thicong; đơn ca_nhan thì có', async () => {
+    it('/lifecycle: đơn thuong_mai (chỉ Thiết bị) KHÔNG có bước thicong; đơn ca_nhan thì có', async () => {
       givenPermissions(PERM.ordersViewOwn);
 
       orderRepo.findUnique.mockResolvedValue(DON_BAOGIA); // thiCong=false, vanChuyen=false
       const thuongMai = await request(server())
-        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .get(`/orders/${ORDER_ID}/lifecycle`)
         .set('Authorization', `Bearer ${token()}`);
 
       orderRepo.findUnique.mockResolvedValue({
@@ -2977,7 +3120,7 @@ describe('/orders (e2e)', () => {
         scopeVanChuyen: true,
       });
       const caNhan = await request(server())
-        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .get(`/orders/${ORDER_ID}/lifecycle`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(thuongMai.status).toBe(200);
@@ -2999,7 +3142,7 @@ describe('/orders (e2e)', () => {
       ).toBe('current');
     });
 
-    it('/phien-ban: mọi bản theo versionNo tăng dần, ĐÚNG MỘT bản laBanHienLuc — và nó theo CON TRỎ, không theo versionNo lớn nhất', async () => {
+    it('/versions: mọi bản theo versionNo tăng dần, ĐÚNG MỘT bản laBanHienLuc — và nó theo CON TRỎ, không theo versionNo lớn nhất', async () => {
       // ⚠️ Fixture cố ý trỏ `currentVersionId` vào bản CŨ hơn. Với fixture "tự nhiên"
       // (con trỏ luôn ở bản mới nhất) thì một cài đặt sai theo `max(versionNo)` vẫn xanh —
       // ca này là chốt chặn của AD-6.
@@ -3055,7 +3198,7 @@ describe('/orders (e2e)', () => {
       ]);
 
       const res = await request(server())
-        .get(`/orders/${ORDER_ID}/phien-ban`)
+        .get(`/orders/${ORDER_ID}/versions`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -3093,7 +3236,7 @@ describe('/orders (e2e)', () => {
       expect(items.map((v) => v.soDong)).toEqual([1, 2]);
     });
 
-    it('/phien-ban: KHÔNG trả tiền/giá (AD-10 — tiền chỉ qua preview-total)', async () => {
+    it('/versions: KHÔNG trả tiền/giá (AD-10 — tiền chỉ qua preview-total)', async () => {
       givenPermissions(PERM.ordersViewOwn);
       orderVersionRepo.findMany.mockResolvedValue([
         {
@@ -3108,7 +3251,7 @@ describe('/orders (e2e)', () => {
       ]);
 
       const res = await request(server())
-        .get(`/orders/${ORDER_ID}/phien-ban`)
+        .get(`/orders/${ORDER_ID}/versions`)
         .set('Authorization', `Bearer ${token()}`);
 
       const raw = JSON.stringify(res.body);
@@ -3132,7 +3275,7 @@ describe('/orders (e2e)', () => {
    *     form đi đường khác body JSON.
    *  3. `StreamableFile` → header thật (`content-type`, `content-disposition`).
    */
-  describe('Story 5.5 — POST /orders/:id/chuyen-trang-thai · GET /orders/:id/anh/:id', () => {
+  describe('Story 5.5 — POST /orders/:id/transition · GET /orders/:id/attachments/:id', () => {
     /** Đơn ở `dacoc`, bật cờ Thi công + Vận chuyển ⇒ hai bước kế cùng mở. */
     const DON_DACOC = {
       ...DON_BAOGIA,
@@ -3167,7 +3310,7 @@ describe('/orders (e2e)', () => {
       files: readonly { name: string; mime: string; size: number }[] = [],
     ): request.Test {
       const req = request(server())
-        .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+        .post(`/orders/${ORDER_ID}/transition`)
         .set('Authorization', `Bearer ${token()}`)
         .field('event', event);
       for (const f of files) {
@@ -3179,7 +3322,9 @@ describe('/orders (e2e)', () => {
       return req;
     }
 
-    function anh(ghiDe: Partial<{ name: string; mime: string; size: number }> = {}) {
+    function anh(
+      ghiDe: Partial<{ name: string; mime: string; size: number }> = {},
+    ) {
       return {
         name: ghiDe.name ?? 'cong-truong.jpg',
         mime: ghiDe.mime ?? 'image/jpeg',
@@ -3241,9 +3386,9 @@ describe('/orders (e2e)', () => {
         ]);
 
         const keys = [...storageMap.keys()];
-        expect(keys.every((k) => k.startsWith(`attachments/${ORDER_ID}/`))).toBe(
-          true,
-        );
+        expect(
+          keys.every((k) => k.startsWith(`attachments/${ORDER_ID}/`)),
+        ).toBe(true);
         expect(keys.some((k) => k.endsWith('.png'))).toBe(true);
       });
     });
@@ -3300,7 +3445,7 @@ describe('/orders (e2e)', () => {
 
       it('thiếu hẳn field `event` ⇒ 400', async () => {
         const res = await request(server())
-          .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+          .post(`/orders/${ORDER_ID}/transition`)
           .set('Authorization', `Bearer ${token()}`)
           .field('khong-phai-event', 'x');
 
@@ -3466,16 +3611,14 @@ describe('/orders (e2e)', () => {
         attachmentRepo.findFirst.mockResolvedValue(HANG_ANH);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/anh/att-1`)
+          .get(`/orders/${ORDER_ID}/attachments/att-1`)
           .set('Authorization', `Bearer ${token()}`)
           .buffer(true)
           .parse(binaryParser);
 
         expect(res.status).toBe(200);
         expect(res.headers['content-type']).toContain('image/jpeg');
-        expect(res.headers['content-disposition']).toContain(
-          'cong-truong.jpg',
-        );
+        expect(res.headers['content-disposition']).toContain('cong-truong.jpg');
         expect((res.body as Buffer).equals(BYTES)).toBe(true);
       });
 
@@ -3490,7 +3633,7 @@ describe('/orders (e2e)', () => {
         attachmentRepo.findFirst.mockResolvedValue(HANG_ANH);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/anh/att-1`)
+          .get(`/orders/${ORDER_ID}/attachments/att-1`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(404);
@@ -3502,7 +3645,7 @@ describe('/orders (e2e)', () => {
         attachmentRepo.findFirst.mockResolvedValue(null);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/anh/att-cua-don-khac`)
+          .get(`/orders/${ORDER_ID}/attachments/att-cua-don-khac`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(404);
@@ -3538,7 +3681,7 @@ describe('/orders (e2e)', () => {
         ]);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/anh`)
+          .get(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
@@ -3555,7 +3698,7 @@ describe('/orders (e2e)', () => {
         attachmentRepo.findFirst.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
 
         const res = await request(server())
-          .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+          .delete(`/orders/${ORDER_ID}/attachments/att-nguoi-khac`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(403);
@@ -3570,7 +3713,7 @@ describe('/orders (e2e)', () => {
         attachmentRepo.delete.mockResolvedValue(HANG_ANH_NGUOI_KHAC);
 
         const res = await request(server())
-          .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+          .delete(`/orders/${ORDER_ID}/attachments/att-nguoi-khac`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(204);
@@ -3583,7 +3726,7 @@ describe('/orders (e2e)', () => {
         attachmentRepo.createMany.mockResolvedValue({ count: 1 });
 
         const res = await request(server())
-          .post(`/orders/${ORDER_ID}/anh`)
+          .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`)
           .attach('anh', Buffer.alloc(1024, 0x41), {
             filename: 'bo-sung.jpg',
@@ -3602,7 +3745,7 @@ describe('/orders (e2e)', () => {
 
       it('POST ảnh sai định dạng ⇒ 400 + fieldErrors giữ được envelope qua multer (AC-10)', async () => {
         const res = await request(server())
-          .post(`/orders/${ORDER_ID}/anh`)
+          .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`)
           .attach('anh', Buffer.alloc(512, 0x41), {
             filename: 'hop-dong.pdf',
@@ -3620,7 +3763,7 @@ describe('/orders (e2e)', () => {
         files: readonly { name: string; mime: string; size: number }[],
       ): request.Test {
         const req = request(server())
-          .post(`/orders/${ORDER_ID}/anh`)
+          .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`);
         for (const f of files) {
           req.attach('anh', Buffer.alloc(f.size, 0x41), {
@@ -3683,7 +3826,7 @@ describe('/orders (e2e)', () => {
 
         it('GET danh sách ⇒ 404, KHÔNG chạm bảng attachments', async () => {
           const res = await request(server())
-            .get(`/orders/${ORDER_ID}/anh`)
+            .get(`/orders/${ORDER_ID}/attachments`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(404);
@@ -3703,7 +3846,7 @@ describe('/orders (e2e)', () => {
 
         it('DELETE ⇒ 404, hàng DB và object R2 còn nguyên', async () => {
           const res = await request(server())
-            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .delete(`/orders/${ORDER_ID}/attachments/att-nguoi-khac`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(404);
@@ -3730,7 +3873,7 @@ describe('/orders (e2e)', () => {
 
         it('204 ⇒ object R2 biến mất thật, đúng objectKey của hàng đã xoá', async () => {
           const res = await request(server())
-            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .delete(`/orders/${ORDER_ID}/attachments/att-nguoi-khac`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(204);
@@ -3744,7 +3887,7 @@ describe('/orders (e2e)', () => {
           deleteObjectStub.mockRejectedValueOnce(new Error('R2 down'));
 
           const res = await request(server())
-            .delete(`/orders/${ORDER_ID}/anh/att-nguoi-khac`)
+            .delete(`/orders/${ORDER_ID}/attachments/att-nguoi-khac`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(204);
@@ -3753,25 +3896,25 @@ describe('/orders (e2e)', () => {
       });
     });
 
-    describe('AC-4/AC-11 — `buocKeTiep` trên response /vong-doi', () => {
+    describe('AC-4/AC-11 — `buocKeTiep` trên response /lifecycle', () => {
       it('trả bước kế lọc theo quyền THẬT của actor', async () => {
         givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .get(`/orders/${ORDER_ID}/lifecycle`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
-        expect(res.body.buocKeTiep.map((b: { event: string }) => b.event)).toEqual(
-          [SU_KIEN.batDauGiao],
-        );
+        expect(
+          res.body.buocKeTiep.map((b: { event: string }) => b.event),
+        ).toEqual([SU_KIEN.batDauGiao]);
       });
 
       it('AC-11: không còn bước nào ⇒ mảng RỖNG, stepper vẫn đủ (client ẩn hẳn nút)', async () => {
         givenPermissions(PERM.ordersViewAll);
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .get(`/orders/${ORDER_ID}/lifecycle`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
@@ -3848,7 +3991,7 @@ describe('/orders (e2e)', () => {
         donDangO('thicong');
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .get(`/orders/${ORDER_ID}/lifecycle`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
@@ -3859,7 +4002,7 @@ describe('/orders (e2e)', () => {
         donDangO('nghiemthu');
 
         const res = await request(server())
-          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .get(`/orders/${ORDER_ID}/lifecycle`)
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
@@ -3951,7 +4094,7 @@ describe('/orders (e2e)', () => {
 
       function vongDoi(): request.Test {
         return request(server())
-          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .get(`/orders/${ORDER_ID}/lifecycle`)
           .set('Authorization', `Bearer ${token()}`);
       }
 
@@ -4225,19 +4368,19 @@ describe('/orders (e2e)', () => {
   });
 
   /**
-   * Story 5.7 — `POST /orders/:id/huy`.
+   * Story 5.7 — `POST /orders/:id/cancel`.
    *
    * ⚠️ MÃ HTTP CHỈ ĐO ĐƯỢC Ở ĐÂY. `ValidationPipe` chạy TRƯỚC service, nên một unit test
    * khẳng định "lý do rỗng ⇒ 400" chỉ khẳng định service ném gì, không khẳng định người dùng
    * nhận gì. Bài học 5.5 HIGH-1: DTO quá chặt ⇒ 400 của pipe thay 409 của nghiệp vụ và unit
    * test không thấy.
    */
-  describe('Story 5.7 — POST /orders/:id/huy (huỷ đơn kèm lý do)', () => {
+  describe('Story 5.7 — POST /orders/:id/cancel (huỷ đơn kèm lý do)', () => {
     const LY_DO = 'Khách đổi ý, không lắp nữa';
 
     function huy(body: unknown = { lyDo: LY_DO }): request.Test {
       return request(server())
-        .post(`/orders/${ORDER_ID}/huy`)
+        .post(`/orders/${ORDER_ID}/cancel`)
         .set('Authorization', `Bearer ${token()}`)
         .send(body as object);
     }
@@ -4323,14 +4466,17 @@ describe('/orders (e2e)', () => {
       ['số, không phải chuỗi', { lyDo: 123 }],
       ['null tường minh', { lyDo: null }],
       ['mảng chuỗi', { lyDo: ['khách', 'đổi ý'] }],
-    ])('%s ⇒ 400 VALIDATION_ERROR — envelope trung tâm, không do controller dựng', async (_ten, body) => {
-      const res = await huy(body);
+    ])(
+      '%s ⇒ 400 VALIDATION_ERROR — envelope trung tâm, không do controller dựng',
+      async (_ten, body) => {
+        const res = await huy(body);
 
-      expect(res.status).toBe(400);
-      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(res.body.fieldErrors?.[0]?.field).toBe('lyDo');
-      expect(orderRepo.updateMany).not.toHaveBeenCalled();
-    });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(res.body.fieldErrors?.[0]?.field).toBe('lyDo');
+        expect(orderRepo.updateMany).not.toHaveBeenCalled();
+      },
+    );
 
     it('lý do 2 ký tự ⇒ lỗi mang code `required` của SERVICE, không phải `minLength` của DTO', async () => {
       // Chốt bằng test cái mà DTO cố ý KHÔNG làm: luật độ dài tối thiểu sống ở service để
@@ -4429,24 +4575,24 @@ describe('/orders (e2e)', () => {
       expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
     });
 
-    it('`/vong-doi` trả `coTheHuy: true` cho đơn `baogia` khi actor có quyền', async () => {
+    it('`/lifecycle` trả `coTheHuy: true` cho đơn `baogia` khi actor có quyền', async () => {
       const res = await request(server())
-        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .get(`/orders/${ORDER_ID}/lifecycle`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
       expect(res.body.coTheHuy).toBe(true);
       // `huy` KHÔNG BAO GIỜ lọt vào lane thủ công — cờ trên là đường DUY NHẤT client biết.
-      expect(res.body.buocKeTiep.map((b: { event: string }) => b.event)).not.toContain(
-        SU_KIEN.huy,
-      );
+      expect(
+        res.body.buocKeTiep.map((b: { event: string }) => b.event),
+      ).not.toContain(SU_KIEN.huy);
     });
 
-    it('`/vong-doi` trả `coTheHuy: false` khi actor thiếu `quotes.create_edit`', async () => {
+    it('`/lifecycle` trả `coTheHuy: false` khi actor thiếu `quotes.create_edit`', async () => {
       givenPermissions(PERM.ordersViewAll);
 
       const res = await request(server())
-        .get(`/orders/${ORDER_ID}/vong-doi`)
+        .get(`/orders/${ORDER_ID}/lifecycle`)
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -4476,7 +4622,7 @@ describe('/orders (e2e)', () => {
    * Lane DUY NHẤT đo được mã HTTP của đường tra cứu: `ValidationPipe` + guard + exception
    * filter chỉ tồn tại ở đây. Đặc biệt là bẫy THỨ TỰ ROUTE — unit test không thấy nó.
    */
-  describe('GET /orders/tra-cuu-bao-hanh (Story 5.9)', () => {
+  describe('GET /orders/warranty-lookup (Story 5.9)', () => {
     const DON_BAO_HANH = {
       ...DON_BAOGIA,
       status: 'nghiem_thu',
@@ -4501,8 +4647,8 @@ describe('/orders (e2e)', () => {
       lineRepo.findMany.mockResolvedValue([DONG_CO_BAO_HANH]);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: '0912 345 678' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0912 345 678' })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -4524,8 +4670,8 @@ describe('/orders (e2e)', () => {
       customerRepo.findUnique.mockResolvedValue(null);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: '0912345678' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0912345678' })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -4537,25 +4683,25 @@ describe('/orders (e2e)', () => {
       });
     });
 
-    it('SĐT rác ⇒ 400 VALIDATION_ERROR kèm fieldErrors trỏ `sdt`', async () => {
+    it('SĐT rác ⇒ 400 VALIDATION_ERROR kèm fieldErrors trỏ `phone`', async () => {
       givenPermissions(PERM.ordersViewAll);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: 'khong-phai-so' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: 'khong-phai-so' })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
     });
 
     it('thiếu CẢ hai quyền đọc đơn ⇒ 403', async () => {
       givenPermissions(PERM.quotesCreateEdit);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: '0912345678' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0912345678' })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(403);
@@ -4570,8 +4716,8 @@ describe('/orders (e2e)', () => {
       danhSachDon([]);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: '0912345678' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0912345678' })
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -4594,11 +4740,11 @@ describe('/orders (e2e)', () => {
       danhSachDon([]);
 
       const res = await request(server())
-        .get('/orders/tra-cuu-bao-hanh')
-        .query({ sdt: '0912345678' })
+        .get('/orders/warranty-lookup')
+        .query({ phone: '0912345678' })
         .set('Authorization', `Bearer ${token()}`);
 
-      // Rơi vào `:id` sẽ cho 404 "Không tìm thấy đơn hàng: tra-cuu-bao-hanh" — một lỗi trông
+      // Rơi vào `:id` sẽ cho 404 "Không tìm thấy đơn hàng: warranty-lookup" — một lỗi trông
       // như lỗi dữ liệu. Hai assert: mã đúng, và đường đọc-theo-id KHÔNG hề được gọi.
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('found');
@@ -4627,18 +4773,18 @@ describe('/orders (e2e)', () => {
             .send({ scopeThiCong: true }),
       ],
       [
-        'POST /:id/chot',
-        () => request(server()).post(`/orders/${ORDER_ID}/chot`),
+        'POST /:id/confirm',
+        () => request(server()).post(`/orders/${ORDER_ID}/confirm`),
       ],
       [
-        'POST /:id/mo-lai',
-        () => request(server()).post(`/orders/${ORDER_ID}/mo-lai`),
+        'POST /:id/reopen',
+        () => request(server()).post(`/orders/${ORDER_ID}/reopen`),
       ],
       [
-        'POST /:id/ap-chiet-khau',
+        'POST /:id/apply-discount',
         () =>
           request(server())
-            .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+            .post(`/orders/${ORDER_ID}/apply-discount`)
             .send({ amount: 1_000_000 }),
       ],
       [
@@ -4663,8 +4809,8 @@ describe('/orders (e2e)', () => {
           ),
       ],
       [
-        'POST /:id/xuat-bao-gia',
-        () => request(server()).post(`/orders/${ORDER_ID}/xuat-bao-gia`),
+        'POST /:id/export-quote',
+        () => request(server()).post(`/orders/${ORDER_ID}/export-quote`),
       ],
     ];
 
@@ -4728,7 +4874,7 @@ describe('/orders (e2e)', () => {
       },
     );
 
-    it('POST /:id/duyet-chiet-khau: có discounts.approve nhưng CHỈ view_own, đơn người khác ⇒ 404', async () => {
+    it('POST /:id/resolve-discount: có discounts.approve nhưng CHỈ view_own, đơn người khác ⇒ 404', async () => {
       givenPermissions(PERM.discountsApprove, PERM.ordersViewOwn);
       orderRepo.findUnique.mockResolvedValue({
         ...DON_BAOGIA,
@@ -4738,7 +4884,7 @@ describe('/orders (e2e)', () => {
       });
 
       const res = await request(server())
-        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .post(`/orders/${ORDER_ID}/resolve-discount`)
         .set('Authorization', `Bearer ${token()}`)
         .send({ approve: true });
 
@@ -4769,8 +4915,8 @@ describe('/orders (e2e)', () => {
         });
       });
 
-      it.each(['anh', 'pdf'])(
-        'Thợ KS A tải /bao-gia/%s của đơn B ⇒ 404 "không tìm thấy đơn", không đọc hồ sơ xuất',
+      it.each(['image', 'pdf'])(
+        'Thợ KS A tải /quote/%s của đơn B ⇒ 404 "không tìm thấy đơn", không đọc hồ sơ xuất',
         async (kind) => {
           givenPermissions(...ROLE_PRESETS.THO_KS);
           orderRepo.findUnique.mockResolvedValue({
@@ -4780,7 +4926,7 @@ describe('/orders (e2e)', () => {
           });
 
           const res = await request(server())
-            .get(`/orders/${ORDER_ID}/bao-gia/${kind}`)
+            .get(`/orders/${ORDER_ID}/quote/${kind}`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(404);
@@ -4791,13 +4937,13 @@ describe('/orders (e2e)', () => {
         },
       );
 
-      it.each(['anh', 'pdf'])(
-        'chủ đơn vẫn tải được /bao-gia/%s',
+      it.each(['image', 'pdf'])(
+        'chủ đơn vẫn tải được /quote/%s',
         async (kind) => {
           givenPermissions(...ROLE_PRESETS.THO_KS);
 
           const res = await request(server())
-            .get(`/orders/${ORDER_ID}/bao-gia/${kind}`)
+            .get(`/orders/${ORDER_ID}/quote/${kind}`)
             .set('Authorization', `Bearer ${token()}`);
 
           expect(res.status).toBe(200);
@@ -4805,11 +4951,11 @@ describe('/orders (e2e)', () => {
       );
     });
 
-    it('GET /cho-duyet-chiet-khau: chỉ view_own ⇒ hàng chờ lọc theo owner/assignee của người gọi', async () => {
+    it('GET /pending-discount-approvals: chỉ view_own ⇒ hàng chờ lọc theo owner/assignee của người gọi', async () => {
       givenPermissions(PERM.discountsApprove, PERM.ordersViewOwn);
 
       const res = await request(server())
-        .get('/orders/cho-duyet-chiet-khau')
+        .get('/orders/pending-discount-approvals')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
@@ -4832,11 +4978,11 @@ describe('/orders (e2e)', () => {
       );
     });
 
-    it('GET /cho-duyet-chiet-khau: view_all ⇒ KHÔNG mệnh đề phạm vi', async () => {
+    it('GET /pending-discount-approvals: view_all ⇒ KHÔNG mệnh đề phạm vi', async () => {
       givenPermissions(...ROLE_PRESETS.QUAN_LY);
 
       const res = await request(server())
-        .get('/orders/cho-duyet-chiet-khau')
+        .get('/orders/pending-discount-approvals')
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);

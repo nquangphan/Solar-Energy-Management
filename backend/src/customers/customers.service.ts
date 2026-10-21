@@ -59,9 +59,10 @@ export class CustomersService {
 
   /**
    * SĐT thô ⇒ E.164, hoặc 400. Đây là CỬA DUY NHẤT mà SĐT đi vào hệ thống — đọc lẫn ghi đều
-   * qua đây, nên `GET /customers/:sdt` với `0912345678` tìm đúng bản ghi đã lưu là `+84912345678`.
+   * qua đây, nên `GET /customers/:phone` với `0912345678` tìm đúng bản ghi đã lưu là `+84912345678`.
+   * `field` names the input the client actually sent: body `sdt` on create, path/query `phone` elsewhere.
    */
-  private normalizeOrThrow(raw: string): string {
+  private normalizeOrThrow(raw: string, field: 'sdt' | 'phone'): string {
     const sdt = normalizeVnPhone(raw);
     if (sdt === null) {
       throw new AppException(
@@ -70,7 +71,7 @@ export class CustomersService {
         'Số điện thoại không hợp lệ.',
         [
           {
-            field: 'sdt',
+            field,
             code: 'isPhoneNumber',
             message:
               'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).',
@@ -185,7 +186,7 @@ export class CustomersService {
   ): Promise<Customer> {
     // Thứ tự có chủ đích: mọi thứ kiểm được TRƯỚC khi chạm DB thì kiểm trước — request hỏng
     // không được để lại dấu vết nào trong DB.
-    const sdt = this.normalizeOrThrow(dto.sdt);
+    const sdt = this.normalizeOrThrow(dto.sdt, 'sdt');
     const source = await this.loadSourceOrThrow(dto.sourceId);
     this.assertSourceNote(source, dto.sourceNote);
     this.assertFieldsMatchType(dto.custType, { ...dto });
@@ -224,7 +225,7 @@ export class CustomersService {
     rawSdt: string,
     dto: UpdateCustomerRequestDto,
   ): Promise<Customer> {
-    const sdt = this.normalizeOrThrow(rawSdt);
+    const sdt = this.normalizeOrThrow(rawSdt, 'phone');
     const before = await this.findOrThrow(sdt);
 
     const custType = effective(dto.custType, before.custType);
@@ -280,7 +281,7 @@ export class CustomersService {
     sdt: string;
     customer: Customer | null;
   }> {
-    const sdt = this.normalizeOrThrow(rawSdt);
+    const sdt = this.normalizeOrThrow(rawSdt, 'phone');
     const customer = await this.prisma.customer.findUnique({ where: { sdt } });
     return { found: customer !== null, sdt, customer };
   }
@@ -336,7 +337,7 @@ export class CustomersService {
   async findOne(rawSdt: string): Promise<Customer> {
     // Tra cứu chạy CÙNG bộ chuẩn hoá với lúc ghi (AD-9) — nếu không, khách lưu bằng
     // `+84912345678` sẽ "không tồn tại" khi tra bằng `0912345678`.
-    return await this.findOrThrow(this.normalizeOrThrow(rawSdt));
+    return await this.findOrThrow(this.normalizeOrThrow(rawSdt, 'phone'));
   }
 
   /**

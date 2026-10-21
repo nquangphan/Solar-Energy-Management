@@ -1,6 +1,6 @@
 // hand-authored — mobile warranty-lookup port (Story 5.9, mirror web
 // web/src/design-system/session/warranty-port.ts). The seam between the
-// Tra cứu bảo hành screen and `GET /orders/tra-cuu-bao-hanh`.
+// Tra cứu bảo hành screen and `GET /orders/warranty-lookup`.
 //
 // THE CLIENT NEVER NORMALISES A PHONE NUMBER (AD-9). The [sdt] that crosses this
 // port OUTBOUND is the RAW string the staffer typed while the customer is on the

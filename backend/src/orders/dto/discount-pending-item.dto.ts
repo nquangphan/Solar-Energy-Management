@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
- * Một item của `GET /orders/cho-duyet-chiet-khau` (Story 4.7, FR-18/FR-37) — mọi con số do
+ * Một item của `GET /orders/pending-discount-approvals` (Story 4.7, FR-18/FR-37) — mọi con số do
  * backend tính bằng hàm pricing duy nhất (AD-16), client CHỈ hiển thị.
  *
  * FENCE `costs.view` (FR-37): `estimatedMarginPct` CHỈ có giá trị khi actor có THÊM

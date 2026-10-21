@@ -41,9 +41,7 @@ export class StockItemsController {
     description:
       'Thiếu CẢ inventory.manage lẫn quotes.create_edit (FORBIDDEN).',
   })
-  async lietKe(
-    @Query() query: StockListQueryDto,
-  ): Promise<StockListResponseDto> {
+  async list(@Query() query: StockListQueryDto): Promise<StockListResponseDto> {
     return (await this.stockItems.lietKeTonKho(query)) as StockListResponseDto;
   }
 }

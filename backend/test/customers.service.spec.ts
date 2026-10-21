@@ -165,6 +165,19 @@ describe('CustomersService', () => {
       expect(err.getStatus()).toBe(400);
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
+
+    // The error names the input the client sent: the path param is `phone`, the create body
+    // field is still `sdt` — one shared normaliser must not leak one name into the other.
+    it('findOne / update with an invalid path phone ⇒ fieldErrors point at `phone`', async () => {
+      const findErr = await bat(service.findOne('abc'));
+      const updateErr = await bat(
+        service.update(ACTOR, 'abc', { custType: CUST_TYPE.thuongMai }),
+      );
+
+      expect(findErr.fieldErrors?.[0].field).toBe('phone');
+      expect(updateErr.fieldErrors?.[0].field).toBe('phone');
+      expect(customerRepo.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('AC-3 — SĐT trùng: P2002 từ DB ⇒ 409, KHÔNG 500', () => {
@@ -500,7 +513,7 @@ describe('CustomersService', () => {
 
         expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
         expect(err.getStatus()).toBe(400);
-        expect(err.fieldErrors?.[0].field).toBe('sdt');
+        expect(err.fieldErrors?.[0].field).toBe('phone');
         expect(customerRepo.findUnique).not.toHaveBeenCalled();
       });
     }

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { ORDER_STATUS_KEYS } from '../domain/order-status';
 
 /**
- * Response của `POST /orders/:id/huy` (Story 5.7).
+ * Response của `POST /orders/:id/cancel` (Story 5.7).
  *
  * KHÔNG trả lại lý do vừa gửi: client đã có nó trong tay, và `GET /orders/:id` mới là đường
  * đọc chính tắc của `cancelReason`.

@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsOptional, IsString, MaxLength, Min } from 'class-validator';
 
 /**
- * Body của `POST /orders/:id/ap-chiet-khau` (Story 4.7, FR-18). Chiết khấu là MỘT khoản
+ * Body của `POST /orders/:id/apply-discount` (Story 4.7, FR-18). Chiết khấu là MỘT khoản
  * integer ĐỒNG trên Đơn (AD-10) — KHÔNG per-line, KHÔNG %: nhập bằng % sẽ buộc quy đổi
  * %→đồng phía client (số học tiền client bị CẤM) hoặc thêm round-point mới ở backend.
  *

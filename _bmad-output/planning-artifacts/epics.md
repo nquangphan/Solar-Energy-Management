@@ -666,6 +666,7 @@ As a lập trình viên client, I want mọi route và tham số API là tiếng
 - **Given** `openapi.json` là build artifact, **When** đổi xong, **Then** sinh lại bằng script có sẵn, drift-guard xanh; KHÔNG sửa tay spec (AD-12).
 - **Given** source-guard/e2e đang so chuỗi route, **When** đổi, **Then** cập nhật theo route mới và thêm một guard: không path nào trong `openapi.json` chứa segment thuộc danh sách route tiếng Việt cũ, có assert chống-guard-rỗng (E-7); mutant thêm lại một route cũ ⇒ ĐỎ.
 - **Given** spine và `project-context.md` còn ví dụ route cũ, **When** story commit, **Then** ví dụ được cập nhật trong cùng commit (G-5).
+- **Tinh chỉnh khi làm story (quyết 2026-10-22, Story 10.1 — ghi vào bảng §4.2 khối "Tinh chỉnh 10.1"):** query `GET /customers/lookup?sdt=` cũng đổi thành `?phone=`; sáu `operationId` tiếng Việt đổi bằng tên method handler controller (`OrdersController_warrantyLookup|transition|cancel`, `StockItemsController_list`, `StockVouchersController_list|findOne`), tên method service giữ; lỗi chuẩn hoá SĐT của service trỏ `fieldErrors[].field = 'phone'` cho input path/query, body `POST /customers` vẫn `sdt` tới 10.2; query cũ `?sdt=` ⇒ 400 `VALIDATION_ERROR` trỏ `phone`; guard `no-vietnamese-api-contract.spec.ts` soi cả tên tham số và `operationId`.
 
 ### Story 10.2: Đổi field DTO tiếng Việt sang tiếng Anh
 As a lập trình viên client, I want mọi field request/response trên contract là tiếng Anh, So that type sinh từ OpenAPI ở web/mobile thống nhất một ngôn ngữ ngay từ đầu.

@@ -9,7 +9,7 @@ import { stripComments } from './util/strip-comments';
  * Story 5.4 nới gate ba route đọc từ `quotes.create_edit` sang
  * `RequireAnyPermissions(orders.view_all, orders.view_own)` — đúng, vì KE_TOAN/THI_CONG/KHO_GIAO
  * thấy đơn trong danh sách nhưng bấm vào thì 403. Nhưng cái gì nới được thì nới tiếp được: quyền
- * `orders.view_*` là quyền XEM, và một mutator (`PATCH /:id`, `chot`, `mo-lai`, `line-items`)
+ * `orders.view_*` là quyền XEM, và một mutator (`PATCH /:id`, `confirm`, `reopen`, `line-items`)
  * lỡ mang gate xem là trao quyền GHI cho mọi người chỉ được phép nhìn.
  *
  * `no-handler-without-require-permissions.spec.ts` chỉ hỏi "có khai quyền không", KHÔNG hỏi
@@ -78,11 +78,11 @@ describe('source-guard: gate `orders.view_*` chỉ mở cho đường ĐỌC (AC
   const ROUTE_DOC_MO_QUYEN_XEM = new Set([
     'Get ',
     'Get :id',
-    'Get :id/vong-doi',
-    'Get :id/phien-ban',
-    'Get :id/anh/:attachmentId',
-    'Get :id/anh',
-    'Get tra-cuu-bao-hanh',
+    'Get :id/lifecycle',
+    'Get :id/versions',
+    'Get :id/attachments/:attachmentId',
+    'Get :id/attachments',
+    'Get warranty-lookup',
   ]);
 
   const routes = docBoRoute();
@@ -96,7 +96,7 @@ describe('source-guard: gate `orders.view_*` chỉ mở cho đường ĐỌC (AC
   });
 
   it('ba route của màn chi tiết mang ĐÚNG gate OR(view_all, view_own) — AC-5', () => {
-    for (const duongDan of [':id', ':id/vong-doi', ':id/phien-ban']) {
+    for (const duongDan of [':id', ':id/lifecycle', ':id/versions']) {
       const route = routes.find((r) => khoaCua(r) === `Get ${duongDan}`);
       expect(route).toBeDefined();
       expect(route?.gateXem).toBe(true);
@@ -111,7 +111,7 @@ describe('source-guard: gate `orders.view_*` chỉ mở cho đường ĐỌC (AC
   });
 
   it('chỉ đúng bộ route đọc đã chốt mới mang gate xem — route đọc khác giữ gate riêng', () => {
-    // `GET /:id/bao-gia/anh` + `/pdf` vẫn là `quotes.create_edit` (luồng người dựng đơn):
+    // `GET /:id/quote/image` + `/pdf` vẫn là `quotes.create_edit` (luồng người dựng đơn):
     // 5.4 chỉ mở màn chi tiết, không mở đường xuất báo giá.
     const mangGateXem = routes.filter((r) => r.gateXem).map(khoaCua);
     expect(new Set(mangGateXem)).toEqual(ROUTE_DOC_MO_QUYEN_XEM);

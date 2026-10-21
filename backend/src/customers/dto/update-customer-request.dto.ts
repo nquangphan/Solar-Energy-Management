@@ -12,7 +12,7 @@ import { CUST_TYPES } from '../domain/customer-type';
 import { IsAbsent } from './is-absent.decorator';
 
 /**
- * Body của `PATCH /customers/:sdt` — chỉ field CÓ MẶT mới được ghi.
+ * Body của `PATCH /customers/:phone` — chỉ field CÓ MẶT mới được ghi.
  *
  * KHÔNG dùng `PartialType(CreateCustomerRequestDto)`: nó gắn `@IsOptional()` lên MỌI field, mà
  * `@IsOptional()` tha cả `null` ⇒ `{"name": null}` lọt xuống cột NOT NULL và vỡ thành 500 (bài
