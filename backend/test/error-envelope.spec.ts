@@ -18,6 +18,7 @@ import request from 'supertest';
 import { CommonModule } from '../src/common/common.module';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * DTO chỉ dùng trong test để kích hoạt ValidationPipe → `fieldErrors`.
@@ -103,7 +104,7 @@ describe('Error envelope thống nhất (e2e, AD-5)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {

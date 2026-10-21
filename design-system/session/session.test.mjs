@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind, assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -108,4 +109,20 @@ test('(f) session logic uses named keys, not raw permission literals (AD-17)', (
   ]) {
     assert.ok(!registryLike.test(code), `${name} must not hardcode a permission literal — use PERM.* (AD-17)`);
   }
+});
+
+// Anti-empty (E-7): the negative scans in this file read these stripped sources; if a stripper/reader
+// ever returned (near-)empty text they would pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('session scans are not blind — stripped production files keep real code', () => {
+  assertCodeNotBlind(
+    [
+      ['me-port.ts', stripTs(mePort)],
+      ['session.ts', stripTs(sessionTs)],
+      ['PermissionsProvider.tsx', stripTs(provider)],
+      ['use-permissions.ts', stripTs(hook)],
+      ['SessionGatingExample.tsx', stripTs(example)],
+    ], 70,
+    'session',
+  );
 });

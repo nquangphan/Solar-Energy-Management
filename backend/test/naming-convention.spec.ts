@@ -35,6 +35,14 @@ describe('naming-convention: file src/ là kebab-case (AC-3)', () => {
     return segments.every((segment) => KEBAB_SEGMENT.test(segment));
   }
 
+  it('guard thực sự quét src/ và nhận ra tên sai (không xanh giả vì tập quét rỗng)', () => {
+    // Đo thật: 166 file .ts. Ngưỡng 120 đỏ khi bộ duyệt thư mục trả rỗng / co lại.
+    expect(collectTsFiles(SRC_DIR).length).toBeGreaterThanOrEqual(120);
+    expect(isKebabFileName('health-response.dto.ts')).toBe(true);
+    expect(isKebabFileName('HealthResponse.dto.ts')).toBe(false);
+    expect(isKebabFileName('health_response.dto.ts')).toBe(false);
+  });
+
   it('không có file src/ nào lệch kebab-case', () => {
     const offenders = collectTsFiles(SRC_DIR)
       .map((file) => file.slice(SRC_DIR.length + 1))

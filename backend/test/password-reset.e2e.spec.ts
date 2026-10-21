@@ -9,6 +9,7 @@ import { AuthService } from '../src/auth/auth.service';
 import { PasswordResetService } from '../src/auth/password-reset.service';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** →
@@ -68,7 +69,7 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
     jwt = moduleRef.get(JwtService);
   });
 

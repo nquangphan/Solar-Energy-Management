@@ -25,6 +25,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,4 +193,11 @@ test('both order ports expose the four Story 5.6 methods', () => {
       `${name} must not carry objectKey — the R2 key does not leave the backend`,
     );
   }
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([...allCode], 8000, 'order-attachments');
 });

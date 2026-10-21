@@ -24,6 +24,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -176,4 +177,11 @@ test('neither port offers a warranty write path', () => {
     }
     assert.ok(port.includes('lookup'), `${name} WarrantyPort must expose lookup()`);
   }
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ...allCode], 150, 'warranty-lookup');
 });

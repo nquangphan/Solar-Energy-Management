@@ -126,7 +126,8 @@ describe('source-guard: chỉ applyTransition ghi Order.status (AD-11)', () => {
 
   it('guard THỰC SỰ quét src/ (không xanh giả vì danh sách file rỗng)', () => {
     const files = collectTsFiles(SRC_DIR);
-    expect(files.length).toBeGreaterThan(0);
+    // Đo thật: 166 file .ts; ngưỡng 120 đỏ khi bộ duyệt thư mục co lại.
+    expect(files.length).toBeGreaterThanOrEqual(120);
     // Và nó thực sự nhìn thấy engine: đúng chỗ được allowlist phải bị máy quét BẮT ĐƯỢC,
     // nếu không thì "0 offender" chỉ có nghĩa là máy quét mù.
     const service = files.find((f) => f.endsWith('orders/orders.service.ts'));

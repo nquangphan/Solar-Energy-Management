@@ -57,7 +57,8 @@ describe('registry ↔ FE stub parity (Epic 1 retro action item, AC-1)', () => {
 
       it('mọi permission literal FE khai đều ∈ registry backend (byte-for-byte)', () => {
         const literals = extractPermissionLiterals(readFileSync(path, 'utf8'));
-        expect(literals.length).toBeGreaterThan(0);
+        // FE stub khai đúng 3 literal; ngưỡng 3 đỏ khi bộ trích trả rỗng/thiếu.
+        expect(literals.length).toBeGreaterThanOrEqual(3);
         for (const literal of literals) {
           expect(PERMISSION_KEYS).toContain(literal);
         }

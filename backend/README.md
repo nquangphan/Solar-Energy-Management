@@ -26,7 +26,7 @@ npm run prisma:generate
 | `npm run lint` / `npm run format` | Lint & format |
 | `npm run format:check` | Kiểm format, không ghi file (dùng cho CI) |
 | `npm test` | Jest — 77 suite (unit + e2e + 9 source-guard kiến trúc + drift-guard OpenAPI/permissions). Hermetic: **không cần Postgres** — 14 suite `*.db.integration.spec.ts` bị loại qua `testPathIgnorePatterns` |
-| `npm run test:db` | Jest — 14 suite `*.db.integration.spec.ts` (**cần Postgres** + `DATABASE_URL`). `npm test` **KHÔNG** chạy nhóm này; unique/FK/idempotency gate chỉ được kiểm ở đây |
+| `npm run test:db` | Jest — 15 suite `*.db.integration.spec.ts` (**cần Postgres** + `DATABASE_URL`; máy dev: container `pns-postgres` cổng 5433). `npm test` **KHÔNG** chạy nhóm này; unique/FK/idempotency gate chỉ được kiểm ở đây |
 | `npm run openapi:gen` | Sinh `openapi/openapi.json` từ code (không cần server/DB) |
 | `npm run permissions:gen` | Sinh `openapi/permissions.json` từ registry quyền (không cần server/DB) |
 | `npm run prisma:migrate:dev` | Tạo/chạy migration (dev — cần Postgres) |

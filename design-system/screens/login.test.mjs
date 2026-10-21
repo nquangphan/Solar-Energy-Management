@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -134,4 +135,11 @@ test('no ad-hoc shadow/gradient/elevation (Viền nét, UX-DR-4)', () => {
   assert.ok(!/drop-shadow/i.test(css), 'login.css must contain 0 drop-shadow');
   assert.ok(!/BoxShadow/.test(mobile), 'login_screen.dart must contain 0 BoxShadow');
   assert.ok(!/elevation/i.test(mobile), 'login_screen.dart must contain 0 elevation');
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ['mobile', stripComments(mobile)]], 800, 'login');
 });

@@ -9,6 +9,7 @@ import { AccountPermissionsService } from '../src/accounts/account-permissions.s
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { RequirePermissions } from '../src/auth/require-permissions.decorator';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** →
@@ -78,7 +79,7 @@ describe('/me + enforcement (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
     jwt = moduleRef.get(JwtService);
   });
 

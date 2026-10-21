@@ -19,6 +19,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -160,7 +161,7 @@ test('the cancel dialog styles add no elevation and no ad-hoc colour', () => {
     assert.ok(!pattern.test(css), `order-detail.css must contain 0 ${pattern.source}`);
   }
   // Every colour on the new rules comes from a token.
-  for (const decl of css.match(/(?:^|\s)color:[^;]+;/g) ?? []) {
+  for (const decl of assertScanned(css.match(/(?:^|\s)color:[^;]+;/g) ?? [], 4, 'order-cancel color declarations')) {
     assert.match(decl, /var\(--/, `order-detail.css colour must come from a token: ${decl.trim()}`);
   }
   assert.ok(!/BoxShadow/.test(mobileCode), 'the mobile detail must contain 0 BoxShadow');
@@ -181,4 +182,11 @@ test('every od-huy-* class used in the markup has a rule in the stylesheet', () 
       `order-detail.css has no rule for .${cls} — the class resolves to nothing`,
     );
   }
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ...allCode], 1500, 'order-cancel');
 });

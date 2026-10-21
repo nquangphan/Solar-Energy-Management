@@ -61,7 +61,8 @@ describe('source-guard: side-effect chỉ qua EventBus port (AD-18)', () => {
   const allFiles = collectTsFiles(SRC_DIR);
 
   it('guard thực sự quét src/ (không xanh giả vì danh sách file rỗng)', () => {
-    expect(allFiles.length).toBeGreaterThan(0);
+    // Đo thật: 166 file .ts; ngưỡng 120 đỏ khi bộ duyệt thư mục co lại.
+    expect(allFiles.length).toBeGreaterThanOrEqual(120);
     // Mọi module sở hữu đều nằm trong tầm quét (nếu không, rule (b) trắng trơn).
     for (const { ownerDir } of OWNED_IDENTIFIERS) {
       expect(allFiles.some((f) => f.startsWith(ownerDir + '/'))).toBe(true);

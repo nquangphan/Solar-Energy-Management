@@ -35,6 +35,17 @@ describe('source-guard: chỉ exception filter dựng envelope (AD-5, AC-2)', ()
     return files;
   }
 
+  it('guard thực sự quét controller + service (không xanh giả vì tập quét rỗng)', () => {
+    const files = collectGuardedFiles(SRC_DIR);
+    // Đo thật: 28 file (12 controller + 16 service). Ngưỡng 20 chừa chỗ cho việc gộp/xoá file
+    // nhưng vẫn đỏ khi bộ trích trả rỗng hoặc chỉ còn một nhúm file.
+    expect(files.length).toBeGreaterThanOrEqual(20);
+    expect(files.some((f) => f.endsWith('.controller.ts'))).toBe(true);
+    expect(files.some((f) => f.endsWith('.service.ts'))).toBe(true);
+    // Chính filter nhắc `traceId` — nếu regex mù thì nó sẽ không thấy thứ nó canh.
+    expect(FORBIDDEN.test('const e = { traceId };')).toBe(true);
+  });
+
   it('không controller/service nào nhắc `traceId` (chỉ filter dựng envelope)', () => {
     const offenders = collectGuardedFiles(SRC_DIR).filter((file) =>
       FORBIDDEN.test(stripToCode(readFileSync(file, 'utf8'))),

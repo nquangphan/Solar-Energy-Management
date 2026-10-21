@@ -7,6 +7,7 @@ import { PrismaService } from '../src/prisma/prisma.service';
 import { AuthService } from '../src/auth/auth.service';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * e2e `/auth/*` — chứng minh WIRING + DTO validation + error envelope cho route mới,
@@ -37,7 +38,7 @@ describe('/auth/* (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterEach(() => {

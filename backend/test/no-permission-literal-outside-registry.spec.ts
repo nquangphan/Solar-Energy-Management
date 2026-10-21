@@ -51,6 +51,15 @@ describe('source-guard: không permission literal ngoài registry (AD-17)', () =
     expect(offenders).toEqual([]);
   });
 
+  it('guard thực sự quét src/ và thấy registry (không xanh giả vì tập quét rỗng)', () => {
+    const files = collectTsFiles(SRC_DIR);
+    // Đo thật: 166 file .ts. Ngưỡng 120 đỏ khi bộ duyệt thư mục co lại.
+    expect(files.length).toBeGreaterThanOrEqual(120);
+    expect(files.some((f) => f.endsWith(REGISTRY_FILE))).toBe(true);
+    // Registry nạp được: 21 key thật (permissions-drift giữ con số chính xác), không phải tập rỗng.
+    expect(PERMISSION_KEYS.length).toBeGreaterThanOrEqual(15);
+  });
+
   it('guard THẬT SỰ bắt được literal (chống guard "chết" luôn xanh)', () => {
     // Sanity: một key registry nhúng thẳng trong code phải bị bắt.
     const sample = `const x = '${PERMISSION_KEYS[0]}';`;

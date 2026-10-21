@@ -21,6 +21,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -391,6 +392,7 @@ test('shareFiles swallows AbortError on user cancel (AC-4 gotcha)', () => {
 // and the composed <Button> intent triggers carry type="button".
 test('non-submit buttons set type="button" so they never submit a parent form', () => {
   // Raw <button> elements: each opening tag (up to its closing `>`) must declare a type.
+  const rawButtons = [];
   for (const [name, src] of [
     ['CartLineRow', cartLineRow],
     ['Dialog', dialog],
@@ -399,8 +401,12 @@ test('non-submit buttons set type="button" so they never submit a parent form', 
   ]) {
     for (const tag of src.match(/<button\b[^>]*>/g) ?? []) {
       assert.ok(/type=/.test(tag), `${name}: raw <button> must set a type (defaults to submit otherwise): ${tag}`);
+      rawButtons.push(tag);
     }
   }
+  // Anti-empty (E-7): measured 5 raw <button> tags across these four files; floor 3 goes red if the
+  // tag regex stops matching (the loop above would then check nothing and stay green).
+  assertScanned(rawButtons, 3, 'raw <button> tags in CartLineRow/Dialog/Sheet/ImageUpload');
   // Composed <Button> triggers that only emit intent must be type="button".
   for (const [name, src] of [
     ['ConfirmDialog', confirmDialog],

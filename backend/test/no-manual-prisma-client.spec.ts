@@ -29,6 +29,16 @@ describe('source-guard: chỉ PrismaService chạm DB (AD-1)', () => {
     return files;
   }
 
+  it('guard thực sự quét src/ (không xanh giả vì tập quét rỗng)', () => {
+    const files = collectTsFiles(SRC_DIR);
+    // Đo thật: 166 file .ts. Ngưỡng 120 chừa chỗ cho việc gộp file nhưng đỏ khi tập quét co lại.
+    expect(files.length).toBeGreaterThanOrEqual(120);
+    expect(files.some((f) => f.endsWith('prisma/prisma.service.ts'))).toBe(
+      true,
+    );
+    expect(FORBIDDEN.test('const c = new PrismaClient({});')).toBe(true);
+  });
+
   it('không có `new PrismaClient(` trong src/ (Prisma là điểm truy cập DUY NHẤT)', () => {
     const offenders = collectTsFiles(SRC_DIR).filter((file) =>
       FORBIDDEN.test(stripToCode(readFileSync(file, 'utf8'))),

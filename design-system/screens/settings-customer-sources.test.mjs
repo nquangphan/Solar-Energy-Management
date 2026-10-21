@@ -16,6 +16,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -373,4 +374,11 @@ test('Tắt goes through ConfirmDialog and states the consequence (AC-7)', () =>
     /onConfirm=\{[\s\S]{0,240}port\.deactivate\(/,
     'port.deactivate must be called from the ConfirmDialog onConfirm',
   );
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css]], 700, 'settings-customer-sources');
 });

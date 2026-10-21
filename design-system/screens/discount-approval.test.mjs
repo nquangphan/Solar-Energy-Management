@@ -16,6 +16,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -224,4 +225,11 @@ test('rejecting without a reason is blocked before the dialog — no port call',
   assert.ok(mobileReject, 'mobile must define _openRejectDialog');
   assert.match(mobileReject, /_reasonCtl\.text\.trim\(\)\.isEmpty/, 'mobile must check the empty reason before opening the dialog');
   assert.ok(!/resolveDiscount/.test(mobileReject), 'mobile _openRejectDialog must not call the port — it only opens the dialog');
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ...allCode], 600, 'discount-approval');
 });

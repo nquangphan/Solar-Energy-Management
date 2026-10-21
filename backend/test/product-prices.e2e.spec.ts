@@ -9,6 +9,7 @@ import { AccountPermissionsService } from '../src/accounts/account-permissions.s
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { FLAG } from '../src/feature-flags/domain/feature-flag-registry';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** →
@@ -164,7 +165,7 @@ describe('/products/:productId/prices + /feature-flags (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     jwt = moduleRef.get(JwtService);
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {

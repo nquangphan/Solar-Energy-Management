@@ -44,7 +44,8 @@ describe('source-guard: KHÔNG BAO GIỜ hard-delete customerSource (AC-3)', () 
   const allFiles = collectTsFiles(SRC_DIR);
 
   it('guard thực sự quét src/ (không xanh giả vì danh sách file rỗng)', () => {
-    expect(allFiles.length).toBeGreaterThan(0);
+    // Đo thật: 166 file .ts; ngưỡng 120 đỏ khi bộ duyệt thư mục co lại.
+    expect(allFiles.length).toBeGreaterThanOrEqual(120);
     // Và file service nguồn khách — nơi cám dỗ nằm — CHẮC CHẮN nằm trong tầm quét.
     expect(
       allFiles.some((f) => f.endsWith('customers/customer-sources.service.ts')),

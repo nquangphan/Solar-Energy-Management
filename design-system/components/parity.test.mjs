@@ -8,6 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind, assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -289,4 +290,15 @@ test('a11y floor values differ per platform BY DESIGN — 44px web ↔ 48dp mobi
   assert.ok(appTokens.includes('tapTargetMin = 48.0'), 'mobile a11y floor must be 48dp (Material)');
   // Both sides document the intentional dp≠px difference so nobody "fixes" it.
   assert.ok(/dp≠px|dp !?=|dp vs px/i.test(a11yCss) || /dp≠px/.test(appTokens), 'the dp≠px rationale must be documented');
+});
+
+// Anti-empty (E-7): the negative scans in this file read these stripped sources; if a stripper/reader
+// ever returned (near-)empty text they would pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('mobile read-only / bottom-nav scans are not blind — stripped code keeps real content', () => {
+  const botnavSrc = readFileSync(resolve(repoRoot, 'mobile/lib/design_system/shell/app_bottom_nav.dart'), 'utf8');
+  assertCodeNotBlind(
+    [['status_chip.dart', stripDart(statusDart)], ['chip.dart', stripDart(chipDart)], ['app_bottom_nav.dart', stripDart(botnavSrc)]], 1000,
+    'parity',
+  );
 });

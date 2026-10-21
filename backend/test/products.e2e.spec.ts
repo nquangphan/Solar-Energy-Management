@@ -8,6 +8,7 @@ import { AccountsService } from '../src/accounts/accounts.service';
 import { AccountPermissionsService } from '../src/accounts/account-permissions.service';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** →
@@ -108,7 +109,7 @@ describe('/products (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     jwt = moduleRef.get(JwtService);
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {

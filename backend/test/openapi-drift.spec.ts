@@ -34,6 +34,16 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect(regenerated).toBe(committed);
   });
 
+  it('spec không rỗng: đủ path và schema (chống drift-guard so hai tài liệu rỗng)', () => {
+    const document = buildOpenApiDocument(app);
+    // Đo thật: 44 path, 72 schema. Ngưỡng chừa chỗ cho việc gộp route nhưng đỏ khi
+    // controller không được quét (spec sinh ra rỗng và file commit cũng rỗng ⇒ byte-for-byte xanh).
+    expect(Object.keys(document.paths).length).toBeGreaterThanOrEqual(30);
+    expect(
+      Object.keys(document.components?.schemas ?? {}).length,
+    ).toBeGreaterThanOrEqual(50);
+  });
+
   it('spec chứa path /health với response schema thật (không path rỗng)', () => {
     const document = buildOpenApiDocument(app);
     expect(document.paths['/health']).toBeDefined();

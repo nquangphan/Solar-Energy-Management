@@ -22,6 +22,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -243,10 +244,17 @@ test('no ad-hoc elevation effects, radius via tokens (Viền nét, UX-DR-4)', ()
     assert.ok(!pattern.test(css), `order-status-change.css must contain 0 ${pattern.source}`);
   }
   assert.ok(!/\b9{3,4}px\b/.test(css), 'order-status-change.css must not hardcode a pill radius (use var(--radius-full))');
-  for (const decl of css.match(/border-radius:[^;]+;/g) ?? []) {
+  for (const decl of assertScanned(css.match(/border-radius:[^;]+;/g) ?? [], 1, 'order-transition border-radius declarations')) {
     assert.match(decl, /var\(--radius/, `radius must come from a token: ${decl}`);
   }
-  for (const decl of css.match(/color:[^;]+;/g) ?? []) {
+  for (const decl of assertScanned(css.match(/color:[^;]+;/g) ?? [], 2, 'order-transition color declarations')) {
     assert.match(decl, /var\(--/, `colour must come from a token: ${decl}`);
   }
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ...allCode], 800, 'order-transition');
 });

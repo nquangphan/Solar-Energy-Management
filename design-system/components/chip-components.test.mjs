@@ -11,6 +11,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind, assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -157,4 +158,11 @@ test('index.ts re-exports the full chip layer', () => {
   for (const name of required) {
     assert.ok(barrel.includes(name), `index.ts must export ${name}`);
   }
+});
+
+// Anti-empty (E-7): the negative scans in this file read these stripped sources; if a stripper/reader
+// ever returned (near-)empty text they would pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('chip read-only scan is not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind(CHIP_CODE, 130, 'chip components');
 });

@@ -36,7 +36,8 @@ describe('source-guard: mọi file nguồn web parse được (TD-1 — web khô
   const files = nguonWeb(WEB_SRC);
 
   it('quét được toàn bộ cây nguồn web — guard rỗng là guard giả PASS', () => {
-    expect(files.length).toBeGreaterThan(20);
+    // Đo thật: 78 file .ts/.tsx; ngưỡng 50 đỏ khi bộ duyệt thư mục co lại.
+    expect(files.length).toBeGreaterThanOrEqual(50);
     expect(files.some((f) => f.endsWith('.tsx'))).toBe(true);
   });
 

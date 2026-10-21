@@ -8,6 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind, assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -123,4 +124,11 @@ test('(f) demo permission set excludes auditRead (Audit gates out) but includes 
   assert.ok(mobSet.includes('AppPerm.ordersViewAll'), 'mobile demo set must include ordersViewAll');
   assert.ok(mobSet.includes('AppPerm.permissionsManage'), 'mobile demo set must include permissionsManage');
   assert.ok(!mobSet.includes('auditRead'), 'mobile demo set must NOT include auditRead (Audit stays gated out)');
+});
+
+// Anti-empty (E-7): the negative scans in this file read these stripped sources; if a stripper/reader
+// ever returned (near-)empty text they would pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('gate scan is not blind — stripped gates keep real code', () => {
+  assertCodeNotBlind([['web Gate', stripTs(webGate)], ['AppGate', stripDart(mobGate)]], 150, 'gating');
 });

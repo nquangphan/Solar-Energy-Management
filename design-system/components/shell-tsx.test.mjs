@@ -7,6 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind, assertScanned } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,4 +75,12 @@ test('Topbar back is a labelled button', () => {
   assert.match(src, /<button[^>]*className="topbar-back"/, 'Topbar back must be a <button className="topbar-back">');
   assert.match(src, /className="topbar-back"[^>]*aria-label=|aria-label=[^>]*className="topbar-back"/,
     'Topbar back <button> must have an aria-label');
+});
+
+// Anti-empty (E-7): the negative scans in this file read these stripped sources; if a stripper/reader
+// ever returned (near-)empty text they would pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('shell scan is not blind — every shell file keeps real code after stripping', () => {
+  assertScanned(FILES, 8, 'shell files');
+  assertCodeNotBlind(Object.entries(sources), 120, 'shell-tsx');
 });

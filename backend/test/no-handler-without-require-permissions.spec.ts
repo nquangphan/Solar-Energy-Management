@@ -140,7 +140,18 @@ describe('source-guard: mọi handler không @Public phải khai quyền (AD-4)'
   const controllers = collectControllerFiles(SRC_DIR);
 
   it('guard thực sự quét controller (không xanh giả vì danh sách rỗng)', () => {
-    expect(controllers.length).toBeGreaterThan(0);
+    // Đo thật: 12 controller, 61 dòng decorator route (@Get/@Post/...). Ngưỡng chừa chỗ cho
+    // việc gộp controller nhưng đỏ khi bộ trích trả rỗng hoặc HTTP_METHOD không khớp dòng nào.
+    expect(controllers.length).toBeGreaterThanOrEqual(8);
+    const soHandler = controllers.reduce(
+      (tong, file) =>
+        tong +
+        stripComments(readFileSync(file, 'utf8'))
+          .split('\n')
+          .filter((line) => HTTP_METHOD.test(line)).length,
+      0,
+    );
+    expect(soHandler).toBeGreaterThanOrEqual(40);
   });
 
   it('mọi handler HTTP trong src/ đều khai @Public / @RequirePermissions / @AuthenticatedOnly', () => {

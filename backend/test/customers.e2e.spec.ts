@@ -9,6 +9,7 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import { ErrorCode } from '../src/common/errors/error-code';
 import { CUST_TYPE } from '../src/customers/domain/customer-type';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * GOTCHA (2.3/2.5): `JwtModule.register` đọc `JWT_ACCESS_SECRET` lúc **import module** ⇒ phải
@@ -137,7 +138,7 @@ describe('/customers (e2e)', () => {
 
     app = moduleRef.createNestApplication();
     jwt = moduleRef.get(JwtService);
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {

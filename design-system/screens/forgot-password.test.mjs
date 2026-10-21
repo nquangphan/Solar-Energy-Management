@@ -9,6 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -192,4 +193,11 @@ test('login screen hands off to the forgot screen via a callback, not an <a href
   // to explain why they are gone. What must not survive is the real thing.
   assert.ok(!/<a\s[^>]*href="#"/.test(stripTsx(loginWeb)), 'LoginScreen.tsx must not keep the dead <a href="#"> link');
   assert.ok(!/onTap:\s*\(\)\s*\{\s*\}/.test(stripDart(loginMobile)), 'login_screen.dart must not keep the empty onTap stub');
+});
+
+// Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader
+// ever returned (near-)empty text they would all pass vacuously. Floors are ~40% of the measured
+// smallest source, so ordinary edits never trip them but a blind stripper does.
+test('scanned sources are not blind — stripped code keeps real content', () => {
+  assertCodeNotBlind([['css', css], ['web', stripTsx(web)], ['mobile', stripDart(mobile)]], 600, 'forgot-password');
 });

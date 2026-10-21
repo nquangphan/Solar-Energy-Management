@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { HealthResponseDto } from '../src/health/dto/health-response.dto';
 import { ErrorCode } from '../src/common/errors/error-code';
+import { initAppOnLoopback } from './util/listen-loopback';
 
 /**
  * e2e cho `GET /health`: 200 + shape mong đợi; chứng minh controller gọi
@@ -31,7 +32,7 @@ describe('GET /health (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {
@@ -83,7 +84,7 @@ describe('GET /health khi DB không kết nối được (e2e)', () => {
       .compile();
 
     app = moduleRef.createNestApplication();
-    await app.init();
+    await initAppOnLoopback(app);
   });
 
   afterAll(async () => {

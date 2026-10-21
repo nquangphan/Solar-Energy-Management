@@ -147,6 +147,11 @@ describe('source-guard: engine transition nhận quyền THẬT của actor (AD-
     expect(offenders).toEqual([]);
   });
 
+  it('guard quét đủ cây src/ (không xanh giả vì tập quét rỗng)', () => {
+    // Đo thật: 166 file .ts; ngưỡng 120 đỏ khi bộ duyệt thư mục co lại.
+    expect(collectTsFiles(SRC_DIR).length).toBeGreaterThanOrEqual(120);
+  });
+
   it('guard THỰC SỰ quét được engine (không xanh giả vì máy quét mù)', () => {
     const service = join(SRC_DIR, 'orders', 'orders.service.ts');
     const giaTri = docGiaTriQuyen(stripToCode(readFileSync(service, 'utf8')));

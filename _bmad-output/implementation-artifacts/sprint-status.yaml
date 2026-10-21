@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-07-19 (retro epic 5 → done; action item E-1..E-9)
+# last_updated: 2026-10-21 (lô chuẩn bị Epic 6: E-2/E-3/E-8 done, E-5/E-9 decided)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-07-19 (retro epic 5 → done; action item E-1..E-9)
+last_updated: 2026-10-21 (lô chuẩn bị Epic 6: E-2/E-3/E-8 done, E-5/E-9 decided)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -122,7 +122,8 @@ action_items:
   - epic: 1
     action: "Đưa web tooling (tsc + bundler + test runtime) vào scope Story 2.1; typecheck toàn bộ .tsx tích luỹ từ Epic 1"
     owner: "Winston (Architect) + Amelia"
-    status: open
+    status: done
+    resolution: "Trả cùng E-2 ngày 2026-10-21 (commit dc35b74)."
   - epic: 1
     action: "Chốt alpha backdrop scrim (.32 hay khác) với chủ design, ghi vào DESIGN.md"
     owner: "Sally (UX)"
@@ -226,28 +227,28 @@ action_items:
   - epic: 5
     action: "E-1: git push + xác nhận MỘT run GitHub Actions XANH + migrate deploy 2 migration treo (add_attachments, add_order_cancel_reason)"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Nợ 2 epic (= D-2). Tiêu chí: gh run list hiện ít nhất một run success, bốn lane pass, prisma migrate deploy áp đủ 7 migration, npm run test:db xanh với schema Epic 5. Epic 6 thêm ≥3 migration tồn kho lên một schema chưa từng deploy ⇒ rủi ro nhân lên nếu hoãn lần ba."
+    status: done
+    resolution: "Nợ 2 epic (= D-2). Tiêu chí: gh run list hiện ít nhất một run success, bốn lane pass, prisma migrate deploy áp đủ 7 migration, npm run test:db xanh với schema Epic 5. Epic 6 thêm ≥3 migration tồn kho lên một schema chưa từng deploy ⇒ rủi ro nhân lên nếu hoãn lần ba. || 2026-10-21: Postgres local riêng (container pns-postgres, cổng 5433); migrate deploy đủ 17 migration, test:db 15 suite/122 xanh; push main. Đại Ca TẮT CI tự chạy (ci.yml chỉ còn workflow_dispatch) ⇒ tiêu chí "run Actions xanh" bỏ; cổng thay thế = 5 lane chạy trên máy trước mỗi push. Lockfile backend+web nay được track (git add -f vì .gitignore cục bộ ignore package-lock.json)."
   - epic: 5
     action: "E-2: Quyết TD-1 lần 5 — mặc định tuyên bố trước lần này là LẬT (dựng story app-scaffold web: tsc + bundler + JSDOM test làm story đầu Epic 6)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Khác 4 lần trước: đã có bằng chứng thiệt hại (5.4 parse, 5.6 CSS), cả hai chỉ review thủ công bắt được. Epic 6 thêm ≥3 màn web (Tồn kho, Phiếu kho, Xuất kho). Im lặng ⇒ mặc định thành quyết định. Muốn GIỮ text-guard-only thì phải nói ra."
+    status: done
+    resolution: "Khác 4 lần trước: đã có bằng chứng thiệt hại (5.4 parse, 5.6 CSS), cả hai chỉ review thủ công bắt được. Epic 6 thêm ≥3 màn web (Tồn kho, Phiếu kho, Xuất kho). Im lặng ⇒ mặc định thành quyết định. Muốn GIỮ text-guard-only thì phải nói ra. || 2026-10-21: LẬT theo mặc định (Đại Ca im lặng + cho làm lô chuẩn bị). web/ có tsc + vite + vitest/jsdom; smoke render 13 màn + guard className↔CSS; sửa 6 lỗi kiểu + 3 bug thật (Skeleton sai prop, nút lồng nút 2 Topbar, .micro/.muted). Commit dc35b74."
   - epic: 5
     action: "E-3: Giao chủ cho TD-31 — đưa đường GHI đơn vào phạm vi (update/confirm/revise/applyDiscount/addLine/updateLine/removeLine đang dùng findOrThrow trần)"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Lỗ uỷ quyền kế thừa Epic 4, ba story Epic 5 nhắc nhưng không story nào sở hữu. THO_KS (quotes.create_edit + orders.confirm + discounts.apply, chỉ orders.view_own) KHÔNG XEM được đơn người khác nhưng SỬA/CHỐT được nếu biết id. Tiêu chí: source-guard không đường ghi nào dùng findOrThrow trần; mutation gỡ phạm vi ⇒ ĐỎ; test THO_KS A không PATCH được đơn của THO_KS B. Epic 6 mở thêm đường ghi tác động tồn kho THẬT ⇒ nâng mức."
+    status: done
+    resolution: "Lỗ uỷ quyền kế thừa Epic 4, ba story Epic 5 nhắc nhưng không story nào sở hữu. THO_KS (quotes.create_edit + orders.confirm + discounts.apply, chỉ orders.view_own) KHÔNG XEM được đơn người khác nhưng SỬA/CHỐT được nếu biết id. Tiêu chí: source-guard không đường ghi nào dùng findOrThrow trần; mutation gỡ phạm vi ⇒ ĐỎ; test THO_KS A không PATCH được đơn của THO_KS B. Epic 6 mở thêm đường ghi tác động tồn kho THẬT ⇒ nâng mức. || 2026-10-21: 8 đường ghi + exportQuote + getExportFile (ảnh/pdf báo giá) + hàng chờ duyệt chiết khấu đi qua mệnh đề phạm vi; 404 cùng thông điệp. Source-guard no-unscoped-order-write (chống-rỗng). 21/21 mutant đỏ. Commit 9bd41ba."
   - epic: 5
     action: "E-4: Dập TD-28 — serialize/cô lập flake backend trước khi CI thành cổng bắt buộc"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "= D-5, trôi sang epic thứ hai. Tiêu chí: full parallel 5 lần liên tiếp ⇒ 0 flake, hoặc nhóm chạy serial có ghi lý do."
+    status: done
+    resolution: "= D-5, trôi sang epic thứ hai. Tiêu chí: full parallel 5 lần liên tiếp ⇒ 0 flake, hoặc nhóm chạy serial có ghi lý do. || 2026-10-21: Nguyên nhân gốc: supertest listen(0) bind mọi địa chỉ, tiến trình khác (VS Code) nghe riêng 127.0.0.1 cùng cổng ⇒ request rơi nhầm (401/404/socket hang up). Sửa: test/util/listen-loopback.ts bind 127.0.0.1 một lần mỗi file (12 file). npx jest song song 5/5 lần xanh 1479/1479."
   - epic: 5
     action: "E-5: Quyết luật audit/event — StatusChanged + event nghiệp vụ = 2 dòng audit mỗi transition (TD-34)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Hệ quả có chủ đích của Story 5.1 (StatusChanged publish THÊM, không thay, vì Epic 9 FCM cần payload amount/note/approved/reason). Mặc định tuyên bố trước: GIỮ 2 dòng, Epic 9 lọc theo loại event khi gửi FCM (không đẩy StatusChanged). Phải chốt trước Epic 9; Epic 6 thêm StockIssued/StockOutBlocked nên chốt sớm tốt hơn."
+    status: decided
+    resolution: "Hệ quả có chủ đích của Story 5.1 (StatusChanged publish THÊM, không thay, vì Epic 9 FCM cần payload amount/note/approved/reason). Mặc định tuyên bố trước: GIỮ 2 dòng, Epic 9 lọc theo loại event khi gửi FCM (không đẩy StatusChanged). Phải chốt trước Epic 9; Epic 6 thêm StockIssued/StockOutBlocked nên chốt sớm tốt hơn. || 2026-10-21: Mặc định tuyên bố trước thành quyết định: GIỮ 2 dòng audit mỗi transition; Epic 9 lọc theo loại event khi gửi FCM, không đẩy StatusChanged."
   - epic: 5
     action: "E-6: Đồng bộ sổ sách sprint-status với code (đóng D-3, D-8, TD-25, TD-26)"
     owner: "Amelia (Dev)"
@@ -256,15 +257,15 @@ action_items:
   - epic: 5
     action: "E-7: Luật guard — mọi source-guard phải có test chống-guard-rỗng"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Căn cứ: 5.7 phát hiện máy trích thân hàm đọc nhầm kiểu trả về Promise<{...}> ⇒ guard quét một chuỗi 20 ký tự và LUÔN XANH; 5.9 phát hiện stripToCode xoá nguyên string literal ⇒ guard soi route path quét tập rỗng và LUÔN XANH. Tiêu chí: mỗi file guard có ít nhất một assert kiểu expect(hits.length).toBeGreaterThan(0) hoặc meta-test. Áp cho guard đã có lẫn guard mới."
+    status: done
+    resolution: "Căn cứ: 5.7 phát hiện máy trích thân hàm đọc nhầm kiểu trả về Promise<{...}> ⇒ guard quét một chuỗi 20 ký tự và LUÔN XANH; 5.9 phát hiện stripToCode xoá nguyên string literal ⇒ guard soi route path quét tập rỗng và LUÔN XANH. Tiêu chí: mỗi file guard có ít nhất một assert kiểu expect(hits.length).toBeGreaterThan(0) hoặc meta-test. Áp cho guard đã có lẫn guard mới. || 2026-10-21: Assert tập-được-quét ở 12 guard backend + design-system/lib/assert-scanned.mjs dùng ở 19 file; 8 mutant làm rỗng bộ trích đều đỏ."
   - epic: 5
     action: "E-8: Bổ sung .micro/.micro.muted vào tokens.css copy nguyên văn từ mockups/all-screens.html (TD-32) + sửa RenderFlex tràn 12px hàng Trạng thái ở màn chi tiết mobile (TD-33)"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Xác minh 2026-07-19: .micro và .muted KHÔNG được định nghĩa ở bất kỳ file CSS nào trong web/ nhưng được gọi ở 9 file .tsx; guard của 5.6 chỉ phủ AttachmentGallery. TD-33 là lỗi hiển thị thật trên đơn đang thi công, suite 5.4 không bắt vì fixture dùng nhãn ngắn 'baogia'. Tiêu chí: mọi className trong web/src có rule CSS thật; widget test mobile dùng fixture nhãn DÀI NHẤT."
+    status: done
+    resolution: "Xác minh 2026-07-19: .micro và .muted KHÔNG được định nghĩa ở bất kỳ file CSS nào trong web/ nhưng được gọi ở 9 file .tsx; guard của 5.6 chỉ phủ AttachmentGallery. TD-33 là lỗi hiển thị thật trên đơn đang thi công, suite 5.4 không bắt vì fixture dùng nhãn ngắn 'baogia'. Tiêu chí: mọi className trong web/src có rule CSS thật; widget test mobile dùng fixture nhãn DÀI NHẤT. || 2026-10-21: tokens.css có .micro/.micro.muted/.muted (sinh từ build-tokens.mjs); guard css-class-coverage. TD-33: chip trạng thái mobile bọc Expanded>FittedBox, 3 widget test nhãn dài nhất 320/360px. Commit dc35b74 + 15f3532."
   - epic: 5
     action: "E-9: Trả 7 câu hỏi sản phẩm — 4 tồn từ Epic 4 (logo, SĐT sales trên PDF, link chia sẻ công khai) + 3 mới của 5.9 (ngưỡng sắp-hết 90 ngày, preset nào được orders.view_all cho vai trực tổng đài, dòng không bảo hành ẩn hay mờ)"
     owner: "Đại Ca (Project Lead)"
-    status: open
-    resolution: "Mặc định tuyên bố trước: để trống logo/SĐT ở Phase 1; giữ hoãn link công khai; giữ ngưỡng 90 ngày; cấp orders.view_all cho KE_TOAN (preset gần vai trực tổng đài nhất — hiện nhân viên không owner/assignee tra bảo hành sẽ ra RỖNG); bỏ hẳn dòng không bảo hành. Im lặng ⇒ mặc định thành quyết định."
+    status: decided
+    resolution: "Mặc định tuyên bố trước: để trống logo/SĐT ở Phase 1; giữ hoãn link công khai; giữ ngưỡng 90 ngày; cấp orders.view_all cho KE_TOAN (preset gần vai trực tổng đài nhất — hiện nhân viên không owner/assignee tra bảo hành sẽ ra RỖNG); bỏ hẳn dòng không bảo hành. Im lặng ⇒ mặc định thành quyết định. || 2026-10-21: Mặc định thành quyết định. Code đã khớp sẵn (KE_TOAN có orders.view_all từ 2.4; tra cứu BH bỏ dòng không BH; ngưỡng 90 ngày) — thêm test DB khoá lại. Logo/SĐT PDF trống, link công khai hoãn. Lưu ý vận hành: account KE_TOAN cũ bị bỏ tick view_all phải tick lại tay."
