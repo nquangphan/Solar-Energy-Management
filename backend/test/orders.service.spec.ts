@@ -1163,8 +1163,8 @@ describe('OrdersService', () => {
         ...DON_BAOGIA,
         kWp: null,
         validityNote: null,
-    cancelReason: null,
-    cancelledAt: null,
+        cancelReason: null,
+        cancelledAt: null,
       });
 
       const view = await service.update(
@@ -3676,6 +3676,135 @@ describe('OrdersService', () => {
   });
 
   /** Task 6: mutator nội dung cũng phải lấy CÙNG khoá — khoá một phía là false-green. */
+  describe('autoTransitionInTx — transition inside the caller tx (payment recording)', () => {
+    const DON_DA_CHOT: Order = { ...DON_BAOGIA, status: 'dachot' };
+    const OCCURRED_AT = new Date('2026-10-21T03:00:00Z');
+    /**
+     * The caller commits its own writes after catching a refusal, so a refusal must leave the
+     * tx untouched: no write method of ANY repo on the tx client, no stock write.
+     */
+    function expectNoWriteOnTx(): void {
+      const writes = Object.values(txMock).flatMap((repo) =>
+        typeof repo === 'object' && repo !== null
+          ? Object.entries(repo as Record<string, unknown>)
+              .filter(([name]) =>
+                /^(create|createMany|update|updateMany|upsert|delete|deleteMany)$/.test(
+                  name,
+                ),
+              )
+              .map(([, fn]) => fn as jest.Mock)
+          : [],
+      );
+      // Not blind: the tx client does expose write methods to watch.
+      expect(writes.length).toBeGreaterThan(0);
+      for (const write of writes) expect(write).not.toHaveBeenCalled();
+      expect(stockVouchers.reserveForOrderInTx).not.toHaveBeenCalled();
+      expect(stockVouchers.releaseHeldForOrderInTx).not.toHaveBeenCalled();
+    }
+
+    const input = (actorPermissions: ReadonlySet<string> = TOAN_QUYEN) => ({
+      orderId: DON_DA_CHOT.id,
+      event: SU_KIEN.duCoc,
+      actorAccountId: ACTOR,
+      actorPermissions,
+      occurredAt: OCCURRED_AT,
+    });
+
+    it('valid edge: writes through the engine on the caller tx and returns an UNPUBLISHED StatusChanged', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      const event = await service.autoTransitionInTx(
+        txMock as unknown as Parameters<typeof service.autoTransitionInTx>[0],
+        input(),
+      );
+
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_DA_CHOT.id, status: 'dachot' },
+        data: { status: 'dacoc' },
+      });
+      expect(event).toBeInstanceOf(StatusChanged);
+      expect(event?.before.status).toBe('dachot');
+      expect(event?.after.status).toBe('dacoc');
+      expect(event?.occurredAt).toBe(OCCURRED_AT);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('order already at the target: null, nothing written, nothing locked again', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dacoc',
+      });
+
+      const event = await service.autoTransitionInTx(
+        txMock as unknown as Parameters<typeof service.autoTransitionInTx>[0],
+        input(),
+      );
+
+      expect(event).toBeNull();
+      expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+      expect(queryRaw).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('missing permission: 403 thrown before any write', async () => {
+      orderRepo.findUnique.mockResolvedValue(DON_DA_CHOT);
+
+      const err = await bat(
+        service.autoTransitionInTx(
+          txMock as unknown as Parameters<typeof service.autoTransitionInTx>[0],
+          input(new Set()),
+        ),
+      );
+
+      expect(err.getStatus()).toBe(403);
+      expectNoWriteOnTx();
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('edge not in the table: 409 thrown before any write', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'thicong',
+      });
+
+      const err = await bat(
+        service.autoTransitionInTx(
+          txMock as unknown as Parameters<typeof service.autoTransitionInTx>[0],
+          input(),
+        ),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expectNoWriteOnTx();
+    });
+
+    it('close with unissued tracked stock: 409 thrown after the read-only stock check, before any write', async () => {
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'nghiemthu',
+        scopeThiCong: true,
+      });
+      lineRepo.findMany.mockResolvedValue([{ productId: 'prod-pin', qty: 2 }]);
+      stockVouchers.lockTrackedProductsInTx.mockResolvedValue(
+        new Set(['prod-pin']),
+      );
+
+      const err = await bat(
+        service.autoTransitionInTx(
+          txMock as unknown as Parameters<typeof service.autoTransitionInTx>[0],
+          { ...input(), event: SU_KIEN.hoanThanh },
+        ),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(
+        'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
+      );
+      expectNoWriteOnTx();
+    });
+  });
+
   describe('mutator nội dung — khoá dòng đơn + đọc lại status TRONG tx', () => {
     it.each([
       [

@@ -56,9 +56,34 @@ describe('PaymentSchedulesService', () => {
     },
   ];
 
+  /** Schedule rows as the post-commit view read returns them (ids + payments per installment). */
+  const stored = (
+    list: readonly (typeof RESOLVED_20_70_10)[number][],
+    paymentsBySeq: Record<number, unknown[]> = {},
+  ) => ({
+    id: SCHEDULE_ID,
+    updatedAt: UPDATED_AT,
+    installments: list.map((i) => ({
+      id: `inst-${i.seq}`,
+      ...i,
+      payments: paymentsBySeq[i.seq] ?? [],
+    })),
+  });
+  const viewOf = (list: readonly (typeof RESOLVED_20_70_10)[number][]) =>
+    list.map((i) => ({
+      id: `inst-${i.seq}`,
+      ...i,
+      paidAmount: 0,
+      remainingAmount: i.amount,
+      status: 'unpaid',
+      payments: [],
+    }));
+
   let log: string[];
   let existing: unknown;
   let fresh: unknown;
+  let viewRows: unknown;
+  let paymentCount: number;
   let commitFails: boolean;
 
   const getScopedTotal = jest.fn();
@@ -69,6 +94,7 @@ describe('PaymentSchedulesService', () => {
   const upsert = jest.fn();
   const deleteMany = jest.fn();
   const createMany = jest.fn();
+  const txPaymentCount = jest.fn();
   const scheduleFindUnique = jest.fn();
   const transaction = jest.fn();
 
@@ -77,6 +103,7 @@ describe('PaymentSchedulesService', () => {
     order: { findUnique: txOrderFindUnique },
     paymentSchedule: { findUnique: txScheduleFindUnique, upsert },
     installment: { deleteMany, createMany },
+    payment: { count: txPaymentCount },
   };
 
   const service = new PaymentSchedulesService(
@@ -100,12 +127,18 @@ describe('PaymentSchedulesService', () => {
     log = [];
     existing = null;
     fresh = { status: 'dachot', currentVersionId: VERSION_ID };
+    viewRows = stored(RESOLVED_20_70_10);
+    paymentCount = 0;
     commitFails = false;
     getScopedTotal.mockImplementation(
       track('scope', () => ({ order: ORDER, total: TOTAL })),
     );
     queryRaw.mockImplementation(track('lock', () => []));
     txOrderFindUnique.mockImplementation(track('recheck', () => fresh));
+    txPaymentCount.mockImplementation(
+      track('paymentCount', () => paymentCount),
+    );
+    scheduleFindUnique.mockImplementation(track('view', () => viewRows));
     txScheduleFindUnique.mockImplementation(
       track('readSchedule', () => existing),
     );
@@ -138,7 +171,7 @@ describe('PaymentSchedulesService', () => {
   const replace = (inputs: InstallmentInput[] = INPUT_20_70_10) =>
     service.replace(ACTOR, PERMS, ORDER_ID, inputs, 8, false);
 
-  it('first save: scope → tx[lock FIRST → recheck → read → upsert → delete → insert] → commit → publish once', async () => {
+  it('first save: scope → tx[lock FIRST → recheck → payments? → read → upsert → delete → insert] → commit → publish once → view', async () => {
     const view = await replace();
 
     expect(log).toEqual([
@@ -146,13 +179,18 @@ describe('PaymentSchedulesService', () => {
       'tx:begin',
       'lock',
       'recheck',
+      'paymentCount',
       'readSchedule',
       'upsert',
       'deleteMany',
       'createMany',
       'tx:commit',
       'publish',
+      'view',
     ]);
+    expect(txPaymentCount).toHaveBeenCalledWith({
+      where: { orderId: ORDER_ID },
+    });
     expect(getScopedTotal).toHaveBeenCalledWith(
       ACTOR,
       PERMS,
@@ -192,10 +230,41 @@ describe('PaymentSchedulesService', () => {
       scheduledTotal: TOTAL,
       difference: 0,
       totalMatches: true,
-      installments: RESOLVED_20_70_10,
+      paidTotal: 0,
+      remainingTotal: TOTAL,
+      paidPercent: 0,
+      paymentStatus: 'unpaid',
+      recordable: true,
+      installments: viewOf(RESOLVED_20_70_10),
       updatedAt: UPDATED_AT,
     });
   });
+
+  it.each([
+    ['a changed list', INPUT_20_70_10, null],
+    ['the identical list', INPUT_20_70_10, RESOLVED_20_70_10],
+  ])(
+    'order with a payment: %s ⇒ 409 under the lock, nothing written, nothing published',
+    async (_l, inputs, current) => {
+      paymentCount = 1;
+      existing = current === null ? null : stored(current);
+      const err = await caught(replace(inputs));
+      expect(err.getStatus()).toBe(409);
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(err.message).toBe('Đơn đã có thanh toán — không sửa lịch được.');
+      expect(log).toEqual([
+        'scope',
+        'tx:begin',
+        'lock',
+        'recheck',
+        'paymentCount',
+      ]);
+      expect(upsert).not.toHaveBeenCalled();
+      expect(deleteMany).not.toHaveBeenCalled();
+      expect(createMany).not.toHaveBeenCalled();
+      expect(publish).not.toHaveBeenCalled();
+    },
+  );
 
   it('replacing an existing schedule carries the old list as `before`', async () => {
     const old = [
@@ -235,6 +304,7 @@ describe('PaymentSchedulesService', () => {
   });
 
   it('a mismatching schedule is saved with a warning, not rejected', async () => {
+    viewRows = stored(RESOLVED_20_70_10.slice(0, 2));
     const view = await replace([
       { percent: 20, conditionNote: 'a' },
       { percent: 70, conditionNote: 'b' },
@@ -326,9 +396,9 @@ describe('PaymentSchedulesService', () => {
     const get = () => service.get(ACTOR, PERMS, ORDER_ID, 8, false);
 
     it('scoped read first; not configured ⇒ configured=false, empty list, difference = total', async () => {
-      scheduleFindUnique.mockImplementation(track('readSchedule', () => null));
+      viewRows = null;
       const view = await get();
-      expect(log).toEqual(['scope', 'readSchedule']);
+      expect(log).toEqual(['scope', 'view']);
       expect(view).toEqual({
         orderId: ORDER_ID,
         configured: false,
@@ -337,17 +407,98 @@ describe('PaymentSchedulesService', () => {
         scheduledTotal: 0,
         difference: TOTAL,
         totalMatches: false,
+        paidTotal: 0,
+        remainingTotal: TOTAL,
+        paidPercent: 0,
+        paymentStatus: 'unpaid',
+        recordable: true,
         installments: [],
         updatedAt: null,
       });
     });
 
-    it('configured schedule against a changed total ⇒ mismatch recomputed on read', async () => {
-      scheduleFindUnique.mockResolvedValue({
-        id: SCHEDULE_ID,
-        updatedAt: UPDATED_AT,
-        installments: RESOLVED_20_70_10,
+    it('payments are summed per installment and order; editable turns false once money is in', async () => {
+      const PAID_ON = new Date('2026-10-20T00:00:00.000Z');
+      const RECORDED_AT = new Date('2026-10-20T03:00:00.000Z');
+      const p = (id: string, amount: number) => ({
+        id,
+        installmentId: 'inst-1',
+        amount,
+        paidOn: PAID_ON,
+        method: 'bank_transfer',
+        note: null,
+        createdAt: RECORDED_AT,
       });
+      viewRows = stored(RESOLVED_20_70_10, {
+        1: [p('pay-1', 10_000_000), p('pay-2', 6_602_192)],
+      });
+      const view = await get();
+
+      expect(scheduleFindUnique).toHaveBeenCalledWith({
+        where: { orderId: ORDER_ID },
+        include: {
+          installments: {
+            orderBy: { seq: 'asc' },
+            include: {
+              payments: { orderBy: [{ paidOn: 'asc' }, { createdAt: 'asc' }] },
+            },
+          },
+        },
+      });
+      expect(view.editable).toBe(false);
+      expect(view.recordable).toBe(true);
+      expect(view.paidTotal).toBe(16_602_192);
+      expect(view.remainingTotal).toBe(66_408_768);
+      expect(view.paidPercent).toBe(20);
+      expect(view.paymentStatus).toBe('partial');
+      expect(
+        view.installments.map((i) => [
+          i.paidAmount,
+          i.remainingAmount,
+          i.status,
+        ]),
+      ).toEqual([
+        [16_602_192, 0, 'paid'],
+        [0, 58_107_672, 'unpaid'],
+        [0, 8_301_096, 'unpaid'],
+      ]);
+      expect(view.installments[0].payments).toEqual([
+        {
+          id: 'pay-1',
+          installmentId: 'inst-1',
+          amount: 10_000_000,
+          paidOn: '2026-10-20',
+          method: 'bank_transfer',
+          note: null,
+          recordedAt: RECORDED_AT,
+        },
+        {
+          id: 'pay-2',
+          installmentId: 'inst-1',
+          amount: 6_602_192,
+          paidOn: '2026-10-20',
+          method: 'bank_transfer',
+          note: null,
+          recordedAt: RECORDED_AT,
+        },
+      ]);
+    });
+
+    it.each([
+      ['hoanthanh', true],
+      ['dagiao', true],
+      ['baogia', false],
+      ['choduyet', false],
+      ['huy', false],
+    ])('order %s ⇒ recordable=%s', async (status, recordable) => {
+      getScopedTotal.mockResolvedValue({
+        order: { ...ORDER, status },
+        total: TOTAL,
+      });
+      expect((await get()).recordable).toBe(recordable);
+    });
+
+    it('configured schedule against a changed total ⇒ mismatch recomputed on read', async () => {
       getScopedTotal.mockResolvedValue({
         order: { ...ORDER, status: 'baogia' },
         total: TOTAL + 1_000,

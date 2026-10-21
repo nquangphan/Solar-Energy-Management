@@ -63,7 +63,8 @@ describe('source-guard: engine transition nhận quyền THẬT của actor (AD-
 
   /**
    * Giá trị truyền cho `actorPermissions` ở mỗi call-site đưa quyền vào engine: engine private
-   * `this.applyTransition(` VÀ cửa công khai `.chuyenTrangThaiTuDong(` mà module ngoài gọi.
+   * `this.applyTransition(` VÀ các cửa công khai `.chuyenTrangThaiTuDong(` / `.autoTransitionInTx(`
+   * (payment recording runs the transition inside its own tx) mà module ngoài gọi.
    * Shorthand (`actorPermissions,`) trả về chính tên biến — đó là pass-through hợp lệ.
    *
    * Khai báo method (`async chuyenTrangThaiTuDong(input: {`) không khớp vì luật đòi dấu `.`
@@ -71,7 +72,8 @@ describe('source-guard: engine transition nhận quyền THẬT của actor (AD-
    */
   function docGiaTriQuyen(code: string): string[] {
     const giaTri: string[] = [];
-    const re = /\bthis\.applyTransition\s*\(|\.chuyenTrangThaiTuDong\s*\(/g;
+    const re =
+      /\bthis\.applyTransition\s*\(|\.chuyenTrangThaiTuDong\s*\(|\.autoTransitionInTx\s*\(/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(code)) !== null) {
       const thamSo = docThamSo(code, m.index + m[0].length - 1);

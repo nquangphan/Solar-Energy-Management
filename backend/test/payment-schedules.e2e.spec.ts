@@ -88,6 +88,7 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
   const TOTAL = 83_010_960;
 
   type Row = {
+    id: string;
     scheduleId: string;
     seq: number;
     percent: number | null;
@@ -99,10 +100,21 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
   let currentOrder: ReturnType<typeof order> | null;
   let schedule: { id: string; orderId: string; updatedAt: Date } | null;
   let rows: Row[];
+  let payments: {
+    id: string;
+    installmentId: string;
+    amount: number;
+    paidOn: Date;
+    method: string;
+    note: string | null;
+    createdAt: Date;
+  }[];
+  let nextRowId: number;
 
   const orderRepo = { findFirst: jest.fn(), findUnique: jest.fn() };
   const scheduleRepo = { findUnique: jest.fn(), upsert: jest.fn() };
   const installmentRepo = { deleteMany: jest.fn(), createMany: jest.fn() };
+  const paymentRepo = { count: jest.fn() };
   const auditRepo = { create: jest.fn() };
   const queryRaw = jest.fn();
   const repos = {
@@ -122,6 +134,7 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
     product: { findMany: jest.fn(() => Promise.resolve([])) },
     paymentSchedule: scheduleRepo,
     installment: installmentRepo,
+    payment: paymentRepo,
     auditLog: auditRepo,
     featureFlag: { findUnique: jest.fn(() => Promise.resolve(null)) },
     systemSetting: { findUnique: jest.fn(() => Promise.resolve(null)) },
@@ -203,6 +216,8 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
     currentOrder = order('dachot');
     schedule = null;
     rows = [];
+    payments = [];
+    nextRowId = 0;
     // Scope fake: applies the owner/assignee clause the service ACTUALLY sends.
     orderRepo.findFirst.mockImplementation(
       (args: {
@@ -237,7 +252,12 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
           ? null
           : {
               ...schedule,
-              installments: [...rows].sort((a, b) => a.seq - b.seq),
+              installments: [...rows]
+                .sort((a, b) => a.seq - b.seq)
+                .map((r) => ({
+                  ...r,
+                  payments: payments.filter((p) => p.installmentId === r.id),
+                })),
             },
       ),
     );
@@ -254,10 +274,17 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
       rows = [];
       return Promise.resolve({ count });
     });
-    installmentRepo.createMany.mockImplementation((args: { data: Row[] }) => {
-      rows.push(...args.data);
-      return Promise.resolve({ count: args.data.length });
-    });
+    installmentRepo.createMany.mockImplementation(
+      (args: { data: Omit<Row, 'id'>[] }) => {
+        rows.push(
+          ...args.data.map((r) => ({ ...r, id: `inst-${++nextRowId}` })),
+        );
+        return Promise.resolve({ count: args.data.length });
+      },
+    );
+    paymentRepo.count.mockImplementation(() =>
+      Promise.resolve(payments.length),
+    );
     auditRepo.create.mockResolvedValue({});
     givenPermissions(...ROLE_PRESETS.KE_TOAN);
   });
@@ -280,6 +307,11 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
       scheduledTotal: 0,
       difference: TOTAL,
       totalMatches: false,
+      paidTotal: 0,
+      remainingTotal: TOTAL,
+      paidPercent: 0,
+      paymentStatus: 'unpaid',
+      recordable: true,
       installments: [],
       updatedAt: null,
     });
@@ -296,29 +328,44 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
       scheduledTotal: TOTAL,
       difference: 0,
       totalMatches: true,
+      paidTotal: 0,
+      remainingTotal: TOTAL,
+      paidPercent: 0,
+      paymentStatus: 'unpaid',
+      recordable: true,
       updatedAt: '2026-10-21T05:00:00.000Z',
     });
+    const unpaid = { paidAmount: 0, status: 'unpaid', payments: [] };
     expect(res.body.installments).toEqual([
       {
+        id: 'inst-1',
         seq: 1,
         percent: 20,
         amount: 16_602_192,
         conditionNote: 'Cọc khi ký hợp đồng',
         milestone: 'coc',
+        remainingAmount: 16_602_192,
+        ...unpaid,
       },
       {
+        id: 'inst-2',
         seq: 2,
         percent: 70,
         amount: 58_107_672,
         conditionNote: 'Khi thi công',
         milestone: null,
+        remainingAmount: 58_107_672,
+        ...unpaid,
       },
       {
+        id: 'inst-3',
         seq: 3,
         percent: 10,
         amount: 8_301_096,
         conditionNote: 'Khi nghiệm thu, bàn giao',
         milestone: 'tat_toan',
+        remainingAmount: 8_301_096,
+        ...unpaid,
       },
     ]);
     expect(auditRows()).toBe(1);
@@ -361,11 +408,16 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
     });
     expect(one.body.installments).toEqual([
       {
+        id: expect.any(String) as string,
         seq: 1,
         percent: 100,
         amount: TOTAL,
         conditionNote: 'Toàn bộ',
         milestone: 'coc',
+        paidAmount: 0,
+        remainingAmount: TOTAL,
+        status: 'unpaid',
+        payments: [],
       },
     ]);
   });
@@ -520,6 +572,45 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
     expect(res.body.difference).toBeLessThan(0);
     expect(res.body.difference).toBe(TOTAL - res.body.scheduledTotal);
   });
+
+  it.each([
+    [
+      'a changed list',
+      { installments: [{ percent: 100, conditionNote: 'x' }] },
+    ],
+    ['the identical list', body20_70_10],
+  ])(
+    'order with a payment: PUT %s ⇒ 409 (never a 500 FK), nothing written; GET editable=false',
+    async (_l, body) => {
+      await put(body20_70_10);
+      payments = [
+        {
+          id: 'pay-1',
+          installmentId: rows[0].id,
+          amount: 1_000_000,
+          paidOn: new Date('2026-10-20T00:00:00.000Z'),
+          method: 'cash',
+          note: null,
+          createdAt: new Date('2026-10-20T03:00:00.000Z'),
+        },
+      ];
+      jest.clearAllMocks();
+      auditRepo.create.mockResolvedValue({});
+      const res = await put(body);
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+      expect(res.body.message).toBe(
+        'Đơn đã có thanh toán — không sửa lịch được.',
+      );
+      expect(installmentRepo.deleteMany).not.toHaveBeenCalled();
+      expect(installmentRepo.createMany).not.toHaveBeenCalled();
+      expect(auditRows()).toBe(0);
+      const read = await get();
+      expect(read.body.editable).toBe(false);
+      expect(read.body.paidTotal).toBe(1_000_000);
+      expect(read.body.installments[0].status).toBe('partial');
+    },
+  );
 
   it.each(['baogia', 'choduyet', 'hoanthanh', 'huy'])(
     'PUT on %s ⇒ 409; GET ⇒ 200 editable=false',

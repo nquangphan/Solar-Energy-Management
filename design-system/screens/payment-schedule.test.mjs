@@ -1,4 +1,4 @@
-// Source-guard + parity for the LỊCH THANH TOÁN screens (Story 7.1).
+// Source-guard + parity for the LỊCH THANH TOÁN screens (Stories 7.1–7.2).
 //
 // A text-guard reads these files AS STRINGS. It cannot see whether a screen
 // renders — web/src/test/payment-schedule-screen.test.tsx and
@@ -7,10 +7,12 @@
 //
 // The load-bearing rules:
 //  - THE CLIENT COMPUTES NOTHING (AD-2/AD-10/AD-16): installment amounts, the
-//    schedule total, the difference and whether it matches are the backend's.
-//    No screen, port or fake adds, subtracts, multiplies or divides them.
+//    schedule total, the difference, whether it matches, what is paid and what
+//    is left are the backend's. No screen, port or fake adds, subtracts,
+//    multiplies or divides them.
 //  - Both platforms show the SAME Vietnamese labels.
-//  - Recording payments is the next story: no "Ghi nhận" on this screen.
+//  - "Ghi nhận" (record a payment) is offered only behind the backend's
+//    `recordable` AND payments.record, and only on an installment not yet paid.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -79,9 +81,36 @@ const SHARED_LABELS = [
   'Thanh toán toàn bộ',
   'Không tải được lịch thanh toán.',
   'Không lưu được lịch thanh toán. Vui lòng thử lại.',
+  // payment recording (Story 7.2)
+  'Tiến độ công nợ',
+  'Đã thu',
+  'Còn lại',
+  'Tiến độ',
+  '% / 100%',
+  'Tổng đơn',
+  'Trạng thái',
+  'Thu một phần',
+  'Chưa thu',
+  'Thu ',
+  'Chuyển khoản',
+  'Tiền mặt',
+  'Ghi nhận',
+  'Ghi nhận thanh toán · Đợt ',
+  'Ghi nhận đợt ',
+  ' cho Đợt ',
+  'Khi đủ đợt cọc, đơn sẽ tự chuyển sang Đã cọc.',
+  'Số tiền thu',
+  'Ngày thu',
+  'Phương thức',
+  'Ghi chú',
+  'Đang ghi nhận…',
+  'Đơn đã chuyển sang ',
+  'Đã ghi nhận tiền. Trạng thái đơn chưa đổi: ',
+  'Không ghi nhận được thanh toán. Vui lòng thử lại.',
 ];
 
-const MONEY = '(?:amount|orderTotal|scheduledTotal|difference)';
+// `amount` (case-insensitive, inside a word) also covers paidAmount / remainingAmount.
+const MONEY = '(?:amount|orderTotal|scheduledTotal|difference|paidTotal|remainingTotal)';
 
 /** The computations only the backend may do — each pattern with why. */
 const BANNED = [
@@ -103,10 +132,22 @@ test('both platforms render the same Vietnamese labels', () => {
   }
 });
 
-test('no "Ghi nhận" (payment recording belongs to the next story)', () => {
-  for (const [name, code] of screens) {
-    assert.ok(!code.includes('Ghi nhận'), `${name} must not offer "Ghi nhận"`);
-  }
+test('"Ghi nhận" is gated on the backend `recordable` AND payments.record, on unpaid installments only', () => {
+  assert.match(
+    webCode,
+    /schedule\.recordable\s*&&\s*can\(perms,\s*PERMISSION_KEYS\.paymentsRecord\)/,
+  );
+  assert.match(webCode, /canRecord\s*&&\s*i\.status\s*!==\s*'paid'/);
+  assert.match(
+    mobileCode,
+    /_schedule\?\.recordable \?\? false\)\s*&&\s*can\(widget\.perms,\s*AppPermissionKeys\.paymentsRecord\)/,
+  );
+  assert.match(mobileCode, /_canRecord\s*&&\s*i\.status\s*!=\s*'paid'/);
+});
+
+test('recording goes through a confirm dialog on both platforms', () => {
+  assert.match(webCode, /<ConfirmDialog\b/);
+  assert.match(mobileCode, /AppConfirmDialog\(/);
 });
 
 test('no screen, port or fake computes money', () => {
@@ -124,6 +165,8 @@ test('the banned patterns do catch what they claim (sanity)', () => {
     'const diff = orderTotal - scheduledTotal;',
     'final x = (orderTotal * percent / 100).floor();',
     'Math.floor(orderTotal * 20 / 100)',
+    'const left = orderTotal - paidTotal;',
+    'final left = installment.amount - installment.paidAmount;',
   ];
   for (const sample of samples) {
     assert.ok(

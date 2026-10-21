@@ -22,9 +22,11 @@ export 'inventory_port.dart';
 // Stock-voucher seam (Story 6.3): the only write path for `onHand`. The backend
 // owns the voucher code, the weighted-average cost and the stock-out refusal.
 export 'stock_vouchers_port.dart';
-// Payment-schedule seam (Story 7.1): the backend owns every amount and the
-// totals verdict; the client sends only what the user typed.
+// Payments seam (Stories 7.1–7.2): the backend owns every amount, the totals
+// verdict and what is paid; the client sends only what the user typed.
 export 'payments_port.dart';
+// Client-generated idempotency keys for money writes (Story 7.2).
+export 'idempotency_key.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 

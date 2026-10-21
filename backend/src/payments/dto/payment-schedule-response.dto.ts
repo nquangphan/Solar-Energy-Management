@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { PAYMENT_STATUS } from '../domain/payment';
 import { InstallmentResponseDto } from './installment-response.dto';
 
 /**
@@ -16,7 +17,7 @@ export class PaymentScheduleResponseDto {
 
   @ApiProperty({
     description:
-      'Server quyết: đơn đã chốt và chưa đóng thì được cấu hình lịch. Nút Sửa còn cần quyền payments.record.',
+      'Server quyết: đơn đã chốt, chưa đóng VÀ chưa có khoản thu nào thì được cấu hình lịch. Nút Sửa còn cần quyền payments.record.',
   })
   editable!: boolean;
 
@@ -44,6 +45,38 @@ export class PaymentScheduleResponseDto {
       'true khi tổng các đợt khớp tổng đơn sau VAT; false ⇒ hiện cảnh báo.',
   })
   totalMatches!: boolean;
+
+  @ApiProperty({
+    description: 'Tổng đã thu của đơn — số nguyên đồng.',
+    example: 16_602_192,
+  })
+  paidTotal!: number;
+
+  @ApiProperty({
+    description:
+      'orderTotal − paidTotal — số nguyên đồng, có thể âm khi thu vượt tổng đơn.',
+    example: 66_408_768,
+  })
+  remainingTotal!: number;
+
+  @ApiProperty({
+    description:
+      'Phần trăm đã thu trên tổng đơn, số nguyên làm tròn xuống; 0 khi tổng đơn bằng 0.',
+    example: 20,
+  })
+  paidPercent!: number;
+
+  @ApiProperty({
+    enum: Object.values(PAYMENT_STATUS),
+    description: 'paid khi đã thu đủ tổng đơn sau VAT.',
+  })
+  paymentStatus!: string;
+
+  @ApiProperty({
+    description:
+      'Server quyết: trạng thái đơn cho phép ghi nhận thanh toán. Nút Ghi nhận còn cần quyền payments.record.',
+  })
+  recordable!: boolean;
 
   @ApiProperty({ type: [InstallmentResponseDto] })
   installments!: InstallmentResponseDto[];

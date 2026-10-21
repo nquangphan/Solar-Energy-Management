@@ -4430,7 +4430,92 @@
             }
           },
           "409": {
-            "description": "Đơn chưa chốt hoặc đã đóng, hoặc đơn vừa đổi trong lúc lưu (CONFLICT).",
+            "description": "Đơn chưa chốt hoặc đã đóng, đơn vừa đổi trong lúc lưu, hoặc đơn đã có khoản thu — lịch không sửa được nữa (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "payments"
+        ]
+      }
+    },
+    "/orders/{id}/payments": {
+      "post": {
+        "operationId": "PaymentsController_record",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordPaymentRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đã ghi nhận (lần đầu) hoặc gửi lại cùng khoá + cùng nội dung (không ghi thêm) — cùng mã 200, cùng thân. Chuyển trạng thái tự động bị từ chối ⇒ tiền VẪN được ghi, autoTransition.outcome = skipped.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordPaymentResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR + fieldErrors: `amount` vượt phần còn lại của đợt (exceedsRemaining), `paidOn` sau hôm nay giờ Việt Nam (futureDate), hoặc sai kiểu/khoảng (amount, paidOn, method, note, idempotencyKey, installmentId); id không phải UUID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu payments.record, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT: đơn chưa chốt hoặc đã huỷ; đơn vừa thay đổi; đơn chưa có lịch thanh toán; đợt không thuộc lịch hiện tại (lịch vừa thay đổi); khoá ghi nhận đã dùng cho một khoản khác.",
             "content": {
               "application/json": {
                 "schema": {
@@ -7355,9 +7440,62 @@
           "items"
         ]
       },
+      "PaymentResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "installmentId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount": {
+            "type": "number",
+            "description": "Số tiền đã thu — số nguyên đồng.",
+            "example": 16602192
+          },
+          "paidOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-21"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "bank_transfer",
+              "cash"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Lúc ghi nhận (ISO-8601 UTC)."
+          }
+        },
+        "required": [
+          "id",
+          "installmentId",
+          "amount",
+          "paidOn",
+          "method",
+          "note",
+          "recordedAt"
+        ]
+      },
       "InstallmentResponseDto": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "id của đợt — gửi kèm khi ghi nhận thanh toán."
+          },
           "seq": {
             "type": "number",
             "description": "Thứ tự đợt, bắt đầu từ 1.",
@@ -7386,14 +7524,44 @@
             ],
             "nullable": true,
             "description": "Mốc tự động do server gán theo vị trí: đợt 1 = coc, đợt cuối (khi ≥ 2 đợt) = tat_toan, còn lại null."
+          },
+          "paidAmount": {
+            "type": "number",
+            "description": "Đã thu cho đợt này — số nguyên đồng.",
+            "example": 0
+          },
+          "remainingAmount": {
+            "type": "number",
+            "description": "Còn phải thu của đợt (amount − paidAmount, không âm) — số nguyên đồng.",
+            "example": 16602192
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "partial",
+              "paid"
+            ]
+          },
+          "payments": {
+            "description": "Các khoản đã thu của đợt, theo ngày thu rồi lúc ghi tăng dần.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PaymentResponseDto"
+            }
           }
         },
         "required": [
+          "id",
           "seq",
           "percent",
           "amount",
           "conditionNote",
-          "milestone"
+          "milestone",
+          "paidAmount",
+          "remainingAmount",
+          "status",
+          "payments"
         ]
       },
       "PaymentScheduleResponseDto": {
@@ -7408,7 +7576,7 @@
           },
           "editable": {
             "type": "boolean",
-            "description": "Server quyết: đơn đã chốt và chưa đóng thì được cấu hình lịch. Nút Sửa còn cần quyền payments.record."
+            "description": "Server quyết: đơn đã chốt, chưa đóng VÀ chưa có khoản thu nào thì được cấu hình lịch. Nút Sửa còn cần quyền payments.record."
           },
           "orderTotal": {
             "type": "number",
@@ -7428,6 +7596,34 @@
           "totalMatches": {
             "type": "boolean",
             "description": "true khi tổng các đợt khớp tổng đơn sau VAT; false ⇒ hiện cảnh báo."
+          },
+          "paidTotal": {
+            "type": "number",
+            "description": "Tổng đã thu của đơn — số nguyên đồng.",
+            "example": 16602192
+          },
+          "remainingTotal": {
+            "type": "number",
+            "description": "orderTotal − paidTotal — số nguyên đồng, có thể âm khi thu vượt tổng đơn.",
+            "example": 66408768
+          },
+          "paidPercent": {
+            "type": "number",
+            "description": "Phần trăm đã thu trên tổng đơn, số nguyên làm tròn xuống; 0 khi tổng đơn bằng 0.",
+            "example": 20
+          },
+          "paymentStatus": {
+            "type": "string",
+            "enum": [
+              "unpaid",
+              "partial",
+              "paid"
+            ],
+            "description": "paid khi đã thu đủ tổng đơn sau VAT."
+          },
+          "recordable": {
+            "type": "boolean",
+            "description": "Server quyết: trạng thái đơn cho phép ghi nhận thanh toán. Nút Ghi nhận còn cần quyền payments.record."
           },
           "installments": {
             "type": "array",
@@ -7450,6 +7646,11 @@
           "scheduledTotal",
           "difference",
           "totalMatches",
+          "paidTotal",
+          "remainingTotal",
+          "paidPercent",
+          "paymentStatus",
+          "recordable",
           "installments",
           "updatedAt"
         ]
@@ -7490,6 +7691,118 @@
         },
         "required": [
           "installments"
+        ]
+      },
+      "RecordPaymentRequestDto": {
+        "type": "object",
+        "properties": {
+          "idempotencyKey": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Khoá chống ghi trùng do client sinh MỘT lần cho mỗi lần mở form; retry phải gửi lại đúng khoá."
+          },
+          "installmentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "id của đợt (không phải seq) — lịch bị thay giữa lúc xem và lúc ghi ⇒ 409 thay vì ghi nhầm đợt."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Số tiền thu — số nguyên đồng, 1..2000000000, không vượt phần còn lại của đợt.",
+            "example": 16602192
+          },
+          "paidOn": {
+            "type": "string",
+            "format": "date",
+            "description": "Ngày thu YYYY-MM-DD, không sau hôm nay (giờ Việt Nam).",
+            "example": "2026-10-21"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "bank_transfer",
+              "cash"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "description": "Ghi chú, tối đa 200 ký tự sau khi bỏ khoảng trắng hai đầu."
+          }
+        },
+        "required": [
+          "idempotencyKey",
+          "installmentId",
+          "amount",
+          "paidOn",
+          "method"
+        ]
+      },
+      "AutoTransitionResultDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": [
+              "du_coc",
+              "hoan_thanh"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "applied",
+              "already",
+              "skipped"
+            ],
+            "description": "applied = đơn đã chuyển; already = đơn đã ở đích; skipped = chuyển bị từ chối (tiền VẪN được ghi)."
+          },
+          "message": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do bị bỏ qua (khi skipped); null trong trường hợp khác."
+          }
+        },
+        "required": [
+          "event",
+          "outcome",
+          "message"
+        ]
+      },
+      "RecordPaymentResponseDto": {
+        "type": "object",
+        "properties": {
+          "payment": {
+            "$ref": "#/components/schemas/PaymentResponseDto"
+          },
+          "schedule": {
+            "description": "Lịch thanh toán HIỆN TẠI sau lần ghi.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PaymentScheduleResponseDto"
+              }
+            ]
+          },
+          "orderStatus": {
+            "type": "string",
+            "description": "Trạng thái đơn hiện tại.",
+            "example": "dacoc"
+          },
+          "autoTransition": {
+            "nullable": true,
+            "description": "null khi lần ghi này không làm đủ mốc nào, và luôn null khi gửi lại cùng khoá. Khi một lần ghi làm đủ cả cọc lẫn tất toán (đợt cọc trả sau cùng), đây là lần chuyển đã đổi trạng thái đơn, nếu không có thì là lần thử sau cùng.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AutoTransitionResultDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "payment",
+          "schedule",
+          "orderStatus",
+          "autoTransition"
         ]
       }
     }

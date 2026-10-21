@@ -47,6 +47,7 @@ model Account {
   orderVersionsCreated OrderVersion[]    @relation("OrderVersionCreatedBy")
   attachmentsUploaded  Attachment[]      @relation("AttachmentUploadedBy")
   stockVouchersCreated StockVoucher[]    @relation("StockVoucherCreatedBy")
+  paymentsRecorded     Payment[]         @relation("PaymentRecordedBy")
 
   @@map("accounts")
 }
@@ -499,6 +500,7 @@ model Order {
   stockMovements    StockMovement[]
   stockVouchers     StockVoucher[]
   paymentSchedule   PaymentSchedule?
+  payments          Payment[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -675,9 +677,36 @@ model Installment {
   conditionNote String          @map("condition_note")
   milestone     String?
   createdAt     DateTime        @default(now()) @map("created_at")
+  payments      Payment[]
 
   @@unique([scheduleId, seq])
   @@map("installments")
+}
+
+/// A payment actually received against one installment (FR-12). Append-only: never updated or
+/// deleted in Phase 1. `amount` = integer dong (AD-10). `orderId` is deliberately redundant
+/// (derivable via installment → schedule → order) so every order-scoped query is one
+/// `where: { orderId }`; the service checks it matches the installment's order when writing.
+/// `idempotencyKey` (client-generated UUID v4, unique) is the last net against a double write.
+/// CHECK constraints (amount > 0, known method) live in the migration.
+model Payment {
+  id                  String      @id @default(uuid())
+  orderId             String      @map("order_id")
+  order               Order       @relation(fields: [orderId], references: [id])
+  installmentId       String      @map("installment_id")
+  installment         Installment @relation(fields: [installmentId], references: [id])
+  amount              Int
+  paidOn              DateTime    @map("paid_on") @db.Date
+  method              String
+  note                String?
+  idempotencyKey      String      @unique @map("idempotency_key")
+  recordedByAccountId String      @map("recorded_by_account_id")
+  recordedBy          Account     @relation("PaymentRecordedBy", fields: [recordedByAccountId], references: [id], onDelete: Restrict)
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([installmentId])
+  @@map("payments")
 }
 
 /// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2

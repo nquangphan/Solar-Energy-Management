@@ -1,6 +1,7 @@
-// hand-authored — Flutter app-screen (Story 7.1, mobile twin of web
+// hand-authored — Flutter app-screen (Stories 7.1–7.2, mobile twin of web
 // web/src/screens/payments/PaymentScheduleScreen.tsx). Lịch thanh toán: view and
-// edit the multi-installment payment schedule of one order.
+// edit the multi-installment payment schedule of one order, see what has been
+// collected, and record a payment against one installment.
 //
 // THE CLIENT COMPUTES NO MONEY. Installment amounts, both totals, the difference
 // and the "totals match" verdict come from the backend. Templates only pre-fill
@@ -11,8 +12,12 @@
 // (the backend answers 400); only a typed "0" is sent as 0.
 //
 // The edit button is shown only when the backend said `editable` AND the caller
-// holds `payments.record` — UX gating only; the backend enforces both. Recording
-// payments and debt progress are NOT here (they belong to story 7.2).
+// holds `payments.record` — UX gating only; the backend enforces both. The same
+// goes for "Ghi nhận": the backend's `recordable` AND `payments.record`.
+//
+// Recording a payment goes through a confirm dialog (money + an automatic status
+// change). The idempotency key is generated ONCE when the form opens and re-sent
+// on every retry; a new key only after a success or a close.
 //
 // LABELS are byte-identical with the web twin.
 
@@ -21,6 +26,7 @@ import 'package:flutter/widgets.dart';
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permission_keys.g.dart';
 import '../../design_system/gating/app_permissions.dart';
+import '../../design_system/session/idempotency_key.dart';
 import '../../design_system/session/payments_port.dart';
 import '../../design_system/shell/app_bottom_nav.dart';
 import '../../design_system/shell/app_mobile_shell.dart';
@@ -62,6 +68,38 @@ final RegExp _rowFieldPath =
 /// Text for an input prefill (digits only, no formatting).
 String _digits(int value) => value.toString();
 
+/// Backend cap on a payment note.
+const int _kNoteMaxLength = 200;
+
+const String _kMethodBank = 'bank_transfer';
+const String _kMethodCash = 'cash';
+const Map<String, String> _kMethodLabels = <String, String>{
+  _kMethodBank: 'Chuyển khoản',
+  _kMethodCash: 'Tiền mặt',
+};
+const Map<String, String> _kPaymentStatusLabels = <String, String>{
+  'paid': 'Đã thu',
+  'partial': 'Thu một phần',
+  'unpaid': 'Chưa thu',
+};
+
+/// `YYYY-MM-DD` ⇒ `dd/MM` (presentation only).
+String _dayMonth(String paidOn) =>
+    '${paidOn.substring(8, 10)}/${paidOn.substring(5, 7)}';
+
+/// Today in Vietnam (UTC+7) as `YYYY-MM-DD` — the default payment date. The backend refuses
+/// a date after today IN VIETNAM, so the device's own timezone must not decide the default.
+String _todayIso() {
+  final DateTime d = DateTime.now().toUtc().add(const Duration(hours: 7));
+  String pad(int n) => n.toString().padLeft(2, '0');
+  return '${d.year}-${pad(d.month)}-${pad(d.day)}';
+}
+
+String _orderStatusLabel(String status) {
+  final StatusKey? key = statusKeyOf(status);
+  return key == null ? status : kStatusLabels[key]!;
+}
+
 enum _LoadState { loading, ready, error }
 
 class _RowErrors {
@@ -91,11 +129,19 @@ class PaymentScheduleScreen extends StatefulWidget {
     required this.orderId,
     this.onBack,
     this.perms = const <PermissionKey>{},
+    this.onOrderStatusChanged,
+    this.newKey = newIdempotencyKey,
   });
 
   final PaymentsPort port;
   final String orderId;
   final VoidCallback? onBack;
+
+  /// Called with the new order status when a payment moved the order (`applied`).
+  final ValueChanged<String>? onOrderStatusChanged;
+
+  /// Idempotency-key source; tests inject a deterministic one.
+  final String Function() newKey;
 
   /// The caller's effective permissions — gates the edit button (UX only).
   final Set<PermissionKey> perms;
@@ -117,6 +163,22 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   String? _formError;
   String? _conflict;
 
+  // ---- record-a-payment form (raw inputs only, plus its idempotency key) ----
+  Installment? _recordFor;
+  String _recordKey = '';
+  // An attempt of this form already failed — its payment may have been recorded anyway.
+  bool _recordFailedAttempt = false;
+  String _recordMethod = _kMethodBank;
+  final TextEditingController _recordAmount = TextEditingController();
+  final TextEditingController _recordDate = TextEditingController();
+  final TextEditingController _recordNote = TextEditingController();
+  bool _recording = false;
+  final Map<String, String> _recordFieldErrors = <String, String>{};
+  String? _recordError;
+  String? _recordConflict;
+  AutoTransitionResult? _outcome;
+  String _outcomeStatus = '';
+
   @override
   void initState() {
     super.initState();
@@ -126,6 +188,9 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   @override
   void dispose() {
     _clearRows();
+    _recordAmount.dispose();
+    _recordDate.dispose();
+    _recordNote.dispose();
     super.dispose();
   }
 
@@ -144,6 +209,8 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
       _conflict = null;
       _formError = null;
       _rowErrors.clear();
+      _recordFor = null;
+      _clearRecordErrors();
     });
     try {
       final PaymentSchedule s = await widget.port.getSchedule(widget.orderId);
@@ -161,6 +228,151 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   bool get _canEdit =>
       (_schedule?.editable ?? false) &&
       can(widget.perms, AppPermissionKeys.paymentsRecord);
+
+  bool get _canRecord =>
+      (_schedule?.recordable ?? false) &&
+      can(widget.perms, AppPermissionKeys.paymentsRecord);
+
+  void _clearRecordErrors() {
+    _recordFieldErrors.clear();
+    _recordError = null;
+    _recordConflict = null;
+  }
+
+  /// A NEW key per opened form; retries of this form keep it. Pressing "Ghi nhận" again on the
+  /// installment whose form is already open keeps that form and its key: after a lost
+  /// response a fresh key would let the same payment be recorded twice.
+  void _openRecord(Installment i) {
+    if (_recordFor?.id == i.id) return;
+    _recordAmount.text = _digits(i.remainingAmount);
+    _recordDate.text = _todayIso();
+    _recordNote.clear();
+    setState(() {
+      _recordFor = i;
+      _recordKey = widget.newKey();
+      _recordFailedAttempt = false;
+      _recordMethod = _kMethodBank;
+      _outcome = null;
+      _clearRecordErrors();
+    });
+  }
+
+  void _closeRecord() {
+    setState(() {
+      _recordFor = null;
+      _clearRecordErrors();
+    });
+  }
+
+  void _recordDigitsOnly(String value) {
+    final String digits = value.replaceAll(_nonDigit, '');
+    if (digits != value) {
+      _recordAmount.value = TextEditingValue(
+        text: digits,
+        selection: TextSelection.collapsed(offset: digits.length),
+      );
+    }
+    setState(() {});
+  }
+
+  /// The note is capped at the backend limit as it is typed (web: `maxLength`).
+  void _recordNoteCapped(String value) {
+    if (value.length > _kNoteMaxLength) {
+      final String capped = value.substring(0, _kNoteMaxLength);
+      _recordNote.value = TextEditingValue(
+        text: capped,
+        selection: TextSelection.collapsed(offset: capped.length),
+      );
+    }
+  }
+
+  /// Form ⇒ request. A blank amount stays ABSENT (never 0); a blank note is not sent.
+  RecordPaymentInput _buildRecordInput() {
+    final String note = _recordNote.text.trim();
+    return RecordPaymentInput(
+      idempotencyKey: _recordKey,
+      installmentId: _recordFor!.id,
+      amount: int.tryParse(_recordAmount.text),
+      paidOn: _recordDate.text.trim(),
+      method: _recordMethod,
+      note: note.isEmpty ? null : note,
+    );
+  }
+
+  Future<void> _confirmRecord() async {
+    final Installment i = _recordFor!;
+    final int? amount = int.tryParse(_recordAmount.text);
+    if (amount == null) return;
+    final String deposit = i.milestone == 'coc'
+        ? '\nKhi đủ đợt cọc, đơn sẽ tự chuyển sang Đã cọc.'
+        : '';
+    await showAppDialog<void>(
+      context: context,
+      child: AppConfirmDialog(
+        title: 'Ghi nhận thanh toán · Đợt ${i.seq}',
+        consequence: 'Ghi nhận ${formatVnd(amount)} cho Đợt ${i.seq}?$deposit',
+        confirmLabel: 'Ghi nhận',
+        confirmTone: AppButtonVariant.primary,
+        onConfirm: _submitRecord,
+      ),
+    );
+  }
+
+  Future<void> _submitRecord() async {
+    if (_recording || _recordFor == null) return;
+    final RecordPaymentInput input = _buildRecordInput();
+    setState(() {
+      _recording = true;
+      _clearRecordErrors();
+    });
+    try {
+      final RecordPaymentResult r =
+          await widget.port.recordPayment(widget.orderId, input);
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _schedule = r.schedule;
+        _recordFor = null;
+        _outcome = r.autoTransition;
+        _outcomeStatus = r.orderStatus;
+      });
+      // A retry after a failed attempt may be the replay of a payment whose response was
+      // lost: the replay carries no autoTransition, so the current status is reported as well.
+      if (r.autoTransition?.outcome == 'applied' || _recordFailedAttempt) {
+        widget.onOrderStatusChanged?.call(r.orderStatus);
+      }
+    } on PaymentsPortError catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _recordFailedAttempt = true;
+        _mapRecordError(e);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _recording = false;
+        _recordFailedAttempt = true;
+        _recordError = 'Không ghi nhận được thanh toán. Vui lòng thử lại.';
+      });
+    }
+  }
+
+  void _mapRecordError(PaymentsPortError e) {
+    if (e.code == 'CONFLICT') {
+      _recordConflict = e.message;
+      return;
+    }
+    final List<String> general = <String>[e.message];
+    for (final FieldError f in e.fieldErrors ?? const <FieldError>[]) {
+      if (f.field == 'amount' || f.field == 'paidOn') {
+        _recordFieldErrors.putIfAbsent(f.field, () => f.message);
+      } else {
+        general.add(f.message);
+      }
+    }
+    _recordError = general.join('\n');
+  }
 
   void _startEdit() {
     final PaymentSchedule s = _schedule!;
@@ -413,11 +625,211 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
             ),
           ),
         ],
+        if (_outcome?.outcome == 'applied') ...<Widget>[
+          const SizedBox(height: AppTokens.space12),
+          AppBanner(
+            tone: AppBannerTone.info,
+            message: 'Đơn đã chuyển sang ${_orderStatusLabel(_outcomeStatus)}.',
+          ),
+        ],
+        if (_outcome?.outcome == 'skipped') ...<Widget>[
+          const SizedBox(height: AppTokens.space12),
+          AppBanner(
+            tone: AppBannerTone.warn,
+            message:
+                'Đã ghi nhận tiền. Trạng thái đơn chưa đổi: ${_outcome!.message ?? ''}',
+          ),
+        ],
+        const SizedBox(height: AppTokens.space12),
+        _debtBlock(s),
+        const SizedBox(height: AppTokens.space12),
+        _statusBlock(s),
+        if (_recordFor != null) ...<Widget>[
+          const SizedBox(height: AppTokens.space12),
+          _recordForm(_recordFor!),
+        ],
         if (_canEdit) ...<Widget>[
           const SizedBox(height: AppTokens.space12),
           Align(alignment: Alignment.centerLeft, child: _editButton(s)),
         ],
       ],
+    );
+  }
+
+  Widget _debtBlock(PaymentSchedule s) => AppFrame(
+        label: 'Tiến độ công nợ',
+        onBg: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            _totalRow('Đã thu', s.paidTotal),
+            const SizedBox(height: AppTokens.space4),
+            _totalRow('Còn lại', s.remainingTotal),
+            const SizedBox(height: AppTokens.space4),
+            Row(
+              children: <Widget>[
+                const Expanded(child: Text('Tiến độ', style: _micro)),
+                Text('${s.paidPercent}% / 100%', style: _strong),
+              ],
+            ),
+            const SizedBox(height: AppTokens.space4),
+            _totalRow('Tổng đơn', s.orderTotal),
+          ],
+        ),
+      );
+
+  Widget _paymentStatusChip(String status) {
+    final Color colour = status == 'paid'
+        ? AppTokens.ok
+        : status == 'partial'
+            ? AppTokens.warn
+            : AppTokens.muted;
+    return AppChip(
+      label: _kPaymentStatusLabels[status] ?? status,
+      background: AppTokens.surface,
+      foreground: colour,
+      border: colour,
+    );
+  }
+
+  Widget _statusBlock(PaymentSchedule s) => AppFrame(
+        label: 'Trạng thái',
+        onBg: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            for (final Installment i in s.installments) ...<Widget>[
+              Row(
+                children: <Widget>[
+                  Expanded(child: Text(_installmentName(i), style: _strong)),
+                  const SizedBox(width: AppTokens.space8),
+                  _paymentStatusChip(i.status),
+                ],
+              ),
+              for (final Payment p in i.payments)
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space4),
+                  child: Wrap(
+                    spacing: AppTokens.space4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      Text(
+                        'Thu ${_dayMonth(p.paidOn)} · ${_kMethodLabels[p.method] ?? p.method} ·',
+                        style: _micro,
+                      ),
+                      MoneyText(p.amount, style: _micro),
+                    ],
+                  ),
+                ),
+              if (_canRecord && i.status != 'paid')
+                Padding(
+                  padding: const EdgeInsets.only(top: AppTokens.space4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: AppButton(
+                      label: 'Ghi nhận',
+                      size: AppButtonSize.sm,
+                      onPressed: _recording ? null : () => _openRecord(i),
+                    ),
+                  ),
+                ),
+              const SizedBox(height: AppTokens.space8),
+            ],
+          ],
+        ),
+      );
+
+  Widget _recordForm(Installment i) {
+    // Blank (never sent as 0) or too long to be a number ⇒ nothing to confirm.
+    final bool unusable = int.tryParse(_recordAmount.text) == null;
+    return AppFrame(
+      label: 'Ghi nhận thanh toán · Đợt ${i.seq}',
+      onBg: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          AppField(
+            label: 'Số tiền thu',
+            controller: _recordAmount,
+            keyboardType: TextInputType.number,
+            onChanged: _recordDigitsOnly,
+          ),
+          if (_recordFieldErrors['amount'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppTokens.space4),
+              child: Text(_recordFieldErrors['amount']!, style: _errorStyle),
+            ),
+          const SizedBox(height: AppTokens.space8),
+          AppField(
+            label: 'Ngày thu',
+            controller: _recordDate,
+            keyboardType: TextInputType.datetime,
+          ),
+          if (_recordFieldErrors['paidOn'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: AppTokens.space4),
+              child: Text(_recordFieldErrors['paidOn']!, style: _errorStyle),
+            ),
+          const SizedBox(height: AppTokens.space8),
+          const Text('Phương thức', style: _micro),
+          const SizedBox(height: AppTokens.space4),
+          Wrap(
+            spacing: AppTokens.space8,
+            runSpacing: AppTokens.space8,
+            children: <Widget>[
+              for (final String m in const <String>[_kMethodBank, _kMethodCash])
+                AppButton(
+                  label: _kMethodLabels[m]!,
+                  size: AppButtonSize.sm,
+                  variant: _recordMethod == m
+                      ? AppButtonVariant.primary
+                      : AppButtonVariant.outline,
+                  onPressed: () => setState(() => _recordMethod = m),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppTokens.space8),
+          AppField(
+            label: 'Ghi chú',
+            controller: _recordNote,
+            maxLines: 2,
+            onChanged: _recordNoteCapped,
+          ),
+          if (_recordError != null) ...<Widget>[
+            const SizedBox(height: AppTokens.space8),
+            AppBanner(tone: AppBannerTone.danger, message: _recordError),
+          ],
+          if (_recordConflict != null) ...<Widget>[
+            const SizedBox(height: AppTokens.space8),
+            AppBanner(tone: AppBannerTone.danger, message: _recordConflict),
+            const SizedBox(height: AppTokens.space8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: AppButton(
+                label: 'Tải lại',
+                size: AppButtonSize.sm,
+                onPressed: _load,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppTokens.space12),
+          Wrap(
+            spacing: AppTokens.space8,
+            runSpacing: AppTokens.space8,
+            children: <Widget>[
+              AppButton(
+                label: _recording ? 'Đang ghi nhận…' : 'Ghi nhận đợt ${i.seq}',
+                variant: AppButtonVariant.primary,
+                onPressed: _recording || unusable ? null : _confirmRecord,
+              ),
+              AppButton(
+                label: 'Huỷ',
+                onPressed: _recording ? null : _closeRecord,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

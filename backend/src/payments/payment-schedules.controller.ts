@@ -108,7 +108,7 @@ export class PaymentSchedulesController {
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Đơn chưa chốt hoặc đã đóng, hoặc đơn vừa đổi trong lúc lưu (CONFLICT).',
+      'Đơn chưa chốt hoặc đã đóng, đơn vừa đổi trong lúc lưu, hoặc đơn đã có khoản thu — lịch không sửa được nữa (CONFLICT).',
   })
   async replace(
     @CurrentAccount() account: AuthenticatedAccount,

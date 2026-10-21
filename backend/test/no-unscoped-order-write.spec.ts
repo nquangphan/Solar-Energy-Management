@@ -23,7 +23,8 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
   /**
    * Mỗi file được canh + lời gọi "đọc có phạm vi" của file đó. `QuoteExportService` không có
    * `findScopedOrThrow` riêng — nó đi qua `OrdersService.getScoped()` / `assertScoped()`.
-   * `PaymentSchedulesService` (outside `orders/`) goes through `OrdersService.getScopedTotal()`.
+   * `PaymentSchedulesService` and `PaymentsService` (outside `orders/`) go through
+   * `OrdersService.getScopedTotal()`.
    * Paths are relative to `src/`.
    */
   const FILE_CANH: readonly { file: string; goiPhamVi: RegExp }[] = [
@@ -38,6 +39,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     {
       file: 'payments/payment-schedules.service.ts',
       goiPhamVi: /this\.orders\.(?:getScopedTotal|getScoped|assertScoped)\s*\(/,
+    },
+    {
+      file: 'payments/payments.service.ts',
+      goiPhamVi: /this\.orders\.getScopedTotal\s*\(/,
     },
   ];
 
@@ -66,6 +71,11 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     // lock, touches that order.
     /\.(?:paymentSchedule|installment)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
     /\.paymentSchedule\.find(?:Unique|First)\s*\(/,
+    // A payment belongs to one order: reading or writing payments touches that order, and so
+    // do the in-tx transition door and the shared schedule view.
+    /\.payment\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count|groupBy|aggregate)\s*\(/,
+    /this\.orders\.autoTransitionInTx\s*\(/,
+    /this\.(?:schedules\.)?viewFor\s*\(/,
     /\.\$queryRaw\b/,
   ];
 
@@ -74,6 +84,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
    *  - `create`: tạo đơn MỚI — chưa có đơn nào để thu hẹp; owner = chính người gọi.
    *  - `chuyenTrangThaiTuDong`: đường HỆ THỐNG (auto-transition từ event nghiệp vụ, vd ghi
    *    nhận thanh toán) — không có người gọi để lấy phạm vi; quyền vẫn do engine gate.
+   *  - `autoTransitionInTx`: runs INSIDE the caller's tx, after the caller locked the order;
+   *    its only caller (`PaymentsService.record`, guarded below) scopes first.
+   *  - `viewFor`: the shared schedule view builder; it takes an order the caller ALREADY scoped
+   *    (`get` here and `PaymentsService.record`, both guarded) and is never routed directly.
    *  - `list`: KHÔNG ghi — `$transaction([count, findMany])` dạng mảng chỉ để đọc nhất quán;
    *    phạm vi danh sách tự nằm trong `where` của nó (canh bởi `orders-list-scope.spec.ts`).
    */
@@ -81,6 +95,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     'orders/orders.service.ts#create': 'tạo đơn mới — chưa có đơn để scope',
     'orders/orders.service.ts#chuyenTrangThaiTuDong':
       'đường hệ thống từ event, không có caller người dùng',
+    'orders/orders.service.ts#autoTransitionInTx':
+      "inside the caller's tx; the caller (payments record) scopes first",
+    'payments/payment-schedules.service.ts#viewFor':
+      'view builder over an order the caller already scoped',
     'orders/orders.service.ts#list':
       'chỉ đọc (tx mảng count+findMany), phạm vi nằm trong where của list',
   };
@@ -214,7 +232,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       );
     });
 
-    it('extracts both public methods of PaymentSchedulesService with full bodies, both touching the order', () => {
+    it('extracts the public methods of PaymentSchedulesService with full bodies, all touching the order', () => {
       const methods = trichMethod(
         docFile('payments/payment-schedules.service.ts'),
       ).filter((m) => m.congKhai);
@@ -224,8 +242,37 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       expect(replace?.than).toMatch(/\.\$transaction\s*\(/);
       expect(replace?.than).toMatch(/\.installment\.createMany\s*\(/);
       expect(viTriChamDau(replace?.than ?? '')).toBeGreaterThan(-1);
-      expect(get?.than).toMatch(/\.paymentSchedule\.findUnique\s*\(/);
+      // `get` reads through the shared view builder, which reads the schedule.
+      expect(get?.than).toMatch(/this\.viewFor\s*\(/);
       expect(viTriChamDau(get?.than ?? '')).toBeGreaterThan(-1);
+      const viewFor = methods.find((m) => m.ten === 'viewFor');
+      expect(viewFor?.than).toMatch(/\.paymentSchedule\.findUnique\s*\(/);
+    });
+
+    it('extracts PaymentsService.record with its full body: scope, tx and the payment insert', () => {
+      const record = trichMethod(docFile('payments/payments.service.ts')).find(
+        (m) => m.congKhai && m.ten === 'record',
+      );
+      expect(record?.than.length).toBeGreaterThan(0);
+      expect(record?.than).toMatch(/this\.orders\.getScopedTotal\s*\(/);
+      expect(record?.than).toMatch(/\.payment\.create\s*\(/);
+      expect(record?.than).toMatch(/this\.orders\.autoTransitionInTx\s*\(/);
+      expect(viTriChamDau(record?.than ?? '')).toBeGreaterThan(-1);
+    });
+
+    it('BẮT a payment read placed before the scoped read', () => {
+      const mau = [
+        'class X {',
+        '  async record(actor: string, q: Set<string>, id: string) {',
+        '    await this.prisma.payment.findUnique({ where: {} });',
+        '    await this.orders.getScopedTotal(actor, q, id, 8, false);',
+        '  }',
+        '}',
+        '',
+      ].join('\n');
+      expect(viPham(mau, /this\.orders\.getScopedTotal\s*\(/)).toEqual([
+        'record',
+      ]);
     });
 
     it('BẮT a schedule write placed before the scoped read', () => {

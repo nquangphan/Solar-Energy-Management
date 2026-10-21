@@ -79,8 +79,9 @@ export type {
   CreateReturnVoucherInput,
   LoaiPhieu,
 } from './stock-vouchers-port';
-// Payments seam (Story 7.1): the payment schedule of an order. The backend
-// resolves every amount, the totals and the mismatch; the screen only renders them.
+// Payments seam (Stories 7.1–7.2): the payment schedule of an order and payment
+// recording. The backend resolves every amount, the totals, the mismatch and what
+// is paid; the screen only renders them.
 export type {
   PaymentsPort,
   PaymentSchedule,
@@ -88,6 +89,12 @@ export type {
   InstallmentInput,
   ReplacePaymentScheduleInput,
   PaymentsPortError,
+  Payment,
+  PaymentMethod,
+  PaymentStatus,
+  RecordPaymentInput,
+  RecordPaymentResult,
+  AutoTransitionResult,
 } from './payments-port';
 export type {
   CatalogPort,
@@ -132,6 +139,8 @@ export {
   DEMO_PAYMENT_SCHEDULE,
   DEMO_PAYMENT_SCHEDULE_EMPTY,
   DEMO_PAYMENT_SCHEDULE_MISMATCH,
+  DEMO_PAYMENT_SCHEDULE_DEPOSIT_PAID,
+  DEMO_RECORD_DEPOSIT_RESULT,
 } from './fake-payments-port';
 export {
   FakeCatalogPort,

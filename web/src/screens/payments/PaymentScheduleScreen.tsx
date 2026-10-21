@@ -1,6 +1,7 @@
-// hand-authored — web app-screen (Story 7.1). Lịch thanh toán: view the order's
-// payment schedule and (re)configure it as installments, each a percent of the
-// order total or an amount, with a condition note.
+// hand-authored — web app-screen (Stories 7.1–7.2). Lịch thanh toán: view the
+// order's payment schedule and (re)configure it as installments, each a percent of
+// the order total or an amount, with a condition note; see what has been collected
+// and record a payment against one installment.
 //
 // THE CLIENT COMPUTES NOTHING (AD-2/AD-10/AD-16). Each installment's amount, the
 // schedule total, the order total after VAT, the difference and whether they
@@ -14,13 +15,17 @@
 // The edit button needs BOTH the backend's `editable` (order confirmed, not
 // closed) and `payments.record` — UX only, the backend enforces both.
 //
-// Recording payments, paid/unpaid status and the debt-progress block belong to the
-// next story; this screen shows the schedule only.
+// Recording a payment is consequential (money + an automatic status change), so it
+// goes through a ConfirmDialog. The idempotency key is generated ONCE when the form
+// opens and re-sent on every retry; a new key only after a success or a close.
+// Paid / remaining / status figures are the backend's; the "Ghi nhận" button needs
+// the backend's `recordable` AND `payments.record` — UX only, the backend enforces.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   Banner,
   Button,
+  ConfirmDialog,
   EmptyState,
   ErrorState,
   Field,
@@ -29,14 +34,19 @@ import {
   Skeleton,
   Table,
 } from '../../design-system/components';
+import { STATUS_LABELS, type StatusKey } from '../../design-system/components/StatusChip';
 import { PERMISSION_KEYS } from '../../design-system/gating/permission-keys.generated';
 import { can, filterNav } from '../../design-system/gating/permissions';
 import type {
+  AutoTransitionResult,
   Installment,
   InstallmentInput,
+  PaymentMethod,
   PaymentSchedule,
+  PaymentStatus,
   PaymentsPort,
   PaymentsPortError,
+  RecordPaymentInput,
 } from '../../design-system/session/payments-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Seg, Sidebar, SIDEBAR_NAV, Topbar, WebShell } from '../../design-system/shell';
@@ -47,6 +57,10 @@ export interface PaymentScheduleScreenProps {
   port: PaymentsPort;
   orderId: string;
   onBack?: () => void;
+  /** Called with the new order status when a payment moved the order (outcome `applied`). */
+  onOrderStatusChanged?: (status: string) => void;
+  /** Idempotency-key source; tests inject a deterministic one. */
+  newKey?: () => string;
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -64,8 +78,21 @@ interface Row {
   conditionNote: string;
 }
 
+/** The open "Ghi nhận thanh toán" form — raw inputs only, plus its idempotency key. */
+interface RecordForm {
+  installment: Installment;
+  amount: string | number;
+  paidOn: string;
+  method: PaymentMethod;
+  note: string;
+  key: string;
+  /** An attempt of this form already failed — its payment may have been recorded anyway. */
+  failedAttempt: boolean;
+}
+
 const MAX_ROWS = 12;
 const UNKNOWN_ERROR = 'Không lưu được lịch thanh toán. Vui lòng thử lại.';
+const UNKNOWN_RECORD_ERROR = 'Không ghi nhận được thanh toán. Vui lòng thử lại.';
 
 const KIND_OPTIONS = [
   { key: 'percent', label: '%' },
@@ -80,6 +107,21 @@ const TEMPLATE_ROWS: Record<Exclude<Template, 'custom'>, readonly [string, strin
   ],
   '100%': [['100', 'Thanh toán toàn bộ']],
 };
+const METHOD_OPTIONS: { key: PaymentMethod; label: string }[] = [
+  { key: 'bank_transfer', label: 'Chuyển khoản' },
+  { key: 'cash', label: 'Tiền mặt' },
+];
+const METHOD_LABELS: Record<PaymentMethod, string> = {
+  bank_transfer: 'Chuyển khoản',
+  cash: 'Tiền mặt',
+};
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  paid: 'Đã thu',
+  partial: 'Thu một phần',
+  unpaid: 'Chưa thu',
+};
+const RECORD_FIELDS = ['amount', 'paidOn'];
+
 const TEMPLATE_BUTTONS: readonly [Template, string][] = [
   ['20/70/10', '20/70/10'],
   ['100%', '100%'],
@@ -96,7 +138,24 @@ function milestoneSuffix(milestone: Installment['milestone']): string {
   return '';
 }
 
-function toPortError(e: unknown): PaymentsPortError {
+/** `YYYY-MM-DD` ⇒ `dd/MM` (presentation only). */
+function dayMonth(paidOn: string): string {
+  return `${paidOn.slice(8, 10)}/${paidOn.slice(5, 7)}`;
+}
+
+/**
+ * Today in Vietnam (UTC+7) as `YYYY-MM-DD` — the default payment date. The backend refuses a
+ * date after today IN VIETNAM, so the device's own timezone must not decide the default.
+ */
+function todayIso(): string {
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status as StatusKey] ?? status;
+}
+
+function toPortError(e: unknown, fallback = UNKNOWN_ERROR): PaymentsPortError {
   if (
     typeof e === 'object' &&
     e !== null &&
@@ -105,7 +164,7 @@ function toPortError(e: unknown): PaymentsPortError {
   ) {
     return e as PaymentsPortError;
   }
-  return { code: 'UNKNOWN', message: UNKNOWN_ERROR };
+  return { code: 'UNKNOWN', message: fallback };
 }
 
 /** Row ⇒ request item. Blank stays ABSENT (never 0); the note is sent as typed. */
@@ -114,7 +173,27 @@ function toInput(row: Row): InstallmentInput {
   return { ...number, conditionNote: row.conditionNote };
 }
 
-export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentScheduleScreenProps) {
+/** Form ⇒ request. A blank amount stays ABSENT (never 0); a blank note is not sent. */
+function toRecordInput(form: RecordForm): RecordPaymentInput {
+  return {
+    idempotencyKey: form.key,
+    installmentId: form.installment.id,
+    ...(form.amount === '' ? {} : { amount: Number(form.amount) }),
+    paidOn: form.paidOn,
+    method: form.method,
+    ...(form.note.trim() === '' ? {} : { note: form.note }),
+  };
+}
+
+const defaultNewKey = () => crypto.randomUUID();
+
+export function PaymentScheduleScreen({
+  port,
+  orderId,
+  onBack,
+  onOrderStatusChanged,
+  newKey = defaultNewKey,
+}: PaymentScheduleScreenProps) {
   const { perms } = usePermissions();
   const [state, setState] = useState<LoadState>('loading');
   const [schedule, setSchedule] = useState<PaymentSchedule | null>(null);
@@ -125,6 +204,13 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const nextKey = useRef(0);
+  const [recordForm, setRecordForm] = useState<RecordForm | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordError, setRecordError] = useState<PaymentsPortError | null>(null);
+  const [outcome, setOutcome] = useState<
+    (AutoTransitionResult & { orderStatus: string }) | null
+  >(null);
 
   const newRow = (kind: Kind, value: string | number, conditionNote: string): Row => {
     nextKey.current += 1;
@@ -175,7 +261,60 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
   const reload = async () => {
     setEditing(false);
     setError(null);
+    setRecordForm(null);
+    setRecordError(null);
     await load();
+  };
+
+  /**
+   * A NEW key per opened form; retries of this form keep it. Pressing "Ghi nhận" again on the
+   * installment whose form is already open keeps that form and its key: after a lost response
+   * a fresh key would let the same payment be recorded twice.
+   */
+  const openRecord = (installment: Installment) => {
+    if (recordForm !== null && recordForm.installment.id === installment.id) return;
+    setRecordForm({
+      installment,
+      amount: installment.remainingAmount,
+      paidOn: todayIso(),
+      method: 'bank_transfer',
+      note: '',
+      key: newKey(),
+      failedAttempt: false,
+    });
+    setRecordError(null);
+    setOutcome(null);
+  };
+
+  const updateRecord = (patch: Partial<RecordForm>) =>
+    setRecordForm((current) => (current === null ? current : { ...current, ...patch }));
+
+  const submitRecord = async () => {
+    if (recordForm === null || inFlight.current) return;
+    inFlight.current = true;
+    setRecording(true);
+    setRecordError(null);
+    try {
+      const result = await port.recordPayment(orderId, toRecordInput(recordForm));
+      setSchedule(result.schedule);
+      setRecordForm(null);
+      setOutcome(
+        result.autoTransition === null
+          ? null
+          : { ...result.autoTransition, orderStatus: result.orderStatus },
+      );
+      // A retry after a failed attempt may be the replay of a payment whose response was lost:
+      // the replay carries no autoTransition, so the current status is reported as well.
+      if (result.autoTransition?.outcome === 'applied' || recordForm.failedAttempt) {
+        onOrderStatusChanged?.(result.orderStatus);
+      }
+    } catch (e) {
+      updateRecord({ failedAttempt: true });
+      setRecordError(toPortError(e, UNKNOWN_RECORD_ERROR));
+    } finally {
+      inFlight.current = false;
+      setRecording(false);
+    }
   };
 
   const save = async () => {
@@ -205,6 +344,13 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
 
   const canEdit =
     schedule !== null && schedule.editable && can(perms, PERMISSION_KEYS.paymentsRecord);
+  const canRecord =
+    schedule !== null && schedule.recordable && can(perms, PERMISSION_KEYS.paymentsRecord);
+  const recordFieldErrors = (field: string) =>
+    (recordError?.fieldErrors ?? []).filter((f) => f.field === field);
+  const recordGeneralErrors = (recordError?.fieldErrors ?? []).filter(
+    (f) => !RECORD_FIELDS.includes(f.field),
+  );
 
   return (
     <WebShell
@@ -249,6 +395,36 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
                 Tổng các đợt lệch tổng đơn sau VAT <Money value={schedule.difference} />
               </Banner>
             )}
+            {outcome?.outcome === 'applied' && (
+              <Banner tone="info" icon="ic-check" role="status">
+                Đơn đã chuyển sang {statusLabel(outcome.orderStatus)}.
+              </Banner>
+            )}
+            {outcome?.outcome === 'skipped' && (
+              <Banner tone="warn" icon="ic-alert" role="status">
+                Đã ghi nhận tiền. Trạng thái đơn chưa đổi: {outcome.message}
+              </Banner>
+            )}
+            <Frame label="Tiến độ công nợ">
+              <div className="ps-debt">
+                <div className="ps-total">
+                  <span className="micro muted">Đã thu</span>
+                  <Money value={schedule.paidTotal} />
+                </div>
+                <div className="ps-total">
+                  <span className="micro muted">Còn lại</span>
+                  <Money value={schedule.remainingTotal} />
+                </div>
+                <div className="ps-total">
+                  <span className="micro muted">Tiến độ</span>
+                  <span className="strong">{schedule.paidPercent}% / 100%</span>
+                </div>
+                <div className="ps-total">
+                  <span className="micro muted">Tổng đơn</span>
+                  <Money value={schedule.orderTotal} />
+                </div>
+              </div>
+            </Frame>
             <Frame label="Các đợt thanh toán">
               <Table>
                 <thead>
@@ -257,6 +433,7 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
                     <th>Điều kiện</th>
                     <th>Tỉ lệ</th>
                     <th className="num">Số tiền</th>
+                    <th>Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -265,11 +442,34 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
                       <td className="strong">
                         Đợt {i.seq}
                         {milestoneSuffix(i.milestone)}
+                        {i.payments.map((p) => (
+                          <div key={p.id} className="micro muted">
+                            Thu {dayMonth(p.paidOn)} · {METHOD_LABELS[p.method]} ·{' '}
+                            <Money value={p.amount} />
+                          </div>
+                        ))}
                       </td>
                       <td>{i.conditionNote}</td>
                       <td>{i.percent !== null ? `${i.percent}%` : '—'}</td>
                       <td className="num">
                         <Money value={i.amount} />
+                      </td>
+                      <td>
+                        <div className="ps-status">
+                          <span className={`chip ps-chip ps-chip--${i.status}`}>
+                            {PAYMENT_STATUS_LABELS[i.status]}
+                          </span>
+                          {canRecord && i.status !== 'paid' && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={recording}
+                              onClick={() => openRecord(i)}
+                            >
+                              Ghi nhận
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -286,6 +486,105 @@ export function PaymentScheduleScreen({ port, orderId, onBack }: PaymentSchedule
                 <Money value={schedule.orderTotal} />
               </div>
             </div>
+            {recordForm !== null && (
+              <Frame label={`Ghi nhận thanh toán · Đợt ${recordForm.installment.seq}`}>
+                <div className="ps-form">
+                  <Field
+                    label="Số tiền thu"
+                    inputMode="numeric"
+                    value={recordForm.amount}
+                    onChange={(e) => updateRecord({ amount: digitsOnly(e.target.value) })}
+                  />
+                  {recordFieldErrors('amount').map((f) => (
+                    <div key={f.field + f.code} className="micro ps-error">
+                      {f.message}
+                    </div>
+                  ))}
+                  <Field
+                    label="Ngày thu"
+                    type="date"
+                    value={recordForm.paidOn}
+                    onChange={(e) => updateRecord({ paidOn: e.target.value })}
+                  />
+                  {recordFieldErrors('paidOn').map((f) => (
+                    <div key={f.field + f.code} className="micro ps-error">
+                      {f.message}
+                    </div>
+                  ))}
+                  <div className="ps-row-head">
+                    <span className="micro muted">Phương thức</span>
+                    <Seg
+                      options={METHOD_OPTIONS}
+                      activeKey={recordForm.method}
+                      onSelect={(k) => updateRecord({ method: k as PaymentMethod })}
+                    />
+                  </div>
+                  <Field
+                    label="Ghi chú"
+                    value={recordForm.note}
+                    maxLength={200}
+                    onChange={(e) => updateRecord({ note: e.target.value })}
+                  />
+                  {recordError !== null && (
+                    <Banner tone="danger" icon="ic-alert" role="alert">
+                      {recordError.message}
+                      {recordGeneralErrors.map((f) => (
+                        <div key={f.field + f.code}>{f.message}</div>
+                      ))}
+                      {recordError.code === 'CONFLICT' && (
+                        <div>
+                          <Button type="button" size="sm" onClick={() => void reload()}>
+                            Tải lại
+                          </Button>
+                        </div>
+                      )}
+                    </Banner>
+                  )}
+                  <div className="ps-actions">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      disabled={recording || recordForm.amount === ''}
+                      onClick={() => setConfirming(true)}
+                    >
+                      {recording ? 'Đang ghi nhận…' : `Ghi nhận đợt ${recordForm.installment.seq}`}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={recording}
+                      onClick={() => {
+                        setRecordForm(null);
+                        setRecordError(null);
+                      }}
+                    >
+                      Huỷ
+                    </Button>
+                  </div>
+                </div>
+              </Frame>
+            )}
+            {recordForm !== null && (
+              <ConfirmDialog
+                open={confirming}
+                title={`Ghi nhận thanh toán · Đợt ${recordForm.installment.seq}`}
+                confirmLabel="Ghi nhận"
+                consequence={
+                  <>
+                    Ghi nhận <Money value={Number(recordForm.amount)} />
+                    {` cho Đợt ${recordForm.installment.seq}?`}
+                    {recordForm.installment.milestone === 'coc' && (
+                      <div>Khi đủ đợt cọc, đơn sẽ tự chuyển sang Đã cọc.</div>
+                    )}
+                  </>
+                }
+                onCancel={() => setConfirming(false)}
+                onConfirm={() => {
+                  setConfirming(false);
+                  void submitRecord();
+                }}
+              />
+            )}
             {canEdit && (
               <div>
                 <Button variant="primary" onClick={() => startEditing(schedule)}>

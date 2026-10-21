@@ -4,7 +4,10 @@
 // mismatch views, the templates, what is actually SENT (blank number ⇒ key
 // absent, typed "0" ⇒ 0), server field errors landing under the right row, the
 // 409 path, permission and `editable` gating, the double-submit guard, and the
-// longest labels at 320/360px.
+// longest labels at 320/360px. Payment recording: the debt block, per-installment
+// status, the "Ghi nhận" gate (`recordable` AND payments.record), the confirm
+// dialog before any call, the idempotency key kept across retries and renewed
+// per opened form, outcome banners, field errors, 409, double submit.
 
 import 'dart:async';
 
@@ -40,6 +43,8 @@ class _GatedPort extends FakePaymentsPort {
 Widget _host(
   PaymentsPort port, {
   Set<PermissionKey> perms = _kCanRecord,
+  ValueChanged<String>? onOrderStatusChanged,
+  String Function()? newKey,
 }) =>
     MaterialApp(
       home: Scaffold(
@@ -47,8 +52,36 @@ Widget _host(
           port: port,
           orderId: 'DH-2048',
           perms: perms,
+          onOrderStatusChanged: onOrderStatusChanged,
+          newKey: newKey ?? _keys(),
         ),
       ),
+    );
+
+/// Deterministic keys: key-1, key-2, … one per opened form.
+String Function() _keys() {
+  int n = 0;
+  return () => 'key-${++n}';
+}
+
+/// [base] with a different `recordable`.
+PaymentSchedule _withRecordable(PaymentSchedule s,
+        {required bool recordable}) =>
+    PaymentSchedule(
+      orderId: s.orderId,
+      configured: s.configured,
+      editable: s.editable,
+      orderTotal: s.orderTotal,
+      scheduledTotal: s.scheduledTotal,
+      difference: s.difference,
+      totalMatches: s.totalMatches,
+      paidTotal: s.paidTotal,
+      remainingTotal: s.remainingTotal,
+      paidPercent: s.paidPercent,
+      paymentStatus: s.paymentStatus,
+      recordable: recordable,
+      installments: s.installments,
+      updatedAt: s.updatedAt,
     );
 
 void _screen(WidgetTester tester, [double width = 400.0]) {
@@ -84,6 +117,11 @@ PaymentSchedule _withEditable(PaymentSchedule s, {required bool editable}) =>
       scheduledTotal: s.scheduledTotal,
       difference: s.difference,
       totalMatches: s.totalMatches,
+      paidTotal: s.paidTotal,
+      remainingTotal: s.remainingTotal,
+      paidPercent: s.paidPercent,
+      paymentStatus: s.paymentStatus,
+      recordable: s.recordable,
       installments: s.installments,
       updatedAt: s.updatedAt,
     );
@@ -100,9 +138,9 @@ void main() {
     for (final String h in <String>['ĐỢT', 'ĐIỀU KIỆN', 'TỈ LỆ', 'SỐ TIỀN']) {
       expect(find.text(h), findsOneWidget);
     }
-    expect(find.text('Đợt 1 · Cọc'), findsOneWidget);
-    expect(find.text('Đợt 2'), findsOneWidget);
-    expect(find.text('Đợt 3 · Tất toán'), findsOneWidget);
+    expect(find.text('Đợt 1 · Cọc'), findsNWidgets(2));
+    expect(find.text('Đợt 2'), findsNWidgets(2));
+    expect(find.text('Đợt 3 · Tất toán'), findsNWidgets(2));
     expect(find.text('20%'), findsOneWidget);
     expect(find.text('Khi thi công'), findsOneWidget);
     expect(find.text('16.602.192 đ'), findsOneWidget);
@@ -110,11 +148,12 @@ void main() {
     expect(find.text('8.301.096 đ'), findsOneWidget);
     expect(find.text('Tổng lịch'), findsOneWidget);
     expect(find.text('Tổng đơn (sau VAT)'), findsOneWidget);
-    // Both totals equal 83.010.960 đ.
-    expect(find.text('83.010.960 đ'), findsNWidgets(2));
+    // Schedule total, order total after VAT, and the debt block's remaining and
+    // order total (nothing paid yet).
+    expect(find.text('83.010.960 đ'), findsNWidgets(4));
     expect(find.text('Tổng các đợt lệch tổng đơn sau VAT'), findsNothing);
     expect(find.text('Sửa lịch'), findsOneWidget);
-    expect(find.textContaining('Ghi nhận'), findsNothing);
+    expect(find.text('Ghi nhận'), findsNWidgets(3));
   });
 
   testWidgets('an amount-typed installment shows "—" for the percent',
@@ -128,12 +167,22 @@ void main() {
       scheduledTotal: 1000,
       difference: 0,
       totalMatches: true,
+      paidTotal: 0,
+      remainingTotal: 1000,
+      paidPercent: 0,
+      paymentStatus: 'unpaid',
+      recordable: true,
       installments: <Installment>[
         Installment(
+          id: 'i1',
           seq: 1,
           amount: 1000,
           conditionNote: 'Một lần',
           milestone: 'coc',
+          paidAmount: 0,
+          remainingAmount: 1000,
+          status: 'unpaid',
+          payments: <Payment>[],
         ),
       ],
     );
@@ -179,7 +228,7 @@ void main() {
     expect(find.text('Không tải được lịch thanh toán.'), findsOneWidget);
 
     await _tap(tester, find.text('Thử lại'));
-    expect(find.text('Đợt 1 · Cọc'), findsOneWidget);
+    expect(find.text('Đợt 1 · Cọc'), findsNWidgets(2));
     expect(port.calls, 2);
   });
 
@@ -207,7 +256,7 @@ void main() {
     });
     // Back to view mode with the RETURNED schedule.
     expect(find.text('Lưu lịch'), findsNothing);
-    expect(find.text('Đợt 3 · Tất toán'), findsOneWidget);
+    expect(find.text('Đợt 3 · Tất toán'), findsNWidgets(2));
     expect(find.text('Sửa lịch'), findsOneWidget);
   });
 
@@ -333,9 +382,33 @@ void main() {
       scheduledTotal: 100,
       difference: 0,
       totalMatches: true,
+      paidTotal: 0,
+      remainingTotal: 100,
+      paidPercent: 0,
+      paymentStatus: 'unpaid',
+      recordable: true,
       installments: <Installment>[
-        Installment(seq: 1, percent: 40, amount: 40, conditionNote: 'A'),
-        Installment(seq: 2, amount: 60, conditionNote: 'B'),
+        Installment(
+          id: 'i1',
+          seq: 1,
+          percent: 40,
+          amount: 40,
+          conditionNote: 'A',
+          paidAmount: 0,
+          remainingAmount: 40,
+          status: 'unpaid',
+          payments: <Payment>[],
+        ),
+        Installment(
+          id: 'i2',
+          seq: 2,
+          amount: 60,
+          conditionNote: 'B',
+          paidAmount: 0,
+          remainingAmount: 60,
+          status: 'unpaid',
+          payments: <Payment>[],
+        ),
       ],
     );
     await tester.pumpWidget(_host(FakePaymentsPort(initial: mixed)));
@@ -460,7 +533,7 @@ void main() {
         perms: const <PermissionKey>{},
       ));
       await tester.pumpAndSettle();
-      expect(find.text('Đợt 1 · Cọc'), findsOneWidget);
+      expect(find.text('Đợt 1 · Cọc'), findsNWidgets(2));
       expect(find.text('Sửa lịch'), findsNothing);
     });
 
@@ -471,7 +544,7 @@ void main() {
         initial: _withEditable(demoPaymentScheduleConfigured, editable: false),
       )));
       await tester.pumpAndSettle();
-      expect(find.text('Đợt 1 · Cọc'), findsOneWidget);
+      expect(find.text('Đợt 1 · Cọc'), findsNWidgets(2));
       expect(find.text('Sửa lịch'), findsNothing);
     });
 
@@ -520,7 +593,463 @@ void main() {
 
     port.gate.complete(demoPaymentScheduleConfigured);
     await tester.pumpAndSettle();
-    expect(find.text('Đợt 1 · Cọc'), findsOneWidget);
+    expect(find.text('Đợt 1 · Cọc'), findsNWidgets(2));
+  });
+
+  group('record a payment', () {
+    Future<void> openForm(WidgetTester tester, [int index = 0]) async {
+      await _tap(tester, find.text('Ghi nhận').at(index));
+    }
+
+    Future<void> confirm(WidgetTester tester, int seq) async {
+      await _tap(tester, find.text('Ghi nhận đợt $seq'));
+      await _tap(
+        tester,
+        find.descendant(
+          of: find.byType(AppConfirmDialog),
+          matching: find.text('Ghi nhận'),
+        ),
+      );
+    }
+
+    testWidgets(
+        'debt block, status chips and payment lines come from the backend',
+        (WidgetTester tester) async {
+      _screen(tester);
+      await tester.pumpWidget(
+          _host(FakePaymentsPort(initial: demoPaymentScheduleDepositPaid)));
+      await tester.pumpAndSettle();
+      expect(find.text('TIẾN ĐỘ CÔNG NỢ'), findsOneWidget);
+      expect(find.text('Đã thu'), findsNWidgets(2)); // debt row + chip
+      expect(find.text('66.408.768 đ'), findsOneWidget);
+      expect(find.text('20% / 100%'), findsOneWidget);
+      expect(find.text('Còn lại'), findsOneWidget);
+      expect(find.text('Tổng đơn'), findsOneWidget);
+      expect(find.text('Chưa thu'), findsNWidgets(2));
+      expect(find.text('Thu 02/07 · Chuyển khoản ·'), findsOneWidget);
+      // the paid deposit has no button, the two unpaid ones do
+      expect(find.text('Ghi nhận'), findsNWidgets(2));
+    });
+
+    testWidgets('no "Ghi nhận" without payments.record (recordable, unpaid)',
+        (WidgetTester tester) async {
+      _screen(tester);
+      await tester.pumpWidget(_host(
+        FakePaymentsPort(initial: demoPaymentScheduleConfigured),
+        perms: const <PermissionKey>{},
+      ));
+      await tester.pumpAndSettle();
+      expect(find.text('Chưa thu'), findsNWidgets(3));
+      expect(find.text('Ghi nhận'), findsNothing);
+    });
+
+    testWidgets('no "Ghi nhận" when recordable=false (with permission, unpaid)',
+        (WidgetTester tester) async {
+      _screen(tester);
+      await tester.pumpWidget(_host(FakePaymentsPort(
+        initial:
+            _withRecordable(demoPaymentScheduleConfigured, recordable: false),
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Chưa thu'), findsNWidgets(3));
+      expect(find.text('Ghi nhận'), findsNothing);
+    });
+
+    testWidgets(
+        'form prefills remaining + today + transfer; cancelling the dialog sends nothing',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      expect(find.text('GHI NHẬN THANH TOÁN · ĐỢT 1'), findsOneWidget);
+      expect(
+        tester.widget<EditableText>(_input('Số tiền thu')).controller.text,
+        '16602192',
+      );
+      expect(
+        tester.widget<EditableText>(_input('Ngày thu')).controller.text,
+        matches(RegExp(r'^\d{4}-\d{2}-\d{2}$')),
+      );
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Chuyển khoản'))
+            .variant,
+        AppButtonVariant.primary,
+      );
+
+      await _tap(tester, find.text('Ghi nhận đợt 1'));
+      expect(
+        find.text(
+            'Ghi nhận 16.602.192 đ cho Đợt 1?\nKhi đủ đợt cọc, đơn sẽ tự chuyển sang Đã cọc.'),
+        findsOneWidget,
+      );
+      await _tap(
+        tester,
+        find.descendant(
+          of: find.byType(AppConfirmDialog),
+          matching: find.text('Huỷ'),
+        ),
+      );
+      expect(find.byType(AppConfirmDialog), findsNothing);
+      expect(port.recordCalls, isEmpty);
+    });
+
+    testWidgets(
+        'a non-deposit installment: the dialog never promises the Đã cọc move',
+        (WidgetTester tester) async {
+      _screen(tester);
+      await tester.pumpWidget(
+          _host(FakePaymentsPort(initial: demoPaymentScheduleConfigured)));
+      await tester.pumpAndSettle();
+      await openForm(tester, 1);
+      await _tap(tester, find.text('Ghi nhận đợt 2'));
+      expect(find.byType(AppConfirmDialog), findsOneWidget);
+      expect(find.text('Ghi nhận 58.107.672 đ cho Đợt 2?'), findsOneWidget);
+      expect(find.textContaining('Khi đủ đợt cọc'), findsNothing);
+    });
+
+    testWidgets(
+        'confirm sends exactly the form, shows the applied banner, reports the status',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final List<String> reported = <String>[];
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port, onOrderStatusChanged: reported.add));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await _tap(tester, find.text('Tiền mặt'));
+      await tester.enterText(_input('Ghi chú'), 'Khách đưa tại công trình');
+      final String paidOn =
+          tester.widget<EditableText>(_input('Ngày thu')).controller.text;
+      await confirm(tester, 1);
+
+      expect(
+          port.recordCalls.map((RecordPaymentInput c) => c.toJson()),
+          <Map<String, Object>>[
+            <String, Object>{
+              'idempotencyKey': 'key-1',
+              'installmentId': 'inst-1',
+              'amount': 16602192,
+              'paidOn': paidOn,
+              'method': 'cash',
+              'note': 'Khách đưa tại công trình',
+            },
+          ]);
+      expect(find.text('Đơn đã chuyển sang Đã cọc.'), findsOneWidget);
+      expect(find.text('GHI NHẬN THANH TOÁN · ĐỢT 1'), findsNothing);
+      expect(find.text('Thu 02/07 · Chuyển khoản ·'), findsOneWidget);
+      expect(reported, <String>['dacoc']);
+    });
+
+    testWidgets(
+        'retry after a network error keeps the key; a new form gets a new key',
+        (WidgetTester tester) async {
+      _screen(tester);
+      int attempt = 0;
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: () async {
+          attempt++;
+          if (attempt == 1) throw Exception('network down');
+          return demoRecordDepositResult;
+        },
+      );
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(find.text('Không ghi nhận được thanh toán. Vui lòng thử lại.'),
+          findsOneWidget);
+      await confirm(tester, 1);
+      expect(find.text('Đơn đã chuyển sang Đã cọc.'), findsOneWidget);
+      await openForm(tester);
+      await confirm(tester, 2);
+      expect(
+        port.recordCalls.map((RecordPaymentInput c) => c.idempotencyKey),
+        <String>['key-1', 'key-1', 'key-2'],
+      );
+    });
+
+    testWidgets(
+        'pressing "Ghi nhận" again on the open installment after a network error keeps the form and its key',
+        (WidgetTester tester) async {
+      _screen(tester);
+      int attempt = 0;
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: () async {
+          attempt++;
+          if (attempt == 1) throw Exception('network down');
+          return demoRecordDepositResult;
+        },
+      );
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await tester.enterText(_input('Số tiền thu'), '10000000');
+      await tester.pumpAndSettle();
+      await confirm(tester, 1);
+      expect(find.text('Không ghi nhận được thanh toán. Vui lòng thử lại.'),
+          findsOneWidget);
+      await openForm(tester);
+      expect(
+        tester.widget<EditableText>(_input('Số tiền thu')).controller.text,
+        '10000000',
+      );
+      await confirm(tester, 1);
+      expect(
+        port.recordCalls.map((RecordPaymentInput c) => c.idempotencyKey),
+        <String>['key-1', 'key-1'],
+      );
+    });
+
+    testWidgets(
+        'a retry that replays a payment whose response was lost still reports the order status',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final List<String> reported = <String>[];
+      int attempt = 0;
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: () async {
+          attempt++;
+          if (attempt == 1) throw Exception('network down');
+          return RecordPaymentResult(
+            payment: demoRecordDepositResult.payment,
+            schedule: demoRecordDepositResult.schedule,
+            orderStatus: demoRecordDepositResult.orderStatus,
+          );
+        },
+      );
+      await tester.pumpWidget(_host(port, onOrderStatusChanged: reported.add));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(reported, isEmpty);
+      await confirm(tester, 1);
+      expect(reported, <String>['dacoc']);
+    });
+
+    testWidgets('an amount too long to be a number disables the button',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await tester.enterText(_input('Số tiền thu'), '1' * 25);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Ghi nhận đợt 1'))
+            .onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the note is capped at 200 characters as it is typed',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await tester.enterText(_input('Ghi chú'), 'a' * 250);
+      await tester.pumpAndSettle();
+      await confirm(tester, 1);
+      expect(port.recordCalls.single.note, 'a' * 200);
+    });
+
+    test('the fake refuses a used key with another payload, like the backend',
+        () async {
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      RecordPaymentInput input(int amount) => RecordPaymentInput(
+            idempotencyKey: 'key-x',
+            installmentId: demoPaymentScheduleConfigured.installments[0].id,
+            amount: amount,
+            paidOn: '2026-10-21',
+            method: 'bank_transfer',
+          );
+      await port.recordPayment('DH-2048', input(1000));
+      expect(
+        (await port.recordPayment('DH-2048', input(1000))).autoTransition,
+        isNull,
+      );
+      await expectLater(
+        port.recordPayment('DH-2048', input(2000)),
+        throwsA(isA<PaymentsPortError>()
+            .having((PaymentsPortError e) => e.code, 'code', 'CONFLICT')),
+      );
+    });
+
+    testWidgets('closing the form discards its key',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await _tap(tester, find.text('Huỷ'));
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(
+        port.recordCalls.map((RecordPaymentInput c) => c.idempotencyKey),
+        <String>['key-2'],
+      );
+    });
+
+    testWidgets('a blank amount is never sent as 0: the button is disabled',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port =
+          FakePaymentsPort(initial: demoPaymentScheduleConfigured);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await tester.enterText(_input('Số tiền thu'), '');
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Ghi nhận đợt 1'))
+            .onPressed,
+        isNull,
+      );
+      expect(port.recordCalls, isEmpty);
+    });
+
+    testWidgets('skipped ⇒ warning banner with the reason; status not reported',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final List<String> reported = <String>[];
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: const RecordPaymentResult(
+          payment: Payment(
+            id: 'pay-3',
+            installmentId: 'inst-3',
+            amount: 8301096,
+            paidOn: '2026-10-21',
+            method: 'bank_transfer',
+            recordedAt: '2026-10-21T03:00:00.000Z',
+          ),
+          schedule: demoPaymentScheduleConfigured,
+          orderStatus: 'nghiemthu',
+          autoTransition: AutoTransitionResult(
+            event: 'hoan_thanh',
+            outcome: 'skipped',
+            message:
+                'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
+          ),
+        ),
+      );
+      await tester.pumpWidget(_host(port, onOrderStatusChanged: reported.add));
+      await tester.pumpAndSettle();
+      await openForm(tester, 2);
+      await confirm(tester, 3);
+      expect(
+        find.text(
+            'Đã ghi nhận tiền. Trạng thái đơn chưa đổi: Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.'),
+        findsOneWidget,
+      );
+      expect(reported, isEmpty);
+    });
+
+    testWidgets(
+        '400 field errors land under amount and date; the form stays open',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: const PaymentsPortError(
+          code: 'VALIDATION_ERROR',
+          message: 'Khoản thu không hợp lệ.',
+          fieldErrors: <FieldError>[
+            FieldError(
+                field: 'amount',
+                code: 'exceedsRemaining',
+                message: 'Số tiền thu vượt phần còn lại của đợt.'),
+            FieldError(
+                field: 'paidOn',
+                code: 'futureDate',
+                message: 'Ngày thu không được sau hôm nay.'),
+            FieldError(
+                field: 'method',
+                code: 'isIn',
+                message: 'Phương thức thu không hợp lệ.'),
+          ],
+        ),
+      );
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(
+          find.text('Số tiền thu vượt phần còn lại của đợt.'), findsOneWidget);
+      expect(find.text('Ngày thu không được sau hôm nay.'), findsOneWidget);
+      expect(
+        find.text('Khoản thu không hợp lệ.\nPhương thức thu không hợp lệ.'),
+        findsOneWidget,
+      );
+      expect(find.text('GHI NHẬN THANH TOÁN · ĐỢT 1'), findsOneWidget);
+    });
+
+    testWidgets('409 ⇒ server message + "Tải lại" reloads and closes the form',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: const PaymentsPortError(
+          code: 'CONFLICT',
+          message: 'Lịch thanh toán vừa thay đổi — tải lại rồi ghi nhận lại.',
+        ),
+      );
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(
+          find.text('Lịch thanh toán vừa thay đổi — tải lại rồi ghi nhận lại.'),
+          findsOneWidget);
+      await _tap(tester, find.text('Tải lại'));
+      expect(find.text('GHI NHẬN THANH TOÁN · ĐỢT 1'), findsNothing);
+      expect(find.text('TIẾN ĐỘ CÔNG NỢ'), findsOneWidget);
+    });
+
+    testWidgets('double submit: one request while in flight, button disabled',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final Completer<RecordPaymentResult> gate =
+          Completer<RecordPaymentResult>();
+      final FakePaymentsPort port = FakePaymentsPort(
+        initial: demoPaymentScheduleConfigured,
+        replyToRecord: () => gate.future,
+      );
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await openForm(tester);
+      await confirm(tester, 1);
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(AppButton, 'Đang ghi nhận…'))
+            .onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('Đang ghi nhận…'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(port.recordCalls, hasLength(1));
+      gate.complete(demoRecordDepositResult);
+      await tester.pumpAndSettle();
+      expect(find.text('Đơn đã chuyển sang Đã cọc.'), findsOneWidget);
+    });
   });
 
   for (final double width in <double>[320.0, 360.0]) {
@@ -536,21 +1065,56 @@ void main() {
         scheduledTotal: 74709864,
         difference: -8301096,
         totalMatches: false,
+        paidTotal: 999999999,
+        remainingTotal: -999999999,
+        paidPercent: 100,
+        paymentStatus: 'partial',
+        recordable: true,
         installments: <Installment>[
           for (int i = 1; i <= 12; i++)
             Installment(
+              id: 'i$i',
               seq: i,
               percent: i == 12 ? null : 1,
               amount: 83010960,
               conditionNote: longNote,
               milestone: i == 12 ? 'tat_toan' : (i == 1 ? 'coc' : null),
+              paidAmount: 1,
+              remainingAmount: 83010959,
+              status: 'partial',
+              payments: <Payment>[
+                Payment(
+                  id: 'p$i',
+                  installmentId: 'i$i',
+                  amount: 1999999999,
+                  paidOn: '2026-12-31',
+                  method: 'bank_transfer',
+                  note: longNote,
+                  recordedAt: '2026-12-31T00:00:00.000Z',
+                ),
+              ],
             ),
         ],
       );
       await tester.pumpWidget(_host(FakePaymentsPort(initial: long)));
       await tester.pumpAndSettle();
-      expect(find.text('Đợt 12 · Tất toán'), findsOneWidget);
+      expect(find.text('Đợt 12 · Tất toán'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
+
+      expect(find.text('Thu một phần'), findsNWidgets(12));
+      await _tap(tester, find.text('Ghi nhận').last);
+      // AppFrame paints its label upper-cased.
+      expect(
+        find.text('Ghi nhận thanh toán · Đợt 12'.toUpperCase()),
+        findsOneWidget,
+      );
+      await tester.enterText(_input('Ghi chú'), longNote);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await _tap(tester, find.text('Ghi nhận đợt 12'));
+      expect(find.byType(AppConfirmDialog), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await _tap(tester, find.text('Huỷ').last);
 
       await _tap(tester, find.text('Sửa lịch'));
       expect(find.text('Xoá đợt'), findsNWidgets(12));

@@ -1,4 +1,4 @@
-/* hand-authored — screen-local layout for Lịch thanh toán (Story 7.1).
+/* hand-authored — screen-local layout for Lịch thanh toán (Stories 7.1–7.2).
 
    LAYOUT ONLY. Every colour comes from the token layer or a shipped
    design-system class — this file invents no palette (AD-13). */
@@ -69,4 +69,35 @@
 
 .ps-error {
   color: var(--danger);
+}
+
+.ps-debt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-22);
+}
+
+.ps-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+/* One colour token drives the whole pill: border follows the text colour. */
+.ps-chip {
+  border-color: currentColor;
+  background: transparent;
+}
+
+.ps-chip--paid {
+  color: var(--ok);
+}
+
+.ps-chip--partial {
+  color: var(--warn);
+}
+
+.ps-chip--unpaid {
+  color: var(--muted);
 }

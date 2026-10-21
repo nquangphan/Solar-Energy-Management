@@ -17,6 +17,33 @@ import {
   type ScheduleErrorCode,
 } from './domain/payment-schedule';
 import { PaymentScheduleConfigured } from './domain/payment-schedule-events';
+import {
+  RECORDABLE_ORDER_STATUSES,
+  installmentStatus,
+  orderPaymentStatus,
+  paidPercent,
+  type PaymentStatus,
+} from './domain/payment';
+
+/** One recorded payment as returned to clients. */
+export interface PaymentView {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly amount: number;
+  readonly paidOn: string;
+  readonly method: string;
+  readonly note: string | null;
+  readonly recordedAt: Date;
+}
+
+/** One installment with what has been collected on it — every figure computed here. */
+export interface InstallmentView extends ResolvedInstallment {
+  readonly id: string;
+  readonly paidAmount: number;
+  readonly remainingAmount: number;
+  readonly status: PaymentStatus;
+  readonly payments: readonly PaymentView[];
+}
 
 /** Schedule as returned to clients — every number computed here, never by the client. */
 export interface PaymentScheduleView {
@@ -27,7 +54,12 @@ export interface PaymentScheduleView {
   readonly scheduledTotal: number;
   readonly difference: number;
   readonly totalMatches: boolean;
-  readonly installments: readonly ResolvedInstallment[];
+  readonly paidTotal: number;
+  readonly remainingTotal: number;
+  readonly paidPercent: number;
+  readonly paymentStatus: PaymentStatus;
+  readonly recordable: boolean;
+  readonly installments: readonly InstallmentView[];
   readonly updatedAt: Date | null;
 }
 
@@ -43,6 +75,7 @@ const NOT_EDITABLE_MESSAGE =
   'Chỉ cấu hình lịch thanh toán khi đơn đã chốt và chưa đóng.';
 const ORDER_CHANGED_MESSAGE =
   'Đơn vừa thay đổi — tải lại rồi cấu hình lại lịch.';
+const HAS_PAYMENTS_MESSAGE = 'Đơn đã có thanh toán — không sửa lịch được.';
 
 interface StoredInstallment {
   readonly seq: number;
@@ -60,12 +93,36 @@ const toResolved = (row: StoredInstallment): ResolvedInstallment => ({
   milestone: row.milestone as MocTuDong | null,
 });
 
+interface StoredPayment {
+  readonly id: string;
+  readonly installmentId: string;
+  readonly amount: number;
+  readonly paidOn: Date;
+  readonly method: string;
+  readonly note: string | null;
+  readonly createdAt: Date;
+}
+
+/** `paidOn` is a DATE column: Prisma returns UTC midnight, so the ISO date part is the day. */
+export const toPaymentView = (row: StoredPayment): PaymentView => ({
+  id: row.id,
+  installmentId: row.installmentId,
+  amount: row.amount,
+  paidOn: row.paidOn.toISOString().slice(0, 10),
+  method: row.method,
+  note: row.note,
+  recordedAt: row.createdAt,
+});
+
 /**
  * Payment schedule of an order (FR-11): read, and replace-all.
  *
  * Scope first: every public method goes through `OrdersService.getScopedTotal()` before it
  * touches anything, so an order the caller cannot see is a 404 with the same message as a
  * missing one (source-guard `no-unscoped-order-write.spec.ts`).
+ *
+ * Once an order has a payment its schedule is frozen (409 on replace): `installments` and
+ * `payments` then can never disagree, and no replace can hit the FK from `payments`.
  *
  * This service never writes the order aggregate and never touches `Order.status`.
  */
@@ -92,16 +149,7 @@ export class PaymentSchedulesService {
       vatRatePercent,
       tieredPricingEnabled,
     );
-    const schedule = await this.prisma.paymentSchedule.findUnique({
-      where: { orderId },
-      include: { installments: { orderBy: { seq: 'asc' } } },
-    });
-    return this.viewOf(
-      order,
-      total,
-      schedule === null ? null : schedule.installments.map(toResolved),
-      schedule?.updatedAt ?? null,
-    );
+    return this.viewFor(order, total);
   }
 
   /**
@@ -109,8 +157,10 @@ export class PaymentSchedulesService {
    *  1. scoped read (404) → 2. status gate (409) → 3. resolve + validate (400) — all before a
    *     transaction, so a rejected request costs no lock;
    *  4. in one transaction: lock the `orders` row FIRST (the same lock payment recording takes),
-   *     re-read status/effective version (409 if the total we resolved against is stale), skip
-   *     an identical list, then upsert schedule + delete + insert installments;
+   *     re-read status/effective version (409 if the total we resolved against is stale), refuse
+   *     when the order already has a payment (409 — checked under the lock, a payment may have
+   *     just committed), skip an identical list, then upsert schedule + delete + insert
+   *     installments;
    *  5. publish `PaymentScheduleConfigured` AFTER commit, once.
    *
    * Without the row lock, delete+insert is not an atomic replace under READ COMMITTED: two
@@ -163,6 +213,9 @@ export class PaymentSchedulesService {
       ) {
         throw new AppException(ErrorCode.CONFLICT, 409, ORDER_CHANGED_MESSAGE);
       }
+      if ((await tx.payment.count({ where: { orderId } })) > 0) {
+        throw new AppException(ErrorCode.CONFLICT, 409, HAS_PAYMENTS_MESSAGE);
+      }
 
       const existing = await tx.paymentSchedule.findUnique({
         where: { orderId },
@@ -172,7 +225,7 @@ export class PaymentSchedulesService {
       if (existing !== null) {
         before = existing.installments.map(toResolved);
         if (isSameSchedule(before, after)) {
-          return { changed: false, before, updatedAt: existing.updatedAt };
+          return { changed: false, before };
         }
       }
 
@@ -189,7 +242,7 @@ export class PaymentSchedulesService {
           data: after.map((i) => ({ scheduleId: schedule.id, ...i })),
         });
       }
-      return { changed: true, before, updatedAt: schedule.updatedAt };
+      return { changed: true, before };
     });
 
     if (outcome.changed) {
@@ -203,28 +256,60 @@ export class PaymentSchedulesService {
         ),
       );
     }
-    return this.viewOf(order, total, after, outcome.updatedAt);
+    return this.viewFor(order, total);
   }
 
-  private viewOf(
-    order: Order,
+  /**
+   * The schedule view of an order, read fresh: installments, the payments on each, and every
+   * paid/remaining/status figure (pure domain functions). Shared with payment recording so the
+   * view is built in exactly one place. `order` must already be scoped by the caller.
+   */
+  async viewFor(
+    order: Pick<Order, 'id' | 'status'>,
     orderTotal: number,
-    installments: readonly ResolvedInstallment[] | null,
-    updatedAt: Date | null,
-  ): PaymentScheduleView {
-    const list = installments ?? [];
-    const scheduledTotal = list.reduce((sum, i) => sum + i.amount, 0);
+  ): Promise<PaymentScheduleView> {
+    const schedule = await this.prisma.paymentSchedule.findUnique({
+      where: { orderId: order.id },
+      include: {
+        installments: {
+          orderBy: { seq: 'asc' },
+          include: {
+            payments: { orderBy: [{ paidOn: 'asc' }, { createdAt: 'asc' }] },
+          },
+        },
+      },
+    });
+    const installments: InstallmentView[] = (schedule?.installments ?? []).map(
+      (row) => {
+        const paidAmount = row.payments.reduce((sum, p) => sum + p.amount, 0);
+        return {
+          id: row.id,
+          ...toResolved(row),
+          paidAmount,
+          remainingAmount: Math.max(0, row.amount - paidAmount),
+          status: installmentStatus(row.amount, paidAmount),
+          payments: row.payments.map(toPaymentView),
+        };
+      },
+    );
+    const scheduledTotal = installments.reduce((sum, i) => sum + i.amount, 0);
+    const paidTotal = installments.reduce((sum, i) => sum + i.paidAmount, 0);
     const difference = orderTotal - scheduledTotal;
     return {
       orderId: order.id,
-      configured: installments !== null,
-      editable: EDITABLE_ORDER_STATUSES.has(order.status),
+      configured: schedule !== null,
+      editable: EDITABLE_ORDER_STATUSES.has(order.status) && paidTotal === 0,
       orderTotal,
       scheduledTotal,
       difference,
-      totalMatches: installments !== null && difference === 0,
-      installments: list,
-      updatedAt,
+      totalMatches: schedule !== null && difference === 0,
+      paidTotal,
+      remainingTotal: orderTotal - paidTotal,
+      paidPercent: paidPercent(orderTotal, paidTotal),
+      paymentStatus: orderPaymentStatus(orderTotal, paidTotal),
+      recordable: RECORDABLE_ORDER_STATUSES.has(order.status),
+      installments,
+      updatedAt: schedule?.updatedAt ?? null,
     };
   }
 }

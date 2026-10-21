@@ -366,6 +366,14 @@ const TU_DONG_GATE_THUA = new Error('tu-dong-gate-thua');
 const THU_CONG_GATE_THUA = new Error('thu-cong-gate-thua');
 
 /**
+ * Sentinel of the in-caller-tx auto lane (`autoTransitionInTx`). The caller already holds the
+ * order row lock and the status was read inside that tx, so losing the atomic gate cannot
+ * happen; if it ever does it is a programming error and must roll the caller's tx back — the
+ * caller never catches it (only 403/409 `AppException`s are caught).
+ */
+const AUTO_IN_TX_GATE_LOST = new Error('auto-in-tx-gate-lost');
+
+/**
  * Sentinel abort transaction lane HUỶ ĐƠN (Story 5.7). Cùng luật với lane thủ công — người
  * bấm Huỷ mà thua cuộc đua phải ăn 409, không được nuốt thành no-op — nhưng là một OBJECT
  * RIÊNG: hai lane bắt sentinel theo IDENTITY, dùng chung một instance là để lane này nuốt
@@ -671,10 +679,10 @@ export class OrdersService {
    * một danh sách cặp status/event chép tay ở đây.
    *
    * ⚠️ RANH GIỚI TRANSACTION: method tự mở transaction của NÓ, không chạy trong tx của
-   * caller — `payments/` không được cầm `tx` của `orders/` (hai module, hai aggregate) và
-   * engine cần khoá dòng đơn ở đúng phạm vi của mình. Đánh đổi phải biết: giữa "Payment
-   * commit" và "status đổi" có một khe; chấp nhận được vì cửa này idempotent nên caller
-   * retry được.
+   * caller. Payment recording does NOT use this door: the 2026-10-21 decision (spine AD-11)
+   * puts the Payment insert and its transition in ONE transaction under the order row lock,
+   * through `autoTransitionInTx` below. This method keeps its behaviour for callers that own
+   * no transaction.
    *
    * Chỉ MỘT event: `StatusChanged`. Event nghiệp vụ đi kèm (`DepositRecorded`…) là của
    * `payments/` ở 7.2, không phải của `orders/`.
@@ -723,6 +731,48 @@ export class OrdersService {
 
     // SAU commit (AD-18) — producer không gọi audit/FCM trực tiếp.
     await this.eventBus.publish(statusChanged);
+  }
+
+  /**
+   * Auto-transition INSIDE the caller's transaction (payment recording, Story 7.2 — AD-11 as
+   * decided 2026-10-21: the Payment insert and the transition it triggers commit or roll back
+   * together, under the order row lock).
+   *
+   * Direction is deliberate: `payments/` owns this tx because the aggregate being written is
+   * `Payment`; `orders/` stays the ONLY place that writes `Order.status` (through the same
+   * private `applyTransition` engine — same table, same gates, same stock check on close).
+   *
+   * Contract with the caller:
+   *  - the caller has ALREADY locked the `orders` row (first op of its tx); the order is
+   *    re-read here through `tx`, so the status the engine gates on is the locked one;
+   *  - order already at the event's target ⇒ `null` (no-op "already"), nothing written;
+   *  - never opens a transaction, never publishes, never catches: the returned `StatusChanged`
+   *    is published by the caller AFTER commit, and every 403/409 refusal of the engine is
+   *    thrown as is. Every such refusal is thrown BEFORE the engine's first write (pure
+   *    evaluation, then a stock check that only reads and locks), so a caller that catches it
+   *    still holds a clean tx and can commit its own writes;
+   *  - `actorPermissions` are the real actor's, resolved fresh by the caller — no bypass.
+   */
+  async autoTransitionInTx(
+    tx: PrismaTx,
+    input: {
+      readonly orderId: string;
+      readonly event: TransitionEvent;
+      readonly actorAccountId: string;
+      readonly actorPermissions: ReadonlySet<string>;
+      readonly occurredAt: Date;
+    },
+  ): Promise<StatusChanged | null> {
+    const order = await this.findOrThrowIn(tx, input.orderId);
+    if (daTaiDich(order.status, input.event)) return null;
+    return this.applyTransition(tx, {
+      order,
+      event: input.event,
+      actorPermissions: input.actorPermissions,
+      actorAccountId: input.actorAccountId,
+      sentinel: AUTO_IN_TX_GATE_LOST,
+      occurredAt: input.occurredAt,
+    });
   }
 
   /**
