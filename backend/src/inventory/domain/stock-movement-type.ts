@@ -8,7 +8,7 @@
 export const STOCK_MOVEMENT_TYPE = {
   /** Held for a confirmed order version (qty > 0). */
   reserve: 'reserve',
-  /** What an older version still held, given back on re-confirm (qty < 0). */
+  /** What a version still held, given back on re-confirm, cancel or completion (qty < 0). */
   release: 'release',
   /** Order-bound stock issue releasing what the order holds (qty < 0). */
   issue: 'xuat',

@@ -4099,6 +4099,15 @@
                 "xuat"
               ]
             }
+          },
+          {
+            "name": "isReturn",
+            "required": false,
+            "in": "query",
+            "description": "true ⇒ chỉ phiếu nhập trả; false ⇒ không có phiếu nhập trả; vắng ⇒ mọi phiếu.",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4113,7 +4122,7 @@
             }
           },
           "400": {
-            "description": "`type` không phải nhap|xuat (VALIDATION_ERROR).",
+            "description": "`type` không phải nhap|xuat hoặc `isReturn` không phải true|false (VALIDATION_ERROR).",
             "content": {
               "application/json": {
                 "schema": {
@@ -4124,6 +4133,91 @@
           },
           "403": {
             "description": "Thiếu inventory.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/stock-vouchers/{id}/return": {
+      "post": {
+        "operationId": "StockVouchersController_createReturn",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReturnVoucherRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Phiếu nhập trả đã lưu: cộng `onHand` đúng số đếm được, giá vốn dòng = giá vốn dòng phiếu xuất gốc. `lines[].unitCost` chỉ có mặt nếu caller có costs.view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockVoucherDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: body sai (lines rỗng, qty không nguyên dương…), lặp sản phẩm (`fieldErrors[].code = DUPLICATE_PRODUCT`), sản phẩm không có trên phiếu gốc (`NOT_ON_ORIGIN_VOUCHER`), nhận lại quá số đã xuất (`RETURN_EXCEEDS_ISSUED`). Không dòng nào được ghi.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu inventory.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có phiếu gốc này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT: phiếu gốc không phải phiếu xuất gắn đơn, đơn chưa huỷ, hoặc phiếu xuất đã có phiếu nhập trả.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6427,6 +6521,45 @@
           "qty"
         ]
       },
+      "StockVoucherReturnOfDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ma": {
+            "type": "string",
+            "description": "Mã phiếu xuất gốc.",
+            "example": "PK-X-0096"
+          },
+          "orderId": {
+            "type": "string",
+            "description": "Đơn (đã huỷ) của phiếu xuất gốc."
+          }
+        },
+        "required": [
+          "id",
+          "ma",
+          "orderId"
+        ]
+      },
+      "StockVoucherReturnRefDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ma": {
+            "type": "string",
+            "description": "Mã phiếu nhập trả.",
+            "example": "PK-NT-0004"
+          }
+        },
+        "required": [
+          "id",
+          "ma"
+        ]
+      },
       "StockVoucherDetailDto": {
         "type": "object",
         "properties": {
@@ -6448,6 +6581,10 @@
           "orderId": {
             "type": "string",
             "description": "Đơn mà phiếu xuất này gắn vào (một Đơn — một phiếu xuất). CHỈ có mặt ở phiếu xuất gắn đơn; phiếu tự do ⇒ field vắng mặt hẳn (không phải null)."
+          },
+          "returnOfVoucherId": {
+            "type": "string",
+            "description": "Phiếu xuất gốc mà phiếu nhập trả này nhận hàng về. CHỈ có mặt ở phiếu nhập trả; phiếu khác ⇒ field vắng mặt hẳn."
           },
           "createdAt": {
             "format": "date-time",
@@ -6476,6 +6613,26 @@
             "items": {
               "$ref": "#/components/schemas/StockVoucherLineResponseDto"
             }
+          },
+          "returnOf": {
+            "description": "CHỈ có mặt ở phiếu nhập trả: phiếu xuất gốc + đơn đã huỷ.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockVoucherReturnOfDto"
+              }
+            ]
+          },
+          "returnVoucher": {
+            "description": "CHỈ có mặt ở phiếu xuất gắn đơn đã có phiếu nhập trả.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockVoucherReturnRefDto"
+              }
+            ]
+          },
+          "canReturn": {
+            "type": "boolean",
+            "description": "true ⇔ phiếu xuất gắn đơn, đơn đã huỷ, chưa có phiếu nhập trả — backend tính, client không tự suy."
           }
         },
         "required": [
@@ -6487,7 +6644,8 @@
           "soDong",
           "tongSoLuong",
           "note",
-          "lines"
+          "lines",
+          "canReturn"
         ]
       },
       "OrderStockIssueLineDto": {
@@ -6941,6 +7099,44 @@
           "lines"
         ]
       },
+      "ReturnVoucherLineRequestDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string",
+            "description": "Sản phẩm trên phiếu xuất gốc (UUID)."
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng đếm được khi nhận lại — nguyên dương, tối đa 1000000, không vượt số đã xuất. Sản phẩm không gửi = nhận lại 0.",
+            "example": 10
+          }
+        },
+        "required": [
+          "productId",
+          "qty"
+        ]
+      },
+      "CreateReturnVoucherRequestDto": {
+        "type": "object",
+        "properties": {
+          "note": {
+            "type": "string",
+            "description": "Ghi chú (vd tình trạng hàng nhận lại). Tối đa 500 ký tự.",
+            "example": "2 tấm nứt kính"
+          },
+          "lines": {
+            "description": "Từ 1 đến 100 dòng; không lặp sản phẩm (DUPLICATE_PRODUCT), chỉ sản phẩm có trên phiếu gốc.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReturnVoucherLineRequestDto"
+            }
+          }
+        },
+        "required": [
+          "lines"
+        ]
+      },
       "StockVoucherSummaryDto": {
         "type": "object",
         "properties": {
@@ -6962,6 +7158,10 @@
           "orderId": {
             "type": "string",
             "description": "Đơn mà phiếu xuất này gắn vào (một Đơn — một phiếu xuất). CHỈ có mặt ở phiếu xuất gắn đơn; phiếu tự do ⇒ field vắng mặt hẳn (không phải null)."
+          },
+          "returnOfVoucherId": {
+            "type": "string",
+            "description": "Phiếu xuất gốc mà phiếu nhập trả này nhận hàng về. CHỈ có mặt ở phiếu nhập trả; phiếu khác ⇒ field vắng mặt hẳn."
           },
           "createdAt": {
             "format": "date-time",

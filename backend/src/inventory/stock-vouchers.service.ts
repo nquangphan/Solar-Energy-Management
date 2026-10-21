@@ -4,10 +4,14 @@ import { AppException } from '../common/errors/app.exception';
 import type { FieldErrorDto } from '../common/errors/dto/field-error.dto';
 import { ErrorCode } from '../common/errors/error-code';
 import { EventBus } from '../events/event-bus';
+import { TRANG_THAI_HUY } from '../orders/domain/order-status';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  DUPLICATE_PRODUCT,
   INSUFFICIENT_STOCK,
+  NOT_ON_ORIGIN_VOUCHER,
   PRODUCT_NOT_STOCKABLE,
+  RETURN_EXCEEDS_ISSUED,
   maPhieu,
   tinhGiaVonBinhQuan,
   type LoaiPhieu,
@@ -32,6 +36,8 @@ export interface StockVoucherSummary {
   type: LoaiPhieu;
   /** Present only on an order-bound stock-out — a free-standing voucher omits the key. */
   orderId?: string;
+  /** Present only on a return voucher: the origin stock-out it counts stock back from. */
+  returnOfVoucherId?: string;
   createdAt: Date;
   nguoiTao: { id: string; displayName: string };
   soDong: number;
@@ -51,6 +57,18 @@ export interface StockVoucherLineView {
 export interface StockVoucherDetail extends StockVoucherSummary {
   note: string | null;
   lines: StockVoucherLineView[];
+  /** Return voucher only: its origin stock-out and that stock-out's (cancelled) order. */
+  returnOf?: { id: string; ma: string; orderId: string };
+  /** Order-bound stock-out only, once a return voucher exists for it. */
+  returnVoucher?: { id: string; ma: string };
+  /** An order-bound stock-out whose order is cancelled and that has no return voucher yet. */
+  canReturn: boolean;
+}
+
+export interface CreateReturnVoucherInput {
+  note?: string;
+  /** A product of the origin left out is taken back as 0. */
+  lines: { productId: string; qty: number }[];
 }
 
 export interface TaoPhieuInput {
@@ -138,6 +156,9 @@ const CHI_TIET_INCLUDE = {
     include: { product: { select: { name: true, sku: true, unit: true } } },
     orderBy: { product: { name: 'asc' } },
   },
+  order: { select: { status: true } },
+  returnOf: { select: { id: true, seq: true, type: true, orderId: true } },
+  returnVoucher: { select: { id: true, seq: true, type: true } },
 } satisfies Prisma.StockVoucherInclude;
 
 type PhieuChiTietRow = Prisma.StockVoucherGetPayload<{
@@ -150,6 +171,7 @@ function tomTat(
     seq: number;
     type: string;
     orderId?: string | null;
+    returnOfVoucherId?: string | null;
     createdAt: Date;
     createdBy: { id: string; displayName: string };
   },
@@ -158,9 +180,12 @@ function tomTat(
   const type = phieu.type as LoaiPhieu;
   return {
     id: phieu.id,
-    ma: maPhieu(type, phieu.seq),
+    ma: maPhieu(type, phieu.seq, phieu.returnOfVoucherId != null),
     type,
     ...(phieu.orderId != null && { orderId: phieu.orderId }),
+    ...(phieu.returnOfVoucherId != null && {
+      returnOfVoucherId: phieu.returnOfVoucherId,
+    }),
     createdAt: phieu.createdAt,
     nguoiTao: phieu.createdBy,
     soDong: lines.length,
@@ -180,8 +205,38 @@ function chiTiet(phieu: PhieuChiTietRow): StockVoucherDetail {
       qty: l.qty,
       unitCost: l.unitCost,
     })),
+    ...(phieu.returnOf != null && {
+      returnOf: {
+        id: phieu.returnOf.id,
+        // The origin is an order-bound stock-out: never itself a return, always has an order.
+        ma: maPhieu(phieu.returnOf.type as LoaiPhieu, phieu.returnOf.seq),
+        orderId: phieu.returnOf.orderId!,
+      },
+    }),
+    ...(phieu.returnVoucher != null && {
+      returnVoucher: {
+        id: phieu.returnVoucher.id,
+        ma: maPhieu(
+          phieu.returnVoucher.type as LoaiPhieu,
+          phieu.returnVoucher.seq,
+          true,
+        ),
+      },
+    }),
+    canReturn:
+      phieu.type === 'xuat' &&
+      phieu.order?.status === TRANG_THAI_HUY &&
+      phieu.returnVoucher == null,
   };
 }
+
+/** Refusal of a return voucher on an origin that is not an order-bound stock-out. */
+const RETURN_ORIGIN_NOT_ORDER_ISSUE_MESSAGE =
+  'Chỉ phiếu xuất gắn đơn mới lập được phiếu nhập trả.';
+
+/** Refusal of a return voucher while the origin's order is still alive. */
+const RETURN_ORDER_NOT_CANCELLED_MESSAGE =
+  'Đơn chưa huỷ — không lập phiếu nhập trả.';
 
 /**
  * Phiếu kho nhập/xuất (FR-25) — đường GHI tồn kho duy nhất ở `inventory/` hiện nay.
@@ -621,6 +676,270 @@ export class StockVouchersService {
   }
 
   /**
+   * Return voucher (`nhap`) counted back in from an order-bound stock-out whose order was
+   * cancelled. Cancelling never adds stock by itself: goods come back only through this voucher,
+   * at the quantity someone counted — less than issued is normal (cut, installed, broken).
+   *
+   * - `unitCost` of each line is the ORIGIN line's `unitCost` (the cost frozen at issue, equal to
+   *   the order line's `costPriceSnapshot`), never the client's and never today's `costPrice`;
+   *   the weighted average moves like any stock-in, so stock stays valued right.
+   * - A product that stopped tracking stock or was deactivated since is still taken back: this
+   *   undoes a deduction made while it was tracked; refusing would lose real goods from the books.
+   * - Writes no `StockMovement`: what the order held was released at issue and at cancel.
+   * - Writes no order table: the cancelled order is only read (`huy` is terminal).
+   *
+   * Lock: `products` of the ORIGIN voucher (a fixed set) with the same statement as every stock
+   * write, so two returns of the same origin queue on the same lock; "already returned" and the
+   * order status are re-checked after it. The `returnOfVoucherId` unique is the last net.
+   */
+  async createReturnVoucher(
+    originId: string,
+    input: CreateReturnVoucherInput,
+    actorAccountId: string,
+  ): Promise<StockVoucherDetail> {
+    const { phieu, dongSnapshot, orderId } = await this.prisma.$transaction(
+      async (tx) => {
+        const origin = await tx.stockVoucher.findUnique({
+          where: { id: originId },
+          include: {
+            lines: {
+              include: { product: { select: { unit: true } } },
+            },
+          },
+        });
+        if (origin === null) {
+          throw new AppException(
+            ErrorCode.NOT_FOUND,
+            404,
+            `Không tìm thấy phiếu kho: ${originId}`,
+          );
+        }
+        // A return voucher is a `nhap` without an order pair ⇒ refused here too.
+        if (origin.type !== 'xuat' || origin.orderId === null) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            RETURN_ORIGIN_NOT_ORDER_ISSUE_MESSAGE,
+          );
+        }
+        const originOrderId = origin.orderId;
+
+        const originIds = origin.lines.map((l) => l.productId);
+        await tx.$queryRaw`
+          SELECT id FROM products WHERE id = ANY(${originIds}) ORDER BY id FOR UPDATE`;
+
+        const existing = await tx.stockVoucher.findUnique({
+          where: { returnOfVoucherId: originId },
+          select: { seq: true, type: true },
+        });
+        if (existing !== null) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            `Phiếu xuất này đã có phiếu nhập trả ${maPhieu(existing.type as LoaiPhieu, existing.seq, true)}.`,
+          );
+        }
+        const order = await tx.order.findUnique({
+          where: { id: originOrderId },
+          select: { status: true },
+        });
+        if (order?.status !== TRANG_THAI_HUY) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            RETURN_ORDER_NOT_CANCELLED_MESSAGE,
+          );
+        }
+
+        const originByProduct = new Map(
+          origin.lines.map((l) => [l.productId, l]),
+        );
+        const loi: FieldErrorDto[] = [];
+        const seen = new Set<string>();
+        input.lines.forEach((dong, i) => {
+          const goc = originByProduct.get(dong.productId);
+          if (seen.has(dong.productId)) {
+            loi.push({
+              field: `lines.${i}.productId`,
+              code: DUPLICATE_PRODUCT,
+              message: 'Mỗi sản phẩm chỉ được một dòng trong phiếu.',
+            });
+          } else if (goc === undefined) {
+            loi.push({
+              field: `lines.${i}.productId`,
+              code: NOT_ON_ORIGIN_VOUCHER,
+              message: 'Sản phẩm không có trên phiếu xuất gốc.',
+            });
+          } else if (dong.qty > goc.qty) {
+            loi.push({
+              field: `lines.${i}.qty`,
+              code: RETURN_EXCEEDS_ISSUED,
+              message: `Đã xuất ${goc.qty} ${goc.product.unit}, không nhận lại được ${dong.qty}.`,
+            });
+          }
+          seen.add(dong.productId);
+        });
+        if (loi.length > 0) {
+          throw new AppException(
+            ErrorCode.VALIDATION_ERROR,
+            400,
+            'Phiếu nhập trả không hợp lệ.',
+            loi,
+          );
+        }
+
+        const ids = input.lines.map((l) => l.productId);
+        const products = await tx.product.findMany({
+          where: { id: { in: ids } },
+          include: { stockItem: true },
+        });
+        const theoId = new Map(products.map((p) => [p.id, p]));
+
+        const dongSnapshot: StockVoucherLineSnapshot[] = [];
+        for (const dong of input.lines) {
+          const p = theoId.get(dong.productId)!;
+          const unitCost = originByProduct.get(dong.productId)!.unitCost;
+          const onHandTruoc = p.stockItem?.onHand ?? 0;
+          const giaVonTruoc = p.costPrice;
+          const onHandSau = onHandTruoc + dong.qty;
+          const giaVonSau = tinhGiaVonBinhQuan({
+            onHandTruoc,
+            giaVonTruoc,
+            qtyNhap: dong.qty,
+            donGiaNhap: unitCost,
+          });
+          await tx.stockItem.upsert({
+            where: { productId: p.id },
+            create: { productId: p.id, onHand: onHandSau },
+            update: { onHand: onHandSau },
+          });
+          await tx.product.update({
+            where: { id: p.id },
+            data: { costPrice: giaVonSau },
+          });
+          dongSnapshot.push({
+            productId: p.id,
+            qty: dong.qty,
+            unitCost,
+            onHandTruoc,
+            onHandSau,
+            giaVonTruoc,
+            giaVonSau,
+          });
+        }
+
+        const phieu = await tx.stockVoucher.create({
+          data: {
+            type: 'nhap',
+            note: input.note || null,
+            returnOfVoucherId: originId,
+            createdByAccountId: actorAccountId,
+            lines: {
+              create: dongSnapshot.map((d) => ({
+                productId: d.productId,
+                qty: d.qty,
+                unitCost: d.unitCost,
+              })),
+            },
+          },
+          include: CHI_TIET_INCLUDE,
+        });
+        return { phieu, dongSnapshot, orderId: originOrderId };
+      },
+    );
+
+    const ketQua = chiTiet(phieu);
+    await this.eventBus.publish(
+      new StockVoucherCreated(
+        actorAccountId,
+        {
+          id: ketQua.id,
+          ma: ketQua.ma,
+          type: 'nhap',
+          note: ketQua.note,
+          lines: dongSnapshot,
+          returnOfVoucherId: originId,
+          orderId,
+        },
+        new Date(),
+      ),
+    );
+    return ketQua;
+  }
+
+  /**
+   * Gives back what a CANCELLED order still holds — called by the `OrderCancelled` subscriber,
+   * AFTER the cancel committed, so it opens its own tx.
+   *
+   * Locks the `orders` row first (every ledger row of one order is written under it; system
+   * order `orders → products`), then re-reads the status: an order that is not `huy` (a replayed
+   * or misrouted event) is left alone — releasing a live order's hold would corrupt `reserved`
+   * for good. Idempotent: once released, the order holds nothing and a rerun writes nothing.
+   * Never touches `onHand`: goods already issued come back only through a return voucher.
+   */
+  async releaseForCancelledOrder(orderId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
+      if (locked.length === 0) return;
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { status: true },
+      });
+      if (order?.status !== TRANG_THAI_HUY) return;
+      await this.releaseHeldForOrderInTx(tx, orderId);
+    });
+  }
+
+  /**
+   * Releases EVERYTHING an order still holds — runs INSIDE the caller's transaction, which
+   * ASSUMES the `orders` row lock is held. Used when an order ends: cancelled (above) or
+   * completed (the status engine, same tx as the transition).
+   *
+   * Per ORDER, across EVERY version: a re-opened order keeps its hold on the OLD version until
+   * re-confirmed. Released by what the ledger holds — not by line qty, and regardless of the
+   * product's current `tracksStock` (a product untracked after confirm still gives back what
+   * was promised). An issued order already nets to 0 ⇒ nothing is written. Releasing per
+   * (version, item) group relies on re-confirm emptying the old version before any issue
+   * (the issue writes the whole order's hold on the current version). Never touches
+   * `onHand`, never publishes (the ledger is its own trace).
+   */
+  async releaseHeldForOrderInTx(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ): Promise<void> {
+    const held = (
+      await tx.stockMovement.groupBy({
+        by: ['orderVersionId', 'stockItemId'],
+        where: { orderId },
+        _sum: { qty: true },
+        orderBy: [{ orderVersionId: 'asc' }, { stockItemId: 'asc' }],
+      })
+    ).filter((g) => (g._sum.qty ?? 0) > 0);
+    if (held.length === 0) return;
+
+    const items = await tx.stockItem.findMany({
+      where: { id: { in: [...new Set(held.map((g) => g.stockItemId))] } },
+      select: { productId: true },
+    });
+    const ids = [...new Set(items.map((i) => i.productId))];
+    await tx.$queryRaw`
+      SELECT id FROM products WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
+
+    for (const g of held) {
+      await tx.stockMovement.create({
+        data: {
+          stockItemId: g.stockItemId,
+          orderId,
+          orderVersionId: g.orderVersionId,
+          qty: -(g._sum.qty ?? 0),
+          type: STOCK_MOVEMENT_TYPE.release,
+        },
+      });
+    }
+  }
+
+  /**
    * Ids among `productIds` that track stock — runs INSIDE the caller's tx AFTER the order row
    * lock, and locks `products` with the SAME statement as every stock write (`ORDER BY id
    * FOR UPDATE`) before reading `tracksStock`. Read-only otherwise.
@@ -708,9 +1027,15 @@ export class StockVouchersService {
 
   async lietKePhieu(query: {
     type?: LoaiPhieu;
+    isReturn?: boolean;
   }): Promise<{ items: StockVoucherSummary[] }> {
     const rows = await this.prisma.stockVoucher.findMany({
-      where: query.type ? { type: query.type } : {},
+      where: {
+        ...(query.type && { type: query.type }),
+        ...(query.isReturn !== undefined && {
+          returnOfVoucherId: query.isReturn ? { not: null } : null,
+        }),
+      },
       include: {
         createdBy: { select: { id: true, displayName: true } },
         lines: { select: { qty: true } },

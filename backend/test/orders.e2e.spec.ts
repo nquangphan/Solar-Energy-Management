@@ -1,5 +1,5 @@
 import type { Server } from 'node:http';
-import type { INestApplication } from '@nestjs/common';
+import { Logger, type INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -4242,8 +4242,19 @@ describe('/orders (e2e)', () => {
         .send(body as object);
     }
 
+    // The cancel now drives the stock subscriber on the real bus, which isolates handler
+    // errors: a broken release would still answer as expected. No cancel case may log one.
+    let loggedError: jest.SpyInstance;
+
     beforeEach(() => {
       givenPermissions(PERM.ordersViewAll, PERM.quotesCreateEdit);
+      loggedError = jest.spyOn(Logger.prototype, 'error');
+    });
+
+    afterEach(() => {
+      const errors = loggedError.mock.calls.length;
+      loggedError.mockRestore();
+      expect(errors).toBe(0);
     });
 
     it('đơn `baogia` + lý do hợp lệ ⇒ 200, status `huy`, occurredAt ISO-8601', async () => {
@@ -4258,6 +4269,46 @@ describe('/orders (e2e)', () => {
         where: { id: ORDER_ID },
         data: { cancelReason: LY_DO, cancelledAt: expect.any(Date) },
       });
+    });
+
+    it('the stock subscriber runs on the real bus after the cancel: releases what the order holds, logs no error', async () => {
+      // The bus isolates subscriber errors, so a broken handler would still answer 200 —
+      // the Logger spy is what makes a swallowed failure visible here.
+      const logged = loggedError;
+      const defaultFindUnique = orderRepo.findUnique.getMockImplementation();
+      // The subscriber re-reads only the status under its own order lock: answer `huy` there.
+      orderRepo.findUnique.mockImplementation(
+        (args: { select?: Record<string, unknown> }) =>
+          args?.select?.status === true && Object.keys(args.select).length === 1
+            ? Promise.resolve({ status: 'huy' })
+            : defaultFindUnique?.(args),
+      );
+      stockMovementRepo.groupBy.mockResolvedValue([
+        { orderVersionId: 'ver-1', stockItemId: 'si-1', _sum: { qty: 5 } },
+      ]);
+      stockItemRepo.findMany.mockResolvedValue([{ productId: 'p-1' }]);
+      stockMovementRepo.create.mockResolvedValue({});
+      try {
+        const res = await huy();
+
+        expect(res.status).toBe(200);
+        expect(stockMovementRepo.create).toHaveBeenCalledTimes(1);
+        expect(stockMovementRepo.create).toHaveBeenCalledWith({
+          data: {
+            stockItemId: 'si-1',
+            orderId: ORDER_ID,
+            orderVersionId: 'ver-1',
+            qty: -5,
+            type: 'release',
+          },
+        });
+        expect(logged).not.toHaveBeenCalled();
+      } finally {
+        orderRepo.findUnique.mockImplementation(defaultFindUnique);
+        stockMovementRepo.groupBy.mockReset();
+        stockItemRepo.findMany.mockReset();
+        stockMovementRepo.create.mockReset();
+      }
     });
 
     it.each([

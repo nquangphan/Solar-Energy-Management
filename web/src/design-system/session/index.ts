@@ -76,6 +76,7 @@ export type {
   StockVoucherPortError,
   CreateStockVoucherInput,
   CreateStockVoucherLineInput,
+  CreateReturnVoucherInput,
   LoaiPhieu,
 } from './stock-vouchers-port';
 export type {

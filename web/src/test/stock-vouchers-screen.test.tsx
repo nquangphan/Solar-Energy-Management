@@ -8,6 +8,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import type { ReactNode } from "react";
@@ -29,6 +30,7 @@ import type {
   CreateStockVoucherInput,
   StockVoucherDetail,
   StockVoucherList,
+  StockVoucherPortError,
   StockVouchersPort,
 } from "../design-system/session/stock-vouchers-port";
 import { InventoryScreen } from "../screens/inventory/InventoryScreen";
@@ -344,13 +346,18 @@ describe("StockVouchersScreen — lọc và picker", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "Nhập" }));
     await screen.findByText("PK-N-0119");
-    expect(spy).toHaveBeenLastCalledWith({ type: "nhap" });
+    expect(spy).toHaveBeenLastCalledWith({ type: "nhap", isReturn: false });
     expect(screen.queryByText("PK-X-0096")).toBeNull();
 
     fireEvent.click(screen.getByRole("link", { name: "Xuất" }));
     await screen.findByText("PK-X-0096");
     expect(spy).toHaveBeenLastCalledWith({ type: "xuat" });
     expect(screen.queryByText("PK-N-0119")).toBeNull();
+
+    fireEvent.click(screen.getByRole("link", { name: "Nhập trả" }));
+    await screen.findByText("PK-NT-0004");
+    expect(spy).toHaveBeenLastCalledWith({ isReturn: true });
+    expect(screen.queryByText("PK-X-0096")).toBeNull();
 
     fireEvent.click(screen.getByRole("link", { name: "Tất cả" }));
     await screen.findByText("PK-N-0119");
@@ -398,6 +405,198 @@ describe("StockVouchersScreen — lọc và picker", () => {
       sheet.getByRole("button", { name: "Battery mới · Còn 1 cái" }),
     ).toBeTruthy();
     expect(sheet.queryByRole("button", { name: /Pin cũ/ })).toBeNull();
+  });
+});
+
+const KHO = { id: "acc-kho-binh", displayName: "Kho/Giao hàng (Bình)" };
+
+/** A cancelled order's stock-out with two lines, returnable. */
+const ORIGIN: StockVoucherDetail = {
+  id: "pk-x-origin",
+  ma: "PK-X-0200",
+  type: "xuat",
+  orderId: "ord-huy-1",
+  createdAt: "2026-07-04T02:30:00.000Z",
+  nguoiTao: KHO,
+  soDong: 2,
+  tongSoLuong: 8,
+  canReturn: true,
+  note: null,
+  lines: [
+    { productId: "p-a", ten: "Sản phẩm A", sku: "A", donVi: "tấm", qty: 5 },
+    { productId: "p-b", ten: "Sản phẩm B", sku: "B", donVi: "bộ", qty: 3 },
+  ],
+};
+
+async function openReturnSheet(port: StockVouchersPort) {
+  renderVouchers(port);
+  fireEvent.click(await screen.findByText("PK-X-0200"));
+  fireEvent.click(await screen.findByRole("button", { name: "Tạo phiếu nhập trả" }));
+  return within(screen.getByRole("dialog"));
+}
+
+describe("StockVouchersScreen — return vouchers", () => {
+  it("a row with returnOfVoucherId ⇒ Nhập trả chip", async () => {
+    renderVouchers();
+    await screen.findByText("PK-NT-0004");
+    const row = screen.getByText("PK-NT-0004").closest("tr")!;
+    expect(within(row).getByText("Nhập trả")).toBeTruthy();
+    expect(within(row).queryByText("Nhập")).toBeNull();
+    const plainRow = screen.getByText("PK-N-0119").closest("tr")!;
+    expect(within(plainRow).queryByText("Nhập trả")).toBeNull();
+  });
+
+  it("canReturn ⇒ Tạo phiếu nhập trả button; canReturn=false ⇒ none", async () => {
+    renderVouchers(new FakeStockVouchersPort([ORIGIN, { ...ORIGIN, id: "x2", ma: "PK-X-0201", canReturn: false }]));
+    fireEvent.click(await screen.findByText("PK-X-0200"));
+    expect(await screen.findByRole("button", { name: "Tạo phiếu nhập trả" })).toBeTruthy();
+    fireEvent.click(screen.getByText("PK-X-0201"));
+    // The header (list row + header = 2) proves the NEW detail loaded, not the stale one.
+    await waitFor(() => expect(screen.getAllByText("PK-X-0201")).toHaveLength(2));
+    expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
+  });
+
+  it("a stock-out that has a return ⇒ Phiếu nhập trả KV that opens that voucher", async () => {
+    renderVouchers();
+    fireEvent.click(await screen.findByText("PK-X-0090"));
+    expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "PK-NT-0004" }));
+    expect(await screen.findByText("Phiếu xuất gốc")).toBeTruthy();
+  });
+
+  it("the sheet starts Nhận lại at Đã xuất, with the exact banner, note and footnote", async () => {
+    const sheet = await openReturnSheet(new FakeStockVouchersPort([ORIGIN]));
+    expect((sheet.getByLabelText("Nhận lại Sản phẩm A") as HTMLInputElement).value).toBe("5");
+    expect((sheet.getByLabelText("Nhận lại Sản phẩm B") as HTMLInputElement).value).toBe("3");
+    expect(sheet.getByText("Đã xuất")).toBeTruthy();
+    expect(
+      sheet.getByText(
+        "Nhận lại ít hơn đã xuất là chuyện bình thường (hàng đã cắt, đã lắp, hỏng). Nhập đúng số đếm được — không ép cho khớp.",
+      ),
+    ).toBeTruthy();
+    expect(
+      sheet.getByText(
+        "Đơn đã huỷ sau khi xuất kho. Tồn kho không tự cộng lại — hàng chỉ về kho khi có người đếm và xác nhận phiếu này.",
+      ),
+    ).toBeTruthy();
+    expect(
+      sheet.getByText(
+        "Xác nhận → cộng tồn thật đúng số đếm được, Audit ghi người nhận. Không sửa/xoá sau khi lưu.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("a row set to 0 is left out of the createReturnVoucher input; the new voucher is then selected", async () => {
+    const port = new FakeStockVouchersPort([ORIGIN]);
+    const spy = vi.spyOn(port, "createReturnVoucher");
+    const sheet = await openReturnSheet(port);
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm A"), { target: { value: "0" } });
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm B"), { target: { value: "2" } });
+    fireEvent.change(sheet.getByLabelText("Ghi chú"), { target: { value: " hỏng 1 " } });
+    fireEvent.click(sheet.getByRole("button", { name: "Xác nhận nhập trả" }));
+
+    expect(await screen.findByText("PK-NT-0005")).toBeTruthy();
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]).toEqual([
+      "pk-x-origin",
+      { note: "hỏng 1", lines: [{ productId: "p-b", qty: 2 }] },
+    ]);
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    // The new voucher is the open detail: its code in the header (list row + header) and its type.
+    expect(await screen.findAllByText("PK-NT-0005")).toHaveLength(2);
+    expect(screen.getByText("Nhập trả · từ đơn huỷ")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
+
+    // The origin no longer offers a second return and links to the one just made.
+    fireEvent.click(screen.getAllByText("PK-X-0200")[0]);
+    expect(await screen.findByRole("button", { name: "PK-NT-0005" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
+  });
+
+  it("double click on Xác nhận nhập trả in one tick ⇒ the port is called exactly once", async () => {
+    const port = new FakeStockVouchersPort([ORIGIN]);
+    const spy = vi
+      .spyOn(port, "createReturnVoucher")
+      .mockImplementation(() => new Promise(() => {}));
+    const sheet = await openReturnSheet(port);
+    const confirm = sheet.getByRole("button", { name: "Xác nhận nhập trả" });
+    // One act ⇒ no re-render between the clicks: both see the pre-click state.
+    act(() => {
+      fireEvent.click(confirm);
+      fireEvent.click(confirm);
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("an Error that is not a port refusal ⇒ the fixed Vietnamese message, not e.message", async () => {
+    const port = new FakeStockVouchersPort([ORIGIN]);
+    vi.spyOn(port, "createReturnVoucher").mockRejectedValue(new Error("ECONNRESET 10.0.0.7"));
+    const sheet = await openReturnSheet(port);
+    fireEvent.click(sheet.getByRole("button", { name: "Xác nhận nhập trả" }));
+
+    expect(await sheet.findByText("Không lưu được phiếu nhập trả. Thử lại.")).toBeTruthy();
+    expect(sheet.queryByText(/ECONNRESET/)).toBeNull();
+  });
+
+  it("a blank row ⇒ error at that input and the port is NOT called (blank is never coerced to 0)", async () => {
+    const port = new FakeStockVouchersPort([ORIGIN]);
+    const spy = vi.spyOn(port, "createReturnVoucher");
+    const sheet = await openReturnSheet(port);
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm B"), { target: { value: "" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Xác nhận nhập trả" }));
+
+    const errorLine = sheet.getByText("Nhập số nhận lại (0 nếu không nhận lại).");
+    expect(errorLine.closest("tr")!.textContent).toContain("Sản phẩm B");
+    expect(sheet.getAllByText("Nhập số nhận lại (0 nếu không nhận lại).").length).toBe(1);
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("every row 0 ⇒ Xác nhận nhập trả disabled", async () => {
+    const sheet = await openReturnSheet(new FakeStockVouchersPort([ORIGIN]));
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm A"), { target: { value: "0" } });
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm B"), { target: { value: "0" } });
+    expect(
+      (sheet.getByRole("button", { name: "Xác nhận nhập trả" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it("RETURN_EXCEEDS_ISSUED at a SUBMITTED index shows under the right displayed row when a 0 row precedes it", async () => {
+    const port = new FakeStockVouchersPort([ORIGIN]);
+    const err: StockVoucherPortError = {
+      message: "Số nhận lại vượt số đã xuất.",
+      fieldErrors: [
+        {
+          field: "lines.0.qty",
+          code: "RETURN_EXCEEDS_ISSUED",
+          message: "Đã xuất 3, không nhận lại 9.",
+        },
+      ],
+    };
+    vi.spyOn(port, "createReturnVoucher").mockRejectedValue(err);
+    const sheet = await openReturnSheet(port);
+    // A is zero ⇒ not sent ⇒ B is index 0 of the sent array, row 1 on screen.
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm A"), { target: { value: "0" } });
+    fireEvent.change(sheet.getByLabelText("Nhận lại Sản phẩm B"), { target: { value: "9" } });
+    fireEvent.click(sheet.getByRole("button", { name: "Xác nhận nhập trả" }));
+
+    const errorLine = await sheet.findByText("Đã xuất 3, không nhận lại 9.");
+    expect(errorLine.closest("tr")!.textContent).toContain("Sản phẩm B");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("return voucher detail ⇒ Loại, Gắn đơn, Phiếu xuất gốc, Người nhận, cost through Money", async () => {
+    renderVouchers();
+    fireEvent.click(await screen.findByText("PK-NT-0004"));
+
+    expect(await screen.findByText("Nhập trả · từ đơn huỷ")).toBeTruthy();
+    expect(screen.getByText("Gắn đơn")).toBeTruthy();
+    expect(screen.getByText("ord-demo-cancelled")).toBeTruthy();
+    expect(screen.getByText("Phiếu xuất gốc")).toBeTruthy();
+    expect(screen.getByText("Phiếu xuất gốc").nextElementSibling!.textContent).toBe("PK-X-0090");
+    expect(screen.getByText("Người nhận")).toBeTruthy();
+    expect(screen.getByText("2.110.000 đ")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
   });
 });
 

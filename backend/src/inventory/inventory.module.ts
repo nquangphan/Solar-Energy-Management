@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccountsModule } from '../accounts/accounts.module';
 import { StockItemsController } from './stock-items.controller';
+import { OrderCancelledStockSubscriber } from './order-cancelled-stock.subscriber';
 import { StockItemsService } from './stock-items.service';
 import { StockVouchersController } from './stock-vouchers.controller';
 import { StockVouchersService } from './stock-vouchers.service';
@@ -22,11 +23,19 @@ import { StockVouchersService } from './stock-vouchers.service';
  *    order lines belong to `orders/`), while the stock figures are computed here
  *    (`checkOrderLines`).
  * The reverse is forbidden: `inventory/` NEVER imports `OrdersModule` (dependency cycle).
+ *
+ * `OrderCancelledStockSubscriber` releases a cancelled order's hold by subscribing to
+ * `OrderCancelled` on the bus — the event is the only seam, so the cancel path never touches
+ * stock and `inventory/` reads only the pure `orders/domain/order-status` constant.
  */
 @Module({
   imports: [AccountsModule],
   controllers: [StockItemsController, StockVouchersController],
-  providers: [StockItemsService, StockVouchersService],
+  providers: [
+    StockItemsService,
+    StockVouchersService,
+    OrderCancelledStockSubscriber,
+  ],
   exports: [StockVouchersService, StockItemsService],
 })
 export class InventoryModule {}

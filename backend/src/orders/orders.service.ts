@@ -631,6 +631,12 @@ export class OrdersService {
       data: { status: ketQua.to },
     });
     if (count === 0) throw input.sentinel;
+    // A completed order holds nothing: whatever the ledger still holds (e.g. a product that
+    // stopped tracking stock after confirm, so it was never issued) is released here, in the
+    // same tx and under the order lock taken above. An issued order nets to 0 ⇒ no write.
+    if (ketQua.to === TRANG_THAI_HOAN_THANH) {
+      await this.stockVouchers.releaseHeldForOrderInTx(tx, order.id);
+    }
 
     const after: Order = { ...order, status: ketQua.to };
     return new StatusChanged(

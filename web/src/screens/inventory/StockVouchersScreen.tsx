@@ -13,7 +13,12 @@
 // An order-bound stock-out (`orderId` present) is read-only here: it
 // is created from the order, and its author is the person who CONFIRMED it.
 //
-// Deliberately absent (later stories): the "Nhập trả" tab and chip.
+// A return voucher ("Nhập trả", `PK-NT-…`) is a stock-in born from a cancelled order's
+// stock-out. Whether a stock-out can be returned (`canReturn`) is the backend's call. The
+// return sheet starts each "Nhận lại" at the issued quantity, never compares it with that
+// quantity (the backend answers `RETURN_EXCEEDS_ISSUED`), never turns a blank into 0, and
+// leaves zero rows out of the request — so a backend `lines.{i}` index is the index in the
+// SENT array and is mapped back to the displayed row.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -33,6 +38,7 @@ import { filterNav } from '../../design-system/gating/permissions';
 import { Icon } from '../../design-system/icons/Icon';
 import type { InventoryPort, StockItemView } from '../../design-system/session/inventory-port';
 import type {
+  CreateReturnVoucherInput,
   LoaiPhieu,
   StockVoucherDetail,
   StockVoucherPortError,
@@ -55,10 +61,12 @@ export interface StockVouchersScreenProps {
 type LoadState = 'loading' | 'ready' | 'error';
 
 const ALL = 'ALL';
+const RETURNS = 'RETURNS';
 const FILTER_OPTIONS = [
   { key: ALL, label: 'Tất cả' },
   { key: 'nhap', label: 'Nhập' },
   { key: 'xuat', label: 'Xuất' },
+  { key: RETURNS, label: 'Nhập trả' },
 ];
 const LOAI_OPTIONS = [
   { key: 'nhap', label: 'Nhập' },
@@ -69,9 +77,39 @@ const NOTE_NHAP =
   'Giá vốn ở đây không được bỏ trống. Hệ thống lấy nó tính bình quân gia quyền rồi cập nhật giá vốn hiện hành của sản phẩm — một chỗ gõ, không ai phải nhớ sửa hai nơi.';
 const NOTE_XUAT = 'Phiếu xuất không gắn đơn (hàng hỏng, mẫu, điều chỉnh). Không sửa/xoá sau khi lưu.';
 const TON_DAU_KY = 'Tồn đầu kỳ';
+const NOTE_RETURN_BANNER =
+  'Đơn đã huỷ sau khi xuất kho. Tồn kho không tự cộng lại — hàng chỉ về kho khi có người đếm và xác nhận phiếu này.';
+const NOTE_RETURN_FEWER =
+  'Nhận lại ít hơn đã xuất là chuyện bình thường (hàng đã cắt, đã lắp, hỏng). Nhập đúng số đếm được — không ép cho khớp.';
+const NOTE_RETURN_FOOT =
+  'Xác nhận → cộng tồn thật đúng số đếm được, Audit ghi người nhận. Không sửa/xoá sau khi lưu.';
+const RETURN_BLANK_ERROR = 'Nhập số nhận lại (0 nếu không nhận lại).';
+const RETURN_UNKNOWN_ERROR = 'Không lưu được phiếu nhập trả. Thử lại.';
 
-/** Chip label + colour token per type. TWIN of `_nhanLoai()` in the Flutter screen. */
-function nhanLoai(type: LoaiPhieu): { label: string; mau: string } {
+/** A port refusal is the plain AD-5 envelope; anything else (an Error, a network fault) is unknown. */
+function toReturnError(e: unknown): StockVoucherPortError {
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    !(e instanceof Error) &&
+    typeof (e as { message?: unknown }).message === 'string'
+  ) {
+    return e as StockVoucherPortError;
+  }
+  return { message: RETURN_UNKNOWN_ERROR };
+}
+
+/** The list query behind each tab. "Nhập" excludes returns; "Nhập trả" is only returns. */
+function listQuery(filter: string) {
+  if (filter === ALL) return {};
+  if (filter === RETURNS) return { isReturn: true };
+  if (filter === 'nhap') return { type: 'nhap' as const, isReturn: false };
+  return { type: filter as LoaiPhieu };
+}
+
+/** Chip label + colour token per type. TWIN of `_chipLoai()` in the Flutter screen. */
+function nhanLoai(type: LoaiPhieu, isReturn: boolean): { label: string; mau: string } {
+  if (isReturn) return { label: 'Nhập trả', mau: 'var(--info)' };
   return type === 'nhap'
     ? { label: 'Nhập', mau: 'var(--ok)' }
     : { label: 'Xuất', mau: 'var(--warn)' };
@@ -101,8 +139,17 @@ interface DongForm {
   unitCost: string;
 }
 
-function ChipLoai({ type }: { type: LoaiPhieu }) {
-  const nhan = nhanLoai(type);
+interface ReturnRow {
+  productId: string;
+  ten: string;
+  donVi: string;
+  issued: number;
+  /** Digits as typed; '' = blank (an error, never 0). */
+  qty: string;
+}
+
+function ChipLoai({ type, isReturn = false }: { type: LoaiPhieu; isReturn?: boolean }) {
+  const nhan = nhanLoai(type, isReturn);
   return (
     <span className="chip pk-chip" style={{ color: nhan.mau }}>
       {nhan.label}
@@ -127,9 +174,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
     const ticket = ++listTicket.current;
     setState('loading');
     try {
-      const result = await port.listVouchers(
-        filter === ALL ? {} : { type: filter as LoaiPhieu },
-      );
+      const result = await port.listVouchers(listQuery(filter));
       if (ticket !== listTicket.current) return;
       setItems(result.items);
       setState('ready');
@@ -243,11 +288,90 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
     }
   };
 
+  // ---- Return sheet ----
+  const [returnOpen, setReturnOpen] = useState(false);
+  const [returnRows, setReturnRows] = useState<ReturnRow[]>([]);
+  const [returnNote, setReturnNote] = useState('');
+  const [returnBlank, setReturnBlank] = useState<Set<string>>(new Set());
+  const [returnError, setReturnError] = useState<StockVoucherPortError | null>(null);
+  const [returnSending, setReturnSending] = useState(false);
+  /** Set synchronously: two clicks in one tick both see the state `false`. */
+  const returnInFlight = useRef(false);
+  /** Displayed-row productId for each index of the array last SENT (zero rows removed). */
+  const [returnSentIds, setReturnSentIds] = useState<string[]>([]);
+
+  const openReturnSheet = (origin: StockVoucherDetail) => {
+    setReturnRows(
+      origin.lines.map((l) => ({
+        productId: l.productId,
+        ten: l.ten,
+        donVi: l.donVi,
+        issued: l.qty,
+        qty: String(l.qty),
+      })),
+    );
+    setReturnNote('');
+    setReturnBlank(new Set());
+    setReturnError(null);
+    setReturnSentIds([]);
+    setReturnOpen(true);
+  };
+
+  const editReturnRow = (productId: string, qty: string) => {
+    setReturnRows(returnRows.map((d) => (d.productId === productId ? { ...d, qty } : d)));
+    setReturnBlank(new Set([...returnBlank].filter((id) => id !== productId)));
+    setReturnError(null);
+  };
+
+  const saveReturn = async () => {
+    if (detail === null || returnInFlight.current) return;
+    const blank = returnRows.filter((d) => d.qty === '');
+    if (blank.length > 0) {
+      setReturnBlank(new Set(blank.map((d) => d.productId)));
+      return;
+    }
+    const toSend = returnRows.filter((d) => Number(d.qty) > 0);
+    if (toSend.length === 0) return;
+    const input: CreateReturnVoucherInput = {
+      ...(returnNote.trim() === '' ? {} : { note: returnNote.trim() }),
+      lines: toSend.map((d) => ({ productId: d.productId, qty: Number(d.qty) })),
+    };
+    setReturnSentIds(toSend.map((d) => d.productId));
+    returnInFlight.current = true;
+    setReturnSending(true);
+    setReturnError(null);
+    try {
+      const created = await port.createReturnVoucher(detail.id, input);
+      setReturnOpen(false);
+      if (filter === ALL) await load();
+      else setFilter(ALL);
+      setSelectedId(created.id);
+    } catch (e) {
+      setReturnError(toReturnError(e));
+    } finally {
+      returnInFlight.current = false;
+      setReturnSending(false);
+    }
+  };
+
+  /** Backend `lines.{i}.…` errors, `i` = index in the sent array → the displayed row's productId. */
+  const returnRowErrors = (productId: string) =>
+    (returnError?.fieldErrors ?? []).filter((f) => {
+      const m = /^lines\.(\d+)\./.exec(f.field);
+      return m !== null && returnSentIds[Number(m[1])] === productId;
+    });
+  const returnGeneralErrors = (returnError?.fieldErrors ?? []).filter((f) => {
+    const m = /^lines\.(\d+)\./.exec(f.field);
+    return m === null || returnSentIds[Number(m[1])] === undefined;
+  });
+  const hasReturnRow = returnRows.some((d) => d.qty === '' || Number(d.qty) > 0);
+
   const loiCuaDong = (i: number) =>
     (loi?.fieldErrors ?? []).filter((f) => f.field.startsWith(`lines.${i}.`));
   const loiChung = (loi?.fieldErrors ?? []).filter((f) => !/^lines\.\d+\./.test(f.field));
 
   const dangLoc = filter !== ALL;
+  const isReturnVoucher = detail?.returnOf !== undefined || detail?.returnOfVoucherId !== undefined;
   const coGiaVon = detail?.lines.some((l) => l.unitCost !== undefined) ?? false;
 
   return (
@@ -318,7 +442,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                     >
                       <td className="strong mono">{p.ma}</td>
                       <td>
-                        <ChipLoai type={p.type} />
+                        <ChipLoai type={p.type} isReturn={p.returnOfVoucherId !== undefined} />
                       </td>
                       <td className="mono">{ngayNgan(p.createdAt)}</td>
                       <td>{p.nguoiTao.displayName}</td>
@@ -346,21 +470,54 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                     <span className="micro">Chi tiết phiếu</span>
                     <span className="strong mono">{detail.ma}</span>
                     <span className="pk-sp" />
-                    <ChipLoai type={detail.type} />
+                    <ChipLoai type={detail.type} isReturn={isReturnVoucher} />
                   </div>
                   <div className="pk-detail-body">
                     <dl className="pk-kv">
                       <dt>Loại</dt>
-                      <dd>{moTaLoai(detail.type, detail.orderId !== undefined)}</dd>
+                      <dd>
+                        {isReturnVoucher
+                          ? 'Nhập trả · từ đơn huỷ'
+                          : moTaLoai(detail.type, detail.orderId !== undefined)}
+                      </dd>
                       {detail.orderId !== undefined && (
                         <>
                           <dt>Gắn đơn</dt>
                           <dd className="mono">{detail.orderId}</dd>
                         </>
                       )}
+                      {detail.returnOf !== undefined && (
+                        <>
+                          <dt>Gắn đơn</dt>
+                          <dd className="mono">{detail.returnOf.orderId}</dd>
+                          <dt>Phiếu xuất gốc</dt>
+                          <dd className="mono">{detail.returnOf.ma}</dd>
+                        </>
+                      )}
+                      {detail.returnVoucher !== undefined && (
+                        <>
+                          <dt>Phiếu nhập trả</dt>
+                          <dd>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setSelectedId(detail.returnVoucher!.id)}
+                            >
+                              {detail.returnVoucher.ma}
+                            </Button>
+                          </dd>
+                        </>
+                      )}
                       <dt>Ngày</dt>
                       <dd className="mono">{ngayGio(detail.createdAt)}</dd>
-                      <dt>{detail.orderId !== undefined ? 'Người xác nhận' : 'Người tạo'}</dt>
+                      <dt>
+                        {isReturnVoucher
+                          ? 'Người nhận'
+                          : detail.orderId !== undefined
+                            ? 'Người xác nhận'
+                            : 'Người tạo'}
+                      </dt>
                       <dd>{detail.nguoiTao.displayName}</dd>
                       <dt>Ghi chú</dt>
                       <dd>{detail.note ?? '—'}</dd>
@@ -387,7 +544,14 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                         ))}
                       </tbody>
                     </Table>
-                    {detail.orderId !== undefined ? (
+                    {detail.canReturn && (
+                      <div>
+                        <Button type="button" onClick={() => openReturnSheet(detail)}>
+                          Tạo phiếu nhập trả
+                        </Button>
+                      </div>
+                    )}
+                    {isReturnVoucher ? null : detail.orderId !== undefined ? (
                       <Banner tone="info">
                         <strong>Một Đơn — một phiếu xuất.</strong> Lúc xác nhận, giá vốn được đóng
                         băng vào từng dòng đơn. Audit ghi người xác nhận. Không sửa/xoá sau khi lưu.
@@ -510,6 +674,71 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
           >
             Lưu phiếu
           </Button>
+        </div>
+      </Sheet>
+
+      <Sheet open={returnOpen} onClose={() => setReturnOpen(false)} title="Tạo phiếu nhập trả">
+        <div className="pk-form">
+          <Banner tone="info">{NOTE_RETURN_BANNER}</Banner>
+          <Table>
+            <thead>
+              <tr>
+                <th>Sản phẩm</th>
+                <th className="num">Đã xuất</th>
+                <th className="num">Nhận lại</th>
+              </tr>
+            </thead>
+            <tbody>
+              {returnRows.map((d) => (
+                <tr key={d.productId} className="pk-return-row">
+                  <td>{d.ten}</td>
+                  <td className="num mono">
+                    {d.issued} {d.donVi}
+                  </td>
+                  <td className="num">
+                    <Field
+                      aria-label={`Nhận lại ${d.ten}`}
+                      inputMode="numeric"
+                      value={d.qty}
+                      onChange={(e) => editReturnRow(d.productId, chiChuSo(e.target.value))}
+                    />
+                    {returnBlank.has(d.productId) && (
+                      <div className="micro pk-loi">{RETURN_BLANK_ERROR}</div>
+                    )}
+                    {returnRowErrors(d.productId).map((f) => (
+                      <div key={f.field} className="micro pk-loi">
+                        {f.message}
+                      </div>
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+          <div className="micro muted">{NOTE_RETURN_FEWER}</div>
+          <Field
+            label="Ghi chú"
+            value={returnNote}
+            maxLength={500}
+            onChange={(e) => setReturnNote(e.target.value)}
+          />
+          {returnError !== null && (
+            <Banner tone="danger" icon="ic-alert" role="alert">
+              {returnError.message}
+              {returnGeneralErrors.map((f) => (
+                <div key={f.field}>{f.message}</div>
+              ))}
+            </Banner>
+          )}
+          <Button
+            type="button"
+            variant="primary"
+            disabled={returnSending || !hasReturnRow}
+            onClick={() => void saveReturn()}
+          >
+            Xác nhận nhập trả
+          </Button>
+          <div className="micro muted">{NOTE_RETURN_FOOT}</div>
         </div>
       </Sheet>
     </WebShell>

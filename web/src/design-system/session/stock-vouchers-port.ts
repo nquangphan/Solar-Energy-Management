@@ -34,6 +34,8 @@ export interface StockVoucherSummary {
   /** ISO-8601 UTC. */
   createdAt: string;
   nguoiTao: StockVoucherCreator;
+  /** Set ONLY on a return voucher (`PK-NT-…`) — the stock-out it returns. ABSENT otherwise. */
+  returnOfVoucherId?: string;
   soDong: number;
   /** Sum of line quantities — always positive; the direction comes from `type`. */
   tongSoLuong: number;
@@ -55,6 +57,12 @@ export interface StockVoucherLine {
 export interface StockVoucherDetail extends StockVoucherSummary {
   note: string | null;
   lines: StockVoucherLine[];
+  /** Return voucher only: the origin stock-out and the cancelled order it belongs to. */
+  returnOf?: { id: string; ma: string; orderId: string };
+  /** Order-bound stock-out that already has a return voucher. */
+  returnVoucher?: { id: string; ma: string };
+  /** Decided by the backend — the client never derives it. ALWAYS present. */
+  canReturn: boolean;
 }
 
 /** Mirrors `StockVoucherListResponseDto`. */
@@ -64,6 +72,8 @@ export interface StockVoucherList {
 
 export interface StockVoucherListQuery {
   type?: LoaiPhieu;
+  /** `true` = return vouchers only; `false` = everything except them. */
+  isReturn?: boolean;
 }
 
 /** One line of `CreateStockVoucherRequestDto`. */
@@ -79,6 +89,12 @@ export interface CreateStockVoucherInput {
   type: LoaiPhieu;
   note?: string;
   lines: CreateStockVoucherLineInput[];
+}
+
+/** Mirrors `CreateReturnVoucherRequestDto`. Cost is never sent — the origin line's cost is reused. */
+export interface CreateReturnVoucherInput {
+  note?: string;
+  lines: { productId: string; qty: number }[];
 }
 
 /**
@@ -102,4 +118,12 @@ export interface StockVouchersPort {
   getVoucher(id: string): Promise<StockVoucherDetail>;
   /** Rejects with `StockVoucherPortError` on 400 / 404 / 409. */
   createVoucher(input: CreateStockVoucherInput): Promise<StockVoucherDetail>;
+  /**
+   * `POST /stock-vouchers/:originVoucherId/return`. Rejects with `StockVoucherPortError` on
+   * 400 (`lines.{i}.qty|productId`, `i` = index in the SUBMITTED array) / 404 / 409.
+   */
+  createReturnVoucher(
+    originVoucherId: string,
+    input: CreateReturnVoucherInput,
+  ): Promise<StockVoucherDetail>;
 }

@@ -26,6 +26,7 @@ import {
 import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { anGiaVonDongPhieu } from './domain/stock-voucher-visibility';
+import { CreateReturnVoucherRequestDto } from './dto/create-return-voucher-request.dto';
 import { CreateStockVoucherRequestDto } from './dto/create-stock-voucher-request.dto';
 import { StockVoucherListQueryDto } from './dto/stock-voucher-list-query.dto';
 import {
@@ -95,12 +96,54 @@ export class StockVouchersController {
     ) as StockVoucherDetailDto;
   }
 
+  @Post(':id/return')
+  @RequirePermissions(PERM.inventoryManage)
+  @ApiCreatedResponse({
+    type: StockVoucherDetailDto,
+    description:
+      'Phiếu nhập trả đã lưu: cộng `onHand` đúng số đếm được, giá vốn dòng = giá vốn dòng phiếu xuất gốc. `lines[].unitCost` chỉ có mặt nếu caller có costs.view.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'VALIDATION_ERROR: body sai (lines rỗng, qty không nguyên dương…), lặp sản phẩm (`fieldErrors[].code = DUPLICATE_PRODUCT`), sản phẩm không có trên phiếu gốc (`NOT_ON_ORIGIN_VOUCHER`), nhận lại quá số đã xuất (`RETURN_EXCEEDS_ISSUED`). Không dòng nào được ghi.',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Thiếu inventory.manage (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có phiếu gốc này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'CONFLICT: phiếu gốc không phải phiếu xuất gắn đơn, đơn chưa huỷ, hoặc phiếu xuất đã có phiếu nhập trả.',
+  })
+  async createReturn(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: CreateReturnVoucherRequestDto,
+  ): Promise<StockVoucherDetailDto> {
+    const phieu = await this.stockVouchers.createReturnVoucher(
+      id,
+      body,
+      account.id,
+    );
+    return anGiaVonDongPhieu(
+      phieu,
+      await this.canViewCosts(account.id),
+    ) as StockVoucherDetailDto;
+  }
+
   @Get()
   @RequirePermissions(PERM.inventoryManage)
   @ApiOkResponse({ type: StockVoucherListResponseDto })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
-    description: '`type` không phải nhap|xuat (VALIDATION_ERROR).',
+    description:
+      '`type` không phải nhap|xuat hoặc `isReturn` không phải true|false (VALIDATION_ERROR).',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,

@@ -145,7 +145,28 @@ test('both screens speak the same sentences (UX-DR-27)', () => {
     assert.ok(webCode.includes(w), `web screen missing "${w}"`);
     assert.ok(mobileCode.includes(w), `mobile screen missing "${w}"`);
   }
-  assert.ok(!/Nhập trả/.test(webCode + mobileCode), 'returns vouchers are a later story — no "Nhập trả" here');
+});
+
+// Return vouchers (stock counted back from a cancelled order's stock-out): same UX copy on both.
+test('both screens carry the return voucher copy verbatim', () => {
+  const words = [
+    'Nhập trả',
+    'Tạo phiếu nhập trả',
+    'Xác nhận nhập trả',
+    'Phiếu xuất gốc',
+    'Gắn đơn',
+    'Đã xuất',
+    'Nhận lại',
+    'Nhập trả · từ đơn huỷ',
+    'Nhập số nhận lại (0 nếu không nhận lại).',
+    'Đơn đã huỷ sau khi xuất kho. Tồn kho không tự cộng lại — hàng chỉ về kho khi có người đếm và xác nhận phiếu này.',
+    'Nhận lại ít hơn đã xuất là chuyện bình thường (hàng đã cắt, đã lắp, hỏng). Nhập đúng số đếm được — không ép cho khớp.',
+    'Xác nhận → cộng tồn thật đúng số đếm được, Audit ghi người nhận. Không sửa/xoá sau khi lưu.',
+  ];
+  for (const w of words) {
+    assert.ok(webCode.includes(w), `web screen missing "${w}"`);
+    assert.ok(mobileCode.includes(w), `mobile screen missing "${w}"`);
+  }
 });
 
 // COMPOSED FROM THE SHIPPED DESIGN SYSTEM (AD-13).

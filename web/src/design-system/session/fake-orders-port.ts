@@ -1102,6 +1102,7 @@ export class FakeOrdersPort implements OrdersPort {
       nguoiTao: { id: 'acc-kho-binh', displayName: 'Kho/Giao hàng (Bình)' },
       soDong: DEMO_ISSUE_LINES.length,
       tongSoLuong: 15,
+      canReturn: false,
       note: null,
       lines: DEMO_ISSUE_LINES.map(({ productId, name, sku, unit, qty }) => ({
         productId,

@@ -99,6 +99,7 @@ describe('OrdersService — order-bound stock issue', () => {
     soDong: 1,
     tongSoLuong: 10,
     note: null,
+    canReturn: false,
     lines: [
       {
         productId: P1,
@@ -152,6 +153,7 @@ describe('OrdersService — order-bound stock issue', () => {
     previewOrderIssue: jest.Mock;
     issueForOrderInTx: jest.Mock;
     lockTrackedProductsInTx: jest.Mock;
+    releaseHeldForOrderInTx: jest.Mock;
   };
   let commitError: Error | null;
   let storage: FakeStorage;
@@ -218,6 +220,7 @@ describe('OrdersService — order-bound stock issue', () => {
       previewOrderIssue: jest.fn(),
       issueForOrderInTx: jest.fn(),
       lockTrackedProductsInTx: recorded('lockTrackedProducts', new Set()),
+      releaseHeldForOrderInTx: recorded('releaseHeld'),
     };
     notIssuedWithTrackedLines();
     const tx = {
@@ -569,6 +572,8 @@ describe('OrdersService — order-bound stock issue', () => {
         expect.anything(),
         expect.objectContaining({ occurredAt: result.occurredAt }),
       );
+      // Only a transition INTO hoanthanh releases the order's hold.
+      expect(stockVouchers.releaseHeldForOrderInTx).not.toHaveBeenCalled();
     });
 
     it('not issued + tracked lines + no inventory.manage ⇒ 403 BEFORE R2: no upload, no tx', async () => {
@@ -841,6 +846,44 @@ describe('OrdersService — order-bound stock issue', () => {
       expect(lineRepo.update).not.toHaveBeenCalled();
     });
 
+    it('closing releases what the order still holds, in the same tx, AFTER the status write under the order lock', async () => {
+      stockVouchers.previewOrderIssue = recorded('previewOrderIssue', {
+        lines: [],
+        tracked: new Set(),
+      });
+
+      await close();
+
+      expect(stockVouchers.releaseHeldForOrderInTx).toHaveBeenCalledTimes(1);
+      // The tx client (it has `$queryRaw` + `attachment`), never the root client.
+      expect(stockVouchers.releaseHeldForOrderInTx).toHaveBeenCalledWith(
+        expect.objectContaining({
+          $queryRaw: expect.any(Function),
+          attachment: expect.anything(),
+        }),
+        ORDER_ID,
+      );
+      const inTx = calls.slice(calls.indexOf('tx.begin') + 1);
+      expect(inTx[0]).toBe('lockOrderRow');
+      expect(inTx.indexOf('releaseHeld')).toBeGreaterThan(
+        inTx.indexOf('order.updateMany'),
+      );
+      expect(inTx.indexOf('releaseHeld')).toBeLessThan(
+        inTx.indexOf('tx.commit'),
+      );
+    });
+
+    it('the gate refuses the close ⇒ nothing is released', async () => {
+      stockVouchers.lockTrackedProductsInTx = recorded(
+        'lockTrackedProducts',
+        new Set([P1]),
+      );
+
+      await caught(close());
+
+      expect(stockVouchers.releaseHeldForOrderInTx).not.toHaveBeenCalled();
+    });
+
     it('auto lane (full payment) is gated by the SAME engine check ⇒ 409, status not written', async () => {
       stockVouchers.lockTrackedProductsInTx = recorded(
         'lockTrackedProducts',
@@ -877,6 +920,53 @@ describe('OrdersService — order-bound stock issue', () => {
       expect(stockVouchers.lockTrackedProductsInTx).not.toHaveBeenCalled();
       expect(stockVouchers.findOrderIssueVoucher).not.toHaveBeenCalled();
     });
+  });
+
+  describe('every edge into hoan_thanh releases what the order still holds', () => {
+    it.each([
+      {
+        from: 'dachot',
+        flags: { scopeThiCong: false, scopeVanChuyen: false },
+        quyen: [PERM.ordersViewAll, PERM.paymentsRecord],
+      },
+      {
+        from: 'nghiemthu',
+        flags: {},
+        quyen: [PERM.ordersViewAll, PERM.constructionTransition],
+      },
+      { from: 'dagiao', flags: {}, quyen: [...WAREHOUSE] },
+    ] as const)(
+      '$from → hoan_thanh ⇒ released once, in the tx, after the status write',
+      async ({ from, flags, quyen }) => {
+        givenOrder(order(from, flags));
+        stockVouchers.previewOrderIssue = recorded('previewOrderIssue', {
+          lines: [],
+          tracked: new Set(),
+        });
+
+        const result = await service.chuyenTrangThaiThuCong({
+          callerAccountId: ACTOR,
+          quyen: new Set(quyen),
+          orderId: ORDER_ID,
+          event: SU_KIEN.hoanThanh,
+          anh: [],
+        });
+
+        expect(result.status).toBe('hoanthanh');
+        expect(stockVouchers.releaseHeldForOrderInTx).toHaveBeenCalledTimes(1);
+        expect(stockVouchers.releaseHeldForOrderInTx).toHaveBeenCalledWith(
+          expect.objectContaining({ $queryRaw: expect.any(Function) }),
+          ORDER_ID,
+        );
+        const inTx = calls.slice(calls.indexOf('tx.begin') + 1);
+        expect(inTx.indexOf('releaseHeld')).toBeGreaterThan(
+          inTx.indexOf('order.updateMany'),
+        );
+        expect(inTx.indexOf('releaseHeld')).toBeLessThan(
+          inTx.indexOf('tx.commit'),
+        );
+      },
+    );
   });
 
   describe('construction close nghiemthu → hoan_thanh (installation order)', () => {

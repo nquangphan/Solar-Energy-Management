@@ -80,4 +80,12 @@ describe('maPhieu', () => {
   it('seq quá 9999 không bị cắt', () => {
     expect(maPhieu('nhap', 12345)).toBe('PK-N-12345');
   });
+
+  it('return voucher: PK-NT + seq padded to 4 digits', () => {
+    expect(maPhieu('nhap', 4, true)).toBe('PK-NT-0004');
+  });
+
+  it('a non-return stock-in keeps PK-N when the flag is false', () => {
+    expect(maPhieu('nhap', 4, false)).toBe('PK-N-0004');
+  });
 });

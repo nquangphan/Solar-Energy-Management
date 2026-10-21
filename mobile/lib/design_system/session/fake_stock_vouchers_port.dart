@@ -73,6 +73,7 @@ const List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
     ],
   ),
   // Order-bound stock-out — `nguoiTao` is the person who CONFIRMED it.
+  // `canReturn` is a fixture value, as the backend would return it.
   StockVoucherDetail(
     id: 'pk-x-0095',
     ma: 'PK-X-0095',
@@ -83,6 +84,7 @@ const List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
     soDong: 1,
     tongSoLuong: 1,
     note: null,
+    canReturn: true,
     lines: <StockVoucherLine>[
       StockVoucherLine(
         productId: 'prod-inverter-hybrid-10k',
@@ -139,6 +141,7 @@ StockVoucherSummary _tomTat(StockVoucherDetail d) => StockVoucherSummary(
       nguoiTao: d.nguoiTao,
       soDong: d.soDong,
       tongSoLuong: d.tongSoLuong,
+      returnOfVoucherId: d.returnOfVoucherId,
     );
 
 class FakeStockVouchersPort implements StockVouchersPort {
@@ -148,11 +151,13 @@ class FakeStockVouchersPort implements StockVouchersPort {
   final List<StockVoucherDetail> _data;
 
   @override
-  Future<StockVoucherList> listVouchers({String? type}) async {
+  Future<StockVoucherList> listVouchers({String? type, bool? isReturn}) async {
     return StockVoucherList(
       items: <StockVoucherSummary>[
         for (final StockVoucherDetail d in _data)
-          if (type == null || d.type == type) _tomTat(d),
+          if ((type == null || d.type == type) &&
+              (isReturn == null || (d.returnOfVoucherId != null) == isReturn))
+            _tomTat(d),
       ],
     );
   }
@@ -194,6 +199,61 @@ class FakeStockVouchersPort implements StockVouchersPort {
     );
     _data.insert(0, moi);
     return moi;
+  }
+
+  /// A canned answer shaped like the backend's — no stock or cost rule here.
+  @override
+  Future<StockVoucherDetail> createReturnVoucher(
+    String originVoucherId, {
+    String? note,
+    required List<CreateReturnVoucherLineInput> lines,
+  }) async {
+    final StockVoucherDetail origin = await getVoucher(originVoucherId);
+    final StockVoucherDetail created = StockVoucherDetail(
+      id: 'pk-nt-demo-${_data.length + 1}',
+      ma: 'PK-NT-0005',
+      type: 'nhap',
+      createdAt: '2026-10-21T03:15:00.000Z',
+      nguoiTao: _kKho,
+      soDong: lines.length,
+      tongSoLuong: lines.fold<int>(
+        0,
+        (int sum, CreateReturnVoucherLineInput l) => sum + l.qty,
+      ),
+      returnOfVoucherId: origin.id,
+      returnOf: StockVoucherReturnOf(
+        id: origin.id,
+        ma: origin.ma,
+        orderId: origin.orderId ?? '',
+      ),
+      note: note,
+      lines: <StockVoucherLine>[
+        for (final CreateReturnVoucherLineInput l in lines)
+          _dong(
+              CreateStockVoucherLineInput(productId: l.productId, qty: l.qty)),
+      ],
+    );
+    // The origin now has its return voucher and can no longer be returned.
+    final int at =
+        _data.indexWhere((StockVoucherDetail d) => d.id == origin.id);
+    _data[at] = StockVoucherDetail(
+      id: origin.id,
+      ma: origin.ma,
+      type: origin.type,
+      orderId: origin.orderId,
+      createdAt: origin.createdAt,
+      nguoiTao: origin.nguoiTao,
+      soDong: origin.soDong,
+      tongSoLuong: origin.tongSoLuong,
+      returnOfVoucherId: origin.returnOfVoucherId,
+      note: origin.note,
+      lines: origin.lines,
+      returnOf: origin.returnOf,
+      returnVoucher: StockVoucherReturnRef(id: created.id, ma: created.ma),
+      canReturn: false,
+    );
+    _data.insert(0, created);
+    return created;
   }
 
   StockVoucherLine _dong(CreateStockVoucherLineInput l) {

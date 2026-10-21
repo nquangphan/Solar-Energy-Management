@@ -180,9 +180,10 @@ model StockItem {
 /// `qty` is SIGNED. The sum never filters by `type` — `type` is for tracing, so the sign must be
 /// right (`inventory/domain/stock-movement-type.ts`):
 /// - `reserve` (qty > 0): written when an order version is confirmed, one row per tracked product.
-/// - `release` (qty < 0): written on re-confirm against the OLD version, for exactly the amount
-///   that version still holds in this ledger — not the old line qty, and regardless of the
-///   product's current `tracksStock`.
+/// - `release` (qty < 0): written on re-confirm against the OLD version, and when the order is
+///   cancelled or completed against EVERY version that still holds — for exactly the amount that
+///   version still holds in this ledger, not the line qty, and regardless of the product's
+///   current `tracksStock`.
 /// - `xuat` (qty < 0): order-bound stock issue, releases what the order currently holds.
 ///
 /// `@@unique([orderVersionId, stockItemId, type])` makes retries idempotent: one version holds at
@@ -192,7 +193,7 @@ model StockItem {
 /// in `migration.sql` — Prisma does not model CHECK constraints.
 ///
 /// Every row of one order is written under that order's `orders` row lock (confirm, order-bound
-/// stock issue), then `products` FOR UPDATE.
+/// stock issue, cancel, completion), then `products` FOR UPDATE.
 model StockMovement {
   id             String       @id @default(uuid())
   stockItemId    String       @map("stock_item_id")
@@ -222,7 +223,16 @@ model StockMovement {
 /// distinct ⇒ free-standing vouchers never hit it.
 /// CHECK `stock_vouchers_order_pair` (both columns null or both set) and
 /// `stock_vouchers_order_only_xuat` (order-bound ⇒ `type = 'xuat'`) live only in
-/// `migration.sql`. The link from a return voucher to its origin comes later.
+/// `migration.sql`.
+///
+/// RETURN voucher (`returnOfVoucherId` non-null) = stock counted back in after the order of an
+/// order-bound stock-out was cancelled. It is a `nhap` voucher with NO order pair of its own
+/// (the order is reached through its origin); each line's `unitCost` is the origin line's
+/// `unitCost` (the cost frozen at issue). It writes no `StockMovement`: what the order held was
+/// already released at issue and at cancel. `returnOfVoucherId` UNIQUE = one stock-out, at most
+/// one return voucher. CHECK `stock_vouchers_return_is_stock_in` (return ⇒ `type = 'nhap'` and
+/// no order pair) lives only in `migration.sql`; "the origin is an order-bound stock-out" spans
+/// two rows and is enforced by the service.
 ///
 /// HỢP ĐỒNG KHOÁ cho MỌI đường ghi tồn (phiếu, xuất gắn đơn, giữ chỗ, nhập trả): khoá dòng
 /// `products` bằng `SELECT … WHERE id = ANY(…) ORDER BY id FOR UPDATE` là lệnh ĐẦU TIÊN của
@@ -239,6 +249,9 @@ model StockVoucher {
   order              Order?             @relation(fields: [orderId], references: [id], onDelete: Restrict)
   orderVersionId     String?            @map("order_version_id")
   orderVersion       OrderVersion?      @relation(fields: [orderVersionId], references: [id], onDelete: Restrict)
+  returnOfVoucherId  String?            @unique @map("return_of_voucher_id")
+  returnOf           StockVoucher?      @relation("StockVoucherReturn", fields: [returnOfVoucherId], references: [id], onDelete: Restrict)
+  returnVoucher      StockVoucher?      @relation("StockVoucherReturn")
   lines              StockVoucherLine[]
 
   @@unique([orderId, orderVersionId])

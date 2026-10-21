@@ -191,6 +191,7 @@ describe('OrdersService', () => {
     findOrderIssueVoucher: jest.fn(),
     lockTrackedProductsInTx: jest.fn(),
     reserveForOrderInTx: jest.fn(),
+    releaseHeldForOrderInTx: jest.fn(),
   };
   const service = new OrdersService(
     prisma,
@@ -215,6 +216,7 @@ describe('OrdersService', () => {
     stockVouchers.findOrderIssueVoucher.mockResolvedValue(null);
     stockVouchers.lockTrackedProductsInTx.mockResolvedValue(new Set());
     stockVouchers.reserveForOrderInTx.mockResolvedValue(undefined);
+    stockVouchers.releaseHeldForOrderInTx.mockResolvedValue(undefined);
     customerRepo.findUnique.mockResolvedValue(KHACH);
     orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
     // Lần đọc đầu của đường đọc/ghi do người gọi kích hoạt đi qua `findScopedOrThrow`

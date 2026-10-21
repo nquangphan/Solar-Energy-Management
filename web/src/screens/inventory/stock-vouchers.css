@@ -110,3 +110,8 @@
 .pk-loi {
   color: var(--danger);
 }
+
+/* One return-sheet row: the "Nhận lại" input and its errors stack in the last cell. */
+.pk-return-row td {
+  vertical-align: top;
+}

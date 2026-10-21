@@ -63,7 +63,9 @@ describe('/stock-vouchers (e2e)', () => {
     $queryRaw: jest.fn(),
     product: { findMany: jest.fn(), update: jest.fn() },
     stockItem: { upsert: jest.fn() },
-    stockVoucher: { create: jest.fn() },
+    stockVoucher: { create: jest.fn(), findUnique: jest.fn() },
+    order: { findUnique: jest.fn() },
+    stockMovement: { create: jest.fn() },
   };
   const voucherRepo = { findMany: jest.fn(), findUnique: jest.fn() };
   // `auditLog` có mặt vì `AuditSubscriber` THẬT chạy trong `AppModule`.
@@ -561,5 +563,478 @@ describe('/stock-vouchers (e2e)', () => {
 
     expect(res.status).toBe(404);
     expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+  });
+  describe('POST /stock-vouchers/:id/return — return voucher from a cancelled order', () => {
+    const ORIGIN_ID = '55555555-5555-4555-8555-555555555555';
+    const ORDER_ID = '66666666-6666-4666-8666-666666666666';
+
+    function postReturn(body: unknown, id: string = ORIGIN_ID) {
+      return request(server())
+        .post(`/stock-vouchers/${id}/return`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send(body as object);
+    }
+
+    function origin(o: { type?: string; orderId?: string | null } = {}) {
+      return {
+        id: ORIGIN_ID,
+        seq: 96,
+        type: o.type ?? 'xuat',
+        orderId: o.orderId === undefined ? ORDER_ID : o.orderId,
+        lines: [
+          {
+            productId: P1,
+            qty: 12,
+            unitCost: 1_000_000,
+            product: { unit: 'tấm' },
+          },
+          { productId: P2, qty: 2, unitCost: 300_000, product: { unit: 'bộ' } },
+        ],
+      };
+    }
+
+    function given(
+      o: {
+        origin?: ReturnType<typeof origin> | null;
+        existingReturn?: { seq: number; type: string } | null;
+        orderStatus?: string;
+      } = {},
+    ) {
+      tx.stockVoucher.findUnique.mockImplementation(
+        (args: { where: { id?: string } }) =>
+          Promise.resolve(
+            args.where.id !== undefined
+              ? o.origin === undefined
+                ? origin()
+                : o.origin
+              : (o.existingReturn ?? null),
+          ),
+      );
+      tx.order.findUnique.mockResolvedValue({ status: o.orderStatus ?? 'huy' });
+    }
+
+    beforeEach(() => {
+      givenPermissions(...ROLE_PRESETS.KHO_GIAO);
+      tx.product.findMany.mockResolvedValue([
+        {
+          id: P1,
+          name: 'Tấm pin 550W',
+          unit: 'tấm',
+          costPrice: 1_200_000,
+          tracksStock: true,
+          isActive: true,
+          stockItem: { id: 's1', productId: P1, onHand: 8 },
+        },
+      ]);
+      tx.stockVoucher.create.mockImplementation(
+        (args: {
+          data: {
+            type: string;
+            returnOfVoucherId: string;
+            lines: {
+              create: { productId: string; qty: number; unitCost: number }[];
+            };
+          };
+        }) =>
+          Promise.resolve({
+            ...phieuRow(args.data.type, args.data.lines.create),
+            seq: 4,
+            orderId: null,
+            returnOfVoucherId: args.data.returnOfVoucherId,
+            order: null,
+            returnOf: {
+              id: ORIGIN_ID,
+              seq: 96,
+              type: 'xuat',
+              orderId: ORDER_ID,
+            },
+            returnVoucher: null,
+          }),
+      );
+      given();
+    });
+
+    it('KHO_GIAO ⇒ 201: PK-NT code, origin link, no top-level orderId, no unitCost in the body; a client unitCost is stripped', async () => {
+      const res = await postReturn({
+        note: '  2 tấm nứt  ',
+        lines: [{ productId: P1, qty: 10, unitCost: 1 }],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({
+        ma: 'PK-NT-0004',
+        type: 'nhap',
+        returnOfVoucherId: ORIGIN_ID,
+        returnOf: { id: ORIGIN_ID, ma: 'PK-X-0096', orderId: ORDER_ID },
+        canReturn: false,
+      });
+      expect(res.body).not.toHaveProperty('orderId');
+      expect(res.body.lines[0]).not.toHaveProperty('unitCost');
+      // The line cost is the ORIGIN line's, not the client's 1.
+      expect(tx.stockVoucher.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            note: '2 tấm nứt',
+            returnOfVoucherId: ORIGIN_ID,
+            lines: {
+              create: [{ productId: P1, qty: 10, unitCost: 1_000_000 }],
+            },
+          }),
+        }),
+      );
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+      // Audit through the event: exactly ONE row, linking the origin and the cancelled order.
+      expect(auditRepo.create).toHaveBeenCalledTimes(1);
+      expect(auditRepo.create.mock.calls[0][0].data).toMatchObject({
+        eventType: 'StockVoucherCreated',
+        targetType: 'StockVoucher',
+        after: {
+          ma: 'PK-NT-0004',
+          returnOfVoucherId: ORIGIN_ID,
+          orderId: ORDER_ID,
+          lines: [
+            {
+              productId: P1,
+              qty: 10,
+              unitCost: 1_000_000,
+              onHandTruoc: 8,
+              onHandSau: 18,
+            },
+          ],
+        },
+      });
+    });
+
+    it('QUAN_LY (costs.view) ⇒ 201 with the origin unitCost', async () => {
+      givenPermissions(...ROLE_PRESETS.QUAN_LY);
+
+      const res = await postReturn({ lines: [{ productId: P1, qty: 12 }] });
+
+      expect(res.status).toBe(201);
+      expect(res.body.lines[0].unitCost).toBe(1_000_000);
+    });
+
+    it.each<[string, unknown, string]>([
+      ['empty lines', { lines: [] }, 'lines'],
+      ['qty 0', { lines: [{ productId: P1, qty: 0 }] }, 'lines.0.qty'],
+      [
+        'fractional qty',
+        { lines: [{ productId: P1, qty: 1.5 }] },
+        'lines.0.qty',
+      ],
+      [
+        'productId not a UUID',
+        { lines: [{ productId: 'abc', qty: 1 }] },
+        'lines.0.productId',
+      ],
+      [
+        'note over 500 chars',
+        { note: 'x'.repeat(501), lines: [{ productId: P1, qty: 1 }] },
+        'note',
+      ],
+    ])('%s ⇒ 400 VALIDATION_ERROR at %s, no tx', async (_name, body, field) => {
+      const res = await postReturn(body);
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(
+        res.body.fieldErrors.map((f: { field: string }) => f.field),
+      ).toContain(field);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it(':id not a UUID ⇒ 400, no tx', async () => {
+      const res = await postReturn(
+        { lines: [{ productId: P1, qty: 1 }] },
+        'abc',
+      );
+
+      expect(res.status).toBe(400);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+
+    it.each<
+      [
+        string,
+        Parameters<typeof given>[0],
+        unknown,
+        number,
+        string,
+        string?,
+        string?,
+      ]
+    >([
+      [
+        'origin missing',
+        { origin: null },
+        { lines: [{ productId: P1, qty: 1 }] },
+        404,
+        ErrorCode.NOT_FOUND,
+        undefined,
+        undefined,
+      ],
+      [
+        'origin is a free-standing stock-in',
+        { origin: origin({ type: 'nhap', orderId: null }) },
+        { lines: [{ productId: P1, qty: 1 }] },
+        409,
+        ErrorCode.CONFLICT,
+        undefined,
+        undefined,
+      ],
+      [
+        'origin is a free-standing stock-out',
+        { origin: origin({ orderId: null }) },
+        { lines: [{ productId: P1, qty: 1 }] },
+        409,
+        ErrorCode.CONFLICT,
+        undefined,
+        undefined,
+      ],
+      [
+        'order not cancelled',
+        { orderStatus: 'dacoc' },
+        { lines: [{ productId: P1, qty: 1 }] },
+        409,
+        ErrorCode.CONFLICT,
+        undefined,
+        undefined,
+      ],
+      [
+        'already returned',
+        { existingReturn: { seq: 4, type: 'nhap' } },
+        { lines: [{ productId: P1, qty: 1 }] },
+        409,
+        ErrorCode.CONFLICT,
+        undefined,
+        undefined,
+      ],
+      [
+        'duplicate product',
+        {},
+        {
+          lines: [
+            { productId: P1, qty: 1 },
+            { productId: P1, qty: 2 },
+          ],
+        },
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        'lines.1.productId',
+        'DUPLICATE_PRODUCT',
+      ],
+      [
+        'product not on the origin',
+        {},
+        {
+          lines: [
+            { productId: '77777777-7777-4777-8777-777777777777', qty: 1 },
+          ],
+        },
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        'lines.0.productId',
+        'NOT_ON_ORIGIN_VOUCHER',
+      ],
+      [
+        'more than issued',
+        {},
+        { lines: [{ productId: P1, qty: 13 }] },
+        400,
+        ErrorCode.VALIDATION_ERROR,
+        'lines.0.qty',
+        'RETURN_EXCEEDS_ISSUED',
+      ],
+    ])(
+      '%s ⇒ refused with the envelope, nothing written, no audit',
+      async (_name, state, body, status, code, field, fieldCode) => {
+        given(state);
+
+        const res = await postReturn(body);
+
+        expect(res.status).toBe(status);
+        expect(res.body.code).toBe(code);
+        expect(typeof res.body.traceId).toBe('string');
+        if (field) {
+          expect(res.body.fieldErrors).toEqual([
+            expect.objectContaining({ field, code: fieldCode }),
+          ]);
+        }
+        expect(tx.stockItem.upsert).not.toHaveBeenCalled();
+        expect(tx.product.update).not.toHaveBeenCalled();
+        expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+        expect(auditRepo.create).not.toHaveBeenCalled();
+      },
+    );
+
+    it('already returned ⇒ the message names the PK-NT voucher', async () => {
+      given({ existingReturn: { seq: 4, type: 'nhap' } });
+
+      const res = await postReturn({ lines: [{ productId: P1, qty: 1 }] });
+
+      expect(res.body.message).toContain('PK-NT-0004');
+    });
+
+    it('THO_KS (no inventory.manage) ⇒ 403, no tx', async () => {
+      givenPermissions(...ROLE_PRESETS.THO_KS);
+
+      const res = await postReturn({ lines: [{ productId: P1, qty: 1 }] });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /stock-vouchers — return voucher filter and fields', () => {
+    const ORIGIN_ID = '55555555-5555-4555-8555-555555555555';
+
+    function list(query: string) {
+      return request(server())
+        .get(`/stock-vouchers${query}`)
+        .set('Authorization', `Bearer ${token()}`);
+    }
+
+    beforeEach(() => givenPermissions(...ROLE_PRESETS.KHO_GIAO));
+
+    it('?isReturn=true ⇒ only return vouchers; the summary carries returnOfVoucherId and a PK-NT code', async () => {
+      voucherRepo.findMany.mockResolvedValue([
+        {
+          ...phieuRow('nhap', []),
+          seq: 4,
+          returnOfVoucherId: ORIGIN_ID,
+          lines: [{ qty: 10 }],
+        },
+      ]);
+
+      const res = await list('?isReturn=true');
+
+      expect(res.status).toBe(200);
+      expect(voucherRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { returnOfVoucherId: { not: null } },
+        }),
+      );
+      expect(res.body.items[0]).toMatchObject({
+        ma: 'PK-NT-0004',
+        returnOfVoucherId: ORIGIN_ID,
+      });
+    });
+
+    it('?type=nhap&isReturn=false ⇒ plain stock-ins only; a summary without a return link omits the key', async () => {
+      voucherRepo.findMany.mockResolvedValue([
+        {
+          ...phieuRow('nhap', []),
+          returnOfVoucherId: null,
+          lines: [{ qty: 1 }],
+        },
+      ]);
+
+      const res = await list('?type=nhap&isReturn=false');
+
+      expect(res.status).toBe(200);
+      expect(voucherRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { type: 'nhap', returnOfVoucherId: null },
+        }),
+      );
+      expect(res.body.items[0]).not.toHaveProperty('returnOfVoucherId');
+    });
+
+    it('no filter ⇒ no return condition', async () => {
+      await list('');
+
+      expect(voucherRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: {} }),
+      );
+    });
+
+    it('detail of a return voucher without costs.view ⇒ origin link, no top-level orderId, no unitCost, canReturn false', async () => {
+      voucherRepo.findUnique.mockResolvedValue({
+        ...phieuRow('nhap', [{ productId: P1, qty: 10, unitCost: 1_000_000 }]),
+        seq: 4,
+        orderId: null,
+        returnOfVoucherId: ORIGIN_ID,
+        order: null,
+        returnOf: {
+          id: ORIGIN_ID,
+          seq: 96,
+          type: 'xuat',
+          orderId: '66666666-6666-4666-8666-666666666666',
+        },
+        returnVoucher: null,
+      });
+
+      const res = await list(`/${VOUCHER_ID}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        ma: 'PK-NT-0004',
+        type: 'nhap',
+        returnOfVoucherId: ORIGIN_ID,
+        returnOf: {
+          id: ORIGIN_ID,
+          ma: 'PK-X-0096',
+          orderId: '66666666-6666-4666-8666-666666666666',
+        },
+        canReturn: false,
+      });
+      expect(res.body).not.toHaveProperty('orderId');
+      expect(res.body).not.toHaveProperty('returnVoucher');
+      expect(res.body.lines[0]).not.toHaveProperty('unitCost');
+    });
+
+    it('?isReturn=maybe ⇒ 400', async () => {
+      const res = await list('?isReturn=maybe');
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    });
+
+    it.each<[string, Record<string, unknown>, boolean]>([
+      [
+        'cancelled order, no return yet',
+        { order: { status: 'huy' }, returnVoucher: null },
+        true,
+      ],
+      [
+        'live order',
+        { order: { status: 'dacoc' }, returnVoucher: null },
+        false,
+      ],
+      [
+        'already returned',
+        {
+          order: { status: 'huy' },
+          returnVoucher: { id: 'vr', seq: 4, type: 'nhap' },
+        },
+        false,
+      ],
+    ])(
+      'detail of an order-bound stock-out: %s (%j) ⇒ canReturn %s',
+      async (_name, rel, canReturn) => {
+        voucherRepo.findUnique.mockResolvedValue({
+          ...phieuRow('xuat', [
+            { productId: P1, qty: 12, unitCost: 1_000_000 },
+          ]),
+          orderId: '66666666-6666-4666-8666-666666666666',
+          returnOf: null,
+          ...rel,
+        });
+
+        const res = await list(`/${VOUCHER_ID}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.canReturn).toBe(canReturn);
+        if (rel.returnVoucher) {
+          expect(res.body.returnVoucher).toEqual({
+            id: 'vr',
+            ma: 'PK-NT-0004',
+          });
+        } else {
+          expect(res.body).not.toHaveProperty('returnVoucher');
+        }
+      },
+    );
   });
 });

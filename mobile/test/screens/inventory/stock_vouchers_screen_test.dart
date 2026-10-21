@@ -16,13 +16,14 @@ import 'package:pns_mobile/design_system/gating/app_permissions.dart';
 import 'package:pns_mobile/design_system/session/fake_inventory_port.dart';
 import 'package:pns_mobile/design_system/session/fake_stock_vouchers_port.dart';
 import 'package:pns_mobile/design_system/session/stock_vouchers_port.dart';
+import 'package:pns_mobile/design_system/shell/app_tabs.dart';
 import 'package:pns_mobile/screens/inventory/inventory_screen.dart';
 import 'package:pns_mobile/screens/inventory/stock_vouchers_screen.dart';
 
 /// Never completes — holds the screen in `loading`.
 class _TreoPort extends FakeStockVouchersPort {
   @override
-  Future<StockVoucherList> listVouchers({String? type}) =>
+  Future<StockVoucherList> listVouchers({String? type, bool? isReturn}) =>
       Completer<StockVoucherList>().future;
 }
 
@@ -31,10 +32,10 @@ class _LoiRoiDuocPort extends FakeStockVouchersPort {
   int soLanGoi = 0;
 
   @override
-  Future<StockVoucherList> listVouchers({String? type}) {
+  Future<StockVoucherList> listVouchers({String? type, bool? isReturn}) {
     soLanGoi++;
     if (soLanGoi == 1) throw Exception('mạng lỗi');
-    return super.listVouchers(type: type);
+    return super.listVouchers(type: type, isReturn: isReturn);
   }
 }
 
@@ -95,6 +96,148 @@ void _manHinhCao(WidgetTester tester, [double width = 400.0]) {
   tester.view.physicalSize = Size(width, 1400.0);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
+}
+
+/// Records the arguments of every list call.
+class _ListRecordingPort extends FakeStockVouchersPort {
+  _ListRecordingPort(super.data);
+
+  final List<({String? type, bool? isReturn})> listCalls =
+      <({String? type, bool? isReturn})>[];
+
+  @override
+  Future<StockVoucherList> listVouchers({String? type, bool? isReturn}) {
+    listCalls.add((type: type, isReturn: isReturn));
+    return super.listVouchers(type: type, isReturn: isReturn);
+  }
+}
+
+/// Records every return-voucher payload; optionally refuses with [failure].
+class _ReturnRecordingPort extends _ListRecordingPort {
+  _ReturnRecordingPort(super.data, {this.failure, this.gate});
+
+  final StockVoucherPortException? failure;
+
+  /// When set, the request stays in flight until it completes.
+  final Future<void>? gate;
+  final List<
+      ({
+        String origin,
+        String? note,
+        List<CreateReturnVoucherLineInput> lines
+      })> returnCalls = <({
+    String origin,
+    String? note,
+    List<CreateReturnVoucherLineInput> lines
+  })>[];
+
+  @override
+  Future<StockVoucherDetail> createReturnVoucher(
+    String originVoucherId, {
+    String? note,
+    required List<CreateReturnVoucherLineInput> lines,
+  }) async {
+    returnCalls.add((origin: originVoucherId, note: note, lines: lines));
+    await gate;
+    final StockVoucherPortException? e = failure;
+    if (e != null) throw e;
+    return super.createReturnVoucher(originVoucherId, note: note, lines: lines);
+  }
+}
+
+const StockVoucherCreator _kActor = StockVoucherCreator(
+  id: 'acc-kho-binh',
+  displayName: 'Kho/Giao hàng (Bình)',
+);
+
+StockVoucherLine _line(String ten, int qty, {int? unitCost}) =>
+    StockVoucherLine(
+      productId: 'prod-${ten.hashCode}',
+      ten: ten,
+      sku: 'SKU',
+      donVi: 'bộ',
+      qty: qty,
+      unitCost: unitCost,
+    );
+
+const String _kNameA = 'Tấm pin AE 630W';
+const String _kNameB = 'Biến tần hybrid ba pha 10kW';
+
+/// Order-bound stock-out of three products; [canReturn] is the backend's call.
+StockVoucherDetail _stockOut({
+  required String id,
+  required String ma,
+  required bool canReturn,
+  StockVoucherReturnRef? returnVoucher,
+  List<StockVoucherLine>? lines,
+}) {
+  final List<StockVoucherLine> ds = lines ??
+      <StockVoucherLine>[
+        _line(_kNameA, 5),
+        _line(_kNameB, 3),
+        _line(_kTenDaiNhat, 2),
+      ];
+  return StockVoucherDetail(
+    id: id,
+    ma: ma,
+    type: 'xuat',
+    orderId: 'ord-huy-1',
+    createdAt: '2026-07-04T02:30:00.000Z',
+    nguoiTao: _kActor,
+    soDong: ds.length,
+    tongSoLuong: ds.fold<int>(0, (int t, StockVoucherLine l) => t + l.qty),
+    note: null,
+    canReturn: canReturn,
+    returnVoucher: returnVoucher,
+    lines: ds,
+  );
+}
+
+StockVoucherDetail _returnVoucher() => StockVoucherDetail(
+      id: 'pk-nt-0004',
+      ma: 'PK-NT-0004',
+      type: 'nhap',
+      createdAt: '2026-07-06T01:05:00.000Z',
+      nguoiTao: _kActor,
+      soDong: 1,
+      tongSoLuong: 4,
+      returnOfVoucherId: 'pk-x-huy',
+      returnOf: const StockVoucherReturnOf(
+        id: 'pk-x-huy',
+        ma: 'PK-X-0095',
+        orderId: 'ord-huy-1',
+      ),
+      note: 'Hỏng 1 tấm',
+      lines: <StockVoucherLine>[_line(_kNameA, 4, unitCost: 2110000)],
+    );
+
+List<StockVoucherDetail> _returnFixture() => <StockVoucherDetail>[
+      _returnVoucher(),
+      _stockOut(id: 'pk-x-huy', ma: 'PK-X-0095', canReturn: true),
+      _stockOut(id: 'pk-x-khong', ma: 'PK-X-0090', canReturn: false),
+    ];
+
+Finder _tab(String label) => find.descendant(
+      of: find.byType(AppTabs),
+      matching: find.text(label),
+    );
+
+/// The "Nhận lại" inputs of the open return sheet, in displayed order.
+Finder get _receivedInputs => find.descendant(
+      of: find.byWidgetPredicate(
+          (Widget w) => w is AppField && w.semanticsLabel == 'Nhận lại'),
+      matching: find.byType(EditableText),
+    );
+
+String _inputValue(WidgetTester tester, int i) =>
+    tester.widget<EditableText>(_receivedInputs.at(i)).controller.text;
+
+Future<void> _openReturnSheet(
+    WidgetTester tester, StockVouchersPort port) async {
+  await tester.pumpWidget(_host(port));
+  await tester.pumpAndSettle();
+  await _bam(tester, find.text('PK-X-0095'));
+  await _bam(tester, find.widgetWithText(AppButton, 'Tạo phiếu nhập trả'));
 }
 
 void main() {
@@ -368,6 +511,342 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  group('Return vouchers', () {
+    testWidgets(
+        'four tabs call the right filter: Nhập = nhap+false, Nhập trả = true',
+        (tester) async {
+      _manHinhCao(tester);
+      final _ListRecordingPort port = _ListRecordingPort(kDemoStockVouchers);
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+
+      for (final String label in <String>[
+        'Tất cả',
+        'Nhập',
+        'Xuất',
+        'Nhập trả'
+      ]) {
+        expect(_tab(label), findsOneWidget);
+      }
+      expect(port.listCalls.last, (type: null, isReturn: null));
+
+      await _bam(tester, _tab('Nhập'));
+      expect(port.listCalls.last, (type: 'nhap', isReturn: false));
+      await _bam(tester, _tab('Xuất'));
+      expect(port.listCalls.last, (type: 'xuat', isReturn: null));
+      await _bam(tester, _tab('Nhập trả'));
+      expect(port.listCalls.last, (type: null, isReturn: true));
+    });
+
+    testWidgets('the "Nhập trả" chip only on a row with returnOfVoucherId',
+        (tester) async {
+      _manHinhCao(tester);
+      await tester.pumpWidget(_host(FakeStockVouchersPort(_returnFixture())));
+      await tester.pumpAndSettle();
+
+      final Finder chip = find.widgetWithText(AppChip, 'Nhập trả');
+      expect(chip, findsOneWidget);
+      final Finder returnRow = find.ancestor(
+          of: find.text('PK-NT-0004'), matching: find.byType(Row));
+      expect(find.descendant(of: returnRow, matching: chip), findsOneWidget);
+      // A return voucher shows ONLY "Nhập trả" — never "Nhập" beside it.
+      expect(
+          find.descendant(
+              of: returnRow, matching: find.widgetWithText(AppChip, 'Nhập')),
+          findsNothing);
+      expect(find.widgetWithText(AppChip, 'Nhập'), findsNothing);
+
+      // Same in the detail header.
+      await _bam(tester, find.text('PK-NT-0004'));
+      expect(find.widgetWithText(AppChip, 'Nhập trả'), findsNWidgets(2));
+      expect(find.widgetWithText(AppChip, 'Nhập'), findsNothing);
+    });
+
+    testWidgets(
+        'the button shows only when canReturn; a canReturn=false voucher has none',
+        (tester) async {
+      _manHinhCao(tester);
+      await tester.pumpWidget(_host(FakeStockVouchersPort(_returnFixture())));
+      await tester.pumpAndSettle();
+
+      // Detail loaded, order-bound voucher: every enclosing condition is on.
+      await _bam(tester, find.text('PK-X-0090'));
+      expect(find.text('Gắn đơn'), findsOneWidget);
+      expect(find.text('Tạo phiếu nhập trả'), findsNothing);
+
+      await _bam(tester, find.text('PK-X-0095'));
+      expect(find.text('Gắn đơn'), findsOneWidget);
+      expect(find.text('Tạo phiếu nhập trả'), findsOneWidget);
+    });
+
+    testWidgets(
+        'a stock-out that has a return ⇒ Phiếu nhập trả row that opens it',
+        (tester) async {
+      _manHinhCao(tester);
+      final List<StockVoucherDetail> data = <StockVoucherDetail>[
+        _returnVoucher(),
+        _stockOut(
+          id: 'pk-x-huy',
+          ma: 'PK-X-0095',
+          canReturn: false,
+          returnVoucher:
+              const StockVoucherReturnRef(id: 'pk-nt-0004', ma: 'PK-NT-0004'),
+        ),
+      ];
+      await tester.pumpWidget(_host(FakeStockVouchersPort(data)));
+      await tester.pumpAndSettle();
+      await _bam(tester, find.text('PK-X-0095'));
+
+      expect(find.text('Phiếu nhập trả'), findsOneWidget);
+      expect(find.text('Tạo phiếu nhập trả'), findsNothing);
+      // List row + KV row: tap the KV row (the last one) to open the return voucher.
+      await _bam(tester, find.text('PK-NT-0004').last);
+      expect(find.text('Phiếu xuất gốc'), findsOneWidget);
+    });
+
+    testWidgets(
+        'sheet: Nhận lại starts at the issued qty, with the exact spec copy',
+        (tester) async {
+      _manHinhCao(tester);
+      await _openReturnSheet(tester, FakeStockVouchersPort(_returnFixture()));
+
+      expect(find.text('Tạo phiếu nhập trả'), findsWidgets);
+      expect(
+        find.text(
+            'Đơn đã huỷ sau khi xuất kho. Tồn kho không tự cộng lại — hàng chỉ về kho khi có người đếm và xác nhận phiếu này.'),
+        findsOneWidget,
+      );
+      expect(find.text('Sản phẩm'), findsWidgets);
+      expect(find.text('Đã xuất'), findsOneWidget);
+      expect(find.text('Nhận lại'), findsOneWidget);
+      expect(
+        find.text(
+            'Nhận lại ít hơn đã xuất là chuyện bình thường (hàng đã cắt, đã lắp, hỏng). Nhập đúng số đếm được — không ép cho khớp.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+            'Xác nhận → cộng tồn thật đúng số đếm được, Audit ghi người nhận. Không sửa/xoá sau khi lưu.'),
+        findsOneWidget,
+      );
+      expect(
+          find.widgetWithText(AppButton, 'Xác nhận nhập trả'), findsOneWidget);
+      expect(<String>[for (int i = 0; i < 3; i++) _inputValue(tester, i)],
+          <String>['5', '3', '2']);
+    });
+
+    testWidgets(
+        'a 0 row is not sent; other qtys are sent as typed; the note goes along',
+        (tester) async {
+      _manHinhCao(tester);
+      final _ReturnRecordingPort port = _ReturnRecordingPort(_returnFixture());
+      await _openReturnSheet(tester, port);
+
+      await tester.enterText(_receivedInputs.at(0), '0');
+      await tester.enterText(_receivedInputs.at(1), '2');
+      await tester.enterText(_o('Ghi chú'), 'Hỏng 1 bộ');
+      await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+
+      expect(port.returnCalls, hasLength(1));
+      expect(port.returnCalls[0].origin, 'pk-x-huy');
+      expect(port.returnCalls[0].note, 'Hỏng 1 bộ');
+      expect(port.returnCalls[0].lines.map((l) => l.qty).toList(), <int>[2, 2]);
+      // The sheet is gone and the NEW voucher is open in the detail.
+      expect(find.text('Xác nhận nhập trả'), findsNothing);
+      expect(find.text('PK-NT-0005'), findsWidgets);
+      expect(find.text('Nhập trả · từ đơn huỷ'), findsOneWidget);
+      expect(find.text('Tạo phiếu nhập trả'), findsNothing);
+      // The origin has its return voucher now and offers no second return.
+      await _bam(tester, find.text('PK-X-0095').first);
+      expect(find.text('Tạo phiếu nhập trả'), findsNothing);
+      expect(find.text('Phiếu nhập trả'), findsOneWidget);
+    });
+
+    testWidgets('every row 0 ⇒ button disabled, port not called',
+        (tester) async {
+      _manHinhCao(tester);
+      final _ReturnRecordingPort port = _ReturnRecordingPort(_returnFixture());
+      await _openReturnSheet(tester, port);
+
+      for (int i = 0; i < 3; i++) {
+        await tester.enterText(_receivedInputs.at(i), '0');
+      }
+      await tester.pump();
+      final Finder nut = find.widgetWithText(AppButton, 'Xác nhận nhập trả');
+      expect(tester.widget<AppButton>(nut).onPressed, isNull);
+      expect(port.returnCalls, isEmpty);
+    });
+
+    testWidgets(
+        'a blank row ⇒ error under it, port NOT called (blank is never coerced to 0)',
+        (tester) async {
+      _manHinhCao(tester);
+      final _ReturnRecordingPort port = _ReturnRecordingPort(_returnFixture());
+      await _openReturnSheet(tester, port);
+
+      await tester.enterText(_receivedInputs.at(1), '');
+      await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+
+      expect(find.text('Nhập số nhận lại (0 nếu không nhận lại).'),
+          findsOneWidget);
+      expect(port.returnCalls, isEmpty);
+    });
+
+    testWidgets(
+        'RETURN_EXCEEDS_ISSUED: the submitted index maps back to the right displayed row when a 0 row precedes it',
+        (tester) async {
+      _manHinhCao(tester);
+      const String message = 'Chỉ xuất 3, không nhận lại được 9.';
+      final _ReturnRecordingPort port = _ReturnRecordingPort(
+        _returnFixture(),
+        failure: const StockVoucherPortException(
+          'Số nhận lại vượt số đã xuất.',
+          fieldErrors: <StockVoucherFieldError>[
+            StockVoucherFieldError(
+              field: 'lines.0.qty',
+              code: 'RETURN_EXCEEDS_ISSUED',
+              message: message,
+            ),
+          ],
+        ),
+      );
+      await _openReturnSheet(tester, port);
+
+      // Displayed row 0 is 0 (not sent) ⇒ displayed row 1 is lines.0 of the sent array.
+      await tester.enterText(_receivedInputs.at(0), '0');
+      await tester.enterText(_receivedInputs.at(1), '9');
+      await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+
+      expect(port.returnCalls[0].lines, hasLength(2));
+      expect(find.text(message), findsOneWidget);
+      final double yError = tester.getTopLeft(find.text(message)).dy;
+      final double yRow0 = tester.getTopLeft(_receivedInputs.at(0)).dy;
+      final double yRow1 = tester.getTopLeft(_receivedInputs.at(1)).dy;
+      final double yRow2 = tester.getTopLeft(_receivedInputs.at(2)).dy;
+      expect(yError, greaterThan(yRow1));
+      expect(yError, lessThan(yRow2));
+      expect(yError, greaterThan(yRow0));
+      // The sheet stays open for correction.
+      expect(
+          find.widgetWithText(AppButton, 'Xác nhận nhập trả'), findsOneWidget);
+    });
+
+    testWidgets(
+        'return voucher detail: Loại, Gắn đơn, Phiếu xuất gốc, Người nhận, cost',
+        (tester) async {
+      _manHinhCao(tester);
+      await tester.pumpWidget(_host(FakeStockVouchersPort(_returnFixture())));
+      await tester.pumpAndSettle();
+      await _bam(tester, find.text('PK-NT-0004'));
+
+      expect(find.text('Nhập trả · từ đơn huỷ'), findsOneWidget);
+      expect(find.text('Gắn đơn'), findsOneWidget);
+      expect(find.text('ord-huy-1'), findsOneWidget);
+      expect(find.text('Phiếu xuất gốc'), findsOneWidget);
+      // List row + the "Phiếu xuất gốc" KV row.
+      expect(find.text('PK-X-0095'), findsNWidgets(2));
+      expect(find.text('Người nhận'), findsOneWidget);
+      expect(find.text('Hỏng 1 tấm'), findsOneWidget);
+      expect(find.text('2.110.000 đ'), findsOneWidget);
+      expect(find.text('Tạo phiếu nhập trả'), findsNothing);
+    });
+
+    testWidgets(
+        'saving from another tab lands on "Tất cả" with the new voucher listed',
+        (tester) async {
+      _manHinhCao(tester);
+      final _ReturnRecordingPort port = _ReturnRecordingPort(_returnFixture());
+      await tester.pumpWidget(_host(port));
+      await tester.pumpAndSettle();
+      await _bam(tester, find.text('PK-X-0095'));
+      await _bam(tester, _tab('Xuất'));
+      await _bam(tester, find.widgetWithText(AppButton, 'Tạo phiếu nhập trả'));
+      await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+
+      expect(port.listCalls.last, (type: null, isReturn: null));
+      // List row + detail header: the new voucher is in the list, not only opened.
+      expect(find.text('PK-NT-0005'), findsNWidgets(2));
+      expect(find.text('Nhập trả · từ đơn huỷ'), findsOneWidget);
+    });
+
+    testWidgets('double submit ⇒ the port is called exactly once',
+        (tester) async {
+      _manHinhCao(tester);
+      final Completer<void> gate = Completer<void>();
+      final _ReturnRecordingPort port =
+          _ReturnRecordingPort(_returnFixture(), gate: gate.future);
+      await _openReturnSheet(tester, port);
+
+      final Finder confirm =
+          find.widgetWithText(AppButton, 'Xác nhận nhập trả');
+      await tester.ensureVisible(confirm);
+      await tester.pumpAndSettle();
+      await tester.tap(confirm);
+      await tester.tap(confirm);
+      await tester.pump();
+      expect(port.returnCalls, hasLength(1));
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(port.returnCalls, hasLength(1));
+    });
+
+    testWidgets(
+        'closing the sheet while the request is in flight is blocked; the result is not lost',
+        (tester) async {
+      _manHinhCao(tester);
+      final Completer<void> gate = Completer<void>();
+      final _ReturnRecordingPort port =
+          _ReturnRecordingPort(_returnFixture(), gate: gate.future);
+      await _openReturnSheet(tester, port);
+
+      await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+      expect(port.returnCalls, hasLength(1));
+
+      // Close button, barrier tap and the system back are all ignored while sending.
+      await tester.tap(find.byWidgetPredicate(
+          (Widget w) => w is AppButton && w.icon == 'ic-close'));
+      await tester.tapAt(const Offset(10.0, 10.0));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Xác nhận nhập trả'), findsOneWidget);
+
+      gate.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Xác nhận nhập trả'), findsNothing);
+      expect(find.text('Nhập trả · từ đơn huỷ'), findsOneWidget);
+      expect(find.text('PK-NT-0005'), findsWidgets);
+    });
+
+    for (final double width in <double>[320.0, 360.0]) {
+      testWidgets('no overflow at ${width}px: list, return detail, sheet',
+          (tester) async {
+        tester.view.physicalSize = Size(width, 1400.0);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(_host(FakeStockVouchersPort(_returnFixture())));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+
+        await _bam(tester, find.text('PK-NT-0004'));
+        expect(tester.takeException(), isNull);
+
+        await _bam(tester, find.text('PK-X-0095').first);
+        await _bam(
+            tester, find.widgetWithText(AppButton, 'Tạo phiếu nhập trả'));
+        expect(find.text(_kTenDaiNhat), findsWidgets);
+        await tester.enterText(_receivedInputs.at(2), '');
+        await tester.enterText(_receivedInputs.at(0), '999');
+        await _bam(tester, find.widgetWithText(AppButton, 'Xác nhận nhập trả'));
+        expect(find.text('Nhập số nhận lại (0 nếu không nhận lại).'),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
 
   group('InventoryScreen — lối vào Phiếu kho', () {
     testWidgets('có callback + inventory.manage ⇒ nút Phiếu kho gọi callback',

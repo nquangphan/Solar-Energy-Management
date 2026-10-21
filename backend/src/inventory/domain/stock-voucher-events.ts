@@ -25,6 +25,10 @@ export interface StockVoucherSnapshot {
   readonly type: LoaiPhieu;
   readonly note: string | null;
   readonly lines: readonly StockVoucherLineSnapshot[];
+  /** Return voucher only: the origin stock-out it counts stock back from. */
+  readonly returnOfVoucherId?: string;
+  /** Return voucher only: the cancelled order of the origin stock-out. */
+  readonly orderId?: string;
 }
 
 /** Phiếu kho mới có hiệu lực — phiếu không sửa/xoá nên không có trạng thái "trước". */

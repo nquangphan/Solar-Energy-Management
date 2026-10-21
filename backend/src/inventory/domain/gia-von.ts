@@ -14,6 +14,10 @@ export type LoaiPhieu = (typeof LOAI_PHIEU)[number];
 export const INSUFFICIENT_STOCK = 'INSUFFICIENT_STOCK';
 export const PRODUCT_NOT_STOCKABLE = 'PRODUCT_NOT_STOCKABLE';
 export const DUPLICATE_PRODUCT = 'DUPLICATE_PRODUCT';
+/** A return line names a product that is not on the origin stock-out. */
+export const NOT_ON_ORIGIN_VOUCHER = 'NOT_ON_ORIGIN_VOUCHER';
+/** A return line takes back more than the origin stock-out issued. */
+export const RETURN_EXCEEDS_ISSUED = 'RETURN_EXCEEDS_ISSUED';
 
 /**
  * Giá vốn mới sau một lô nhập, tiền integer đồng (AD-10), làm tròn MỘT điểm ở cuối
@@ -41,7 +45,15 @@ export function tinhGiaVonBinhQuan(input: {
   );
 }
 
-/** Mã phiếu hiển thị: `PK-N-0119` (nhập) / `PK-X-0096` (xuất); quá 4 chữ số thì không cắt. */
-export function maPhieu(type: LoaiPhieu, seq: number): string {
-  return `PK-${type === 'nhap' ? 'N' : 'X'}-${String(seq).padStart(4, '0')}`;
+/**
+ * Mã phiếu hiển thị: `PK-N-0119` (nhập) / `PK-X-0096` (xuất) / `PK-NT-0004` (return voucher —
+ * a `nhap` counted back from a cancelled order's stock-out); quá 4 chữ số thì không cắt.
+ */
+export function maPhieu(
+  type: LoaiPhieu,
+  seq: number,
+  isReturn = false,
+): string {
+  const prefix = isReturn ? 'NT' : type === 'nhap' ? 'N' : 'X';
+  return `PK-${prefix}-${String(seq).padStart(4, '0')}`;
 }

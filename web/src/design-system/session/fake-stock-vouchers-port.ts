@@ -9,6 +9,7 @@
 
 import { DEMO_STOCK_LIST } from './fake-inventory-port';
 import type {
+  CreateReturnVoucherInput,
   CreateStockVoucherInput,
   StockVoucherDetail,
   StockVoucherList,
@@ -30,6 +31,7 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
     nguoiTao: KHO,
     soDong: 2,
     tongSoLuong: 50,
+    canReturn: false,
     note: 'Nhập từ nhà cung cấp',
     lines: [
       {
@@ -58,6 +60,7 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
     nguoiTao: KHO,
     soDong: 2,
     tongSoLuong: 15,
+    canReturn: false,
     note: 'Hàng mẫu cho khách',
     lines: [
       {
@@ -86,6 +89,7 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
     nguoiTao: KHO,
     soDong: 1,
     tongSoLuong: 1,
+    canReturn: true,
     note: null,
     lines: [
       {
@@ -105,6 +109,7 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
     nguoiTao: KHO,
     soDong: 1,
     tongSoLuong: 5,
+    canReturn: false,
     note: 'Tồn đầu kỳ',
     lines: [
       {
@@ -114,6 +119,53 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
         donVi: 'bộ',
         qty: 5,
         unitCost: 18_500_000,
+      },
+    ],
+  },
+  {
+    // Order-bound stock-out of a cancelled order that already has its return voucher.
+    id: 'pk-x-0090',
+    ma: 'PK-X-0090',
+    type: 'xuat',
+    orderId: 'ord-demo-cancelled',
+    createdAt: '2026-07-01T02:30:00.000Z',
+    nguoiTao: KHO,
+    soDong: 1,
+    tongSoLuong: 4,
+    canReturn: false,
+    returnVoucher: { id: 'pk-nt-0004', ma: 'PK-NT-0004' },
+    note: null,
+    lines: [
+      {
+        productId: 'prod-pin-ae-630',
+        ten: 'Tấm pin AE 630W',
+        sku: 'PIN-AE-630',
+        donVi: 'tấm',
+        qty: 4,
+      },
+    ],
+  },
+  {
+    // Return voucher: type 'nhap', no top-level orderId.
+    id: 'pk-nt-0004',
+    ma: 'PK-NT-0004',
+    type: 'nhap',
+    returnOfVoucherId: 'pk-x-0090',
+    createdAt: '2026-07-03T02:00:00.000Z',
+    nguoiTao: KHO,
+    soDong: 1,
+    tongSoLuong: 3,
+    canReturn: false,
+    returnOf: { id: 'pk-x-0090', ma: 'PK-X-0090', orderId: 'ord-demo-cancelled' },
+    note: 'Đã cắt 1 tấm',
+    lines: [
+      {
+        productId: 'prod-pin-ae-630',
+        ten: 'Tấm pin AE 630W',
+        sku: 'PIN-AE-630',
+        donVi: 'tấm',
+        qty: 3,
+        unitCost: 2_110_000,
       },
     ],
   },
@@ -134,12 +186,13 @@ export const FAKE_INSUFFICIENT_STOCK_ERROR: StockVoucherPortError = {
 };
 
 function tomTat(d: StockVoucherDetail): StockVoucherSummary {
-  const { id, ma, type, orderId, createdAt, nguoiTao, soDong, tongSoLuong } = d;
+  const { id, ma, type, orderId, returnOfVoucherId, createdAt, nguoiTao, soDong, tongSoLuong } = d;
   return {
     id,
     ma,
     type,
     ...(orderId === undefined ? {} : { orderId }),
+    ...(returnOfVoucherId === undefined ? {} : { returnOfVoucherId }),
     createdAt,
     nguoiTao,
     soDong,
@@ -155,7 +208,12 @@ export class FakeStockVouchersPort implements StockVouchersPort {
   }
 
   listVouchers(query: StockVoucherListQuery = {}): Promise<StockVoucherList> {
-    const items = this.data.filter((d) => query.type === undefined || d.type === query.type);
+    const items = this.data.filter(
+      (d) =>
+        (query.type === undefined || d.type === query.type) &&
+        (query.isReturn === undefined ||
+          (d.returnOfVoucherId !== undefined) === query.isReturn),
+    );
     return Promise.resolve({ items: items.map(tomTat) });
   }
 
@@ -184,6 +242,7 @@ export class FakeStockVouchersPort implements StockVouchersPort {
       nguoiTao: KHO,
       soDong: input.lines.length,
       tongSoLuong: input.lines.reduce((tong, l) => tong + l.qty, 0),
+      canReturn: false,
       note: input.note ?? null,
       lines: input.lines.map((l) => {
         const sp = DEMO_STOCK_LIST.items.find((i) => i.productId === l.productId);
@@ -199,5 +258,48 @@ export class FakeStockVouchersPort implements StockVouchersPort {
     };
     this.data.unshift(moi);
     return Promise.resolve(moi);
+  }
+
+  createReturnVoucher(
+    originVoucherId: string,
+    input: CreateReturnVoucherInput,
+  ): Promise<StockVoucherDetail> {
+    const origin = this.data.find((d) => d.id === originVoucherId);
+    if (origin === undefined) {
+      const err: StockVoucherPortError = { message: 'Không tìm thấy phiếu kho.' };
+      return Promise.reject(err);
+    }
+    // A canned answer shaped like the backend's; stock and cost come from the backend.
+    const created: StockVoucherDetail = {
+      id: `pk-demo-${this.data.length + 1}`,
+      ma: 'PK-NT-0005',
+      type: 'nhap',
+      returnOfVoucherId: origin.id,
+      createdAt: '2026-10-21T03:15:00.000Z',
+      nguoiTao: KHO,
+      soDong: input.lines.length,
+      tongSoLuong: input.lines.reduce((sum, l) => sum + l.qty, 0),
+      canReturn: false,
+      returnOf: { id: origin.id, ma: origin.ma, orderId: origin.orderId ?? '' },
+      note: input.note ?? null,
+      lines: input.lines.map((l) => {
+        const originLine = origin.lines.find((x) => x.productId === l.productId);
+        return {
+          productId: l.productId,
+          ten: originLine?.ten ?? l.productId,
+          sku: originLine?.sku ?? '',
+          donVi: originLine?.donVi ?? '',
+          qty: l.qty,
+          ...(originLine?.unitCost === undefined ? {} : { unitCost: originLine.unitCost }),
+        };
+      }),
+    };
+    this.data[this.data.indexOf(origin)] = {
+      ...origin,
+      canReturn: false,
+      returnVoucher: { id: created.id, ma: created.ma },
+    };
+    this.data.unshift(created);
+    return Promise.resolve(created);
   }
 }

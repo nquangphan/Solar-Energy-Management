@@ -528,15 +528,17 @@ test('the inventory port is the SAME one-method read contract on both platforms 
   }
 });
 
-test('the stock-vouchers port is the SAME three-method contract on both platforms, field for field with openapi.json (Story 6.3)', () => {
+test('the stock-vouchers port is the SAME four-method contract on both platforms, field for field with openapi.json', () => {
   const webPort = readFileSync(resolve(webDir, 'stock-vouchers-port.ts'), 'utf8');
   const mobPort = readFileSync(resolve(mobDir, 'stock_vouchers_port.dart'), 'utf8');
   assert.match(webPort, /listVouchers\(query\?: StockVoucherListQuery\): Promise<StockVoucherList>/, 'web listVouchers(query?) => StockVoucherList');
-  assert.match(mobPort, /Future<StockVoucherList> listVouchers\(\{String\? type\}\)/, 'mobile listVouchers({type}) => StockVoucherList');
+  assert.match(mobPort, /Future<StockVoucherList> listVouchers\(\{String\? type, bool\? isReturn\}\)/, 'mobile listVouchers({type, isReturn}) => StockVoucherList');
   assert.match(webPort, /getVoucher\(id: string\): Promise<StockVoucherDetail>/, 'web getVoucher(id) => StockVoucherDetail');
   assert.match(mobPort, /Future<StockVoucherDetail> getVoucher\(String id\)/, 'mobile getVoucher(id) => StockVoucherDetail');
   assert.match(webPort, /createVoucher\(input: CreateStockVoucherInput\): Promise<StockVoucherDetail>/, 'web createVoucher(input) => StockVoucherDetail');
   assert.match(mobPort, /Future<StockVoucherDetail> createVoucher\(CreateStockVoucherInput input\)/, 'mobile createVoucher(input) => StockVoucherDetail');
+  assert.match(webPort, /createReturnVoucher\(\s*originVoucherId: string,\s*input: CreateReturnVoucherInput,?\s*\): Promise<StockVoucherDetail>/, 'web createReturnVoucher(originVoucherId, input) => StockVoucherDetail');
+  assert.match(mobPort, /Future<StockVoucherDetail> createReturnVoucher\(\s*String originVoucherId,\s*\{\s*String\? note,\s*required List<CreateReturnVoucherLineInput> lines,?\s*\}\)/, 'mobile createReturnVoucher(originVoucherId, {note, lines}) => StockVoucherDetail');
 
   // Every property of every voucher DTO in the backend's generated spec is named in
   // BOTH ports — parity with the contract, not only between the twins.
@@ -549,6 +551,10 @@ test('the stock-vouchers port is the SAME three-method contract on both platform
     'StockVoucherDetailDto',
     'StockVoucherLineRequestDto',
     'CreateStockVoucherRequestDto',
+    'StockVoucherReturnOfDto',
+    'StockVoucherReturnRefDto',
+    'ReturnVoucherLineRequestDto',
+    'CreateReturnVoucherRequestDto',
   ];
   const fields = new Set();
   for (const dto of dtos) {

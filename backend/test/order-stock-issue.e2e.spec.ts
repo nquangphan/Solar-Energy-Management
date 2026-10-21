@@ -128,8 +128,12 @@ describe('/orders/:id/stock-issue (e2e)', () => {
     createMany: jest.fn(),
   };
   const productRepo = { findMany: jest.fn() };
-  const stockItemRepo = { upsert: jest.fn() };
-  const stockMovementRepo = { aggregate: jest.fn(), create: jest.fn() };
+  const stockItemRepo = { upsert: jest.fn(), findMany: jest.fn() };
+  const stockMovementRepo = {
+    aggregate: jest.fn(),
+    create: jest.fn(),
+    groupBy: jest.fn(),
+  };
   const stockVoucherRepo = { findUnique: jest.fn(), create: jest.fn() };
   // `auditLog` is here because the REAL `AuditSubscriber` runs inside `AppModule`.
   const auditRepo = { create: jest.fn() };
@@ -279,6 +283,8 @@ describe('/orders/:id/stock-issue (e2e)', () => {
     );
     stockItemRepo.upsert.mockResolvedValue({ id: 'si-panel' });
     stockMovementRepo.aggregate.mockResolvedValue({ _sum: { qty: null } });
+    // Nothing held at close ⇒ the completion release writes nothing.
+    stockMovementRepo.groupBy.mockResolvedValue([]);
     stockVoucherRepo.findUnique.mockImplementation(() =>
       Promise.resolve(savedVoucher),
     );
@@ -329,6 +335,8 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(first.status).toBe(201);
       expect(first.body.voucher.ma).toBe('PK-X-0096');
       expect(first.body.voucher.orderId).toBe(ORDER_ID);
+      // A live order's stock-out offers no return; the flag is always present.
+      expect(first.body.voucher.canReturn).toBe(false);
       expect(first.body.voucher.lines).toEqual([
         {
           productId: PANEL,
@@ -548,6 +556,37 @@ describe('/orders/:id/stock-issue (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('hoanthanh');
+    });
+
+    it('a hold left on a product untracked since confirm ⇒ 200, released in the close tx after the status write', async () => {
+      lineRepo.findMany.mockResolvedValue([ORDER_LINES[1]]);
+      stockMovementRepo.groupBy.mockResolvedValue([
+        {
+          orderVersionId: VERSION_ID,
+          stockItemId: 'si-panel',
+          _sum: { qty: 10 },
+        },
+      ]);
+      stockItemRepo.findMany.mockResolvedValue([{ productId: PANEL }]);
+
+      const res = await close();
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('hoanthanh');
+      expect(stockMovementRepo.create).toHaveBeenCalledTimes(1);
+      expect(stockMovementRepo.create).toHaveBeenCalledWith({
+        data: {
+          stockItemId: 'si-panel',
+          orderId: ORDER_ID,
+          orderVersionId: VERSION_ID,
+          qty: -10,
+          type: 'release',
+        },
+      });
+      expect(
+        stockMovementRepo.create.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(orderRepo.updateMany.mock.invocationCallOrder[0]);
+      expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     });
 
     it('re-opening (mo-lai) an issued order ⇒ 409, no new version', async () => {

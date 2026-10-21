@@ -30,6 +30,7 @@ class StockVoucherSummary {
     required this.nguoiTao,
     required this.soDong,
     required this.tongSoLuong,
+    this.returnOfVoucherId,
   });
 
   final String id;
@@ -52,6 +53,30 @@ class StockVoucherSummary {
 
   /// Sum of line quantities — always positive; the direction comes from [type].
   final int tongSoLuong;
+
+  /// Set only on a return voucher (`Nhập trả`): the stock-out it returns.
+  final String? returnOfVoucherId;
+}
+
+/// Mirrors `returnOf` on `StockVoucherDetailDto` (return voucher only).
+class StockVoucherReturnOf {
+  const StockVoucherReturnOf({
+    required this.id,
+    required this.ma,
+    required this.orderId,
+  });
+
+  final String id;
+  final String ma;
+  final String orderId;
+}
+
+/// Mirrors `returnVoucher` on `StockVoucherDetailDto` (a stock-out that has one).
+class StockVoucherReturnRef {
+  const StockVoucherReturnRef({required this.id, required this.ma});
+
+  final String id;
+  final String ma;
 }
 
 /// Mirrors `StockVoucherLineResponseDto`.
@@ -88,12 +113,25 @@ class StockVoucherDetail extends StockVoucherSummary {
     required super.nguoiTao,
     required super.soDong,
     required super.tongSoLuong,
+    super.returnOfVoucherId,
     required this.note,
     required this.lines,
+    this.returnOf,
+    this.returnVoucher,
+    this.canReturn = false,
   });
 
   final String? note;
   final List<StockVoucherLine> lines;
+
+  /// Return voucher only: the stock-out it returns and that stock-out's order.
+  final StockVoucherReturnOf? returnOf;
+
+  /// Order-bound stock-out that already has a return voucher.
+  final StockVoucherReturnRef? returnVoucher;
+
+  /// Decided by the backend; the client never derives it.
+  final bool canReturn;
 }
 
 /// Mirrors `StockVoucherListResponseDto`.
@@ -131,6 +169,17 @@ class CreateStockVoucherInput {
   final List<CreateStockVoucherLineInput> lines;
 }
 
+/// One line of `CreateReturnVoucherRequestDto`.
+class CreateReturnVoucherLineInput {
+  const CreateReturnVoucherLineInput({
+    required this.productId,
+    required this.qty,
+  });
+
+  final String productId;
+  final int qty;
+}
+
 /// One `fieldErrors[]` entry. [field] is the backend's path, e.g. `lines.0.qty`.
 class StockVoucherFieldError {
   const StockVoucherFieldError({
@@ -165,11 +214,21 @@ class StockVoucherPortException implements Exception {
 /// TODO(app-runtime/login-network): the real implementation attaches the bearer
 /// token and parses the AD-5 envelope into [StockVoucherPortException].
 abstract class StockVouchersPort {
-  /// [type] = `nhap` | `xuat`; null ⇒ every type.
-  Future<StockVoucherList> listVouchers({String? type});
+  /// [type] = `nhap` | `xuat`; null ⇒ every type. [isReturn] filters return
+  /// vouchers in (true) or out (false); null ⇒ no filter.
+  Future<StockVoucherList> listVouchers({String? type, bool? isReturn});
 
   Future<StockVoucherDetail> getVoucher(String id);
 
   /// Throws [StockVoucherPortException] on 400 / 404 / 409.
   Future<StockVoucherDetail> createVoucher(CreateStockVoucherInput input);
+
+  /// `POST /stock-vouchers/:originVoucherId/return`. Throws
+  /// [StockVoucherPortException] whose `fieldErrors` index (`lines.{i}.…`) is the
+  /// position in the SUBMITTED [lines].
+  Future<StockVoucherDetail> createReturnVoucher(
+    String originVoucherId, {
+    String? note,
+    required List<CreateReturnVoucherLineInput> lines,
+  });
 }

@@ -31,6 +31,12 @@ export class StockVoucherSummaryDto {
   })
   orderId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Phiếu xuất gốc mà phiếu nhập trả này nhận hàng về. CHỈ có mặt ở phiếu nhập trả; phiếu khác ⇒ field vắng mặt hẳn.',
+  })
+  returnOfVoucherId?: string;
+
   @ApiProperty({ description: 'Thời điểm lưu phiếu (ISO-8601 UTC).' })
   createdAt!: Date;
 
@@ -81,10 +87,47 @@ export class StockVoucherLineResponseDto {
   unitCost?: number;
 }
 
+export class StockVoucherReturnOfDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ description: 'Mã phiếu xuất gốc.', example: 'PK-X-0096' })
+  ma!: string;
+
+  @ApiProperty({ description: 'Đơn (đã huỷ) của phiếu xuất gốc.' })
+  orderId!: string;
+}
+
+export class StockVoucherReturnRefDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({ description: 'Mã phiếu nhập trả.', example: 'PK-NT-0004' })
+  ma!: string;
+}
+
 export class StockVoucherDetailDto extends StockVoucherSummaryDto {
   @ApiProperty({ type: String, nullable: true })
   note!: string | null;
 
   @ApiProperty({ type: [StockVoucherLineResponseDto] })
   lines!: StockVoucherLineResponseDto[];
+
+  @ApiPropertyOptional({
+    type: StockVoucherReturnOfDto,
+    description: 'CHỈ có mặt ở phiếu nhập trả: phiếu xuất gốc + đơn đã huỷ.',
+  })
+  returnOf?: StockVoucherReturnOfDto;
+
+  @ApiPropertyOptional({
+    type: StockVoucherReturnRefDto,
+    description: 'CHỈ có mặt ở phiếu xuất gắn đơn đã có phiếu nhập trả.',
+  })
+  returnVoucher?: StockVoucherReturnRefDto;
+
+  @ApiProperty({
+    description:
+      'true ⇔ phiếu xuất gắn đơn, đơn đã huỷ, chưa có phiếu nhập trả — backend tính, client không tự suy.',
+  })
+  canReturn!: boolean;
 }

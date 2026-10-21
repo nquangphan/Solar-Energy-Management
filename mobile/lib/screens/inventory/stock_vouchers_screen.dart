@@ -23,6 +23,7 @@ import '../../design_system/session/stock_vouchers_port.dart';
 import '../../design_system/shell/app_bottom_nav.dart';
 import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
+import '../../design_system/shell/app_tabs.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import 'inventory_screen.dart' show kInventoryTabIndex;
@@ -32,6 +33,25 @@ const String _kNoteNhap =
 const String _kNoteXuat =
     'Phiếu xuất không gắn đơn (hàng hỏng, mẫu, điều chỉnh). Không sửa/xoá sau khi lưu.';
 const String _kTonDauKy = 'Tồn đầu kỳ';
+const String _kReturnBanner =
+    'Đơn đã huỷ sau khi xuất kho. Tồn kho không tự cộng lại — hàng chỉ về kho khi có người đếm và xác nhận phiếu này.';
+const String _kReturnFewerNote =
+    'Nhận lại ít hơn đã xuất là chuyện bình thường (hàng đã cắt, đã lắp, hỏng). Nhập đúng số đếm được — không ép cho khớp.';
+const String _kReturnFoot =
+    'Xác nhận → cộng tồn thật đúng số đếm được, Audit ghi người nhận. Không sửa/xoá sau khi lưu.';
+const String _kReturnBlankError = 'Nhập số nhận lại (0 nếu không nhận lại).';
+const int _kNoteMax = 500;
+
+const String _kTabAll = 'all';
+const String _kTabNhap = 'nhap';
+const String _kTabXuat = 'xuat';
+const String _kTabNhapTra = 'nhaptra';
+const List<AppTabItem> _kTabs = <AppTabItem>[
+  AppTabItem(key: _kTabAll, label: 'Tất cả'),
+  AppTabItem(key: _kTabNhap, label: 'Nhập'),
+  AppTabItem(key: _kTabXuat, label: 'Xuất'),
+  AppTabItem(key: _kTabNhapTra, label: 'Nhập trả'),
+];
 
 /// TWIN of `ngayNgan()` in web format-gio.ts: ISO UTC ⇒ `dd/MM` at a fixed UTC+7.
 String ngayNgan(String iso) {
@@ -55,7 +75,12 @@ String _hai(int n) => n.toString().padLeft(2, '0');
 String _soLuongCoDau(String type, int qty) =>
     '${type == 'nhap' ? '+' : '−'}$qty';
 
-String _moTaLoai(String type, {required bool orderBound}) {
+String _moTaLoai(
+  String type, {
+  required bool orderBound,
+  bool isReturn = false,
+}) {
+  if (isReturn) return 'Nhập trả · từ đơn huỷ';
   if (type == 'nhap') return 'Nhập kho';
   return orderBound ? 'Xuất kho · gắn đơn' : 'Xuất kho · không gắn đơn';
 }
@@ -100,6 +125,8 @@ class StockVouchersScreen extends StatefulWidget {
 class _StockVouchersScreenState extends State<StockVouchersScreen> {
   _LoadState _state = _LoadState.loading;
   List<StockVoucherSummary> _items = <StockVoucherSummary>[];
+  String _tab = _kTabAll;
+  int _listTicket = 0;
 
   String? _selectedId;
   _LoadState _detailState = _LoadState.loading;
@@ -112,18 +139,32 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
   }
 
   Future<void> _tai() async {
+    final int ticket = ++_listTicket;
     setState(() => _state = _LoadState.loading);
     try {
-      final StockVoucherList kq = await widget.port.listVouchers();
-      if (!mounted) return;
+      // The tab maps to the backend's filters; the client filters nothing itself.
+      final StockVoucherList kq = switch (_tab) {
+        _kTabNhap =>
+          await widget.port.listVouchers(type: 'nhap', isReturn: false),
+        _kTabXuat => await widget.port.listVouchers(type: 'xuat'),
+        _kTabNhapTra => await widget.port.listVouchers(isReturn: true),
+        _ => await widget.port.listVouchers(),
+      };
+      if (!mounted || ticket != _listTicket) return;
       setState(() {
         _items = kq.items;
         _state = _LoadState.ready;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || ticket != _listTicket) return;
       setState(() => _state = _LoadState.error);
     }
+  }
+
+  void _changeTab(String key) {
+    if (key == _tab) return;
+    setState(() => _tab = key);
+    _tai();
   }
 
   Future<void> _chon(String id) async {
@@ -144,8 +185,10 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
     }
   }
 
-  /// TWIN of `nhanLoai()` in the web screen.
-  Widget _chipLoai(String type) {
+  /// TWIN of `nhanLoai()` in the web screen: a return voucher shows ONLY the info-toned
+  /// "Nhập trả" chip, never "Nhập" next to it.
+  Widget _chipLoai(String type, {bool isReturn = false}) {
+    if (isReturn) return _returnChip();
     final bool nhap = type == 'nhap';
     final Color mau = nhap ? AppTokens.ok : AppTokens.warn;
     return AppChip(
@@ -153,6 +196,15 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
       background: AppTokens.surface,
       foreground: mau,
       border: mau,
+    );
+  }
+
+  Widget _returnChip() {
+    return const AppChip(
+      label: 'Nhập trả',
+      background: AppTokens.surface,
+      foreground: AppTokens.info,
+      border: AppTokens.info,
     );
   }
 
@@ -201,7 +253,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
                   ),
                 ),
                 const SizedBox(width: AppTokens.space8),
-                _chipLoai(p.type),
+                _chipLoai(p.type, isReturn: p.returnOfVoucherId != null),
                 const Spacer(),
                 Text(_soLuongCoDau(p.type, p.tongSoLuong), style: _so),
               ],
@@ -219,17 +271,42 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
     );
   }
 
-  Widget _kv(String k, String v) {
+  Widget _kv(String k, String v, {VoidCallback? onTap}) {
+    final Widget value = Text(
+      v,
+      style: onTap == null ? _strong : _strong.copyWith(color: AppTokens.teal),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTokens.space4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SizedBox(width: 76.0, child: Text(k, style: _microMuted)),
-          Expanded(child: Text(v, style: _strong)),
+          SizedBox(width: 88.0, child: Text(k, style: _microMuted)),
+          Expanded(
+            child: onTap == null
+                ? value
+                : GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: onTap,
+                    child: value,
+                  ),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _openReturnSheet(StockVoucherDetail origin) async {
+    final String? createdId = await showAppSheet<String>(
+      context: context,
+      child: _ReturnSheet(port: widget.port, origin: origin),
+    );
+    if (createdId == null || !mounted) return;
+    // Same as web: land on "Tất cả" so the new voucher is in the list, then open it.
+    if (_tab != _kTabAll) setState(() => _tab = _kTabAll);
+    await _tai();
+    if (!mounted) return;
+    await _chon(createdId);
   }
 
   Widget _chiTiet() {
@@ -262,15 +339,36 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
                 ),
               ),
               const SizedBox(width: AppTokens.space8),
-              _chipLoai(d.type),
+              _chipLoai(d.type, isReturn: d.returnOfVoucherId != null),
             ],
           ),
           const SizedBox(height: AppTokens.space8),
-          _kv('Loại', _moTaLoai(d.type, orderBound: d.orderId != null)),
-          if (d.orderId != null) _kv('Gắn đơn', d.orderId!),
+          _kv(
+            'Loại',
+            _moTaLoai(
+              d.type,
+              orderBound: d.orderId != null,
+              isReturn: d.returnOf != null,
+            ),
+          ),
+          if (d.returnOf != null) ...<Widget>[
+            _kv('Gắn đơn', d.returnOf!.orderId),
+            _kv('Phiếu xuất gốc', d.returnOf!.ma),
+          ] else if (d.orderId != null)
+            _kv('Gắn đơn', d.orderId!),
+          if (d.returnVoucher != null)
+            _kv(
+              'Phiếu nhập trả',
+              d.returnVoucher!.ma,
+              onTap: () => _chon(d.returnVoucher!.id),
+            ),
           _kv('Ngày', ngayGio(d.createdAt)),
           _kv(
-            d.orderId != null ? 'Người xác nhận' : 'Người tạo',
+            d.returnOf != null
+                ? 'Người nhận'
+                : d.orderId != null
+                    ? 'Người xác nhận'
+                    : 'Người tạo',
             d.nguoiTao.displayName,
           ),
           _kv('Ghi chú', d.note ?? '—'),
@@ -296,7 +394,17 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             ],
           ),
           const SizedBox(height: AppTokens.space8),
-          if (d.orderId != null)
+          if (d.canReturn) ...<Widget>[
+            AppButton(
+              label: 'Tạo phiếu nhập trả',
+              wide: true,
+              onPressed: () => _openReturnSheet(d),
+            ),
+            const SizedBox(height: AppTokens.space8),
+          ],
+          if (d.returnOf != null)
+            const SizedBox.shrink()
+          else if (d.orderId != null)
             const AppBanner(
               tone: AppBannerTone.info,
               child: Text.rich(
@@ -398,7 +506,16 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
           onAction: _moForm,
         ),
         bottomNav: const AppBottomNav(activeIndex: kInventoryTabIndex),
-        body: SingleChildScrollView(child: _than()),
+        body: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              AppTabs(tabs: _kTabs, activeKey: _tab, onSelect: _changeTab),
+              const SizedBox(height: AppTokens.space12),
+              _than(),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -669,6 +786,249 @@ class _FormPhieuState extends State<_FormPhieu> {
                 onPressed: _sending || _dong.isEmpty ? null : _luu,
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The return-voucher sheet for one order-bound stock-out. Pops with the new
+/// voucher's id on success.
+///
+/// The client never compares a quantity with what was issued: the backend answers
+/// RETURN_EXCEEDS_ISSUED. A blank "Nhận lại" is an error, never a silent 0; a 0
+/// line is simply not sent, so the backend's `lines.{i}` index is the position in
+/// the SUBMITTED array and is mapped back to the displayed row here.
+class _ReturnSheet extends StatefulWidget {
+  const _ReturnSheet({required this.port, required this.origin});
+
+  final StockVouchersPort port;
+  final StockVoucherDetail origin;
+
+  @override
+  State<_ReturnSheet> createState() => _ReturnSheetState();
+}
+
+class _ReturnSheetState extends State<_ReturnSheet> {
+  final TextEditingController _note = TextEditingController();
+  late final List<TextEditingController> _qty = <TextEditingController>[
+    for (final StockVoucherLine l in widget.origin.lines)
+      TextEditingController(text: '${l.qty}'),
+  ];
+  final Set<int> _blank = <int>{};
+  bool _noteTooLong = false;
+  bool _sending = false;
+  StockVoucherPortException? _error;
+
+  /// Displayed row ⇒ error messages, from the last backend refusal.
+  final Map<int, List<String>> _rowErrors = <int, List<String>>{};
+  final List<String> _generalErrors = <String>[];
+
+  @override
+  void dispose() {
+    _note.dispose();
+    for (final TextEditingController c in _qty) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  /// Whole non-negative number, or null when blank / not a number.
+  int? _parseQty(String text) {
+    final String t = text.trim();
+    return RegExp(r'^\d+$').hasMatch(t) ? int.tryParse(t) : null;
+  }
+
+  /// Disabled only when every row is a real 0 — a blank still has to be told off.
+  bool get _allZero =>
+      _qty.every((TextEditingController c) => _parseQty(c.text) == 0);
+
+  Future<void> _submit() async {
+    if (_sending) return;
+    final String note = _note.text.trim();
+    final Set<int> blank = <int>{};
+    final List<int> sentRows = <int>[]; // submitted position ⇒ displayed row
+    final List<CreateReturnVoucherLineInput> lines =
+        <CreateReturnVoucherLineInput>[];
+    for (int i = 0; i < _qty.length; i++) {
+      final int? n = _parseQty(_qty[i].text);
+      if (n == null) {
+        blank.add(i);
+      } else if (n > 0) {
+        sentRows.add(i);
+        lines.add(CreateReturnVoucherLineInput(
+          productId: widget.origin.lines[i].productId,
+          qty: n,
+        ));
+      }
+    }
+    final bool tooLong = note.length > _kNoteMax;
+    setState(() {
+      _blank
+        ..clear()
+        ..addAll(blank);
+      _noteTooLong = tooLong;
+      _error = null;
+      _rowErrors.clear();
+      _generalErrors.clear();
+    });
+    if (blank.isNotEmpty || tooLong || lines.isEmpty) return;
+
+    setState(() => _sending = true);
+    try {
+      final StockVoucherDetail created = await widget.port.createReturnVoucher(
+        widget.origin.id,
+        note: note.isEmpty ? null : note,
+        lines: lines,
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(created.id);
+    } on StockVoucherPortException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e;
+        for (final StockVoucherFieldError f in e.fieldErrors) {
+          final RegExpMatch? m = RegExp(r'^lines\.(\d+)\.').firstMatch(f.field);
+          final int? k = m == null ? null : int.tryParse(m.group(1)!);
+          if (k != null && k < sentRows.length) {
+            (_rowErrors[sentRows[k]] ??= <String>[]).add(f.message);
+          } else {
+            _generalErrors.add(f.message);
+          }
+        }
+        _sending = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = const StockVoucherPortException(
+            'Không lưu được phiếu nhập trả. Thử lại.');
+        _sending = false;
+      });
+    }
+  }
+
+  static const TextStyle _strong = _StockVouchersScreenState._strong;
+  static const TextStyle _microMuted = _StockVouchersScreenState._microMuted;
+  static const TextStyle _errorStyle = TextStyle(
+    color: AppTokens.danger,
+    fontFamily: AppTokens.fontFamily,
+    fontSize: AppTokens.microFontSize,
+    fontWeight: FontWeight.w700,
+  );
+
+  Widget _row(int i) {
+    final StockVoucherLine l = widget.origin.lines[i];
+    final List<String> errors = <String>[
+      if (_blank.contains(i)) _kReturnBlankError,
+      ...?_rowErrors[i],
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: AppTokens.space8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              Expanded(flex: 5, child: Text(l.ten, style: _strong)),
+              const SizedBox(width: AppTokens.space8),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  '${l.qty} ${l.donVi}',
+                  style: _strong,
+                  textAlign: TextAlign.right,
+                ),
+              ),
+              const SizedBox(width: AppTokens.space8),
+              Expanded(
+                flex: 3,
+                child: AppField(
+                  semanticsLabel: 'Nhận lại',
+                  controller: _qty[i],
+                  keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+            ],
+          ),
+          for (final String m in errors) Text(m, style: _errorStyle),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final StockVoucherPortException? failure = _error;
+    // While the request is in flight, closing (button / barrier / back) would drop its
+    // result — the voucher would exist with nobody told. Close is blocked until it settles.
+    return PopScope(
+      canPop: !_sending,
+      child: AppSheet(
+        title: 'Tạo phiếu nhập trả',
+        onClose: () {
+          if (!_sending) Navigator.of(context).pop();
+        },
+        body: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 460.0),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const AppBanner(
+                  tone: AppBannerTone.info,
+                  message: _kReturnBanner,
+                ),
+                const SizedBox(height: AppTokens.space8),
+                const Row(
+                  children: <Widget>[
+                    Expanded(
+                        flex: 5, child: Text('Sản phẩm', style: _microMuted)),
+                    SizedBox(width: AppTokens.space8),
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        'Đã xuất',
+                        style: _microMuted,
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                    SizedBox(width: AppTokens.space8),
+                    Expanded(
+                        flex: 3, child: Text('Nhận lại', style: _microMuted)),
+                  ],
+                ),
+                for (int i = 0; i < _qty.length; i++) _row(i),
+                const SizedBox(height: AppTokens.space8),
+                const Text(_kReturnFewerNote, style: _microMuted),
+                const SizedBox(height: AppTokens.space8),
+                AppField(label: 'Ghi chú', controller: _note),
+                if (_noteTooLong)
+                  const Text('Ghi chú tối đa $_kNoteMax ký tự.',
+                      style: _errorStyle),
+                if (failure != null) ...<Widget>[
+                  const SizedBox(height: AppTokens.space8),
+                  AppBanner(
+                    tone: AppBannerTone.danger,
+                    message:
+                        <String>[failure.message, ..._generalErrors].join('\n'),
+                  ),
+                ],
+                const SizedBox(height: AppTokens.space8),
+                AppButton(
+                  label: 'Xác nhận nhập trả',
+                  variant: AppButtonVariant.primary,
+                  wide: true,
+                  onPressed: _sending || _allZero ? null : _submit,
+                ),
+                const SizedBox(height: AppTokens.space8),
+                const Text(_kReturnFoot, style: _microMuted),
+              ],
+            ),
           ),
         ),
       ),
