@@ -60,7 +60,7 @@ test('web LoginScreen carries both validation messages (AC-2)', () => {
     'LoginScreen.tsx must show the empty-field message',
   );
   assert.ok(
-    web.includes('Tài khoản phải là số điện thoại hoặc email hợp lệ.'),
+    web.includes('Tài khoản phải là email hợp lệ.'),
     'LoginScreen.tsx must show the malformed-account message',
   );
 });
@@ -110,11 +110,11 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Mật khẩu',
     'Quên mật khẩu',
     'Phương Nam Solar',
-    'Số điện thoại hoặc email',
+    'Email đăng nhập',
     'Nhập mật khẩu',
     // Validation copy is user-facing too — it must not drift between platforms.
     'Nhập đủ tài khoản và mật khẩu.',
-    'Tài khoản phải là số điện thoại hoặc email hợp lệ.',
+    'Tài khoản phải là email hợp lệ.',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `LoginScreen.tsx missing label "${label}"`);

@@ -38,9 +38,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Presentational validation only (AC-2): rỗng → AppBanner; định dạng tối thiểu
-  // (SĐT chữ số hoặc email). Cùng câu Việt như web để parity nhãn. Real auth
-  // wires in Epic 2 (Story 2.3) — KHÔNG mạng, KHÔNG token, KHÔNG router.
+  // Presentational validation only (AC-2): empty → AppBanner; minimal email format
+  // (accounts sign in by email only). Same Vietnamese copy as web for label parity.
+  // No network, no token, no router here — mobile sign-in wires in Story 10.6.
   void _submit() {
     final String account = _account.text.trim();
     final String password = _password.text.trim();
@@ -48,11 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Nhập đủ tài khoản và mật khẩu.');
       return;
     }
-    final bool isPhone = RegExp(r'^[0-9]{8,}$').hasMatch(account);
     final bool isEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(account);
-    if (!isPhone && !isEmail) {
-      setState(
-          () => _error = 'Tài khoản phải là số điện thoại hoặc email hợp lệ.');
+    if (!isEmail) {
+      setState(() => _error = 'Tài khoản phải là email hợp lệ.');
       return;
     }
     setState(() => _error = null);
@@ -80,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
               label: 'Tài khoản',
               size: AppFieldSize.large,
               controller: _account,
-              placeholder: 'Số điện thoại hoặc email',
+              placeholder: 'Email đăng nhập',
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: AppTokens.space12),

@@ -27,9 +27,9 @@ export interface MeResponse {
  * interface), NOT an HTTP client — the seam that lets gating consume `/me`
  * without the app owning a bundler/router/token store yet.
  *
- * TODO(app-runtime/login-network): the real implementation attaches
- * `Authorization: Bearer <accessToken>` (Story 2.3) and parses the AD-5 error
- * envelope. It lands with the app-runtime; until then `FakeMePort` drives tests.
+ * TODO(Story 10.4): the HTTP adapter goes through the generated client; the
+ * transport (web/src/api/transport.ts, Story 10.3) already attaches the bearer
+ * and parses the AD-5 envelope. Until then `FakeMePort` drives tests.
  */
 export interface MePort {
   fetchMe(): Promise<MeResponse>;

@@ -25,6 +25,7 @@ import {
   FakeOrdersPort,
   FakePasswordPort,
   FakePaymentsPort,
+  FakeAuthPort,
   FakeContractsPort,
   FakeInvoicesPort,
   DEMO_INVOICE_SUMMARY,
@@ -94,7 +95,7 @@ describe('smoke render — mọi màn web/src/screens', () => {
   });
 
   it('LoginScreen', async () => {
-    renderScreen(<LoginScreen />);
+    renderScreen(<LoginScreen port={new FakeAuthPort()} onLoggedIn={() => {}} />);
     expect(await screen.findByText('Phương Nam Solar')).toBeTruthy();
     expect(screen.getByText('App quản lý nội bộ · Phase 1')).toBeTruthy();
   });

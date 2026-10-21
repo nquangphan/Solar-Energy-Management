@@ -5,6 +5,7 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { applyCors } from './common/http/cors';
 
 /**
  * Bootstrap HTTP server.
@@ -31,6 +32,8 @@ async function bootstrap(): Promise<void> {
   }
 
   const app = await NestFactory.create(AppModule);
+  // Cross-origin web only when CORS_ORIGINS lists it; empty ⇒ off.
+  applyCors(app);
 
   // Drain the Prisma pool on SIGTERM/SIGINT: without this, PrismaService's
   // onModuleDestroy ($disconnect) never runs on a prod deploy/restart.

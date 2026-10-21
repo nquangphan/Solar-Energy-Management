@@ -33,6 +33,10 @@ Tồn đầu kỳ không có loại phiếu riêng — nó là một phiếu nh�
 
 Báo giá, hợp đồng và hoá đơn đều render PDF bằng Puppeteer, nên máy chủ phải có Chrome/Chromium. Cài bằng `npx puppeteer browsers install chrome` trong thư mục `backend/`, hoặc trỏ `PUPPETEER_EXECUTABLE_PATH` tới Chrome có sẵn. Chạy trong container/VPS thiếu sandbox thì đặt thêm `PUPPETEER_NO_SANDBOX=1` (xem `backend/.env.example`). Thiếu Chrome thì mọi nút xuất PDF báo lỗi.
 
+## Web gọi backend
+
+Web đọc địa chỉ backend từ `VITE_API_BASE_URL` lúc **build** (xem `web/.env.example`). Mặc định `/api`: web và backend cùng origin, reverse proxy chuyển `/api/...` sang backend và bỏ tiền tố `/api` (backend không có tiền tố route). Nếu web host ở origin khác thì build web với URL đầy đủ của backend và đặt `CORS_ORIGINS` phía backend bằng đúng origin của web (vd `https://app.example.vn`, nhiều origin cách nhau dấu phẩy — xem `backend/.env.example`). Để trống `CORS_ORIGINS` thì CORS tắt và trình duyệt chặn mọi lời gọi khác origin.
+
 ## Giá vốn sau go-live
 
 Mỗi phiếu nhập về sau tự tính **bình quân gia quyền** giữa hàng đang có và lô mới, rồi cập nhật giá vốn hiện hành — không phải sửa tay ở danh mục. Phiếu xuất không đổi giá vốn.

@@ -17,10 +17,10 @@
  * NOT an HTTP client — the seam that lets the screens exist before the app owns
  * a bundler/router/token store.
  *
- * TODO(app-runtime/login-network): the real implementation attaches
- * `Authorization: Bearer <accessToken>` (Story 2.3) to `changePassword` and
- * parses the AD-5 error envelope into the screen's Banner copy. It lands with
- * the app-runtime; until then `FakePasswordPort` drives tests.
+ * TODO(Story 10.4): the HTTP adapter goes through the generated client; the
+ * transport (web/src/api/transport.ts, Story 10.3) already attaches the bearer
+ * and parses the AD-5 envelope. Until then `FakePasswordPort` drives tests and
+ * the Quên mật khẩu screen in main.tsx.
  */
 export interface PasswordPort {
   /**

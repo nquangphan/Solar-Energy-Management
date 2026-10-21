@@ -8,11 +8,14 @@
     "node": ">=24"
   },
   "scripts": {
+    "dev": "vite",
     "typecheck": "tsc --noEmit",
     "build": "vite build",
-    "test": "vitest run"
+    "test": "vitest run",
+    "api:gen": "node scripts/generate-api.mjs"
   },
   "dependencies": {
+    "openapi-fetch": "0.17.0",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
@@ -23,8 +26,14 @@
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.5",
     "jsdom": "29.1.1",
+    "openapi-typescript": "7.13.0",
     "typescript": "6.0.3",
     "vite": "8.1.6",
     "vitest": "4.1.12"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }

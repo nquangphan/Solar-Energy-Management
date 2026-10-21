@@ -8,6 +8,8 @@
 
 export type { MePort, MeResponse } from './me-port';
 export type { PasswordPort } from './password-port';
+// Sign-in seam (Story 10.3): web-only until the mobile twin (Story 10.6).
+export type { AuthPort } from './auth-port';
 export type {
   CustomersPort,
   Customer,
@@ -137,9 +139,10 @@ export type { UsePermissions } from './use-permissions';
 export { SessionGatingExample } from './SessionGatingExample';
 
 // TEST/DEMO-ONLY — not a real session source (see fake-me-port.ts,
-// fake-password-port.ts). They enforce no security rule; the backend owns all of them.
+// fake-password-port.ts, fake-auth-port.ts). They enforce no security rule; the backend owns all of them.
 export { FakeMePort, DEMO_ME } from './fake-me-port';
 export { FakePasswordPort, DEMO_EXPIRES_IN_SECONDS } from './fake-password-port';
+export { FakeAuthPort } from './fake-auth-port';
 export {
   FakeCustomersPort,
   DEMO_CUSTOMERS,

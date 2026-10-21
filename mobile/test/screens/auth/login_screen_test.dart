@@ -60,7 +60,7 @@ void main() {
         (tester) async {
       await tester.pumpWidget(_host(const LoginScreen()));
 
-      // Account is neither a phone (≥8 digits) nor a valid email.
+      // Account is not a valid email.
       await tester.enterText(find.byType(TextField).at(0), 'not-an-account');
       await tester.enterText(find.byType(TextField).at(1), 'secret');
       await tester.tap(find.byType(AppButton));
@@ -68,9 +68,21 @@ void main() {
 
       expect(find.byType(AppBanner), findsOneWidget);
       expect(
-        find.text('Tài khoản phải là số điện thoại hoặc email hợp lệ.'),
+        find.text('Tài khoản phải là email hợp lệ.'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('a phone number is refused — sign-in is by email only',
+        (tester) async {
+      await tester.pumpWidget(_host(const LoginScreen()));
+
+      await tester.enterText(find.byType(TextField).at(0), '0912345678');
+      await tester.enterText(find.byType(TextField).at(1), 'secret');
+      await tester.tap(find.byType(AppButton));
+      await tester.pump();
+
+      expect(find.text('Tài khoản phải là email hợp lệ.'), findsOneWidget);
     });
 
     testWidgets('valid credentials clear the error region (AC-2 happy path)',
@@ -82,12 +94,12 @@ void main() {
       await tester.pump();
       expect(find.byType(AppBanner), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField).at(0), '0912345678');
+      await tester.enterText(find.byType(TextField).at(0), 'admin@pns.vn');
       await tester.enterText(find.byType(TextField).at(1), 'secret');
       await tester.tap(find.byType(AppButton));
       await tester.pump();
 
-      // Valid phone + password ⇒ no banner (real auth wires in Epic 2).
+      // Valid email + password ⇒ no banner (real auth wires in Story 10.6).
       expect(find.byType(AppBanner), findsNothing);
     });
 
