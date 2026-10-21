@@ -9,8 +9,9 @@ Hợp đồng đặt tên & quy ước cho **mọi** story backend. Nguồn: `AR
 | Entity (Prisma model) | **PascalCase** | `Order`, `OrderLineItem`, `Account` |
 | Bảng DB | **snake_case số nhiều** (qua `@@map`) | `orders`, `order_line_items`, `accounts` |
 | File | **kebab-case** | `prisma.service.ts`, `allowed-transition.ts` |
-| REST route | **danh từ số nhiều, kebab-case** | `/orders`, `/orders/{id}/line-items` |
-| Action nghiệp vụ | **POST sub-resource** (không phải verb ở path) | `POST /orders/{id}/chot` |
+| REST route | **danh từ số nhiều, kebab-case** | `/orders`, `/orders/{id}/line-items`, `/stock-vouchers` |
+| Action nghiệp vụ | **POST sub-resource** (không phải verb ở path) | `POST /orders/{id}/stock-issue`, `POST /stock-vouchers/{id}/return` |
+| Ngôn ngữ contract | Route, field DTO/OpenAPI, mã `fieldErrors` **mới** viết **tiếng Anh** (Đại Ca chốt 2026-10-21, xem `project-context.md`). Route/field tiếng Việt có sẵn (`/orders/{id}/chot`, `/huy`, `/tra-cuu-bao-hanh`) giữ tới khi refactor riêng — không đổi tên trong lúc làm story | `lines.{i}.qty`, không `dong.{i}.qty` |
 | ID | **UUID v4** mọi entity — **trừ** `Customer` (PK = SĐT chuẩn hoá **E.164**, chỉ chuẩn hoá ở backend `customers`, AD-9) | `id: uuid` |
 | Tiền | **integer đồng** — KHÔNG float/decimal (AD-10) | `unitPriceSnapshot: int` |
 | Ngày giờ | **ISO-8601 UTC** lưu DB; client hiển thị UTC+7 | `2026-07-08T09:00:00.000Z` |
@@ -176,6 +177,13 @@ Mọi hành động nghiệp vụ **có hệ quả** (E4+) phát tín hiệu qua
 - **Consumer tự đăng ký `onModuleInit`** (`this.eventBus.subscribe(this)`): `AuditSubscriber` (ghi `AuditLog`) và `NotificationDispatcher` (bản đầu no-op/log; Epic 9 thay bằng FCM). EventsModule (@Global) KHÔNG biết consumer nào — thêm consumer = thêm module, không sửa nền.
 - **Fan-out đồng bộ + cô lập lỗi:** `InProcessEventBus.publish` await từng subscriber trong `try/catch` riêng — một subscriber ném → **log** (Logger, KHÔNG nuốt im lặng) + tiếp tục subscriber còn lại; `publish` KHÔNG sập vì một consumer hỏng. In-process đủ cho Phase 1 (~20 user, YAGNI — chưa cần queue/broker).
 - **`AuditLog` append-only** (bảng `audit_logs`, AD-8): `AuditService` CHỈ `create` (KHÔNG `update`/`delete`/`upsert`) — nhật ký bất biến. `actorAccountId` lưu String **KHÔNG FK cascade** để bản ghi sống sót khi account bị vô hiệu/xoá. Đọc audit chỉ **Super Admin** (gate `audit.read`) = **Story 8.5**; 2.7 chỉ dựng đường **ghi**, KHÔNG endpoint mới → `openapi.json` không đổi.
+
+## Khoá dòng & test đồng thời (Epic 6)
+
+- **Thứ tự khoá toàn hệ thống:** `SELECT id FROM orders WHERE id = … FOR UPDATE` là op đầu tiên trong tx chạm đơn; khoá sản phẩm sau đó bằng **một** câu `SELECT id FROM products WHERE id = ANY(…) ORDER BY id FOR UPDATE` (khoá `products`, không khoá `stock_items` — dòng tồn sinh lười, `FOR UPDATE` trên tập rỗng không khoá gì). Đảo thứ tự = deadlock.
+- **`FOR UPDATE` chỉ đo được ở lane DB** — lane hermetic mock Prisma luôn xanh khi gỡ khoá. Mỗi khoá mới cần một ca `*.db.integration.spec.ts` ép interleaving.
+- **Tx giữ khoá trong test phải GHI đúng thứ primitive đọc** (vd `onHand + 3` dưới khoá, rồi assert kết quả cuối). Tx chỉ giữ khoá "trần" có thể bị một lệnh khác chặn hộ (FK lấy KEY SHARE, UPDATE cùng dòng) ⇒ ca "CHỜ khoá" vẫn xanh khi gỡ `FOR UPDATE`.
+- **Tập khoá có nhiều nguồn** (vd dòng version mới + sản phẩm chỉ còn giữ ở version cũ): mỗi nguồn cần một ca interleaving riêng; mutate từng nguồn và đòi ĐỎ.
 
 ## Lint / format (bắt buộc)
 

@@ -1,7 +1,7 @@
 ---
 project_name: Phương Nam Solar — Phase 1
 type: project-context
-updated: 2026-07-09
+updated: 2026-10-21
 status: complete
 optimized_for_llm: true
 sections_completed: [stack, architecture-invariants, api-contract, coding-style, scout, testing, workflow, gotchas]
@@ -17,7 +17,7 @@ sources:
 
 App quản lý nội bộ công ty NLMT (báo giá, đơn, thi công/giao hàng, tồn kho, phân quyền, thông báo). 3 client tách biệt: **Backend NestJS API** · **Web React** · **Mobile Flutter**. Solo dev.
 
-**Nguồn chân lý (đọc trước khi làm):** PRD (34 FR) · `ARCHITECTURE-SPINE.md` (AD-1..18) · `DESIGN.md`+`EXPERIENCE.md` (UI/hành vi) · `epics.md` (9 epic/60 story). Khi mâu thuẫn: **spine thắng** cho kiến trúc/dữ liệu, **DESIGN/EXPERIENCE thắng** cho UI/hành vi.
+**Nguồn chân lý (đọc trước khi làm):** PRD (37 FR) · `ARCHITECTURE-SPINE.md` (AD-1..21) · `DESIGN.md`+`EXPERIENCE.md` (UI/hành vi) · `epics.md` (9 epic/70 story). Khi mâu thuẫn: **spine thắng** cho kiến trúc/dữ liệu, **DESIGN/EXPERIENCE thắng** cho UI/hành vi.
 
 ## Technology Stack & Versions
 
@@ -47,7 +47,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 - **Khách hàng định danh SĐT E.164**, chuẩn hoá **chỉ ở backend** `customers/domain` (AD-9).
 - **Error envelope thống nhất** `{ code, message, details?, fieldErrors: [{field,code,message}], traceId }` + HTTP status; **một central exception filter** là nơi duy nhất tạo envelope (AD-5).
 - **File/ảnh ở Cloudflare R2**; DB chỉ giữ key/metadata; backend trung gian upload/truy cập (AD-3).
-- **EventBus port:** mọi hành động nghiệp vụ **publish domain event** (OrderConfirmed, DiscountRequested/Resolved, DepositRecorded, PaymentRecorded, StatusChanged, StockOutBlocked); **KHÔNG gọi FCM/notification/audit trực tiếp** — consumer subscribe (AD-18).
+- **EventBus port:** mọi hành động nghiệp vụ **publish domain event** (OrderConfirmed, DiscountRequested/Resolved, DepositRecorded, PaymentRecorded, StatusChanged, OrderCancelled, StockVoucherCreated, StockIssued, StockOutBlocked); **KHÔNG gọi FCM/notification/audit trực tiếp** — consumer subscribe (AD-18).
 - **OpenAPI sinh TỪ backend** (code là nguồn), cả web+mobile gen client từ đó; **cấm sửa tay spec** (AD-12). Auth JWT access+refresh.
 - **Design-system-first:** dựng thư viện component React + widget Flutter theo `DESIGN.md` **trước mọi màn**; mọi màn dùng lại component/token; **cấm style ad-hoc** (AD-13).
 - **Firebase mobile** (FCM/Crashlytics/Analytics/Remote Config); **Remote Config chỉ config/feature-flag cấp app** — KHÔNG thay business flag ở backend (AD-14). Đích push **theo QUYỀN** (không theo role) + người phụ trách đơn, lọc theo quyền xem đơn (AD-15).
@@ -75,8 +75,9 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 - Bắt buộc test cho phần dễ sai/tiền bạc: **pricing/VAT, `applyTransition` (gate cờ+quyền), permission resolve, snapshot giá, ghi nhận thanh toán, chặn tồn**.
 - Backend: unit cho domain + e2e cho endpoint quan trọng (chốt, `preview-total`, chuyển trạng thái). FE: test component design-system + luồng critical (giỏ hàng, chốt).
 - **Design-system guard (Epic 1):** chạy `cd design-system && npm test` (`node --test "**/*.test.mjs"`) — drift-guard (output generated không cũ) + source-guard (bất biến: cấm số học tiền client, cấm upload R2, cấm đổi status, read-only chip, Viền nét 0 shadow) + parity byte-for-byte web↔Flutter. Guard quét TOÀN VĂN file như text → **tránh viết chuỗi bị cấm (`shadow`/`gradient`/`box-shadow:`/`var(--r)`/`.toUpperCase()`) trong comment** (false-positive tái diễn). Mobile: `cd mobile && flutter test` + `flutter analyze`.
-- **Backend (từ Epic 2):** `cd backend && npm test` — 33 suite (unit + e2e + **7 source-guard kiến trúc**: `no-manual-prisma-client`, `no-controller-error-envelope`, `no-permission-literal-outside-registry`, `no-direct-side-effect-outside-eventbus`, `no-handler-without-require-permissions`, `audit-log-append-only`, `naming-convention`) + drift-guard byte-for-byte cho `openapi.json` và `permissions.json`. Toàn bộ **hermetic** (mock Prisma) → không cần Postgres.
-- **⚠️ Chưa có integration test chạm DB thật.** 5 migration đều sinh **offline** (`prisma migrate diff --script`, không có Postgres cục bộ) và **chưa từng** chạy `migrate deploy`. Ràng buộc tầng DB (unique constraint, FK, PK) **chưa được kiểm** — mock không chứng minh được chúng. Đến hạn ở Epic 3 (Story 3.3 "chặn trùng SĐT" là ràng buộc DB).
+- **Backend:** `cd backend && npm test` — lane **hermetic** (mock Prisma, không cần Postgres): unit + e2e + **10 source-guard kiến trúc** ở `backend/test/no-*.spec.ts` (`no-manual-prisma-client`, `no-controller-error-envelope`, `no-permission-literal-outside-registry`, `no-direct-side-effect-outside-eventbus`, `no-handler-without-require-permissions`, `no-fabricated-actor-permissions`, `no-hard-delete-customer-source`, `no-order-status-write-outside-transition`, `no-unscoped-order-write`, `no-stock-write-in-cancel`) + `audit-log-append-only` + `naming-convention` + guard theo module + drift-guard byte-for-byte cho `openapi.json` và `permissions.json`. **Mọi source-guard phải có assert chống-guard-rỗng** (`assertCodeNotBlind` / `length > 0`).
+- **Lane DB (Postgres thật):** `cd backend && npm run test:db` — chạy MỌI `*.db.integration.spec.ts` (`npm test` loại chúng qua `testPathIgnorePatterns`). Máy dev: container `pns-postgres` cổng 5433, `npx prisma migrate deploy` trước. Unique/FK/CHECK/`FOR UPDATE`/idempotency **chỉ đo được ở lane này** — mock không chứng minh được. CHECK constraint viết tay trong migration (Prisma không model CHECK). CI tự chạy đang TẮT (Đại Ca chốt): cổng = 5 lane chạy trên máy (backend, test:db, design-system, web, mobile) trước mỗi push.
+- **Test đồng thời:** ca "CHỜ khoá" phải để tx giữ khoá **GHI** đúng thứ primitive đọc (tx chỉ giữ khoá trần có thể bị lệnh khác chặn hộ ⇒ xanh giả khi gỡ `FOR UPDATE`); mỗi nguồn của tập khoá cần một ca interleaving riêng.
 - **Web tooling (TD-1 đã trả, 2026-10-21):** `web/` có `package.json` — `npm run typecheck` (tsc --noEmit, strict), `npm test` (vitest + jsdom: smoke render MỌI màn trong `web/src/screens/` qua fake port + guard mọi className tĩnh có rule CSS thật), `npm run build` (vite). Màn web mới BẮT BUỘC có ca render trong `web/src/test/screens-render.test.tsx` (guard đếm số file màn). Text-guard design-system vẫn giữ. Entry `web/src/main.tsx` mới là shell demo auth — chưa có router/composition root thật. `mobile/` chưa có `main.dart`/`android/`/`ios/` → không có app-runtime, transport đi qua **port tiêm** (`MePort`/`PasswordPort`) + fake port trong test.
 
 ### Development Workflow
@@ -90,6 +91,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 - Client **KHÔNG** tự tính tiền/thuế/logic — luôn gọi backend.
 - **Hiển thị tiền** (Đại Ca chốt 2026-10-21) luôn qua `<Money>`/`formatVnd` (web) hoặc `MoneyText`/`formatVnd` (Flutter), định dạng `83.010.960 đ`; **CẤM** in số tiền thô (`String(x.amount)`, `{x.amount}`, `'${x.amount}'`) và cấm `toLocaleString`/`Intl`/`NumberFormat`. Guard `design-system/money/money-render-guard.test.mjs` chặn. Định dạng chữ số là trình bày, không phải số học tiền; ô NHẬP tiền vẫn gõ số thô.
 - **KHÔNG** đổi `Order.status` ngoài `applyTransition`.
+- **Tồn kho:** `reserved` = `SUM(StockMovement.qty)` — cấm cột `reserved`; ledger append-only (giải phóng = ghi dòng `release`, không xoá). **Thứ tự khoá toàn hệ thống:** `orders` FOR UPDATE trước, rồi `SELECT id FROM products WHERE id = ANY(…) ORDER BY id FOR UPDATE`. Chốt/re-chốt KHÔNG BAO GIỜ chặn thiếu tồn — chặn ở khâu xuất kho.
 - **KHÔNG** gọi FCM/audit trực tiếp — publish domain event.
 - **KHÔNG** hardcode chuỗi quyền — dùng permission registry.
 - Sửa giá danh mục **KHÔNG hồi tố** đơn đã chốt (snapshot đã khoá).

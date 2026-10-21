@@ -159,7 +159,7 @@ flowchart TD
 
 - **Binds:** FR-25, FR-26
 - **Prevents:** một cột `reserved` cộng-trừ bị sai khi retry chốt/xuất (không idempotent); khả dụng hiển thị sai thực tế.
-- **Rule:** `StockItem` có **hai con số độc lập**: `onHand` (hàng thật trong kho, chỉ phiếu nhập/xuất kho đụng vào) và `reserved` (hàng đã hứa cho đơn đã chốt). Khả dụng = `onHand − reserved`. `StockMovement` là ledger append-only với unique constraint trên `(orderId, orderVersionId)` → chốt/xuất idempotent khi retry; `reserved` là **tổng của `StockMovement.qty`**, không phải một cột cộng-trừ. Chốt đơn khi thiếu tồn: **CHO CHỐT, không chặn**; cảnh báo sớm ở màn báo giá. Chặn nằm ở khâu **xuất kho** (FR-26). Một Đơn, một phiếu xuất. **Không đơn nào Hoàn thành khi còn vật tư theo dõi tồn chưa xuất** (Đại Ca chốt 2026-10-21): đường tắt `dachot → hoanthanh` của đơn chỉ-thiết-bị và đường đóng thi công `nghiemthu → hoanthanh` (Đại Ca mở rộng cùng ngày) bị engine chặn 409 dưới khoá dòng đơn (mọi lane, kể cả auto tất toán) tới khi đơn có phiếu xuất — một kiểm chung cho mọi cạnh vào `hoanthanh` từ trạng thái có thể chưa xuất; `dagiao → hoanthanh` không kiểm vì bước Đã giao tự xuất; cửa xuất kho riêng nhận cả `dachot` và `nghiemthu`; đơn đã xuất không mở lại (`mo_lai`) được — version mới sẽ mồ côi phiếu xuất và mở đường xuất lần hai.
+- **Rule:** `StockItem` có **hai con số độc lập**: `onHand` (hàng thật trong kho, chỉ phiếu nhập/xuất kho đụng vào) và `reserved` (hàng đã hứa cho đơn đã chốt). Khả dụng = `onHand − reserved`. `StockMovement` là ledger append-only theo **từng sản phẩm**: `type` ∈ `reserve` (qty > 0) / `release` / `xuat` (qty < 0, CHECK `stock_movements_qty_sign`), unique `(orderVersionId, stockItemId, type)` → chốt/re-chốt/xuất idempotent khi retry (khoá `(orderId, orderVersionId)` ban đầu không dùng được cho ledger nhiều sản phẩm — sửa ở Story 6.6; cặp đó là unique của **`StockVoucher`**: một đơn một phiếu xuất). `reserved` là **tổng của `StockMovement.qty`** trên MỌI dòng của một `stockItemId` (không lọc theo `type`), không phải một cột cộng-trừ. Giải phóng = append dòng `release`, không xoá dòng: re-chốt release version cũ rồi reserve version mới; huỷ đơn release ở cấp đơn qua subscriber `OrderCancelled` (`huyDon()` không chạm tồn); mọi cạnh vào `hoanthanh` release phần còn giữ trong cùng tx. Đơn huỷ SAU khi xuất không tự cộng tồn — lên lại qua **phiếu nhập trả** (`StockVoucher.returnOfVoucherId` → phiếu xuất gốc, `unitCost` = giá vốn gốc, tối đa một phiếu trả mỗi phiếu xuất). **Thứ tự khoá toàn hệ thống:** `orders` (FOR UPDATE) trước, `products` sau (`SELECT id FROM products WHERE id = ANY(…) ORDER BY id FOR UPDATE`). Chốt đơn khi thiếu tồn: **CHO CHỐT, không chặn**; cảnh báo sớm ở màn báo giá. Chặn nằm ở khâu **xuất kho** (FR-26). Một Đơn, một phiếu xuất. **Không đơn nào Hoàn thành khi còn vật tư theo dõi tồn chưa xuất** (Đại Ca chốt 2026-10-21): đường tắt `dachot → hoanthanh` của đơn chỉ-thiết-bị và đường đóng thi công `nghiemthu → hoanthanh` (Đại Ca mở rộng cùng ngày) bị engine chặn 409 dưới khoá dòng đơn (mọi lane, kể cả auto tất toán) tới khi đơn có phiếu xuất — một kiểm chung cho mọi cạnh vào `hoanthanh` từ trạng thái có thể chưa xuất; `dagiao → hoanthanh` không kiểm vì bước Đã giao tự xuất; cửa xuất kho riêng nhận cả `dachot` và `nghiemthu`; đơn đã xuất không mở lại (`mo_lai`) được — version mới sẽ mồ côi phiếu xuất và mở đường xuất lần hai.
 
 ### AD-20 — Hai mốc đóng băng khác nhau: giá bán lúc chốt, giá vốn lúc xuất kho `[ADOPTED]`
 
@@ -320,10 +320,11 @@ erDiagram
     }
     STOCK_VOUCHER {
         uuid id PK
-        int seq "UNIQUE SERIAL - ghép mã phiếu PK-N/PK-X"
+        int seq "UNIQUE SERIAL - ghép mã phiếu PK-N/PK-X/PK-NT (nhập trả)"
         uuid orderId FK "nullable - phiếu xuất gắn đơn; unique cặp (orderId, orderVersionId) — một đơn một phiếu"
         uuid orderVersionId FK "nullable - cùng null/cùng có với orderId (CHECK)"
         string type "nhap | xuat (gắn đơn ⇒ chỉ xuat, CHECK)"
+        uuid returnOfVoucherId FK "nullable UNIQUE - phiếu nhập trả → phiếu xuất gốc; CHECK: chỉ nhap, không mang cặp order"
         string note "không có status/phiếu nháp: tạo = xác nhận"
         uuid createdByAccountId FK
         datetime createdAt
@@ -370,8 +371,8 @@ erDiagram
         uuid stockItemId FK
         uuid orderId FK
         uuid orderVersionId FK
-        int qty "có dấu: giữ chỗ +, giải phóng/xuất -"
-        string type
+        int qty "có dấu: giữ chỗ +, giải phóng/xuất - (CHECK theo type)"
+        string type "reserve | release | xuat; UNIQUE (orderVersionId, stockItemId, type)"
         datetime createdAt
     }
 ```
@@ -489,7 +490,7 @@ backend/
 
 ## Deferred
 
-- ~~**Danh sách tên trạng thái cuối cùng**~~ — **ĐÃ CHỐT ở Epic 4/5:** 10 khoá chính tắc trong `backend/src/orders/domain/order-status.ts` (khoá thi công là `thicong`, KHÔNG phải `dangthicong`); nhãn verbatim trong `web/src/design-system/components/StatusChip.tsx`. Bước **"Lên lịch thi công" đã bị BỎ** khỏi vòng đời (Story 5.8) — chuỗi thật là Đang thi công → Nghiệm thu. Mapping "đợt thanh toán → trạng thái" là cạnh `du_coc` (`dachot → dacoc`) trong `orders/domain/allowed-transition.ts` (bảng 16 dòng), hình dạng khai ở `orders/domain/auto-transition-map.ts`; **giá trị** cấu hình lịch thanh toán vẫn thuộc Story 7.1.
+- ~~**Danh sách tên trạng thái cuối cùng**~~ — **ĐÃ CHỐT ở Epic 4/5:** 10 khoá chính tắc trong `backend/src/orders/domain/order-status.ts` (khoá thi công là `thicong`, KHÔNG phải `dangthicong`); nhãn verbatim trong `web/src/design-system/components/StatusChip.tsx`. Bước **"Lên lịch thi công" đã bị BỎ** khỏi vòng đời (Story 5.8) — chuỗi thật là Đang thi công → Nghiệm thu. Mapping "đợt thanh toán → trạng thái" là cạnh `du_coc` (`dachot → dacoc`) trong `orders/domain/allowed-transition.ts` (bảng 17 dòng — Story 6.1 thêm cạnh khách tự lấy `dacoc → dagiao`), hình dạng khai ở `orders/domain/auto-transition-map.ts`; **giá trị** cấu hình lịch thanh toán vẫn thuộc Story 7.1.
 - **Giới hạn định dạng/dung lượng ảnh** — nơi lưu đã chốt (R2, AD-3); giới hạn kích thước/định dạng + nén để lại cho implementation (FR-24).
 - **CI/CD & môi trường triển khai** — VPS provider, pipeline, container/orchestration cụ thể chưa quyết (solo dev, ưu tiên đơn giản).
 - **Monitoring / backup** — chiến lược backup Postgres, retention R2, alerting để lại cho vận hành.

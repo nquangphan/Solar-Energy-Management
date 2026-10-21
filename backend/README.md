@@ -25,8 +25,8 @@ npm run prisma:generate
 | `npm run build` / `npm run start:prod` | Build & chạy production |
 | `npm run lint` / `npm run format` | Lint & format |
 | `npm run format:check` | Kiểm format, không ghi file (dùng cho CI) |
-| `npm test` | Jest — 77 suite (unit + e2e + 9 source-guard kiến trúc + drift-guard OpenAPI/permissions). Hermetic: **không cần Postgres** — 14 suite `*.db.integration.spec.ts` bị loại qua `testPathIgnorePatterns` |
-| `npm run test:db` | Jest — 15 suite `*.db.integration.spec.ts` (**cần Postgres** + `DATABASE_URL`; máy dev: container `pns-postgres` cổng 5433). `npm test` **KHÔNG** chạy nhóm này; unique/FK/idempotency gate chỉ được kiểm ở đây |
+| `npm test` | Jest — 96 suite (unit + e2e + 10 source-guard kiến trúc `test/no-*.spec.ts` + drift-guard OpenAPI/permissions). Hermetic: **không cần Postgres** — 21 suite `*.db.integration.spec.ts` bị loại qua `testPathIgnorePatterns` |
+| `npm run test:db` | Jest — 21 suite `*.db.integration.spec.ts` (**cần Postgres** + `DATABASE_URL`; máy dev: container `pns-postgres` cổng 5433). `npm test` **KHÔNG** chạy nhóm này; unique/FK/CHECK/`FOR UPDATE`/idempotency chỉ được kiểm ở đây |
 | `npm run openapi:gen` | Sinh `openapi/openapi.json` từ code (không cần server/DB) |
 | `npm run permissions:gen` | Sinh `openapi/permissions.json` từ registry quyền (không cần server/DB) |
 | `npm run prisma:migrate:dev` | Tạo/chạy migration (dev — cần Postgres) |
@@ -38,7 +38,7 @@ npm run prisma:generate
 Cần một Postgres đang chạy + `.env` có `DATABASE_URL` + `JWT_ACCESS_SECRET` (≥32 ký tự) + `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (xem `.env.example`). Sau đó:
 
 ```bash
-npm run prisma:migrate:deploy   # áp toàn bộ migration đã commit (auth, danh mục, khách hàng, đơn hàng, tệp đính kèm…)
+npm run prisma:migrate:deploy   # áp toàn bộ migration đã commit (auth, danh mục, khách hàng, đơn hàng, tệp đính kèm, tồn kho…)
 npx prisma db seed              # tạo account admin; SEED_ADMIN_IS_SUPER_ADMIN=true → cấp preset SUPER_ADMIN
 npm run start:dev               # POST /auth/login với email/mật khẩu admin
 ```

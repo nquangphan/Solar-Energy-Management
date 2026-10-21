@@ -446,11 +446,11 @@ As a người có quyền chốt đơn, I want bấm Chốt để đóng băng g
 - **Given** dòng có `priceEditable=true` (phí lắp), **When** lưu, **Then** `OrderLineItem` lưu **song song** giá catalog (từ `Product.unitPrice`) và giá đã sửa (`unitPriceSnapshot` lúc chốt); chênh lệch không nằm trong bóng tối để audit chiết khấu (§2).
 - **Given** thao tác tiền, **When** Chốt bị retry, **Then** idempotent, không chốt/ghi trùng; publish domain event `OrderConfirmed` qua EventBus (NFR-1, AD-18).
 
-### Story 4.6: Sửa Đơn đã chốt — bản update mới + re-snapshot reserved + chặn thiếu tồn khi re-chốt
+### Story 4.6: Sửa Đơn đã chốt — bản update mới + re-snapshot reserved (re-chốt KHÔNG chặn thiếu tồn — xem 6.5)
 As a người có quyền sửa đơn, I want sửa đơn đã chốt bằng cách sinh bản update mới, So that giữ nguyên lịch sử và không ghi đè bản cũ.
 **Acceptance Criteria:**
 - **Given** một Đơn đã chốt, **When** mở lại để sửa, **Then** tạo `OrderVersion` MỚI (không ghi đè), repoint `Order.currentVersionId` sang bản mới, giữ các bản cũ (FR-6, AD-6).
-- **Given** bản update mới được chốt lại, **When** re-finalize, **Then** re-snapshot giá + vatRate/vatmode lên bản mới **AND** huỷ `StockMovement` version cũ, tạo `StockMovement` mới với số lượng update; tính lại `reserved` theo version mới; không đủ khả dụng → **chặn re-chốt** (§2, FR-26).
+- **Given** bản update mới được chốt lại, **When** re-finalize, **Then** re-snapshot giá + vatRate/vatmode lên bản mới **AND** ghi dòng `release` cho phần version cũ đang giữ, ghi `reserve` mới theo số lượng update (ledger append-only, Story 6.6); tính lại `reserved` theo version mới; không đủ khả dụng → **VẪN cho re-chốt** — Đại Ca chốt (`docs/quyet-dinh-yeu-cau-moi-khach-hang-2026-07-10.md`): chốt và re-chốt không bao giờ chặn, chặn nằm ở khâu xuất kho (Story 6.5) (§2, FR-26).
 - **Given** trang chi tiết Đơn, **When** xem lịch sử, **Then** thấy bản nào/ai/khi nào/đổi gì; sửa đơn publish event `OrderRevised` + ghi Audit (FR-6, AD-18).
 
 ### Story 4.7: Áp chiết khấu + duyệt chiết khấu (biên ước tính)
@@ -593,8 +593,8 @@ As a người có quyền nhập/xuất kho, I want hệ thống cảnh báo và
 As a lập trình viên tồn kho, I want giữ chỗ tồn lúc chốt đơn bằng `StockMovement` ledger, So that `reserved` chính xác khi re-chốt.
 **Acceptance Criteria:**
 - **Given** chốt Đơn lần đầu, **When** lưu, **Then** tạo `StockMovement` với `orderId`, `orderVersionId`, số lượng item vật tư; `reserved` là **tổng của `StockMovement`**, KHÔNG phải biến cộng-trừ (§2).
-- **Given** `StockMovement` unique trên `(orderId, orderVersionId)`, **When** chốt/re-chốt, **Then** thao tác tiền **idempotent** — gọi Chốt API hai lần không tạo movement trùng; lần đầu tạo, lần thứ hai skip hoặc update (NFR-1, §2).
-- **Given** sửa Đơn → tạo version mới + re-chốt, **When** re-finalize, **Then** huỷ movement version cũ, tạo movement mới theo version mới (Story 4.6).
+- **Given** `StockMovement` unique trên `(orderVersionId, stockItemId, type)` (ledger theo từng sản phẩm; cặp `(orderId, orderVersionId)` là unique của phiếu xuất, không dùng được cho ledger — sửa ở 6.6), **When** chốt/re-chốt, **Then** thao tác tiền **idempotent** — gọi Chốt API hai lần không tạo movement trùng; lần đầu tạo, lần thứ hai skip hoặc update (NFR-1, §2).
+- **Given** sửa Đơn → tạo version mới + re-chốt, **When** re-finalize, **Then** ghi dòng `release` cho version cũ, ghi `reserve` theo version mới — không xoá dòng ledger (Story 4.6).
 - **Phụ thuộc:** story này **sửa luồng chốt của Epic 4** nhưng phải nằm ở Epic 6 vì cần `StockItem` (6.2) tồn tại trước. Hệ quả: Epic 4 chưa xong hẳn khi hết Story 4.9 — hành vi giữ chỗ tồn lúc chốt chỉ hoàn chỉnh sau story này.
 
 ### Story 6.7: Phiếu nhập trả khi huỷ đơn đã xuất kho
@@ -604,7 +604,9 @@ As a người quản lý tồn kho, I want tạo phiếu nhập trả khi huỷ 
 - **Given** phiếu nhập trả, **When** tạo, **Then** entity `StockVoucher` loại "nhập", gắn phiếu xuất gốc, cùng giá vốn (`unitCost` = `costPriceSnapshot` lúc xuất) để báo cáo lợi nhuận không lệch (§2, §4).
 - **Given** tạo phiếu trả, **When** lưu, **Then** tăng lại `onHand`, ghi Audit, gắn link Đơn huỷ (FR-24, AD-18).
 - **Given** đường huỷ đơn đã ship ở Story 5.7 KHÔNG chạm tồn kho (khoá bằng source-guard), **When** nối tồn kho vào, **Then** story này **subscribe event `OrderCancelled`** (mang `orderId`, `orderVersionId`, `lyDo`, `statusTruocHuy`) — đây là seam duy nhất; **không** thêm lệnh ghi tồn vào `huyDon()` (AD-11, AD-18).
-- **Given** Đơn huỷ **TRƯỚC khi xuất kho**, **When** xử lý `OrderCancelled`, **Then** huỷ `StockMovement` của version đó → **giải phóng `reserved`** ngay (chuyển từ Story 5.7 sang đây vì ledger chưa tồn tại ở Epic 5) (AD-19).
+- **Given** Đơn huỷ **TRƯỚC khi xuất kho**, **When** xử lý `OrderCancelled`, **Then** ghi dòng `release` ở cấp đơn (mọi version còn giữ, không xoá dòng ledger) → **giải phóng `reserved`** ngay; mọi cạnh vào `hoanthanh` cũng release phần còn giữ trong cùng tx (chuyển từ Story 5.7 sang đây vì ledger chưa tồn tại ở Epic 5) (AD-19).
+
+## Epic 7: Thanh toán, Hợp đồng & Hoá đơn
 _Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng thái (publish DepositRecorded/PaymentRecorded); sinh HĐ Thi công/Mua bán (PDF); tạo hoá đơn (DB + PDF). FR-11,12,13,27,28._
 
 ### Story 7.1: Cấu hình Lịch thanh toán nhiều đợt (chặn đợt đầu 0%)
@@ -692,6 +694,8 @@ As a quản lý hoặc kế toán, I want báo cáo lợi nhuận gộp trên v�
 - **Given** dữ liệu lợi nhuận, **When** tính, **Then** công thức: `Lợi nhuận gộp = Σ(unitPriceSnapshot − costPriceSnapshot) × qty` cho mỗi dòng; đơn chưa xuất kho KHÔNG có trong báo cáo (chưa lãi gì); dòng không có giá vốn (công lắp/phí lắp/dòng tự do) → đặt `costPriceSnapshot = unitPriceSnapshot` → lãi dòng = 0 (§4).
 - **Given** màn báo cáo, **When** render, **Then** hiển thị **nhãn bắt buộc**: `"Lợi nhuận gộp trên vật tư. Chưa trừ nhân công, vận chuyển, chi phí chung."` (§4).
 - **Given** quyền xem báo cáo, **When** gate, **Then** gate theo `costs.view` (quyền mới Story 2.9); nếu không có quyền không hiển thị mục báo cáo (§5).
+
+## Epic 9: Thông báo đẩy (lắp bộ gửi phía sau port)
 _Firebase mobile (FCM/Crashlytics/Analytics/Remote Config); đăng ký device token; subscribe domain event → resolve người nhận THEO QUYỀN (AD-15/17) + người phụ trách đơn, lọc theo quyền xem → gửi FCM; hộp thư in-app; bật/tắt theo loại; nhắc theo lịch. Lắp sau EventBus port của Epic 2 — không mở lại E4–E7. FR-30,31,32,33,34._
 
 ### Story 9.1: Thiết lập Firebase mobile

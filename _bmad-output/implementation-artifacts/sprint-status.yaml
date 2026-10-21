@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-21 (story 6.7 review)
+# last_updated: 2026-10-21 (retro epic 6)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-21 (story 6.7 review)
+last_updated: 2026-10-21 (retro epic 6)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -88,7 +88,7 @@ development_status:
   6-5-chan-khi-thieu-ton: done
   6-6-giu-cho-ton-khi-chot-don-stock-movement: done
   6-7-phieu-nhap-tra-khi-huy-don-da-xuat: done
-  epic-6-retrospective: optional
+  epic-6-retrospective: done
   epic-7: backlog
   7-1-cau-hinh-lich-thanh-toan-nhieu-dot: backlog
   7-2-ghi-nhan-thanh-toan-auto-chuyen-trang-thai: backlog
@@ -189,8 +189,8 @@ action_items:
   - epic: 4
     action: "Xác nhận một run CI Actions XANH thật với schema Epic 4 (3 migration mới: system_settings, discount_approvals, quote_exports); migrate deploy + test:db xanh trên Postgres CI"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "D-2: KHÔNG ĐỘNG TỚI xuyên Epic 5 — nay TỆ HƠN. Xác minh 2026-07-19: main ahead 39 commit chưa push; gh run list RỖNG (Actions chưa chạy lần nào); docker.sock vắng mặt. 2 migration Epic 5 (add_attachments, add_order_cancel_reason) chưa migrate deploy lần nào; lane DB chỉ chạy được 2/9 story. Mang sang Epic 6 thành E-1."
+    status: done
+    resolution: "Retro Epic 6: đóng qua E-1 (migrate deploy + lane DB thật; tiêu chí run Actions bỏ vì Đại Ca tắt CI). || D-2: KHÔNG ĐỘNG TỚI xuyên Epic 5 — nay TỆ HƠN. Xác minh 2026-07-19: main ahead 39 commit chưa push; gh run list RỖNG (Actions chưa chạy lần nào); docker.sock vắng mặt. 2 migration Epic 5 (add_attachments, add_order_cancel_reason) chưa migrate deploy lần nào; lane DB chỉ chạy được 2/9 story. Mang sang Epic 6 thành E-1."
   - epic: 4
     action: "Quyết ngữ nghĩa mốc bảo hành khi khách mua thêm bảo hành SAU lần chốt đầu (chặn Story 5.9). Mặc định tuyên bố trước: giữ ngày-chốt-đầu của dòng (bảo thủ) — im lặng đến hạn ⇒ mặc định thành quyết định"
     owner: "Đại Ca (Project Lead)"
@@ -199,13 +199,13 @@ action_items:
   - epic: 4
     action: "Ghi số lane test SAU QA phase trong Dev Agent Record (lặp finding 4.2, 4.3 — số trong story lệch số npm test/flutter test thật)"
     owner: "Amelia (Dev)"
-    status: in-progress
-    resolution: "D-4: CẢI THIỆN, chưa sạch. Story Epic 5 nay ghi bảng 'trước dev / sau QA / sau review'. Nhưng 5.4 vẫn có finding MEDIUM-3 (số liệu lệch) và 5.7 vs 5.8 lệch nhau về số dòng bảng transition ('19' vs '16' — 16 là đúng)."
+    status: done
+    resolution: "Retro Epic 6: 7/7 story Epic 6 ghi bảng lane trước/sau review; số retro chạy lại khớp story cuối (6.7: 1852/238/87/341/448). || D-4: CẢI THIỆN, chưa sạch. Story Epic 5 nay ghi bảng 'trước dev / sau QA / sau review'. Nhưng 5.4 vẫn có finding MEDIUM-3 (số liệu lệch) và 5.7 vs 5.8 lệch nhau về số dòng bảng transition ('19' vs '16' — 16 là đúng)."
   - epic: 4
     action: "Serialize/cô lập 4 flake backend (customer-sources.e2e, customers, me.e2e, error-envelope) trước khi CI thành cổng bắt buộc; full parallel 5 lần liên tiếp ⇒ 0 flake"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "D-5: KHÔNG ĐỘNG TỚI xuyên Epic 5. Story 5.7 ghi nhận customers.e2e.spec.ts đỏ 1 lần dưới jest song song. Mang sang Epic 6 thành E-4 (điều kiện cần trước khi CI thành cổng bắt buộc)."
+    status: done
+    resolution: "Retro Epic 6: đóng qua E-4 (listen-loopback). || D-5: KHÔNG ĐỘNG TỚI xuyên Epic 5. Story 5.7 ghi nhận customers.e2e.spec.ts đỏ 1 lần dưới jest song song. Mang sang Epic 6 thành E-4 (điều kiện cần trước khi CI thành cổng bắt buộc)."
   - epic: 4
     action: "Quyết lại TD-1 cho Epic 5 (đến hạn lần 4; Epic 5 thêm ≥3 màn web: Danh sách/Chi tiết/Chuyển trạng thái). Mặc định tuyên bố trước: tái khẳng định chấp nhận text-guard-only web xuyên Epic 5, mobile bắt buộc widget test — im lặng ⇒ mặc định thành quyết định"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -214,8 +214,8 @@ action_items:
   - epic: 4
     action: "Trả 4 câu hỏi sản phẩm mở của 4.8/4.9: file logo công ty, SĐT sales trên PDF, link chia sẻ công khai (đang hoãn), mốc bảo hành post-chot (= D-3)"
     owner: "Đại Ca (Project Lead)"
-    status: open
-    resolution: "D-7: KHÔNG ĐỘNG TỚI xuyên Epic 5. Logo/SĐT PDF vẫn trống; chia sẻ vẫn chỉ proxy-JWT streaming. Story 5.9 dồn thêm 3 câu hỏi mới. Mang sang Epic 6 thành E-9 (7 câu, có mặc định tuyên bố trước)."
+    status: decided
+    resolution: "Retro Epic 6: đóng qua E-9 (mặc định thành quyết định). || D-7: KHÔNG ĐỘNG TỚI xuyên Epic 5. Logo/SĐT PDF vẫn trống; chia sẻ vẫn chỉ proxy-JWT streaming. Story 5.9 dồn thêm 3 câu hỏi mới. Mang sang Epic 6 thành E-9 (7 câu, có mặc định tuyên bố trước)."
   - epic: 4
     action: "Đóng TD-25/TD-26 bằng endpoint đọc: Story 5.4 lộ danh sách version qua API; Story 5.9 lộ warrantyStartAt + warrantyMonths + hạn tính được"
     owner: "Amelia (Dev)"
@@ -228,7 +228,7 @@ action_items:
     action: "E-1: git push + xác nhận MỘT run GitHub Actions XANH + migrate deploy 2 migration treo (add_attachments, add_order_cancel_reason)"
     owner: "Amelia (Dev)"
     status: done
-    resolution: "Nợ 2 epic (= D-2). Tiêu chí: gh run list hiện ít nhất một run success, bốn lane pass, prisma migrate deploy áp đủ 7 migration, npm run test:db xanh với schema Epic 5. Epic 6 thêm ≥3 migration tồn kho lên một schema chưa từng deploy ⇒ rủi ro nhân lên nếu hoãn lần ba. || 2026-10-21: Postgres local riêng (container pns-postgres, cổng 5433); migrate deploy đủ 17 migration, test:db 15 suite/122 xanh; push main. Đại Ca TẮT CI tự chạy (ci.yml chỉ còn workflow_dispatch) ⇒ tiêu chí "run Actions xanh" bỏ; cổng thay thế = 5 lane chạy trên máy trước mỗi push. Lockfile backend+web nay được track (git add -f vì .gitignore cục bộ ignore package-lock.json)."
+    resolution: "Nợ 2 epic (= D-2). Tiêu chí: gh run list hiện ít nhất một run success, bốn lane pass, prisma migrate deploy áp đủ 7 migration, npm run test:db xanh với schema Epic 5. Epic 6 thêm ≥3 migration tồn kho lên một schema chưa từng deploy ⇒ rủi ro nhân lên nếu hoãn lần ba. || 2026-10-21: Postgres local riêng (container pns-postgres, cổng 5433); migrate deploy đủ 17 migration, test:db 15 suite/122 xanh; push main. Đại Ca TẮT CI tự chạy (ci.yml chỉ còn workflow_dispatch) ⇒ tiêu chí 'run Actions xanh' bỏ; cổng thay thế = 5 lane chạy trên máy trước mỗi push. Lockfile backend+web nay được track (git add -f vì .gitignore cục bộ ignore package-lock.json)."
   - epic: 5
     action: "E-2: Quyết TD-1 lần 5 — mặc định tuyên bố trước lần này là LẬT (dựng story app-scaffold web: tsc + bundler + JSDOM test làm story đầu Epic 6)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -269,3 +269,45 @@ action_items:
     owner: "Đại Ca (Project Lead)"
     status: decided
     resolution: "Mặc định tuyên bố trước: để trống logo/SĐT ở Phase 1; giữ hoãn link công khai; giữ ngưỡng 90 ngày; cấp orders.view_all cho KE_TOAN (preset gần vai trực tổng đài nhất — hiện nhân viên không owner/assignee tra bảo hành sẽ ra RỖNG); bỏ hẳn dòng không bảo hành. Im lặng ⇒ mặc định thành quyết định. || 2026-10-21: Mặc định thành quyết định. Code đã khớp sẵn (KE_TOAN có orders.view_all từ 2.4; tra cứu BH bỏ dòng không BH; ngưỡng 90 ngày) — thêm test DB khoá lại. Logo/SĐT PDF trống, link công khai hoãn. Lưu ý vận hành: account KE_TOAN cũ bị bỏ tick view_all phải tick lại tay."
+  # --- Retro Epic 6 (2026-10-21). Cùng cơ chế hai vế: dòng có chủ + trả trong LÔ CHUẨN BỊ
+  # trước commit đầu của story 7.1 (Epic 4 có lô 12/12 · Epic 5 không lô 5,5/8 · Epic 6 có lô 9/9).
+  - epic: 6
+    action: "F-1: Push 11 commit Epic 6 + gắn chủ cho bước push vào chu trình story"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "E-1 bỏ CI, lấy 5 lane cục bộ làm cổng; cổng lane được giữ nhưng main lại ahead 11. Tiêu chí: git status -sb không ahead; bước 'push sau khi 5 lane xanh' nằm trong story-automator hoặc checklist review."
+  - epic: 6
+    action: "F-2: Correct-course chèn epic 'Nối dây client' (TD-38: 0 adapter HTTP, 0 client sinh từ OpenAPI, web không router, mobile không app shell) + thống nhất contract tiếng Anh (TD-39)"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: chạy bmad-correct-course SAU Epic 7, TRƯỚC Epic 8; đổi route tiếng Việt sang tiếng Anh trước khi client thật dùng chúng. Im lặng ⇒ mặc định thành quyết định."
+  - epic: 6
+    action: "F-3: Quyết thứ tự Payment ↔ transition cho 7.2 (TD-40: D12 chặn →hoanthanh ở mọi lane kể cả auto tất toán)"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: Payment + chuyenTrangThaiTuDong() cùng một tx dưới khoá dòng đơn; transition bị chặn 409 thì Payment VẪN ghi, transition bỏ qua + log + event, không rollback tiền. Ghi vào spine trước khi viết story 7.2."
+  - epic: 6
+    action: "F-4: Đầu vào hợp đồng 7.3 — trích điều khoản tĩnh từ docs/1. Khảo sát lắp đặt/HĐ THI CÔNG CT .docx và docs/2. Thương mại/HDMB CT QTS l2.pdf + nguồn thông tin pháp nhân bên A"
+    owner: "Đại Ca (dữ liệu) + Amelia (Dev)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: thông tin pháp nhân đọc từ system_settings (khuôn VAT 4.4), seed rỗng; HĐ xuất được, ô trống hiện 'Chưa cấu hình', không chặn."
+  - epic: 6
+    action: "F-5: Luật test khoá — tx giữ khoá GHI đúng thứ primitive đọc; mỗi nguồn của tập khoá có một ca interleaving DB; ghi vào backend/CONVENTIONS.md"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Căn cứ 6.6 R1 + 2 test che lấp ở 6.7. Ghi vào CONVENTIONS.md trong retro Epic 6 (mục Khoá dòng & test đồng thời). Áp cho Payment ở 7.2."
+  - epic: 6
+    action: "F-6: Công cụ chạy lại release cho đơn huỷ còn giữ chỗ (TD-41) — idempotent, có test DB"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Phải xong trước go-live; không chặn 7.1."
+  - epic: 6
+    action: "F-7: Đồng bộ sổ sách — đóng D-2/D-4/D-5/D-7 Epic 4 + sửa tài liệu lệch code"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 6: sprint-status, ARCHITECTURE-SPINE (AD-19 khoá ledger, ERD, 17 dòng), epics.md (4.6, 6.4, 6.6), project-context, backend README + CONVENTIONS."
+  - epic: 6
+    action: "F-8: 7 câu hỏi sản phẩm Epic 6 (dachot→hoanthanh, hai nhánh song song ở dacoc, mốc trừ kho, nút xuất khoá khi thiếu tồn, mo_lai không release, một phiếu trả/phiếu xuất, lối vào phiếu trả từ màn Đơn)"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Mặc định tuyên bố trước = hành vi code hiện tại: giữ dachot→hoanthanh; cho hai nhánh song song; trừ kho ở xong_giao; giữ nút khoá (Epic 9 de-dupe); mo_lai không release; một phiếu trả mỗi phiếu xuất; chưa có lối vào từ màn Đơn. Im lặng ⇒ mặc định thành quyết định."
