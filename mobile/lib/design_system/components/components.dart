@@ -26,6 +26,10 @@ export 'table.dart'
 export 'stepper.dart' show AppStepper, AppStepItem, AppStepState;
 export 'kpi.dart' show AppKpi;
 
+// Money display: the ONE formatter (`83.010.960 đ`) and the widget that applies
+// it with the `mono` token. Screens never print a raw money number.
+export 'money_text.dart' show MoneyText, formatVnd;
+
 // Behaviour layer (mirror Story 1.6): cart line, overlays, list states, share,
 // image upload. Behaviour primitives only — no business logic (money math,
 // status transitions, R2 upload all live on the backend; AD-3/10/11/16).

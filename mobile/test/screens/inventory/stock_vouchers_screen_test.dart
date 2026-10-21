@@ -157,7 +157,7 @@ void main() {
     expect(find.text('Nhập từ nhà cung cấp'), findsOneWidget);
     expect(find.text('+40'), findsOneWidget);
     expect(find.text('GIÁ VỐN / ĐV'), findsOneWidget);
-    expect(find.text('2110000'), findsOneWidget);
+    expect(find.text('2.110.000 đ'), findsOneWidget);
     expect(find.textContaining('không được bỏ trống'), findsOneWidget);
   });
 
@@ -172,6 +172,7 @@ void main() {
     expect(find.text('Xuất kho · không gắn đơn'), findsOneWidget);
     expect(find.text('GIÁ VỐN / ĐV'), findsNothing);
     expect(find.text('0'), findsNothing);
+    expect(find.text('0 đ'), findsNothing);
   });
 
   testWidgets(

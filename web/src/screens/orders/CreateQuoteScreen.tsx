@@ -27,6 +27,7 @@ import {
   ErrorState,
   Field,
   Frame,
+  Money,
   ScopeFlag,
   Sheet,
   Table,
@@ -694,8 +695,8 @@ export function CreateQuoteScreen({
           </div>
         </Frame>
 
-        {/* Khu tổng tiền: 3 số backend trả qua preview-total, integer thô (cùng
-            convention `amount` của CartLineRow). "—" = chưa có/preview lỗi.
+        {/* Khu tổng tiền: 3 số backend trả qua preview-total, hiển thị qua <Money>
+            (cùng convention `amount` của CartLineRow). "—" = chưa có/preview lỗi.
             Client CẤM số học tiền. Tick VAT (Story 4.4) phản ánh order.vatMode;
             thuế suất % là GIÁ TRỊ BACKEND từ totals.vatRate — không nhãn tĩnh. */}
         <Frame label="Tổng kết">
@@ -712,18 +713,20 @@ export function CreateQuoteScreen({
           </div>
           <dl className="quote-totals">
             <dt>Tổng trước VAT</dt>
-            <dd className="num mono">{totals ? String(totals.subtotal) : '—'}</dd>
+            <dd className="num mono">{totals ? <Money value={totals.subtotal} /> : '—'}</dd>
             {/* Dòng chiết khấu (Story 4.7): CHỈ hiện khi có — số backend echo. */}
             {totals !== null && totals.discountAmount > 0 && (
               <>
                 <dt>Chiết khấu</dt>
-                <dd className="num mono">{String(totals.discountAmount)}</dd>
+                <dd className="num mono">
+                  <Money value={totals.discountAmount} />
+                </dd>
               </>
             )}
             <dt>Tiền VAT</dt>
-            <dd className="num mono">{totals ? String(totals.vatAmount) : '—'}</dd>
+            <dd className="num mono">{totals ? <Money value={totals.vatAmount} /> : '—'}</dd>
             <dt>Tổng sau VAT</dt>
-            <dd className="num mono strong">{totals ? String(totals.total) : '—'}</dd>
+            <dd className="num mono strong">{totals ? <Money value={totals.total} /> : '—'}</dd>
           </dl>
         </Frame>
 
@@ -835,7 +838,7 @@ export function CreateQuoteScreen({
                 <div className="quote-product-info">
                   <span className="strong">{product.name}</span>
                   <span className="micro muted">
-                    {product.sku} · {product.unit} · <span className="mono">{product.price}</span>
+                    {product.sku} · {product.unit} · <Money value={product.price} />
                   </span>
                 </div>
                 <Button

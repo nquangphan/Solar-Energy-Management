@@ -1,0 +1,20 @@
+{
+  "$note": "Shared money-display contract: input (integer đồng) -> exact displayed string. Consumed byte-for-byte by the web formatVnd (design-system/money/format-vnd.test.mjs) and the Flutter formatVnd (mobile/test/design_system/components/money_text_test.dart). Format decided 2026-10-21: '.' thousands separator, ONE regular space (U+0020), lowercase 'đ'.",
+  "cases": [
+    { "input": 0, "expected": "0 đ" },
+    { "input": 5, "expected": "5 đ" },
+    { "input": 999, "expected": "999 đ" },
+    { "input": 1000, "expected": "1.000 đ" },
+    { "input": 12345, "expected": "12.345 đ" },
+    { "input": 100000, "expected": "100.000 đ" },
+    { "input": 1000000, "expected": "1.000.000 đ" },
+    { "input": 83010960, "expected": "83.010.960 đ" },
+    { "input": 1250000000, "expected": "1.250.000.000 đ" },
+    { "input": -5, "expected": "-5 đ" },
+    { "input": -999, "expected": "-999 đ" },
+    { "input": -1000, "expected": "-1.000 đ" },
+    { "input": -1500000, "expected": "-1.500.000 đ" },
+    { "input": 999999999999, "expected": "999.999.999.999 đ", "$note": "largest realistic order value (just under 1.000 tỷ)" },
+    { "input": 9007199254740991, "expected": "9.007.199.254.740.991 đ", "$note": "Number.MAX_SAFE_INTEGER — the largest value the web can carry exactly" }
+  ]
+}

@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/components -> repo root
@@ -163,4 +164,19 @@ test('money cells (.mono / .table .num) are never truncated at large sizes', () 
   const numBlock = componentsCss.match(/\.table \.num\{([^}]*)\}/)?.[1] ?? '';
   assert.ok(numBlock.length > 0, '.table .num rule must exist in components.css');
   assert.ok(!/text-overflow|ellipsis|overflow\s*:\s*hidden/.test(numBlock), '.table .num must not clip money');
+});
+
+// The money display components themselves: web <Money> renders the `.mono`
+// utility (checked above) with no inline clipping; Flutter MoneyText is the
+// tabular-figures mirror and must not cap lines or ellipsize.
+test('Money / MoneyText apply the mono token and never clip (UX-DR-26)', () => {
+  const money = stripComments(readFileSync(resolve(repoRoot, 'web/src/design-system/components/Money.tsx'), 'utf8'));
+  const moneyText = stripComments(readFileSync(resolve(repoRoot, 'mobile/lib/design_system/components/money_text.dart'), 'utf8'));
+  assert.ok(money.includes('className="mono"'), 'Money must render with the .mono token');
+  assert.ok(money.includes('formatVnd(value)'), 'Money must display formatVnd(value)');
+  assert.ok(!/style=|overflow|ellipsis/.test(money), 'Money must not add inline styles or clipping');
+  assert.ok(moneyText.includes('FontFeature.tabularFigures()'), 'MoneyText must apply tabular figures');
+  assert.ok(moneyText.includes('TextAlign.right'), 'MoneyText must right-align');
+  assert.ok(moneyText.includes('formatVnd(value)'), 'MoneyText must display formatVnd(value)');
+  assert.ok(!/maxLines|TextOverflow|softWrap/.test(moneyText), 'MoneyText must never cap lines or ellipsize money');
 });

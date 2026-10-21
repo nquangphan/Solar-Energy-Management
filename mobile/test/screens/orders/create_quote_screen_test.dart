@@ -348,9 +348,9 @@ void main() {
       expect(find.text('Tiền VAT'), findsOneWidget);
       expect(find.text('Tổng sau VAT'), findsOneWidget);
       // Giỏ rỗng vẫn preview được: fake-backend trả 0/0/0 và màn hiển thị
-      // NGUYÊN VĂN — không còn "—" nào (preview đã chạy ngay sau create).
+      // qua formatVnd — không còn "—" nào (preview đã chạy ngay sau create).
       expect(find.text('—'), findsNothing);
-      expect(find.text('0'), findsNWidgets(3));
+      expect(find.text('0 đ'), findsNWidgets(3));
     });
 
     testWidgets(
@@ -370,9 +370,9 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, '1').first, '5');
       await tester.pumpAndSettle();
 
-      expect(find.text('12250000'), findsWidgets);
-      expect(find.text('980000'), findsOneWidget);
-      expect(find.text('13230000'), findsOneWidget);
+      expect(find.text('12.250.000 đ'), findsWidgets);
+      expect(find.text('980.000 đ'), findsOneWidget);
+      expect(find.text('13.230.000 đ'), findsOneWidget);
       expect(find.text('—'), findsNothing);
     });
 
@@ -412,17 +412,17 @@ void main() {
       await tester.pumpAndSettle();
 
       // qty 1: subtotal 2_450_000, VAT 196_000, total 2_646_000.
-      expect(find.text('196000'), findsOneWidget);
-      expect(find.text('2646000'), findsOneWidget);
+      expect(find.text('196.000 đ'), findsOneWidget);
+      expect(find.text('2.646.000 đ'), findsOneWidget);
 
       // qty 1 → 2: preview mới 4_900_000 / 392_000 / 5_292_000 — số cũ biến mất.
       await tester.enterText(find.widgetWithText(TextField, '1').first, '2');
       await tester.pumpAndSettle();
 
-      expect(find.text('4900000'), findsWidgets);
-      expect(find.text('392000'), findsOneWidget);
-      expect(find.text('5292000'), findsOneWidget);
-      expect(find.text('196000'), findsNothing);
+      expect(find.text('4.900.000 đ'), findsWidgets);
+      expect(find.text('392.000 đ'), findsOneWidget);
+      expect(find.text('5.292.000 đ'), findsOneWidget);
+      expect(find.text('196.000 đ'), findsNothing);
     });
 
     testWidgets(
@@ -456,7 +456,7 @@ void main() {
           applyVat: true));
       // Hai preview kia còn treo nhưng không giữ frame nào — settle an toàn.
       await tester.pumpAndSettle();
-      expect(find.text('5292000'), findsOneWidget);
+      expect(find.text('5.292.000 đ'), findsOneWidget);
 
       // Hai preview CŨ về TRỄ (1 dòng qty 1, rồi giỏ rỗng) — ticket phải vứt
       // cả hai, số mới giữ nguyên trên màn.
@@ -470,10 +470,10 @@ void main() {
           subtotal: 0, vatAmount: 0, total: 0, vatRate: 8, applyVat: true));
       await tester.pumpAndSettle();
 
-      expect(find.text('5292000'), findsOneWidget);
-      expect(find.text('392000'), findsOneWidget);
-      expect(find.text('2646000'), findsNothing);
-      expect(find.text('196000'), findsNothing);
+      expect(find.text('5.292.000 đ'), findsOneWidget);
+      expect(find.text('392.000 đ'), findsOneWidget);
+      expect(find.text('2.646.000 đ'), findsNothing);
+      expect(find.text('196.000 đ'), findsNothing);
       // Không quay về "—", không về 0 — mọi response trễ đều bị vứt sạch.
       expect(find.text('—'), findsNothing);
     });
@@ -494,7 +494,7 @@ void main() {
 
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
       // qty 1 → amount = the FAKE-BACKEND's number, rendered as-is.
-      expect(find.text('2450000'), findsWidgets);
+      expect(find.text('2.450.000 đ'), findsWidgets);
     });
 
     testWidgets(
@@ -513,7 +513,7 @@ void main() {
       // input carries the price value.
       expect(find.widgetWithText(TextField, '1'), findsOneWidget);
       expect(find.widgetWithText(TextField, '2450000'), findsNothing);
-      expect(find.text('2450000'), findsWidgets);
+      expect(find.text('2.450.000 đ'), findsWidgets);
     });
 
     testWidgets(
@@ -581,7 +581,8 @@ void main() {
       await tester.enterText(find.widgetWithText(TextField, '1').first, '5');
       await tester.pumpAndSettle();
 
-      expect(find.text('12250000'), findsWidgets); // 5 × 2450000 — số của port
+      expect(
+          find.text('12.250.000 đ'), findsWidgets); // 5 × 2450000 — số của port
       expect(find.text('Thử lại'), findsNothing); // không rơi vào nhánh lỗi
     });
 
@@ -757,7 +758,7 @@ void main() {
       await tester.tapAt(const Offset(10.0, 10.0));
       await tester.pumpAndSettle();
       // Trước khi untick: VAT 8% của fake-backend + nhãn % là GIÁ TRỊ backend.
-      expect(find.text('196000'), findsOneWidget);
+      expect(find.text('196.000 đ'), findsOneWidget);
       expect(find.text('8%'), findsOneWidget);
 
       final Finder vatToggle = find.widgetWithText(AppCheckbox, 'Tính VAT');
@@ -772,9 +773,9 @@ void main() {
       expect(port.metaCalls.single.hasKWp, isFalse);
       expect(port.metaCalls.single.hasValidityNote, isFalse);
       // Preview mới echo vatMode mới: VAT 0, total = subtotal — tức thì.
-      expect(find.text('196000'), findsNothing);
-      expect(find.text('0'), findsOneWidget);
-      expect(find.text('2450000'), findsWidgets);
+      expect(find.text('196.000 đ'), findsNothing);
+      expect(find.text('0 đ'), findsOneWidget);
+      expect(find.text('2.450.000 đ'), findsWidgets);
     });
 
     testWidgets(
@@ -839,7 +840,7 @@ void main() {
       await tester.pump();
       await tester.tap(vatToggle); // untick → khong_vat
       await tester.pumpAndSettle();
-      expect(find.text('196000'), findsNothing);
+      expect(find.text('196.000 đ'), findsNothing);
 
       await tester.tap(vatToggle); // tick lại → co_vat
       await tester.pumpAndSettle();
@@ -848,7 +849,7 @@ void main() {
       expect(port.metaCalls, hasLength(2));
       expect(port.metaCalls.last.vatMode, 'co_vat');
       // Preview echo vatMode mới: VAT 8% của fake-backend hiện trở lại.
-      expect(find.text('196000'), findsOneWidget);
+      expect(find.text('196.000 đ'), findsOneWidget);
       final AppCheckbox tick = tester.widget<AppCheckbox>(vatToggle);
       expect(tick.checked, isTrue);
     });
@@ -1226,9 +1227,9 @@ void main() {
       // Tổng kết thêm dòng Chiết khấu — SỐ FAKE-BACKEND echo (2_450_000 −
       // 500_000 = vatBase 1_950_000; VAT 8% = 156_000; total 2_106_000).
       expect(find.text('Chiết khấu'), findsOneWidget);
-      expect(find.text('500000'), findsOneWidget);
-      expect(find.text('156000'), findsOneWidget);
-      expect(find.text('2106000'), findsOneWidget);
+      expect(find.text('500.000 đ'), findsOneWidget);
+      expect(find.text('156.000 đ'), findsOneWidget);
+      expect(find.text('2.106.000 đ'), findsOneWidget);
       // Giỏ vẫn hiển thị đủ dòng ở chế độ read-only.
       expect(find.text('Tấm pin JA Solar 580W'), findsOneWidget);
     });

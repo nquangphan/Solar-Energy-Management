@@ -62,8 +62,8 @@ void main() {
           amount: 999, // deliberately != 2 * 500
         ),
       ));
-      expect(find.text('999'), findsOneWidget);
-      expect(find.text('1000'), findsNothing);
+      expect(find.text('999 đ'), findsOneWidget);
+      expect(find.text('1.000 đ'), findsNothing);
     });
 
     testWidgets('editing qty emits the new number, amount stays put',
@@ -83,7 +83,7 @@ void main() {
       await tester.pump();
       expect(emitted, 3);
       // The displayed amount did NOT recompute — it waits for the backend.
-      expect(find.text('999'), findsOneWidget);
+      expect(find.text('999 đ'), findsOneWidget);
     });
 
     testWidgets('editing unit price emits onUnitPriceChange, amount stays put',
@@ -104,7 +104,7 @@ void main() {
       await tester.pump();
       expect(emitted, 750);
       // Still the backend amount — the widget never recomputes qty × price.
-      expect(find.text('999'), findsOneWidget);
+      expect(find.text('999 đ'), findsOneWidget);
     });
 
     testWidgets('delete emits intent only', (tester) async {

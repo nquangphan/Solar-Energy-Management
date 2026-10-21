@@ -104,7 +104,7 @@ void main() {
     testWidgets('shrinks to nothing without dashboard.finance_view',
         (tester) async {
       await _pumpExample(tester, kDemoMe);
-      expect(find.text('1.250.000.000 ₫'), findsNothing);
+      expect(find.text('1.250.000.000 đ'), findsNothing);
     });
 
     testWidgets('renders the figure with dashboard.finance_view',
@@ -115,7 +115,7 @@ void main() {
             id: 'f', email: 'e', displayName: 'D',
             permissions: ['dashboard.finance_view']),
       );
-      expect(find.text('1.250.000.000 ₫'), findsOneWidget);
+      expect(find.text('1.250.000.000 đ'), findsOneWidget);
     });
   });
 
@@ -133,7 +133,7 @@ void main() {
       await tester.pump(); // let initState kick off the fetch; it never resolves
       expect(find.byType(AppSkeleton), findsOneWidget);
       expect(find.text('Phân quyền'), findsNothing);
-      expect(find.text('1.250.000.000 ₫'), findsNothing);
+      expect(find.text('1.250.000.000 đ'), findsNothing);
     });
 
     testWidgets('error state shown when the port throws', (tester) async {

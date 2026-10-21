@@ -117,7 +117,8 @@ describe("StockVouchersScreen — hành vi", () => {
     expect(screen.getByText("Nhập từ nhà cung cấp")).toBeTruthy();
     expect(screen.getByText("+40")).toBeTruthy();
     expect(screen.getByText("Giá vốn / đv")).toBeTruthy();
-    expect(screen.getByText("2110000")).toBeTruthy();
+    expect(screen.getByText("2.110.000 đ")).toBeTruthy();
+    expect(screen.queryByText("2110000")).toBeNull();
     expect(screen.getByText(/không được bỏ trống/)).toBeTruthy();
   });
 

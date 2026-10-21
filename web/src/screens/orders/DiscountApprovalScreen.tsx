@@ -20,6 +20,7 @@ import {
   ErrorState,
   Field,
   Frame,
+  Money,
   Skeleton,
   StatusChip,
   Table,
@@ -163,7 +164,9 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
                       <span className="strong">{item.orderId}</span>{' '}
                       <span className="micro muted mono">{item.customerSdt}</span>
                     </td>
-                    <td className="num mono">{String(item.amount)}</td>
+                    <td className="num mono">
+                      <Money value={item.amount} />
+                    </td>
                     <td>{item.requestedByDisplayName}</td>
                     <td>
                       <StatusChip status={ORDER_STATUS_CHODUYET} />
@@ -180,11 +183,17 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
             {/* 3 con số backend (AD-16) — màn hiển thị nguyên văn, canh phải. */}
             <dl className="discount-summary">
               <dt>Giá gốc</dt>
-              <dd className="num mono">{String(selected.subtotal)}</dd>
+              <dd className="num mono">
+                <Money value={selected.subtotal} />
+              </dd>
               <dt>Chiết khấu</dt>
-              <dd className="num mono">{String(selected.amount)}</dd>
+              <dd className="num mono">
+                <Money value={selected.amount} />
+              </dd>
               <dt>Sau chiết khấu</dt>
-              <dd className="num mono strong">{String(selected.afterDiscount)}</dd>
+              <dd className="num mono strong">
+                <Money value={selected.afterDiscount} />
+              </dd>
             </dl>
 
             <Table>
@@ -201,7 +210,9 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
                   <tr key={`${selected.orderId}-${index}`}>
                     <td>{line.name}</td>
                     <td className="num mono">{String(line.qty)}</td>
-                    <td className="num mono">{String(line.unitPrice)}</td>
+                    <td className="num mono">
+                      <Money value={line.unitPrice} />
+                    </td>
                     {/* Biên là SỐ PORT TRẢ (integer %) — null = "—" (FR-37). */}
                     <td className="num mono">
                       {line.estimatedMarginPct === null

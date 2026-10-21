@@ -1,6 +1,7 @@
 // hand-authored — web-only design-system component (Story 1.6).
 import { useState } from 'react';
 import { Icon } from '../icons/Icon';
+import { Money } from './Money';
 
 /** How the warranty cell renders for this line (Story 4.9). */
 export type WarrantyMode = 'input' | 'none' | 'link';
@@ -25,9 +26,9 @@ export interface CartLineRowProps {
   meta?: string;
   qty: number;
   unitPrice: number;
-  // The line total. Rendered STRAIGHT from this prop — the backend computes it
-  // (POST /orders/preview-total, AD-10/16). The component never multiplies
-  // qty × unitPrice, never sums, never formats money.
+  // The line total. Taken STRAIGHT from this prop — the backend computes it
+  // (POST /orders/preview-total, AD-10/16). The component never computes money
+  // (no qty × unitPrice, no sum); it displays it via formatVnd (<Money>).
   amount: number;
   editable?: boolean;
   // Gate the UNIT-PRICE input separately from qty (Story 4.1): qty is editable
@@ -56,9 +57,10 @@ export interface CartLineRowProps {
  * 1.5). Edits emit immediately via callbacks (no save button, AC-1): the SCREEN
  * calls preview-total on each emit and re-renders the backend-computed amount.
  *
- * Money invariant (AD-10/16): `amount` is a backend number passed by the caller
- * and rendered as-is. This component does NOT compute qty × unitPrice or any
- * total — pricing lives in orders/domain on the backend.
+ * Money invariant (AD-10/16): `amount` is a backend number passed by the caller.
+ * This component never computes money (no qty × unitPrice, no total — pricing
+ * lives in orders/domain on the backend); it displays via formatVnd (<Money>).
+ * The unit-price INPUT keeps raw digits for typing.
  *
  * Web deletes via a button (AC-1). Swipe-to-delete is a mobile/Flutter concern
  * (Story 1.7) and is intentionally not implemented here. Overlap ≤ 1 level: the
@@ -186,10 +188,12 @@ export function CartLineRow({
             }}
           />
         ) : (
-          <span className="num mono">{unitPrice}</span>
+          <Money value={unitPrice} />
         )}
       </td>
-      <td className="num strong mono">{amount}</td>
+      <td className="num strong mono">
+        <Money value={amount} />
+      </td>
       {onDelete && (
         <td className="num">
           <button

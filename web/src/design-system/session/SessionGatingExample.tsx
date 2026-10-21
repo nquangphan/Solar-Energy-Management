@@ -9,6 +9,7 @@
 
 import { Skeleton } from '../components/Skeleton';
 import { ErrorState } from '../components/ErrorState';
+import { Money } from '../components/Money';
 import { Gate } from '../gating/Gate';
 import { PERM, filterNav } from '../gating/permissions';
 import { Sidebar, SIDEBAR_NAV } from '../shell/Sidebar';
@@ -36,7 +37,9 @@ export function SessionGatingExample() {
     <div>
       <Sidebar sections={sections} />
       <Gate perms={perms} requires={PERM.dashboardFinanceView}>
-        <div className="mono">1.250.000.000 ₫</div>
+        <div className="mono">
+          <Money value={1250000000} />
+        </div>
       </Gate>
     </div>
   );

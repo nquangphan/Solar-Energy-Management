@@ -4,8 +4,8 @@
 // The component CSS is covered by components.test.mjs (drift-guard on the
 // stylesheet). This file guards the TSX/TS SOURCE instead — the behavior
 // contracts and, most importantly, the two hard invariants the CSS can't see:
-//   (a) CartLineRow does NO client-side money math — it renders the backend
-//       `amount` prop as-is (AD-10/16). This is the single most important guard:
+//   (a) CartLineRow does NO client-side money math — it displays the backend
+//       `amount` prop via <Money> (AD-10/16). This is the single most important guard:
 //       it catches any attempt to compute qty × unitPrice / sum a total.
 //   (b) ImageUpload does NOT upload — no fetch/R2/signed URL; it only emits the
 //       chosen File[] via onAdd (AD-3).
@@ -70,9 +70,9 @@ const barrel = read('index.ts');
 // ---------------------------------------------------------------------------
 
 // (1) The row must never multiply qty × unitPrice or otherwise compute a total:
-// `amount` is a backend number, rendered as-is. Scan the comment/string-free
-// source for any money arithmetic.
-test('CartLineRow does NO client money math — amount is rendered from prop (AD-10/16)', () => {
+// `amount` is a backend number, displayed via formatVnd (<Money>). Scan the
+// comment/string-free source for any money arithmetic.
+test('CartLineRow does NO client money math — amount is displayed from prop via <Money> (AD-10/16)', () => {
   const code = stripCommentsAndStrings(cartLineRow);
   // Any multiplication between two expressions is money math here regardless of
   // the variable names — a rename (`quantity * price`) must not slip through.
@@ -83,12 +83,14 @@ test('CartLineRow does NO client money math — amount is rendered from prop (AD
     !anyMultiply.test(codeNoImports),
     'CartLineRow must not multiply anything (qty × price / any total) — amount comes from the backend',
   );
+  // Summing is backend/preview-total. Locale formatting is banned: money
+  // formatting goes through formatVnd (<Money>) only.
   assert.ok(
-    !/\breduce\s*\(|\.sum\b|toFixed|toLocaleString/.test(codeNoImports),
-    'CartLineRow must not sum or format money — that is backend/preview-total',
+    !/\breduce\s*\(|\.sum\b|toFixed|toLocaleString|\bIntl\b|NumberFormat/.test(codeNoImports),
+    'CartLineRow must not sum money or format it itself — formatting goes through formatVnd (<Money>) only',
   );
-  // It DOES render the backend amount directly.
-  assert.ok(/\{amount\}/.test(cartLineRow), 'CartLineRow must render {amount} straight from the prop');
+  // It DOES display the backend amount straight from the prop, via <Money>.
+  assert.ok(/<Money value=\{amount\} \/>/.test(cartLineRow), 'CartLineRow must display <Money value={amount} /> straight from the prop');
 });
 
 // (2) Edits emit immediately via callbacks; the row has a delete affordance.

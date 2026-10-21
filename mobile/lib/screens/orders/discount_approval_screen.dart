@@ -234,11 +234,20 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                                     ],
                                   ),
                                 ),
-                                Text('${item.amount}', style: _mono),
                                 const SizedBox(width: AppTokens.space8),
-                                // Chip enum key `choduyet` — label canonical
-                                // "Chờ duyệt", KHÔNG override ad-hoc.
-                                const AppStatusChip(status: StatusKey.choduyet),
+                                // Amount stacked above the chip so the full
+                                // "1.000.000 đ" fits a phone row (never clipped).
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    MoneyText(item.amount, style: _mono),
+                                    const SizedBox(height: AppTokens.space4),
+                                    // Chip enum key `choduyet` — label canonical
+                                    // "Chờ duyệt", KHÔNG override ad-hoc.
+                                    const AppStatusChip(
+                                        status: StatusKey.choduyet),
+                                  ],
+                                ),
                               ],
                             ),
                           ),
@@ -263,12 +272,12 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 3 con số backend (AD-16) — màn hiển thị nguyên văn, canh phải.
-          _SummaryRow(label: 'Giá gốc', value: '${selected.subtotal}'),
-          _SummaryRow(label: 'Chiết khấu', value: '${selected.amount}'),
+          // 3 con số backend (AD-16) — màn hiển thị qua formatVnd, canh phải.
+          _SummaryRow(label: 'Giá gốc', value: formatVnd(selected.subtotal)),
+          _SummaryRow(label: 'Chiết khấu', value: formatVnd(selected.amount)),
           _SummaryRow(
             label: 'Sau chiết khấu',
-            value: '${selected.afterDiscount}',
+            value: formatVnd(selected.afterDiscount),
             strong: true,
           ),
           const SizedBox(height: AppTokens.space8),
@@ -287,7 +296,7 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                     <Widget>[
                       AppTableCellText(entry.value.name),
                       AppTableCellText('${entry.value.qty}'),
-                      AppTableCellText('${entry.value.unitPrice}'),
+                      AppTableCellText(formatVnd(entry.value.unitPrice)),
                       // Biên là SỐ PORT TRẢ (integer %) — null = "—" (FR-37).
                       AppTableCellText(
                         entry.value.estimatedMarginPct == null

@@ -207,6 +207,7 @@ test('every web component has a matching Flutter widget file (parity coverage)',
     Table: 'table.dart',
     Stepper: 'stepper.dart',
     Kpi: 'kpi.dart',
+    Money: 'money_text.dart',
     Banner: 'banner.dart',
     CartLineRow: 'cart_line_row.dart',
     Dialog: 'dialog.dart',
@@ -240,6 +241,17 @@ test('the mobile widget classes carry the App-prefixed parity names', () => {
   for (const name of names) {
     assert.ok(barrel.includes(name), `components.dart barrel missing export ${name}`);
   }
+});
+
+// Money display ships on both platforms under the names screens import: web
+// <Money> + formatVnd ↔ Flutter MoneyText + formatVnd (same formatter name, so a
+// reader can grep one name across both clients).
+test('money display is exported on both platforms (Money/MoneyText + formatVnd)', () => {
+  const webBarrel = readFileSync(resolve(repoRoot, 'web/src/design-system/components/index.ts'), 'utf8');
+  const dartBarrel = readFileSync(resolve(mobileDir, 'components.dart'), 'utf8');
+  assert.match(webBarrel, /export \{ Money \} from '\.\/Money'/, 'web barrel must export Money');
+  assert.match(webBarrel, /export \{ formatVnd \} from '\.\/format-vnd'/, 'web barrel must export formatVnd');
+  assert.match(dartBarrel, /export 'money_text\.dart' show MoneyText, formatVnd;/, 'components.dart must export MoneyText + formatVnd');
 });
 
 // ---------- Gating + a11y-floor parity (Story 1.10, UX-DR-22/26/27) ----------

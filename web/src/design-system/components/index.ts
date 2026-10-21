@@ -44,6 +44,12 @@ export type { KpiProps } from './Kpi';
 export { Banner } from './Banner';
 export type { BannerProps, BannerTone } from './Banner';
 
+// Money display: the ONE formatter (`83.010.960 đ`) and the component that
+// applies it with the `mono` token. Screens never print a raw money number.
+export { Money } from './Money';
+export type { MoneyProps } from './Money';
+export { formatVnd } from './format-vnd';
+
 // Behavior / interaction layer (Story 1.6): cart line, overlays, list states,
 // share, image upload. Behavior primitives only — no business logic (money math,
 // status transitions, R2 upload all live on the backend; AD-3/10/11/16).

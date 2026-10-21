@@ -289,7 +289,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
                   AppTableCellText(_soLuongCoDau(d.type, l.qty)),
                   if (coGiaVon)
                     AppTableCellText(
-                      l.unitCost != null ? '${l.unitCost}' : '',
+                      l.unitCost != null ? formatVnd(l.unitCost!) : '',
                       strong: true,
                     ),
                 ]),

@@ -88,6 +88,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 ### Critical Don't-Miss (gotchas)
 
 - Client **KHÔNG** tự tính tiền/thuế/logic — luôn gọi backend.
+- **Hiển thị tiền** (Đại Ca chốt 2026-10-21) luôn qua `<Money>`/`formatVnd` (web) hoặc `MoneyText`/`formatVnd` (Flutter), định dạng `83.010.960 đ`; **CẤM** in số tiền thô (`String(x.amount)`, `{x.amount}`, `'${x.amount}'`) và cấm `toLocaleString`/`Intl`/`NumberFormat`. Guard `design-system/money/money-render-guard.test.mjs` chặn. Định dạng chữ số là trình bày, không phải số học tiền; ô NHẬP tiền vẫn gõ số thô.
 - **KHÔNG** đổi `Order.status` ngoài `applyTransition`.
 - **KHÔNG** gọi FCM/audit trực tiếp — publish domain event.
 - **KHÔNG** hardcode chuỗi quyền — dùng permission registry.

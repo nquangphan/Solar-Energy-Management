@@ -677,7 +677,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                               children: [
                                 Text(product.name, style: _strong),
                                 Text(
-                                  '${product.sku} · ${product.unit} · ${product.price}',
+                                  '${product.sku} · ${product.unit} · ${formatVnd(product.price)}',
                                   style: _microMuted,
                                 ),
                               ],
@@ -1135,21 +1135,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   ),
                   _TotalRow(
                     label: 'Tổng trước VAT',
-                    value: _totals == null ? '—' : '${_totals!.subtotal}',
+                    value: _totals == null ? '—' : formatVnd(_totals!.subtotal),
                   ),
                   // Dòng chiết khấu (Story 4.7): CHỈ hiện khi có — số backend echo.
                   if (_totals != null && _totals!.discountAmount > 0)
                     _TotalRow(
                       label: 'Chiết khấu',
-                      value: '${_totals!.discountAmount}',
+                      value: formatVnd(_totals!.discountAmount),
                     ),
                   _TotalRow(
                     label: 'Tiền VAT',
-                    value: _totals == null ? '—' : '${_totals!.vatAmount}',
+                    value:
+                        _totals == null ? '—' : formatVnd(_totals!.vatAmount),
                   ),
                   _TotalRow(
                     label: 'Tổng sau VAT',
-                    value: _totals == null ? '—' : '${_totals!.total}',
+                    value: _totals == null ? '—' : formatVnd(_totals!.total),
                     strong: true,
                   ),
                 ],

@@ -101,7 +101,7 @@ void main() {
       // (label canonical của key choduyet — không label ad-hoc).
       expect(find.text('Duyệt chiết khấu'), findsOneWidget);
       expect(find.text('ord-demo-1'), findsOneWidget);
-      expect(find.text('1000000'), findsOneWidget);
+      expect(find.text('1.000.000 đ'), findsOneWidget);
       expect(find.text('Nhân viên demo'), findsOneWidget);
       expect(find.text('Chờ duyệt'), findsOneWidget);
 
@@ -109,9 +109,9 @@ void main() {
 
       // Panel chi tiết: 3 con số backend + bảng dòng kèm cột Biên ước tính.
       expect(find.text('Giá gốc'), findsOneWidget);
-      expect(find.text('5400000'), findsOneWidget);
+      expect(find.text('5.400.000 đ'), findsOneWidget);
       expect(find.text('Sau chiết khấu'), findsOneWidget);
-      expect(find.text('4400000'), findsOneWidget);
+      expect(find.text('4.400.000 đ'), findsOneWidget);
       // Header AppTable render label UPPERCASE — label nguồn vẫn byte-identical
       // 'Biên ước tính' (guard quét source), text render là bản hoa.
       expect(find.text('BIÊN ƯỚC TÍNH'), findsOneWidget);

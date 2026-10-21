@@ -3,8 +3,9 @@
 //
 // MONEY INVARIANT (AD-10/16) — THE most important guard in this story:
 // `amount` is a number the BACKEND computed (POST /orders/preview-total) and is
-// rendered STRAIGHT from the prop. This widget NEVER multiplies quantity by unit
-// price, never sums, never formats money. Edits only emit the new number via
+// taken STRAIGHT from the prop. This widget never computes money (no quantity ×
+// unit price, no sum); it displays via formatVnd (MoneyText). The unit-price
+// INPUT keeps raw digits for typing. Edits only emit the new number via
 // onQtyChange/onUnitPriceChange; the SCREEN re-queries preview-total and passes
 // a fresh `amount` back. A runtime test (amount independent of qty/price) plus a
 // source-guard enforce this.
@@ -15,6 +16,7 @@ import '../icons/app_icons.dart';
 import '../tokens/app_tokens.dart';
 import 'button.dart';
 import 'field.dart';
+import 'money_text.dart';
 
 const Color _zebraFill = Color(0xFFF7FBFA);
 
@@ -70,11 +72,14 @@ class AppCartLineRow extends StatelessWidget {
   final String? sku;
   final String? meta;
   final num qty;
-  final num unitPrice;
 
-  /// The line total, computed by the backend and rendered as-is. NOT derived
-  /// from qty/unitPrice here (AD-10/16).
-  final num amount;
+  /// Integer đồng (AD-10). Read-only it displays via [MoneyText]; editable it is
+  /// a raw-digit input.
+  final int unitPrice;
+
+  /// The line total, computed by the backend and displayed via [MoneyText].
+  /// NOT derived from qty/unitPrice here (AD-10/16).
+  final int amount;
   final bool editable;
 
   /// Gate the UNIT-PRICE input separately from qty (Story 4.1): qty is editable
@@ -128,12 +133,24 @@ class AppCartLineRow extends StatelessWidget {
           ),
           Expanded(
             flex: 2,
-            child: _numberCell(
-              value: unitPrice,
-              editable: priceEditable ?? editable,
-              semanticsLabel: 'Đơn giá',
-              onChanged: onUnitPriceChange,
-            ),
+            child: (priceEditable ?? editable)
+                ? _numberCell(
+                    value: unitPrice,
+                    editable: true,
+                    semanticsLabel: 'Đơn giá',
+                    onChanged: onUnitPriceChange,
+                  )
+                : Align(
+                    alignment: Alignment.centerRight,
+                    child: MoneyText(
+                      unitPrice,
+                      style: const TextStyle(
+                        color: AppTokens.ink2,
+                        fontFamily: AppTokens.fontFamily,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
           ),
           Expanded(flex: 2, child: _amountCell()),
           if (onDelete != null)
@@ -231,15 +248,14 @@ class AppCartLineRow extends StatelessWidget {
   Widget _amountCell() {
     return Align(
       alignment: Alignment.centerRight,
-      // Rendered STRAIGHT from the backend-computed prop — no arithmetic.
-      child: Text(
-        '$amount',
+      // The backend-computed prop, displayed via formatVnd — no arithmetic.
+      child: MoneyText(
+        amount,
         style: const TextStyle(
           color: AppTokens.ink,
           fontFamily: AppTokens.fontFamily,
           fontSize: 12.5,
           fontWeight: FontWeight.w800,
-          fontFeatures: [FontFeature.tabularFigures()],
         ),
       ),
     );

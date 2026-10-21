@@ -47,6 +47,7 @@ import {
   Field,
   Frame,
   ImageUpload,
+  Money,
   ScopeFlag,
   Sheet,
   Skeleton,
@@ -511,7 +512,9 @@ export function OrderDetailScreen({
                             <td>{l.ten}</td>
                             <td className="num mono">{l.qty}</td>
                             {stockIssue.voucher!.lines.some((x) => x.unitCost !== undefined) && (
-                              <td className="num mono">{l.unitCost ?? ''}</td>
+                              <td className="num mono">
+                                {l.unitCost !== undefined ? <Money value={l.unitCost} /> : ''}
+                              </td>
                             )}
                           </tr>
                         ))}
@@ -600,8 +603,10 @@ export function OrderDetailScreen({
                         <td>{line.name}</td>
                         <td>{line.unit}</td>
                         <td>{line.qty}</td>
-                        {/* Backend-computed number, rendered as given (AD-10). */}
-                        <td className="od-mono">{line.amount}</td>
+                        {/* Backend-computed number, displayed via <Money> (AD-10). */}
+                        <td className="od-mono">
+                          <Money value={line.amount} />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

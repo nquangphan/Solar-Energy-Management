@@ -461,7 +461,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   AppTableCellText(l.ten),
                   AppTableCellText('${l.qty}'),
                   if (hasCost)
-                    AppTableCellText(l.unitCost != null ? '${l.unitCost}' : ''),
+                    AppTableCellText(
+                        l.unitCost != null ? formatVnd(l.unitCost!) : ''),
                 ]),
             ],
           ),
@@ -595,7 +596,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   Expanded(child: _value(line.name)),
                   _label('${line.qty} ${line.unit}'),
                   const SizedBox(width: AppTokens.space8),
-                  _mono('${line.amount}'),
+                  _mono(formatVnd(line.amount)),
                 ],
               ),
             );

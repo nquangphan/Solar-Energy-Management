@@ -24,6 +24,7 @@ import {
   ErrorState,
   Field,
   Frame,
+  Money,
   Sheet,
   Skeleton,
   Table,
@@ -379,7 +380,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                             <td className="num mono">{soLuongCoDau(detail.type, l.qty)}</td>
                             {coGiaVon && (
                               <td className="num mono strong">
-                                {l.unitCost !== undefined ? l.unitCost : ''}
+                                {l.unitCost !== undefined ? <Money value={l.unitCost} /> : ''}
                               </td>
                             )}
                           </tr>

@@ -11,6 +11,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../components/error_state.dart';
+import '../components/money_text.dart';
 import '../components/skeleton.dart';
 import '../gating/app_gate.dart';
 import '../gating/app_permissions.dart';
@@ -63,7 +64,7 @@ class AppSessionGatingExample extends StatelessWidget {
         AppGate(
           perms: scope.perms,
           requires: AppPerm.dashboardFinanceView,
-          child: const Text('1.250.000.000 ₫',
+          child: const MoneyText(1250000000,
               style: TextStyle(fontFamily: AppTokens.fontFamily)),
         ),
       ],
