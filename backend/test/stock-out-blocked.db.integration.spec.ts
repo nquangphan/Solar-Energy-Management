@@ -394,9 +394,9 @@ describeDb('Blocked stock-out + quote stock warning on REAL Postgres', () => {
       where: { productId: panel },
     });
     await prisma.$executeRaw`INSERT INTO stock_movements (id, stock_item_id, order_id, order_version_id, qty, type)
-      VALUES (gen_random_uuid()::text, ${si.id}, ${x.id}, ${x.versionId}, 3, 'giu')`;
+      VALUES (gen_random_uuid()::text, ${si.id}, ${x.id}, ${x.versionId}, 3, 'reserve')`;
     await prisma.$executeRaw`INSERT INTO stock_movements (id, stock_item_id, order_id, order_version_id, qty, type)
-      VALUES (gen_random_uuid()::text, ${si.id}, ${y.id}, ${y.versionId}, 2, 'giu')`;
+      VALUES (gen_random_uuid()::text, ${si.id}, ${y.id}, ${y.versionId}, 2, 'reserve')`;
 
     const forX = (await orders.getStockCheck(ACTOR, PERMISSIONS, x.id))
       .lines[0];

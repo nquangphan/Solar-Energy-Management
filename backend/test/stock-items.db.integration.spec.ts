@@ -27,7 +27,6 @@ moTa('Tồn kho (GET /stock-items) trên Postgres THẬT', () => {
   const ACTOR = 'acc-stock-62';
   const SKU = 'TEST62-';
   let orderId: string;
-  let versionId: string;
   const sp: Record<string, string> = {};
 
   async function donDep(): Promise<void> {
@@ -88,14 +87,20 @@ moTa('Tồn kho (GET /stock-items) trên Postgres THẬT', () => {
     return s.id;
   }
 
+  let ledgerVersions = 0;
   async function ghiSo(stockItemId: string, qty: number): Promise<void> {
+    // One version per row: the ledger allows one row per (version, product, type).
+    ledgerVersions += 1;
+    const version = await prisma.orderVersion.create({
+      data: { orderId, versionNo: ledgerVersions },
+    });
     await prisma.stockMovement.create({
       data: {
         stockItemId,
         orderId,
-        orderVersionId: versionId,
+        orderVersionId: version.id,
         qty,
-        type: qty > 0 ? 'giu_cho' : 'giai_phong',
+        type: qty > 0 ? 'reserve' : 'release',
       },
     });
   }
@@ -146,10 +151,6 @@ moTa('Tồn kho (GET /stock-items) trên Postgres THẬT', () => {
       },
     });
     orderId = order.id;
-    const version = await prisma.orderVersion.create({
-      data: { orderId, versionNo: 1 },
-    });
-    versionId = version.id;
   });
 
   afterAll(async () => {

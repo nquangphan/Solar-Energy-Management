@@ -13,6 +13,7 @@ import {
   type LoaiPhieu,
 } from './domain/gia-von';
 import { stockIssueLines } from './domain/stock-issue-lines';
+import { STOCK_MOVEMENT_TYPE } from './domain/stock-movement-type';
 import { StockOutBlocked } from './domain/stock-out-blocked-event';
 import { issueShortfall } from './domain/stock-shortfall';
 import {
@@ -65,6 +66,14 @@ export interface IssueForOrderInput {
   orderLines: readonly { productId: string; qty: number }[];
   actorAccountId: string;
   occurredAt: Date;
+}
+
+export interface ReserveForOrderInput {
+  orderId: string;
+  /** The version being confirmed — becomes the only version holding stock for the order. */
+  orderVersionId: string;
+  /** EVERY line of that version that has a `productId` — `tracksStock` is filtered here. */
+  orderLines: readonly { productId: string; qty: number }[];
 }
 
 export interface IssueForOrderResult {
@@ -449,7 +458,7 @@ export class StockVouchersService {
             orderId: input.orderId,
             orderVersionId: input.orderVersionId,
             qty: -reservedReleased,
-            type: 'xuat',
+            type: STOCK_MOVEMENT_TYPE.issue,
           },
         });
       }
@@ -499,6 +508,116 @@ export class StockVouchersService {
         input.occurredAt,
       ),
     };
+  }
+
+  /**
+   * Reservation written when an order version is confirmed — runs INSIDE the CALLER's
+   * transaction (`OrdersService.confirm`): never opens a tx, never publishes, never touches
+   * `this.prisma`, never writes order tables.
+   *
+   * ASSUMES the caller holds the `orders` row lock: every ledger row of one order is written
+   * under that lock, so reading this order's ledger before locking `products` is safe. Lock
+   * order stays `orders → products`, with the same `ORDER BY id FOR UPDATE` statement as every
+   * other stock write.
+   *
+   * 1. Older versions of the order that still hold stock (ledger `SUM > 0`) are released by
+   *    exactly what they hold — not by their line qty, and even if the product stopped
+   *    tracking stock since.
+   * 2. The confirmed version reserves its stock-issue lines (`stockIssueLines`: same selection
+   *    as the order-bound stock-out), so what is reserved is what will be issued. A product
+   *    already reserved by this version is skipped (idempotent).
+   *
+   * Never checks or blocks on stock: confirming is allowed even when Available goes negative;
+   * shortages are blocked only at stock issue. `onHand` is never touched.
+   */
+  async reserveForOrderInTx(
+    tx: Prisma.TransactionClient,
+    input: ReserveForOrderInput,
+  ): Promise<void> {
+    const heldByOldVersions = (
+      await tx.stockMovement.groupBy({
+        by: ['orderVersionId', 'stockItemId'],
+        where: {
+          orderId: input.orderId,
+          orderVersionId: { not: input.orderVersionId },
+        },
+        _sum: { qty: true },
+        orderBy: [{ orderVersionId: 'asc' }, { stockItemId: 'asc' }],
+      })
+    ).filter((g) => (g._sum.qty ?? 0) > 0);
+    const heldItems =
+      heldByOldVersions.length === 0
+        ? []
+        : await tx.stockItem.findMany({
+            where: {
+              id: {
+                in: [...new Set(heldByOldVersions.map((g) => g.stockItemId))],
+              },
+            },
+            select: { productId: true },
+          });
+
+    const ids = [
+      ...new Set([
+        ...input.orderLines.map((l) => l.productId),
+        ...heldItems.map((i) => i.productId),
+      ]),
+    ];
+    if (ids.length === 0) return;
+    await tx.$queryRaw`
+      SELECT id FROM products WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
+
+    for (const g of heldByOldVersions) {
+      await tx.stockMovement.create({
+        data: {
+          stockItemId: g.stockItemId,
+          orderId: input.orderId,
+          orderVersionId: g.orderVersionId,
+          qty: -(g._sum.qty ?? 0),
+          type: STOCK_MOVEMENT_TYPE.release,
+        },
+      });
+    }
+
+    const products = await tx.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, tracksStock: true },
+    });
+    const lines = stockIssueLines(
+      input.orderLines,
+      new Map(
+        products.map((p) => [
+          p.id,
+          { name: p.name, tracksStock: p.tracksStock },
+        ]),
+      ),
+    );
+    for (const line of lines) {
+      const stockItem = await tx.stockItem.upsert({
+        where: { productId: line.productId },
+        create: { productId: line.productId, onHand: 0 },
+        update: {},
+      });
+      const existing = await tx.stockMovement.findUnique({
+        where: {
+          orderVersionId_stockItemId_type: {
+            orderVersionId: input.orderVersionId,
+            stockItemId: stockItem.id,
+            type: STOCK_MOVEMENT_TYPE.reserve,
+          },
+        },
+      });
+      if (existing !== null) continue;
+      await tx.stockMovement.create({
+        data: {
+          stockItemId: stockItem.id,
+          orderId: input.orderId,
+          orderVersionId: input.orderVersionId,
+          qty: line.qty,
+          type: STOCK_MOVEMENT_TYPE.reserve,
+        },
+      });
+    }
   }
 
   /**

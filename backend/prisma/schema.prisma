@@ -154,8 +154,9 @@ model Product {
 /// AD-19 thắng. Khả dụng = `onHand − reserved` chỉ tính ở `inventory/domain/ton-kho.ts`.
 ///
 /// Sinh LƯỜI: không seed/backfill, tạo sản phẩm không tạo dòng này. Đường đọc LEFT JOIN từ
-/// `products` — vắng dòng ⇒ `onHand = 0`, `reserved = 0`. Đường ghi (phiếu kho) upsert dưới
-/// `SELECT … FOR UPDATE`.
+/// `products` — vắng dòng ⇒ `onHand = 0`, `reserved = 0`. Write paths (stock vouchers, and the
+/// reservation written when an order is confirmed) upsert it under `SELECT … FOR UPDATE` on
+/// `products`.
 ///
 /// `onDelete: Restrict` — `Product` soft-delete; xoá cứng sản phẩm còn sổ tồn phải bị chặn.
 ///
@@ -175,17 +176,23 @@ model StockItem {
 
 /// Ledger hàng ĐÃ HỨA cho đơn (AD-19) — APPEND-ONLY, không UPDATE/DELETE dòng cũ.
 ///
-/// Hợp đồng cho mọi đường ghi sau này: `reserved = SUM(qty)` trên TOÀN BỘ dòng của một
-/// `stockItemId`; `qty` CÓ DẤU (giữ chỗ dương, giải phóng/xuất âm). `type` chỉ để truy vết —
-/// phép tính KHÔNG lọc theo `type`, nên ai thêm loại mới phải giữ đúng dấu.
+/// Contract for every write path: `reserved = SUM(qty)` over ALL rows of one `stockItemId`;
+/// `qty` is SIGNED. The sum never filters by `type` — `type` is for tracing, so the sign must be
+/// right (`inventory/domain/stock-movement-type.ts`):
+/// - `reserve` (qty > 0): written when an order version is confirmed, one row per tracked product.
+/// - `release` (qty < 0): written on re-confirm against the OLD version, for exactly the amount
+///   that version still holds in this ledger — not the old line qty, and regardless of the
+///   product's current `tracksStock`.
+/// - `xuat` (qty < 0): order-bound stock issue, releases what the order currently holds.
 ///
-/// CHƯA có unique idempotency: một version có nhiều sản phẩm nên unique `(orderId,
-/// orderVersionId)` không đặt được trên movement-per-product — đường giữ chỗ sẽ quyết khoá.
+/// `@@unique([orderVersionId, stockItemId, type])` makes retries idempotent: one version holds at
+/// most one row of each type per product (`orderVersionId` already determines `orderId`). A
+/// unique on `(orderId, orderVersionId)` cannot exist on a per-product ledger.
+/// CHECK `stock_movements_qty_sign` (`reserve` ⇒ qty > 0; `release`/`xuat` ⇒ qty < 0) lives only
+/// in `migration.sql` — Prisma does not model CHECK constraints.
 ///
-/// An order-bound stock issue writes a `type = 'xuat'` row with `qty = −(amount currently held
-/// for that order)` to release the reservation — the reservation path's unique design MUST
-/// leave room for this `xuat` row (same `orderId`/`orderVersionId`/`stockItemId` as the
-/// reservation row).
+/// Every row of one order is written under that order's `orders` row lock (confirm, order-bound
+/// stock issue), then `products` FOR UPDATE.
 model StockMovement {
   id             String       @id @default(uuid())
   stockItemId    String       @map("stock_item_id")
@@ -198,6 +205,7 @@ model StockMovement {
   type           String
   createdAt      DateTime     @default(now()) @map("created_at")
 
+  @@unique([orderVersionId, stockItemId, type])
   @@index([stockItemId])
   @@map("stock_movements")
 }

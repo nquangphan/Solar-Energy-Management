@@ -2180,6 +2180,10 @@ export class OrdersService {
    * ⇒ cổng `choduyet` count 0 ⇒ sentinel ⇒ đọc lại.
    *
    * Publish `OrderConfirmed` SAU commit, CHỈ ở nhánh chốt thật — retry im lặng (NFR-1, AD-18).
+   *
+   * Stock reservation (AD-19) is written in the same tx (`reserveForOrderInTx`): the confirmed
+   * version holds its stock-tracked lines and older versions' holds are released. Confirming
+   * never checks or blocks on stock — shortages are blocked only at stock issue.
    */
   async confirm(
     actorAccountId: string,
@@ -2316,6 +2320,18 @@ export class OrdersService {
           sentinel: CHOT_GATE_THUA,
           occurredAt: chotAt,
         });
+        // The gate only checks status: a confirm + reopen landing between the read outside the
+        // tx and the lock brings the order back to `baogia` on a NEWER version. Confirming the
+        // stale version would snapshot and reserve a dead version while the current one stays
+        // unfrozen — re-read the pointer under the lock and refuse.
+        const lockedOrder = await this.findOrThrowIn(tx, before.id);
+        if (lockedOrder.currentVersionId !== versionId) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            'Báo giá vừa được mở lại sang bản mới — tải lại rồi chốt lại.',
+          );
+        }
         // Dòng đọc BÊN TRONG tx, SAU khoá — đây là điểm mấu chốt của TOCTOU: đọc ngoài tx
         // thì một `addLine` commit trong khoảng giữa sẽ để lại một dòng KHÔNG có snapshot
         // trong một đơn đã chốt, tức giá của đơn đã chốt vẫn còn tự đổi theo danh mục.
@@ -2352,6 +2368,14 @@ export class OrdersService {
             },
           });
         }
+        // Stock reservation in the SAME tx, from the lines read under the lock: a confirm
+        // that commits without its reservation (or the reverse) leaves `reserved` wrong for
+        // good. Older versions' holds are released here — reopening never releases.
+        await this.stockVouchers.reserveForOrderInTx(tx, {
+          orderId: before.id,
+          orderVersionId: versionId,
+          orderLines: productLines(lines),
+        });
         return event;
       });
     } catch (error) {
@@ -2408,6 +2432,9 @@ export class OrdersService {
    *
    * KHÔNG nhận `vatRatePercent` — mở lại không ghi thuế; re-chốt qua `confirm()` hiện có mới
    * đóng băng lại.
+   *
+   * Reopening does NOT touch the stock ledger: the old version's reservation stays in force
+   * while the order is edited and is replaced on re-confirm (`confirm()` releases it).
    */
   async revise(
     actorAccountId: string,

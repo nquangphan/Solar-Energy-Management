@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
-import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
@@ -62,6 +62,9 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
     });
     const orderIds = orders.map((order) => order.id);
     if (orderIds.length > 0) {
+      await prisma.stockMovement.deleteMany({
+        where: { orderId: { in: orderIds } },
+      });
       await prisma.discountApproval.deleteMany({
         where: { orderId: { in: orderIds } },
       });
@@ -78,6 +81,7 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
       await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
     }
     await prisma.customer.deleteMany({ where: { sdt: SDT } });
+    await prisma.stockItem.deleteMany({ where: { product: { sku: SKU } } });
     await prisma.product.deleteMany({ where: { sku: SKU } });
     await prisma.account.deleteMany({
       where: { id: { in: [ACTOR, APPROVER] } },
@@ -93,7 +97,10 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
       fakeStorage(),
-      {} as unknown as StockVouchersService,
+      new StockVouchersService(
+        prisma as unknown as PrismaService,
+        { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+      ),
       {} as unknown as StockItemsService,
     );
 
@@ -153,6 +160,9 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
     });
     const orderIds = orders.map((order) => order.id);
     if (orderIds.length > 0) {
+      await prisma.stockMovement.deleteMany({
+        where: { orderId: { in: orderIds } },
+      });
       await prisma.discountApproval.deleteMany({
         where: { orderId: { in: orderIds } },
       });

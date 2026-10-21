@@ -181,8 +181,13 @@ describe('/orders (e2e)', () => {
   // Order-bound stock issue ("Đã giao" step): the order stock-out + stock + reservation ledger —
   // run INSIDE the transition tx. Default: order not issued yet, empty ledger.
   const stockVoucherRepo = { findUnique: jest.fn(), create: jest.fn() };
-  const stockItemRepo = { upsert: jest.fn() };
-  const stockMovementRepo = { aggregate: jest.fn(), create: jest.fn() };
+  const stockItemRepo = { upsert: jest.fn(), findMany: jest.fn() };
+  const stockMovementRepo = {
+    aggregate: jest.fn(),
+    create: jest.fn(),
+    groupBy: jest.fn(),
+    findUnique: jest.fn(),
+  };
   // Storage in-memory + renderer stub (override provider) — e2e KHÔNG đụng Chromium/R2.
   const storageMap = new Map<string, { body: Buffer; contentType: string }>();
   // `deleteObject` là jest.fn để lane này đo được HAI thứ mà stub im lặng che mất:
@@ -379,6 +384,10 @@ describe('/orders (e2e)', () => {
     );
     stockItemRepo.upsert.mockResolvedValue({ id: 'si-pin' });
     stockMovementRepo.aggregate.mockResolvedValue({ _sum: { qty: null } });
+    // Confirm-time reservation: no older version holds stock, nothing reserved yet.
+    stockMovementRepo.groupBy.mockResolvedValue([]);
+    stockMovementRepo.findUnique.mockResolvedValue(null);
+    stockItemRepo.findMany.mockResolvedValue([]);
     auditRepo.create.mockResolvedValue({});
     featureFlagRepo.findUnique.mockResolvedValue(null);
     systemSettingRepo.findUnique.mockResolvedValue(null);
@@ -1317,7 +1326,7 @@ describe('/orders (e2e)', () => {
       );
     });
 
-    it('confirming is NOT blocked by stock: a stock-tracked line with on-hand 0 still confirms (200 dachot), no stock written', async () => {
+    it('confirming is NOT blocked by stock: a stock-tracked line with on-hand 0 still confirms (200 dachot) and reserves it, on-hand untouched, no voucher', async () => {
       givenPermissions(PERM.ordersConfirm);
       productRepo.findMany.mockResolvedValue([
         { ...PIN_580W, sku: 'PIN-580', tracksStock: true, stockItem: null },
@@ -1329,8 +1338,39 @@ describe('/orders (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('dachot');
-      expect(stockItemRepo.upsert).not.toHaveBeenCalled();
+      expect(stockItemRepo.upsert).toHaveBeenCalledTimes(1);
+      expect(stockItemRepo.upsert).toHaveBeenCalledWith({
+        where: { productId: PIN_580W.id },
+        create: { productId: PIN_580W.id, onHand: 0 },
+        update: {},
+      });
+      expect(stockMovementRepo.create).toHaveBeenCalledTimes(1);
+      expect(stockMovementRepo.create).toHaveBeenCalledWith({
+        data: {
+          stockItemId: 'si-pin',
+          orderId: ORDER_ID,
+          orderVersionId: VERSION_ID,
+          qty: DONG_CATALOG.qty,
+          type: 'reserve',
+        },
+      });
       expect(stockVoucherRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('confirm retried on an already-confirmed order writes no reservation', async () => {
+      givenPermissions(PERM.ordersConfirm);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'dachot',
+      });
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('dachot');
+      expect(transaction).not.toHaveBeenCalled();
       expect(stockMovementRepo.create).not.toHaveBeenCalled();
     });
 

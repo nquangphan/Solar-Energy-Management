@@ -190,6 +190,7 @@ describe('OrdersService', () => {
   const stockVouchers = {
     findOrderIssueVoucher: jest.fn(),
     lockTrackedProductsInTx: jest.fn(),
+    reserveForOrderInTx: jest.fn(),
   };
   const service = new OrdersService(
     prisma,
@@ -213,6 +214,7 @@ describe('OrdersService', () => {
     jest.clearAllMocks();
     stockVouchers.findOrderIssueVoucher.mockResolvedValue(null);
     stockVouchers.lockTrackedProductsInTx.mockResolvedValue(new Set());
+    stockVouchers.reserveForOrderInTx.mockResolvedValue(undefined);
     customerRepo.findUnique.mockResolvedValue(KHACH);
     orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
     // Lần đọc đầu của đường đọc/ghi do người gọi kích hoạt đi qua `findScopedOrThrow`
@@ -1661,6 +1663,7 @@ describe('OrdersService', () => {
       expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
       expect(txVersionRepo.update).not.toHaveBeenCalled();
       expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(stockVouchers.reserveForOrderInTx).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
@@ -1683,6 +1686,7 @@ describe('OrdersService', () => {
       // Sentinel abort: các op SAU cổng không được chạy.
       expect(txVersionRepo.update).not.toHaveBeenCalled();
       expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(stockVouchers.reserveForOrderInTx).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
@@ -1726,7 +1730,67 @@ describe('OrdersService', () => {
       expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
       expect(err.getStatus()).toBe(400);
       expect(transaction).not.toHaveBeenCalled();
+      expect(stockVouchers.reserveForOrderInTx).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('reserves stock exactly once, inside the transaction, AFTER the line snapshots, from the lines read under the lock (free-text lines dropped)', async () => {
+      await service.confirm(ACTOR, DON_BAOGIA.id, 8, true, TOAN_QUYEN);
+
+      expect(stockVouchers.reserveForOrderInTx).toHaveBeenCalledTimes(1);
+      expect(stockVouchers.reserveForOrderInTx).toHaveBeenCalledWith(txMock, {
+        orderId: DON_BAOGIA.id,
+        orderVersionId: VERSION_ID,
+        orderLines: [
+          { productId: DONG_CATALOG.productId, qty: DONG_CATALOG.qty },
+          { productId: DONG_PHI_LAP.productId, qty: DONG_PHI_LAP.qty },
+        ],
+      });
+      const reserveOrder =
+        stockVouchers.reserveForOrderInTx.mock.invocationCallOrder[0];
+      expect(txLineRepo.update).toHaveBeenCalledTimes(3);
+      for (const order of txLineRepo.update.mock.invocationCallOrder) {
+        expect(order).toBeLessThan(reserveOrder);
+      }
+      expect(reserveOrder).toBeLessThan(
+        eventBus.publish.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('order reopened onto a newer version between the read and the lock ⇒ 409, no snapshot, no reservation, nothing published', async () => {
+      // First read (outside the tx) sees the old version; the re-read under the lock sees the
+      // order already confirmed + reopened onto a newer version, back in `baogia`.
+      orderRepo.findUnique
+        .mockResolvedValueOnce(DON_BAOGIA)
+        .mockResolvedValueOnce({
+          ...DON_BAOGIA,
+          currentVersionId: 'ver-newer',
+        });
+
+      const err = await bat(
+        service.confirm(ACTOR, DON_BAOGIA.id, 8, true, TOAN_QUYEN),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expect(txOrderRepo.updateMany).toHaveBeenCalledTimes(1);
+      expect(txVersionRepo.update).not.toHaveBeenCalled();
+      expect(txLineRepo.update).not.toHaveBeenCalled();
+      expect(stockVouchers.reserveForOrderInTx).not.toHaveBeenCalled();
+      expect(eventBus.publish).toHaveBeenCalledTimes(0);
+    });
+
+    it('reservation failure rolls the confirm back: the error surfaces and nothing is published', async () => {
+      const boom = new Error('reservation failed');
+      stockVouchers.reserveForOrderInTx.mockRejectedValue(boom);
+
+      await expect(
+        service.confirm(ACTOR, DON_BAOGIA.id, 8, true, TOAN_QUYEN),
+      ).rejects.toBe(boom);
+
+      // The transaction body really ran up to the reservation (not a rejected-tx shortcut).
+      expect(txOrderRepo.updateMany).toHaveBeenCalledTimes(1);
+      expect(txLineRepo.update).toHaveBeenCalledTimes(3);
+      expect(eventBus.publish).toHaveBeenCalledTimes(0);
     });
 
     it('toViews ưu tiên snapshot: dòng đã đóng băng trả snapshot dù giá danh mục ĐÃ ĐỔI, bỏ hẳn tra product', async () => {
@@ -2786,6 +2850,14 @@ describe('OrdersService', () => {
       });
       expect(view.status).toBe('dachot');
       expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(OrderConfirmed);
+      expect(stockVouchers.reserveForOrderInTx).toHaveBeenCalledTimes(1);
+      expect(stockVouchers.reserveForOrderInTx).toHaveBeenCalledWith(txMock, {
+        orderId: DON_BAOGIA.id,
+        orderVersionId: VERSION_ID,
+        orderLines: [
+          { productId: DONG_CATALOG.productId, qty: DONG_CATALOG.qty },
+        ],
+      });
     });
 
     it("approval còn cho_duyet ⇒ 409 'Chiết khấu chưa được duyệt', KHÔNG transaction", async () => {

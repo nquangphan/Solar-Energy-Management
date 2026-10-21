@@ -508,7 +508,7 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
       where: { productId: held },
     });
     await prisma.$executeRaw`INSERT INTO stock_movements (id, stock_item_id, order_id, order_version_id, qty, type)
-      VALUES (gen_random_uuid()::text, ${si.id}, ${o.id}, ${o.versionId}, 5, 'giu')`;
+      VALUES (gen_random_uuid()::text, ${si.id}, ${o.id}, ${o.versionId}, 5, 'reserve')`;
     const before = await stockItems.lietKeTonKho({ productIds: [held] });
     expect(before.items[0]).toMatchObject({ onHand: 20, reserved: 5 });
 
@@ -520,7 +520,7 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
     });
     expect(movements.map((m) => [m.stockItemId, m.qty, m.type])).toEqual([
       [si.id, -5, 'xuat'],
-      [si.id, 5, 'giu'],
+      [si.id, 5, 'reserve'],
     ]);
     const after = await stockItems.lietKeTonKho({
       productIds: [held, notHeld],

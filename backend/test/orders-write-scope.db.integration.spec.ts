@@ -4,7 +4,7 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
-import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
 import { QuoteExportService } from '../src/orders/quote-export.service';
@@ -64,6 +64,9 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
     });
     const orderIds = orders.map((order) => order.id);
     if (orderIds.length > 0) {
+      await prisma.stockMovement.deleteMany({
+        where: { orderId: { in: orderIds } },
+      });
       await prisma.quoteExport.deleteMany({
         where: { orderId: { in: orderIds } },
       });
@@ -120,7 +123,10 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
       storage,
-      {} as unknown as StockVouchersService,
+      new StockVouchersService(
+        prisma as unknown as PrismaService,
+        { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
+      ),
       {} as unknown as StockItemsService,
     );
     quoteExport = new QuoteExportService(
