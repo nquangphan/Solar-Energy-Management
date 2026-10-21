@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-22 (retrospective epic 7)
+# last_updated: 2026-10-22 (correct-course, chèn Epic 10 trước Epic 8)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-22 (retrospective epic 7)
+last_updated: 2026-10-22 (correct-course, chèn Epic 10 trước Epic 8)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -96,6 +96,17 @@ development_status:
   7-4-tao-hoa-don-tu-don-luu-db: done
   7-5-xem-xuat-hoa-don-pdf: done
   epic-7-retrospective: done
+  # Epic 10 chạy TRƯỚC Epic 8 (correct-course 2026-10-22, sprint-change-proposal-2026-10-22.md)
+  epic-10: backlog
+  10-1-doi-route-va-tham-so-tieng-viet-sang-tieng-anh: backlog
+  10-2-doi-field-dto-tieng-viet-sang-tieng-anh: backlog
+  10-3-web-client-sinh-tu-openapi-phien-dang-nhap-va-xu-ly-loi-mot-cho: backlog
+  10-4-web-composition-root-router-va-adapter-danh-muc-khach-cai-dat: backlog
+  10-5-web-adapter-don-kho-tien-chung-tu-va-nut-chi-tiet-don-theo-quyen: backlog
+  10-6-mobile-app-shell-android-ios-client-dart-sinh-tu-openapi-va-phien-dang-nhap: backlog
+  10-7-mobile-dieu-huong-va-adapter-danh-muc-khach-tai-khoan: backlog
+  10-8-mobile-adapter-don-kho-tien-chung-tu-va-nut-chi-tiet-don-theo-quyen: backlog
+  epic-10-retrospective: optional
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
@@ -279,8 +290,8 @@ action_items:
   - epic: 6
     action: "F-2: Correct-course chèn epic 'Nối dây client' (TD-38: 0 adapter HTTP, 0 client sinh từ OpenAPI, web không router, mobile không app shell) + thống nhất contract tiếng Anh (TD-39)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: in-progress
-    resolution: "Mặc định tuyên bố trước: chạy bmad-correct-course SAU Epic 7, TRƯỚC Epic 8; đổi route tiếng Việt sang tiếng Anh trước khi client thật dùng chúng. Im lặng ⇒ mặc định thành quyết định. || 2026-10-22 (retro Epic 7): đến hạn đúng lịch; chuyển thành G-1 trong lô chuẩn bị Epic 8. Epic 7 thêm 3 port (web nay 13 port, 0 fetch)."
+    status: done
+    resolution: "Mặc định tuyên bố trước: chạy bmad-correct-course SAU Epic 7, TRƯỚC Epic 8; đổi route tiếng Việt sang tiếng Anh trước khi client thật dùng chúng. Im lặng ⇒ mặc định thành quyết định. || 2026-10-22 (retro Epic 7): đến hạn đúng lịch; chuyển thành G-1 trong lô chuẩn bị Epic 8. Epic 7 thêm 3 port (web nay 13 port, 0 fetch). || 2026-10-22: đóng qua G-1 (Epic 10)."
   - epic: 6
     action: "F-3: Quyết thứ tự Payment ↔ transition cho 7.2 (TD-40: D12 chặn →hoanthanh ở mọi lane kể cả auto tất toán)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -316,8 +327,8 @@ action_items:
   - epic: 7
     action: "G-1: Chạy bmad-correct-course (= F-2): chèn epic 'Nối dây client' (router/composition root web, app shell mobile + android/ios, gen client từ openapi.json thay fake, nối callback theo quyền cho nút Thanh toán/Hợp đồng/Hoá đơn) + đổi route tiếng Việt sang tiếng Anh"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Tiêu chí: epics.md có epic mới với story đánh số + key trong sprint-status; thứ tự so với Epic 8/9 được ghi. ĐÃ QUYẾT (Đại Ca, 2026-10-21 22:33): chèn TRƯỚC Epic 8; correct-course chạy ngay sau retro Epic 7."
+    status: done
+    resolution: "Tiêu chí: epics.md có epic mới với story đánh số + key trong sprint-status; thứ tự so với Epic 8/9 được ghi. ĐÃ QUYẾT (Đại Ca, 2026-10-21 22:33): chèn TRƯỚC Epic 8; correct-course chạy ngay sau retro Epic 7. || 2026-10-22: correct-course xong — _bmad-output/planning-artifacts/sprint-change-proposal-2026-10-22.md. Epic 10 'Nối dây client' (8 story 10.1–10.8) thêm vào epics.md + sprint-status, thứ tự E7 → E10 → E8 → E9; spine AD-12 thêm luật client. 24 mặc định tuyên bố trước ở §6 của proposal (im lặng ⇒ thành quyết định)."
   - epic: 7
     action: "G-2: Quyết TD-9 — access token cũ sống ≤15 phút sau đổi mật khẩu/đăng xuất"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -327,7 +338,7 @@ action_items:
     action: "G-3: Sửa TD-50 — ContractsService.generate 409 khi trạng thái đổi dưới khoá từ trạng thái chưa đóng băng (khuôn invoices.service.ts 7.4)"
     owner: "Amelia (Dev)"
     status: open
-    resolution: "Căn cứ: 7.4 review #1; contracts.service.ts chỉ kiểm currentVersionId và in view.lineItems đọc trước khoá. Tiêu chí: ca DB forced-interleaving (holder sửa qty + chốt dưới khoá ⇒ 409, 0 dòng contracts); mutant gỡ kiểm ⇒ lane DB ĐỎ."
+    resolution: "Căn cứ: 7.4 review #1; contracts.service.ts chỉ kiểm currentVersionId và in view.lineItems đọc trước khoá. Tiêu chí: ca DB forced-interleaving (holder sửa qty + chốt dưới khoá ⇒ 409, 0 dòng contracts); mutant gỡ kiểm ⇒ lane DB ĐỎ. || 2026-10-22 (correct-course): xếp LÔ CHUẨN BỊ Epic 10, trước commit đầu story 10.1 — không thành story."
   - epic: 7
     action: "G-4: Rà 10 guard no-* theo danh sách biến thể (khoảng trắng/xuống dòng quanh dấu chấm, *OrThrow, *AndReturn, SQL thô trong template literal)"
     owner: "Amelia (Dev)"

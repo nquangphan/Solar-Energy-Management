@@ -143,6 +143,7 @@ UX-DR-27: Both platforms conform to DESIGN.md as one shared design system (same 
 - FR-35: Epic 3 — nguồn khách (3.5, 3.3) · Epic 4 — snapshot `Order.sourceId` (4.1)
 - FR-36: Epic 4 — bảo hành theo dòng (4.9) · Epic 5 — tra cứu theo SĐT (5.9)
 - FR-37: Epic 6 — giá vốn & snapshot lúc xuất (6.3, 6.4) · Epic 8 — báo cáo lợi nhuận gộp (8.6)
+- Epic 10 (chạy TRƯỚC Epic 8): không FR mới — nối client web/mobile vào backend cho FR-1..FR-29 (FR-22 đăng nhập thật), thống nhất contract tiếng Anh (TD-38, TD-39)
 
 
 ## Epic List
@@ -176,6 +177,10 @@ Nhánh Giao hàng (Đang giao→Đã giao, gate cờ Thiết bị) dùng lại e
 ### Epic 7: Thanh toán, Hợp đồng & Hoá đơn
 Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng thái (**publish DepositRecorded/PaymentRecorded event**); sinh HĐ Thi công/Mua bán (PDF); tạo hoá đơn (lưu DB + PDF).
 **FRs covered:** FR-11, FR-12, FR-13, FR-27, FR-28
+
+### Epic 10: Nối dây client (chạy TRƯỚC Epic 8 — chèn bởi correct-course 2026-10-22)
+**Thứ tự chạy: Epic 7 → Epic 10 → Epic 8 → Epic 9.** Số 10 chỉ để không đánh số lại Epic 8/9. Thống nhất contract tiếng Anh (đổi route/tham số/field DTO tiếng Việt) TRƯỚC khi client thật dùng; web có client sinh từ `openapi.json` + tầng transport + phiên đăng nhập + composition root + router + adapter HTTP thay fake cho mọi port; mobile có app shell `main.dart` + `android/`/`ios/` + client Dart sinh + điều hướng + adapter; nối callback theo quyền cho nút Thanh toán/Hợp đồng/Hoá đơn ở chi tiết đơn. Không thêm FR mới — làm cho FR-1..FR-29 đã có backend dùng được đầu-cuối. [Source: `sprint-change-proposal-2026-10-22.md`]
+**FRs covered:** FR-22 (đăng nhập thật trên hai client) · đưa FR-1..FR-29 lên client thật · AD-12 (client sinh từ OpenAPI) · AD-5 (FE xử lý envelope một chỗ)
 
 ### Epic 8: Quản trị — Dashboard, Phân quyền, Audit & Báo cáo lợi nhuận
 Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role, luật không-leo-thang) + form account; màn xem Audit log (gate theo quyền audit.read, không role); báo cáo lợi nhuận gộp (một bảng, bốn cách nhóm: đơn/tháng/sale/nguồn khách, dòng KPI trên cùng, nhãn bắt buộc). (Ghi audit là cross-cutting, nhúng ở E3–E7.)
@@ -648,6 +653,83 @@ As a người có quyền, I want xem lại và xuất PDF Hoá đơn, So that i
 - **Given** một Hoá đơn đã tạo, **When** xem, **Then** hiển thị số, ngày, tổng tiền, gắn đúng Đơn (FR-28).
 - **Given** hoá đơn, **When** xuất, **Then** tạo PDF, binary ở R2, chia sẻ/download tương tự báo giá (FR-28, AD-3).
 - **Given** PDF hoá đơn, **When** render, **Then** in "Số tiền viết bằng chữ" dưới Tổng cộng (helper dùng chung `backend/src/common/money/amount-in-words.ts`); PDF render **một lần** dưới khoá dòng hoá đơn, lần xuất sau trả file đã lưu (quyết 2026-10-22, Story 7.5).
+
+## Epic 10: Nối dây client (chạy TRƯỚC Epic 8)
+_Chèn bởi correct-course 2026-10-22 (G-1 = F-2; TD-38, TD-39). **Chạy sau Epic 7, TRƯỚC Epic 8** — số 10 chỉ để giữ nguyên key story Epic 8/9. Thứ tự nội bộ: 10.1 → 10.2 (contract tiếng Anh) → 10.3 → 10.4 → 10.5 (web) → 10.6 → 10.7 → 10.8 (mobile). Lô chuẩn bị trước commit đầu 10.1: G-3 (TD-50, race sinh hợp đồng — action item, không phải story), G-4, G-5. Bảng đổi tên và 24 mặc định tuyên bố trước: [Source: `_bmad-output/planning-artifacts/sprint-change-proposal-2026-10-22.md` §4.2, §6]._
+
+### Story 10.1: Đổi route và tham số tiếng Việt sang tiếng Anh
+As a lập trình viên client, I want mọi route và tham số API là tiếng Anh trước khi web/mobile gọi thật, So that không phải đổi contract (breaking change) sau khi đã có consumer.
+**Acceptance Criteria:**
+- **Given** 16 route tiếng Việt hiện có (`cho-duyet-chiet-khau`, `tra-cuu-bao-hanh`, `anh`, `ap-chiet-khau`, `duyet-chiet-khau`, `bao-gia/anh`, `bao-gia/pdf`, `xuat-bao-gia`, `chot`, `chuyen-trang-thai`, `huy`, `mo-lai`, `phien-ban`, `vong-doi`…), **When** đổi tên, **Then** route mới đúng từng dòng bảng đổi tên; method HTTP, quyền `@RequirePermissions`, phạm vi đọc/ghi đơn và hành vi giữ nguyên [Source: sprint-change-proposal-2026-10-22.md §4.2].
+- **Given** tham số `sdt` (path `/customers/{sdt}`, query `?sdt=` của tra cứu bảo hành), **When** đổi, **Then** thành `phone`; chuẩn hoá E.164 vẫn chỉ ở backend `customers/domain` (AD-9).
+- **Given** 0 consumer HTTP, **When** đổi, **Then** đổi cứng, KHÔNG giữ alias route cũ (mặc định §6.4); gọi route cũ ⇒ 404 envelope chuẩn (AD-5).
+- **Given** `openapi.json` là build artifact, **When** đổi xong, **Then** sinh lại bằng script có sẵn, drift-guard xanh; KHÔNG sửa tay spec (AD-12).
+- **Given** source-guard/e2e đang so chuỗi route, **When** đổi, **Then** cập nhật theo route mới và thêm một guard: không path nào trong `openapi.json` chứa segment thuộc danh sách route tiếng Việt cũ, có assert chống-guard-rỗng (E-7); mutant thêm lại một route cũ ⇒ ĐỎ.
+- **Given** spine và `project-context.md` còn ví dụ route cũ, **When** story commit, **Then** ví dụ được cập nhật trong cùng commit (G-5).
+
+### Story 10.2: Đổi field DTO tiếng Việt sang tiếng Anh
+As a lập trình viên client, I want mọi field request/response trên contract là tiếng Anh, So that type sinh từ OpenAPI ở web/mobile thống nhất một ngôn ngữ ngay từ đầu.
+**Acceptance Criteria:**
+- **Given** ~30 field DTO tiếng Việt (`sdt`, `customerSdt`, `cccd`, `chotAt`, `buoc`, `buocKeTiep`, `trangThai`, `coTheHuy`, `lyDo`, `laBanHienLuc`, `thayDoi`, `ten`, `donVi`, `khaDung`, `ma`, `nguoiTao`, `scopeThiCong`…) và 3 tên schema (`ThayDoiBanUpdateDto`, `ThayDoiSoLuongDto`, `CanMuaViewDto`), **When** đổi, **Then** theo đúng bảng đổi tên; tinh chỉnh nào (vd trùng tên trong cùng DTO) phải ghi lại vào bảng trong cùng commit (G-5) [Source: sprint-change-proposal-2026-10-22.md §4.2].
+- **Given** cột/bảng DB và enum value nghiệp vụ (khoá trạng thái, khoá event, loại khách, loại phiếu, `tinhTrang`), **When** đổi field, **Then** KHÔNG đổi — chỉ đổi tên trên contract; không migration (mặc định §6.6, §6.7).
+- **Given** validation trả `fieldErrors[].field`, **When** request sai, **Then** `field` mang tên mới (vd `reason`, không còn `lyDo`) — e2e qua `ValidationPipe` chứng minh (AD-5).
+- **Given** `openapi.json` sinh lại, **When** chạy guard mới, **Then** không property nào trong `components.schemas` thuộc danh sách tên tiếng Việt cũ, có assert chống-guard-rỗng; mutant đổi ngược một field ⇒ ĐỎ.
+- **Given** fake port web/mobile còn chép tay tên cũ, **When** story này xong, **Then** KHÔNG sửa client (chưa consumer HTTP); fake được viết lại theo type sinh ở 10.3/10.6 — ghi rõ trong Dev Notes để review không coi là drift.
+
+### Story 10.3: Web: client sinh từ OpenAPI, phiên đăng nhập và xử lý lỗi một chỗ
+As a người dùng web, I want đăng nhập thật vào backend và mọi lỗi API hiển thị nhất quán, So that web là client REST thật thay vì demo fake.
+**Acceptance Criteria:**
+- **Given** `backend/openapi/openapi.json`, **When** chạy script sinh client web, **Then** type + client có type được sinh vào thư mục generated của `web/` (mặc định `openapi-typescript` + `openapi-fetch`); cấm khai tay type contract (AD-12); drift-guard: sinh lại phải ra đúng byte, lệch ⇒ `npm test` ĐỎ.
+- **Given** tầng transport duy nhất, **When** client gọi API, **Then** chỉ transport được gọi `fetch`; guard quét `web/src` không lời gọi mạng nào ngoài transport (chống-guard-rỗng).
+- **Given** response lỗi, **When** transport nhận, **Then** parse envelope `{ code, message, fieldErrors, traceId }` ở ĐÚNG một chỗ và ném lỗi có type mà màn dùng sẵn (AD-5); body không phải envelope ⇒ lỗi chung tiếng Việt, không crash.
+- **Given** port đăng nhập mới (login/refresh/logout, tên tiếng Anh) và màn `LoginScreen` có sẵn, **When** đăng nhập đúng, **Then** access token giữ trong bộ nhớ, refresh token trong `localStorage`; gặp 401 thì refresh **một lần** cho mọi request đang chờ rồi phát lại; refresh hỏng ⇒ xoá phiên, về Đăng nhập; logout gọi `POST /auth/logout` (mặc định §6.13, §6.15).
+- **Given** web chạy khác origin, **When** cấu hình, **Then** base URL từ `VITE_API_BASE_URL`; dev dùng proxy vite; backend bật CORS theo allowlist env `CORS_ORIGINS` (rỗng ⇒ tắt) có test e2e cho origin được phép và bị từ chối (mặc định §6.16, §6.17).
+- **Given** test transport, **When** chạy vitest, **Then** có ca: envelope 400 + fieldErrors, 401 → refresh → phát lại, hai 401 đồng thời chỉ một lần refresh, refresh 401 → đăng xuất.
+
+### Story 10.4: Web: composition root, router và adapter danh mục, khách, cài đặt
+As a người dùng web, I want điều hướng giữa các màn có sẵn với dữ liệu thật và chỉ thấy mục mình có quyền, So that dùng web cho danh mục, khách hàng, cấu hình thay Excel.
+**Acceptance Criteria:**
+- **Given** `web/src/main.tsx`, **When** khởi động, **Then** thành **composition root** duy nhất: tạo transport, ráp port với adapter HTTP, bọc `PermissionsProvider` từ `/me`; không import fake nào (guard, chống-guard-rỗng) [Source: ARCHITECTURE-SPINE AD-12].
+- **Given** router (mặc định `react-router`), **When** đăng nhập xong, **Then** sidebar (Story 1.9) điều hướng tới màn thật; route của mục không có quyền không render và không có trong nav (UX-DR-22, AD-4); chưa đăng nhập ⇒ về Đăng nhập.
+- **Given** port me, password, customers, customer-sources, catalog (sản phẩm, giá, gói vật tư), settings (VAT, pháp nhân), warranty, **When** dùng adapter, **Then** mỗi adapter cài đúng interface port hiện có bằng client sinh (10.3), không đổi chữ ký port mà màn đang dùng; method port tên tiếng Việt (nếu có) đổi sang tiếng Anh cùng caller.
+- **Given** mỗi adapter, **When** test, **Then** có ca map response thành công + một ca lỗi envelope qua transport giả lập HTTP (không qua fake port).
+- **Given** fake port, **When** dùng, **Then** chỉ còn trong test/demo, viết lại theo type sinh; smoke render mọi màn (`screens-render.test.tsx`) vẫn xanh.
+
+### Story 10.5: Web: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền
+As a nhân viên bán hàng/kế toán trên web, I want đi trọn luồng báo giá → chốt → thanh toán → hợp đồng → hoá đơn với backend thật, So that web dùng được đầu-cuối cho đơn hàng.
+**Acceptance Criteria:**
+- **Given** port orders, inventory, stock-vouchers, payments, contracts, invoices, **When** dùng adapter, **Then** cài bằng client sinh; method tiếng Việt (`chuyenTrangThai`, `huyDon`, `themAnh`, `xoaAnh`, `listAnh`, `anhBytes`) đổi sang tiếng Anh cùng mọi caller (mặc định §6.8).
+- **Given** upload ảnh và tải PDF/ảnh, **When** gọi, **Then** upload multipart qua backend (AD-3), tải nhị phân kèm Bearer rồi mở/tải bằng object URL; không link công khai (mặc định §6.18).
+- **Given** ghi thanh toán, **When** gửi, **Then** khoá idempotency do port sinh được truyền nguyên vẹn; retry cùng khoá không ghi trùng (NFR-1).
+- **Given** chi tiết đơn, **When** router render `OrderDetailScreen`, **Then** truyền `onOpenPaymentSchedule` cho mọi account xem được đơn, `onOpenContracts` chỉ khi có `contracts.generate`, `onOpenInvoices` chỉ khi có `invoices.manage` — khớp `@RequirePermissions` của endpoint chính màn đích; test cho cả account đủ và thiếu quyền (mặc định §6.19, UX-DR-22).
+- **Given** backend + `pns-postgres` chạy local, **When** smoke đầu-cuối bằng account seed có quyền, **Then** tạo báo giá → chốt → cấu hình lịch → ghi thanh toán → sinh HĐ → lập + xuất hoá đơn thành công; kết quả ghi vào Dev Agent Record (mặc định §6.21).
+- **Given** client không tính tiền (AD-2, AD-16), **When** hiển thị tổng, **Then** chỉ hiện số backend trả qua `<Money>`; guard tiền hiện có vẫn xanh.
+
+### Story 10.6: Mobile: app shell, android/ios, client Dart sinh từ OpenAPI và phiên đăng nhập
+As a nhân viên hiện trường, I want app mobile cài được trên điện thoại và đăng nhập thật, So that dùng app thay vì demo.
+**Acceptance Criteria:**
+- **Given** `mobile/` chưa có app-runtime, **When** dựng, **Then** có `lib/main.dart` là composition root duy nhất + thư mục `android/` và `ios/`; `flutter build apk --debug` chạy được; `ios/` có mặt và `flutter analyze` sạch, build iOS không là tiêu chí (mặc định §6.22).
+- **Given** `openapi.json`, **When** chạy script sinh client Dart (mặc định bộ sinh Dart thuần, ưu tiên `swagger_parser`, HTTP qua `dio`), **Then** client + model được sinh, cấm khai tay type contract (AD-12); drift-guard sinh lại ra đúng byte. Nếu phải đổi công cụ, ghi lý do vào spine/proposal cùng commit (G-5).
+- **Given** tầng transport Dart, **When** gọi API, **Then** chỉ transport chạm mạng (guard quét `mobile/lib`, chống-guard-rỗng); envelope AD-5 parse ở một chỗ; base URL từ `--dart-define=API_BASE_URL`.
+- **Given** port đăng nhập mới + màn Đăng nhập Flutter có sẵn, **When** đăng nhập, **Then** refresh token trong `flutter_secure_storage`, access token trong bộ nhớ; 401 ⇒ refresh một lần cho mọi request chờ; refresh hỏng ⇒ về Đăng nhập (mặc định §6.14, §6.15).
+- **Given** test, **When** `flutter test`, **Then** có ca transport: envelope 400 + fieldErrors, 401 → refresh → phát lại, refresh hỏng → đăng xuất; widget test màn Đăng nhập với port giả lập HTTP.
+
+### Story 10.7: Mobile: điều hướng và adapter danh mục, khách, tài khoản
+As a nhân viên hiện trường, I want chuyển giữa các tab và màn có sẵn với dữ liệu thật, chỉ thấy mục có quyền, So that tra khách, danh mục, bảo hành ngay tại công trình.
+**Acceptance Criteria:**
+- **Given** bottom-nav 5 tab cố định (Story 1.8), **When** đăng nhập xong, **Then** điều hướng (mặc định `go_router`) nối 5 tab và FAB tới màn thật; không đổi số tab; mục thiếu quyền không xuất hiện (UX-DR-15, UX-DR-22).
+- **Given** port me, password, catalog, customers, warranty, **When** dùng adapter, **Then** cài đúng interface port hiện có bằng client sinh (10.6); tên method tiếng Việt (nếu có) đổi sang tiếng Anh cùng caller.
+- **Given** mỗi adapter, **When** test, **Then** có ca thành công + một ca lỗi envelope qua HTTP giả lập; widget test hiện có vẫn xanh.
+- **Given** composition root `main.dart`, **When** khởi động, **Then** không import fake nào (guard, chống-guard-rỗng); fake chỉ còn trong test, viết lại theo type sinh.
+
+### Story 10.8: Mobile: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền
+As a nhân viên bán hàng/hiện trường, I want tạo báo giá, chốt, chuyển trạng thái kèm ảnh, ghi thanh toán, xem HĐ/hoá đơn trên điện thoại với backend thật, So that không cần quay về văn phòng.
+**Acceptance Criteria:**
+- **Given** port orders, inventory, stock-vouchers, payments, contracts, invoices, **When** dùng adapter, **Then** cài bằng client sinh; method tiếng Việt đổi sang tiếng Anh cùng caller (mặc định §6.8).
+- **Given** chụp/chọn ảnh và chia sẻ PDF/ảnh, **When** gọi, **Then** upload multipart qua backend (AD-3); tải nhị phân kèm Bearer rồi chuyển byte cho `share_plus` (UX-DR-21, mặc định §6.18).
+- **Given** chi tiết đơn mobile, **When** điều hướng render màn, **Then** nút Thanh toán/Hợp đồng/Hoá đơn có callback theo cùng luật quyền như web 10.5 (mặc định §6.19); widget test cho account đủ và thiếu quyền.
+- **Given** ghi thanh toán, **When** gửi, **Then** khoá idempotency truyền nguyên vẹn; retry không ghi trùng (NFR-1).
+- **Given** backend + `pns-postgres` local và emulator Android, **When** smoke đầu-cuối, **Then** đăng nhập → tạo báo giá → chốt → ghi thanh toán → xem HĐ/hoá đơn → chia sẻ PDF thành công; ghi vào Dev Agent Record (mặc định §6.21).
 
 ## Epic 8: Quản trị — Dashboard, Phân quyền & Audit
 _Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role) + form account; màn xem Audit log (chỉ Super Admin). Ghi audit là cross-cutting, đã emit ở E3–E7. FR-16,17,18,19,20._

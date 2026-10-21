@@ -122,6 +122,7 @@ flowchart TD
 - **Binds:** FR-22, `all` (contract API)
 - **Prevents:** lệch contract giữa backend và client; sửa tay spec làm spec lệch code; mobile không được ràng vào contract; session không revoke được.
 - **Rule:** API là REST. OpenAPI spec được **SINH TỪ backend NestJS** (code là chân lý, spec là **build artifact**), được **versioned + publish** làm **hợp đồng cross-repo DUY NHẤT**; **CẢ web LẪN mobile** đều sinh/validate client dựa trên spec này (mobile cũng vậy, không chỉ web). **Cấm sửa tay** spec. Auth dùng JWT access token (ngắn hạn) + refresh token; `/me` trả effective permission set.
+- **Luật client (correct-course 2026-10-22, Epic 10):** mỗi client có **MỘT composition root** (web `web/src/main.tsx`, mobile `mobile/lib/main.dart`) là nơi DUY NHẤT ráp port với adapter HTTP. Adapter dựng trên **client sinh từ `openapi.json`** (cấm khai tay type contract); client sinh có drift-guard (sinh lại phải ra đúng byte). **Chỉ tầng transport** được gọi mạng; envelope AD-5 parse ở đúng một chỗ trong transport; làm mới access token (một lần cho mọi request đang chờ) cũng chỉ ở transport. Fake port chỉ dùng trong test/demo, không được import từ composition root. Route, tham số và field DTO là tiếng Anh; enum value nghiệp vụ giữ nguyên. [Source: `sprint-change-proposal-2026-10-22.md`]
 
 ### AD-13 — Design-system-first: một tầng design system trước mọi màn `[ADOPTED]`
 
@@ -183,7 +184,7 @@ flowchart TD
 | --- | --- |
 | Đặt tên entity | PascalCase entity (`Order`, `OrderLineItem`); bảng snake_case số nhiều (`order_line_items`) |
 | Đặt tên file | kebab-case (`orders.service.ts`, `allowed-transition.ts`) |
-| REST route | danh từ số nhiều, kebab-case (`/orders/{id}/line-items`); action nghiệp vụ là sub-resource POST (`/orders/{id}/chot`) |
+| REST route | danh từ số nhiều, kebab-case, **tiếng Anh** (`/orders/{id}/line-items`); action nghiệp vụ là sub-resource POST (`/orders/{id}/confirm`); route/tham số/field DTO tiếng Anh, enum value nghiệp vụ (khoá trạng thái, khoá event, loại khách, loại phiếu) giữ nguyên. Route tiếng Việt cũ đổi ở Story 10.1/10.2 |
 | ID | UUID v4 cho tất cả entity, **trừ** `Customer` (PK = SĐT chuẩn hoá **E.164** `+84…`, chuẩn hoá chỉ ở backend `customers`, AD-9) |
 | Ngày giờ | ISO-8601 UTC lưu trong DB; client hiển thị theo giờ VN (UTC+7) |
 | Tiền | integer đồng (AD-10); không float, không decimal |
@@ -570,7 +571,7 @@ backend/
 - **CI/CD & môi trường triển khai** — VPS provider, pipeline, container/orchestration cụ thể chưa quyết (solo dev, ưu tiên đơn giản).
 - **Monitoring / backup** — chiến lược backup Postgres, retention R2, alerting để lại cho vận hành.
 - ~~**Auth token TTL, rotation, revocation**~~ — **ĐÃ CHỐT ở Story 2.3** (2026-07-08): access = JWT stateless TTL **15m** (`ACCESS_TOKEN_TTL`); refresh = opaque `randomBytes(32)` lưu **hash SHA-256** ở `sessions`, TTL **30 ngày** (`REFRESH_TOKEN_TTL_DAYS`); **rotate** mỗi lần refresh (cổng atomic `updateMany` + `count === 1` — chống replay); logout/reset/change-password set `revokedAt`. **Giới hạn còn lại:** thu hồi phiên không làm access token cũ hết hiệu lực ngay (≤15m). Chi tiết: `backend/CONVENTIONS.md#Auth`.
-- **Chi tiết OpenAPI codegen (FE)** — sinh client TS/Dart từ `openapi.json` vẫn hoãn tới khi có app-runtime web/mobile (AD-12). Hiện FE khai type khớp contract bằng tay + comment TODO.
+- ~~**Chi tiết OpenAPI codegen (FE)**~~ — **ĐÃ LÊN LỊCH ở Epic 10** (correct-course 2026-10-22): web Story 10.3 (mặc định `openapi-typescript` + `openapi-fetch`), mobile Story 10.6 (mặc định bộ sinh Dart thuần, ưu tiên `swagger_parser`, HTTP qua `dio`). Luật client ghi ở AD-12. Tới khi hai story đó xong, FE vẫn khai type bằng tay.
 - **Web push (trình duyệt)** — Phase sau; Phase 1 web dùng hộp thư in-app + badge, chưa push trình duyệt (§4.14, FR-31/32).
 - **Ngưỡng thời gian nhắc theo lịch** — báo giá "sắp hết hiệu lực" báo trước bao lâu (noti #11) và "lead nguội" sau bao nhiêu ngày (noti #12) chốt khi làm epics (FR-34).
 - **Chọn job scheduler** — NestJS Schedule vs cron ngoài vs queue cho job nhắc lịch để lại cho implementation (FR-34).
