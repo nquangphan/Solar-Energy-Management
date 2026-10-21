@@ -120,7 +120,8 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
       <div className="discount-wrap">
         {error !== null && <Banner tone="danger">{error}</Banner>}
 
-        {state === 'loading' && <Skeleton lines={5} />}
+        {state === 'loading' &&
+          Array.from({ length: 5 }, (_, i) => <Skeleton key={i} />)}
 
         {state === 'error' && (
           <ErrorState

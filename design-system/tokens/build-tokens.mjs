@@ -153,6 +153,14 @@ ${roleVars}
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
+/* Micro-uppercase label (role "micro") — copied verbatim from
+   mockups/all-screens.html:58-59, the canonical visual source. */
+.micro{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--teal)}
+.micro.muted{color:var(--muted)}
+
+/* Standalone muted prose (no mockup rule of its own): same colour as .micro.muted. */
+.muted{color:var(--muted)}
 `;
 }
 

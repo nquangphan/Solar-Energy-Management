@@ -359,7 +359,9 @@ export interface ResolveDiscountInput {
 export interface QuoteExportFile {
   fileName: string;
   mimeType: string;
-  bytes: Uint8Array;
+  // `<ArrayBuffer>` (không phải ArrayBufferLike mặc định): `new File([bytes])` chỉ nhận
+  // view trên ArrayBuffer thường — response.arrayBuffer() của port HTTP luôn là loại này.
+  bytes: Uint8Array<ArrayBuffer>;
 }
 
 /** The pair one `exportQuote` call yields — share order is [image, pdf] (UX-DR-21). */

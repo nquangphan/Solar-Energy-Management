@@ -12,7 +12,7 @@
 // NOTE: web has no bundler/tsc yet (project-context defers web-runtime), so this
 // file is guarded by the Node text-guard + parity tests, not a React runtime.
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import type { PermissionSet } from '../gating/permissions';

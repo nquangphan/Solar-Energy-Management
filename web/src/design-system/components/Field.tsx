@@ -4,7 +4,9 @@ import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 export type FieldSize = 'lg';
 
-export interface FieldProps extends InputHTMLAttributes<HTMLInputElement> {
+// `size` của <input> (số ký tự) bị thay bằng biến thể thị giác 'lg' — Field không
+// bao giờ chuyển `size` xuống DOM (đã tách ra trước `...rest`).
+export interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'size'> {
   // When set, renders a .flabel above the input, wrapped in .fgroup, and links
   // it to the input via htmlFor/id for a11y (UX-DR-26).
   label?: string;

@@ -1,13 +1,14 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  # Tắt tự chạy theo quyết định chủ dự án (2026-10-21) — chỉ chạy tay từ tab Actions.
+  # Bật lại: thêm `push: { branches: [main] }` và `pull_request:`.
+  workflow_dispatch:
 
-# Bốn lane chạy CÙNG NHAU — mỗi lane canh một loại sự thật, không lane nào thay được lane khác
+# Năm lane chạy CÙNG NHAU — mỗi lane canh một loại sự thật, không lane nào thay được lane khác
 # (bài học retro Epic 3): hermetic bắt logic thuần + createMany rỗng; test:db bắt ràng buộc DB +
-# lỗi đua; design-system bắt drift/parity token; flutter bắt màn không render. Một PR gỡ khoá
+# lỗi đua; design-system bắt drift/parity token; web bắt .tsx sai kiểu/không render/thiếu CSS;
+# flutter bắt màn không render. Một PR gỡ khoá
 # `FOR UPDATE` hay đổi một token là CI đỏ, không cần ai nhớ gõ tay.
 
 jobs:
@@ -83,6 +84,31 @@ jobs:
       - name: Test
         working-directory: design-system
         run: npm test
+
+  # Lane web (TD-1): tsc bắt lỗi kiểu/cú pháp .tsx, vitest+jsdom bắt màn không render +
+  # className không có rule CSS, vite build bắt import/bundle hỏng — ba thứ text-guard mù.
+  web:
+    name: Web (typecheck + JSDOM render + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install
+        working-directory: web
+        run: npm ci
+      - name: Typecheck
+        working-directory: web
+        run: npm run typecheck
+      - name: Test
+        working-directory: web
+        run: npm test
+      - name: Build
+        working-directory: web
+        run: npm run build
 
   mobile:
     name: Mobile (analyze + widget test)

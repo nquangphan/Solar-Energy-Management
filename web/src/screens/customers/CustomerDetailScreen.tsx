@@ -12,7 +12,7 @@
 // and a screen may not show a number no table can back (AC-7).
 import { useCallback, useEffect, useState } from 'react';
 
-import { Button, Card, ErrorState, Frame, Skeleton } from '../../design-system/components';
+import { Card, ErrorState, Frame, Skeleton } from '../../design-system/components';
 import { filterNav } from '../../design-system/gating/permissions';
 import type {
   Customer,
@@ -70,11 +70,10 @@ export function CustomerDetailScreen({ port, sdt, onEdit }: CustomerDetailScreen
         <Topbar
           eyebrow={eyebrow}
           title={customer?.name ?? ''}
-          action={
-            <Button variant="ghost" type="button" onClick={() => onEdit?.(sdt)}>
-              Sửa
-            </Button>
-          }
+          // Topbar tự bọc `action` trong <button class="topbar-action"> — truyền CHỮ +
+          // onAction, không truyền <Button> (button lồng button là HTML không hợp lệ).
+          action="Sửa"
+          onAction={() => onEdit?.(sdt)}
         />
       }
     >

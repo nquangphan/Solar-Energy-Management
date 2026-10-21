@@ -208,11 +208,10 @@ export function CustomerSourceConfigScreen({
         <Topbar
           eyebrow="CẤU HÌNH HỆ THỐNG"
           title="Nguồn khách hàng"
-          action={
-            <Button variant="primary" type="button" onClick={() => openForm(EMPTY_FORM)}>
-              + Thêm nguồn
-            </Button>
-          }
+          // Topbar tự bọc `action` trong <button class="topbar-action"> — truyền CHỮ +
+          // onAction, không truyền <Button> (button lồng button là HTML không hợp lệ).
+          action="+ Thêm nguồn"
+          onAction={() => openForm(EMPTY_FORM)}
         />
       }
     >

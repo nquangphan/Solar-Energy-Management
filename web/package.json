@@ -1,0 +1,30 @@
+{
+  "name": "@pns/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phương Nam Solar web client (React SPA) — typecheck + bundle + JSDOM render lane.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "6.0.5",
+    "jsdom": "29.1.1",
+    "typescript": "6.0.3",
+    "vite": "8.1.6",
+    "vitest": "4.1.12"
+  }
+}
