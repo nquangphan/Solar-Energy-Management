@@ -91,12 +91,26 @@ function braceContent(code, open) {
   return null;
 }
 
-/** A JSX child brace: `{` reached from a `>` (not `=>`) through JSX text only. */
+/**
+ * A JSX child brace: `{` reached from a `>` (not `=>`) through JSX text and
+ * earlier balanced `{...}` children only. An attribute value (`=` first), a
+ * call argument or an object literal (`(`, `,`, `;`, `=`) ends the walk.
+ */
 function isJsxChildBrace(code, open) {
   for (let k = open - 1; k >= 0; k -= 1) {
     const c = code[k];
     if (c === '>') return code[k - 1] !== '=';
-    if ('<{}=();,[]'.includes(c)) return false;
+    if (c === '}') {
+      let depth = 1;
+      while (depth > 0 && k > 0) {
+        k -= 1;
+        if (code[k] === '}') depth += 1;
+        else if (code[k] === '{') depth -= 1;
+      }
+      if (depth > 0) return false;
+      continue;
+    }
+    if ('<{=();,[]'.includes(c)) return false;
   }
   return false;
 }
@@ -218,6 +232,9 @@ test('self-test: the guard flags every known raw-render shape and passes the san
     "<td>{l.unitCost !== undefined ? l.unitCost : ''}</td>",
     "<td className=\"num mono\">{l.unitCost ?? ''}</td>",
     '<span>{product.sku} · <span className="mono">{product.price}</span></span>',
+    '<p>Giá {l.qty} · {l.unitCost}</p>',
+    '<p>{l.qty}{l.unitCost}</p>',
+    '<p>{l.qty} {l.unitCost ?? \'\'}</p>',
     'const label = `Tổng ${totals.total}`;',
     'const s = line.amount.toString();',
     'const s = n.toLocaleString("vi-VN");',
@@ -231,6 +248,8 @@ test('self-test: the guard flags every known raw-render shape and passes the san
     "_SummaryRow(label: 'Giá gốc', value: '${selected.subtotal}'),",
     "value: _totals == null ? '—' : '${_totals!.total}',",
     "child: Text('$amount'),",
+    "Text('Giá ${l.qty} · ${l.unitCost}'),",
+    "Text('Giá ${l.qty} · $amount đ'),",
     'AppTableCellText(l.unitCost.toString()),',
     "import 'package:intl/intl.dart';",
   ];
@@ -246,6 +265,10 @@ test('self-test: the guard flags every known raw-render shape and passes the san
     '{fieldErrors.amount && <Banner tone="danger">{fieldErrors.amount}</Banner>}',
     'const label = `Tổng ${formatVnd(totals.total)}`;',
     '<td>{line.qty}</td>',
+    '<p>Giá {l.qty} · <Money value={x.amount} /></p>',
+    '<p>{l.qty} <input value={x.unitPrice} onChange={f} /></p>',
+    'const a = foo({l.qty}, {x.amount});',
+    'const a = {x.amount};',
   ];
   for (const snippet of webGood) {
     assert.deepEqual(findRawMoneyRenders(snippet, 'web'), [], `web guard must NOT flag: ${snippet}`);
