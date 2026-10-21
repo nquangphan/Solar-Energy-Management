@@ -4,8 +4,10 @@
 //
 // THE CLIENT DECIDES NOTHING (AD-2). Rows arrive already summed per product and
 // in the backend's canonical order; "Tồn thật" is shown for counting, never
-// compared with "Đơn cần" here — whether the stock is enough is the backend's
-// answer (409 with `lines.{i}.qty`), which this block places under row `i`.
+// compared with "Đơn cần" here. Whether the stock is enough is the backend's
+// answer twice over: BEFORE the tap as `blocked` + per-row `shortfall` (a
+// warning — the hosts lock their confirm button on it), and AT the tap as a
+// 409 with `lines.{i}.qty`, which this block places under row `i`.
 
 import 'package:flutter/widgets.dart';
 
@@ -80,6 +82,24 @@ class StockIssuePreview extends StatelessWidget {
             ),
           ),
         ),
+        if (view.blocked) ...<Widget>[
+          const SizedBox(height: AppTokens.space8),
+          AppBanner(
+            tone: AppBannerTone.danger,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                for (final OrderStockIssueLine line in view.lines)
+                  if (line.shortfall > 0)
+                    Text(
+                      'CHẶN xuất kho — ${line.name} không đủ tồn thật (cần ${line.qty}, còn ${line.onHand}). Đơn này đã được chốt dù thiếu hàng; chặn chỉ nằm ở đây. Nhập hàng trước khi xuất.',
+                      style: _kNote,
+                    ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: AppTokens.space8),
         AppTable(
           columns: const <AppTableColumn>[
@@ -95,7 +115,14 @@ class StockIssuePreview extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
                     AppTableCellText(view.lines[i].name),
-                    if (errors[i] != null) Text(errors[i]!, style: _kRowError),
+                    // The server's refusal of row `i` wins over the preview's warning.
+                    if (errors[i] != null)
+                      Text(errors[i]!, style: _kRowError)
+                    else if (view.lines[i].shortfall > 0)
+                      Text(
+                        'Thiếu ${view.lines[i].shortfall} ${view.lines[i].unit}',
+                        style: _kRowError,
+                      ),
                   ],
                 ),
                 AppTableCellText('${view.lines[i].qty}'),

@@ -5,6 +5,7 @@ import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
 import { QuoteExportService } from '../src/orders/quote-export.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -120,6 +121,7 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
       storage,
       {} as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
     quoteExport = new QuoteExportService(
       service,

@@ -380,7 +380,7 @@ describe('/stock-vouchers (e2e)', () => {
     });
   }
 
-  it('xuất quá tồn ⇒ 409 CONFLICT, fieldErrors[0].code = INSUFFICIENT_STOCK, không ghi gì', async () => {
+  it('stock-out beyond on-hand ⇒ 409 CONFLICT, fieldErrors[0].code = INSUFFICIENT_STOCK, nothing written, exactly 1 StockOutBlocked audit row', async () => {
     givenPermissions(...ROLE_PRESETS.KHO_GIAO);
 
     const res = await post({
@@ -400,7 +400,16 @@ describe('/stock-vouchers (e2e)', () => {
     });
     expect(tx.stockItem.upsert).not.toHaveBeenCalled();
     expect(tx.stockVoucher.create).not.toHaveBeenCalled();
-    expect(auditRepo.create).not.toHaveBeenCalled();
+    // The refused attempt is itself the fact: one audit row via the subscriber, no target.
+    expect(auditRepo.create).toHaveBeenCalledTimes(1);
+    expect(auditRepo.create.mock.calls[0][0]).toMatchObject({
+      data: {
+        eventType: 'StockOutBlocked',
+        targetType: null,
+        targetId: null,
+        after: { lines: [{ productId: P1, qty: 6, onHand: 5 }] },
+      },
+    });
   });
 
   for (const [ten, co] of [

@@ -274,4 +274,92 @@ describe('StockItemsService', () => {
       { productId: 'p3', ten: 'Pin', donVi: 'tấm', canNhap: 3 },
     ]);
   });
+
+  describe('checkOrderLines', () => {
+    it('no product line ⇒ empty, no query at all', async () => {
+      await expect(service.checkOrderLines('ord-x', [])).resolves.toEqual([]);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it("ONE array-form RepeatableRead tx: products + ledger total + this order's own share, no write", async () => {
+      productRepo.findMany.mockResolvedValue([]);
+
+      await service.checkOrderLines('ord-x', [{ productId: 'p1', qty: 1 }]);
+
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(transaction.mock.calls[0][1]).toEqual({
+        isolationLevel: 'RepeatableRead',
+      });
+      expect(stockMovementRepo.groupBy).toHaveBeenCalledTimes(2);
+      expect(stockMovementRepo.groupBy.mock.calls[1][0]).toMatchObject({
+        where: { orderId: 'ord-x', stockItem: { productId: { in: ['p1'] } } },
+      });
+      for (const repo of [productRepo, stockItemRepo, stockMovementRepo]) {
+        for (const [ten, fn] of Object.entries(repo)) {
+          if (ten === 'findMany' || ten === 'groupBy') continue;
+          expect(fn).not.toHaveBeenCalled();
+        }
+      }
+    });
+
+    it("merges same-product lines, drops non-tracked products, orders by name then id; reserved excludes the order's own share", async () => {
+      productRepo.findMany.mockResolvedValue([
+        sanPham('p2', 'B Tấm pin', { stockItem: { id: 's2', onHand: 7 } }),
+        sanPham('p1', 'A Inverter', { stockItem: { id: 's1', onHand: 1 } }),
+        sanPham('p3', 'Công lắp', { tracksStock: false }),
+        sanPham('p4', 'C Cáp'),
+      ]);
+      stockMovementRepo.groupBy
+        .mockResolvedValueOnce([
+          { stockItemId: 's2', _sum: { qty: 5 } },
+          { stockItemId: 's1', _sum: { qty: 4 } },
+        ])
+        .mockResolvedValueOnce([{ stockItemId: 's2', _sum: { qty: 3 } }]);
+
+      const lines = await service.checkOrderLines('ord-x', [
+        { productId: 'p2', qty: 3 },
+        { productId: 'p3', qty: 1 },
+        { productId: 'p2', qty: 2 },
+        { productId: 'p1', qty: 2 },
+        { productId: 'p4', qty: 1 },
+      ]);
+
+      expect(lines).toEqual([
+        {
+          productId: 'p1',
+          name: 'A Inverter',
+          unit: 'tấm',
+          qty: 2,
+          onHand: 1,
+          reserved: 4,
+          available: -3,
+          shortfall: 5,
+          status: 'short',
+        },
+        {
+          productId: 'p2',
+          name: 'B Tấm pin',
+          unit: 'tấm',
+          qty: 5,
+          onHand: 7,
+          // ledger 5, of which 3 held for this very order ⇒ 2 promised elsewhere
+          reserved: 2,
+          available: 5,
+          shortfall: 0,
+          status: 'enough',
+        },
+        {
+          productId: 'p4',
+          name: 'C Cáp',
+          unit: 'tấm',
+          qty: 1,
+          onHand: 0,
+          reserved: 0,
+          available: 0,
+          shortfall: 1,
+          status: 'short',
+        },
+      ]);
+    });
+  });
 });

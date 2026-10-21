@@ -27,13 +27,48 @@ import 'package:pns_mobile/screens/orders/order_status_change_screen.dart';
 const String _kLongestName = 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha';
 const String _kOrderId = 'ord-test-1';
 
+const String _kBlockedSentence =
+    'CHẶN xuất kho — Battery LiFePO4 10kWh không đủ tồn thật (cần 2, còn 0). Đơn này đã được chốt dù thiếu hàng; chặn chỉ nằm ở đây. Nhập hàng trước khi xuất.';
+
+/// The race the server still guards: a preview read BEFORE the stock ran out
+/// (not blocked, no shortfall) — the tap then hits a 409.
+OrderStockIssueView _stale(OrderStockIssueView v) => OrderStockIssueView(
+      issued: v.issued,
+      voucher: v.voucher,
+      canIssue: v.canIssue,
+      blocked: false,
+      lines: <OrderStockIssueLine>[
+        for (final OrderStockIssueLine l in v.lines)
+          OrderStockIssueLine(
+            productId: l.productId,
+            name: l.name,
+            sku: l.sku,
+            unit: l.unit,
+            qty: l.qty,
+            onHand: l.onHand,
+            shortfall: 0,
+          ),
+      ],
+      untrackedItems: v.untrackedItems,
+    );
+
 /// An order standing at `danggiao`: the one next step is "Đã giao".
+/// `stalePreview` ⇒ the FIRST preview read is [_stale], later reads are real.
 class _InDeliveryPort extends FakeOrdersPort {
-  _InDeliveryPort({this.transitionError});
+  _InDeliveryPort({this.transitionError, this.stalePreview = false});
 
   final Object? transitionError;
+  final bool stalePreview;
   int transitionCalls = 0;
   int issueCalls = 0;
+  int _previewReads = 0;
+
+  @override
+  Future<OrderStockIssueView> getStockIssue(String orderId) async {
+    final OrderStockIssueView real = await super.getStockIssue(orderId);
+    _previewReads += 1;
+    return stalePreview && _previewReads == 1 ? _stale(real) : real;
+  }
 
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
@@ -118,6 +153,7 @@ class _DetailPort extends FakeOrdersPort {
     return OrderStockIssueView(
       issued: false,
       canIssue: false,
+      blocked: false,
       lines: v.lines,
       untrackedItems: v.untrackedItems,
     );
@@ -132,11 +168,13 @@ class _DetailPort extends FakeOrdersPort {
 }
 
 /// An order at `dacoc` without Vận chuyển: two open steps, none preselected.
-/// `previews` answers `getStockIssue` call by call (a Completer or an error).
+/// `previews` answers `getStockIssue` call by call (a Completer or an error);
+/// `stalePreview` ⇒ the first unscripted read is [_stale].
 class _TwoStepPort extends FakeOrdersPort {
-  _TwoStepPort({this.transitionError});
+  _TwoStepPort({this.transitionError, this.stalePreview = false});
 
   final Object? transitionError;
+  final bool stalePreview;
   final List<Completer<OrderStockIssueView>> previews =
       <Completer<OrderStockIssueView>>[];
   int previewCalls = 0;
@@ -166,6 +204,9 @@ class _TwoStepPort extends FakeOrdersPort {
     if (previews.length >= previewCalls) {
       return previews[previewCalls - 1].future;
     }
+    if (stalePreview && previewCalls == 1) {
+      return super.getStockIssue(orderId).then(_stale);
+    }
     return super.getStockIssue(orderId);
   }
 
@@ -178,6 +219,13 @@ class _TwoStepPort extends FakeOrdersPort {
     if (transitionError != null) throw transitionError!;
     return super.chuyenTrangThai(orderId, event, anh);
   }
+}
+
+/// The detail port whose preview is the backend's BLOCKED warning.
+class _BlockedDetailPort extends _DetailPort {
+  @override
+  Future<OrderStockIssueView> getStockIssue(String orderId) =>
+      super.getStockIssue(kFakeOrderShortStock);
 }
 
 /// The detail port whose `issueStock` always answers the backend's 409.
@@ -274,8 +322,10 @@ void main() {
         '409 short stock ⇒ banner with the backend message + error under row lines.0',
         (tester) async {
       _screenSize(tester, 400.0);
-      final _InDeliveryPort port =
-          _InDeliveryPort(transitionError: kFakeStockIssueShortError);
+      final _InDeliveryPort port = _InDeliveryPort(
+        transitionError: kFakeStockIssueShortError,
+        stalePreview: true,
+      );
       await tester
           .pumpWidget(_statusChange(port, orderId: kFakeOrderShortStock));
       await tester.pumpAndSettle();
@@ -316,12 +366,84 @@ void main() {
       );
     });
 
+    testWidgets(
+        'preview blocked ⇒ CHẶN banner (one sentence per short line), "Thiếu N unit" under that row only, button LOCKED, port never called',
+        (tester) async {
+      _screenSize(tester, 400.0);
+      final _InDeliveryPort port = _InDeliveryPort();
+      await tester
+          .pumpWidget(_statusChange(port, orderId: kFakeOrderShortStock));
+      await tester.pumpAndSettle();
+
+      expect(find.text(_kBlockedSentence), findsOneWidget);
+      expect(find.textContaining('CHẶN xuất kho'), findsOneWidget);
+      final Finder shortCell = find.ancestor(
+        of: find.text('Battery LiFePO4 10kWh'),
+        matching: find.byType(Column),
+      );
+      expect(
+        find.descendant(
+            of: shortCell.first, matching: find.text('Thiếu 2 bình')),
+        findsOneWidget,
+      );
+      final Finder otherCell = find.ancestor(
+        of: find.text(_kLongestName),
+        matching: find.byType(Column),
+      );
+      expect(
+        find.descendant(
+            of: otherCell.first, matching: find.textContaining('Thiếu')),
+        findsNothing,
+      );
+      final Finder button =
+          find.widgetWithText(AppButton, 'Xác nhận xuất kho & chuyển Đã giao');
+      expect(tester.widget<AppButton>(button).onPressed, isNull);
+      await tester.ensureVisible(button);
+      await tester.tap(button, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(port.transitionCalls, 0);
+    });
+
+    testWidgets(
+        'preview not blocked ⇒ no CHẶN banner, no "Thiếu" row, button usable',
+        (tester) async {
+      _screenSize(tester, 400.0);
+      await tester.pumpWidget(_statusChange(_InDeliveryPort()));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('CHẶN xuất kho'), findsNothing);
+      expect(find.textContaining('Thiếu '), findsNothing);
+      expect(
+        tester
+            .widget<AppButton>(find.widgetWithText(
+                AppButton, 'Xác nhận xuất kho & chuyển Đã giao'))
+            .onPressed,
+        isNotNull,
+      );
+    });
+
+    for (final double width in <double>[320.0, 360.0]) {
+      testWidgets('blocked banner + LONGEST name do not overflow at ${width}px',
+          (tester) async {
+        _screenSize(tester, width);
+        await tester.pumpWidget(
+            _statusChange(_InDeliveryPort(), orderId: kFakeOrderShortStock));
+        await tester.pumpAndSettle();
+        expect(find.text(_kBlockedSentence), findsOneWidget);
+        expect(find.text(_kLongestName), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+
     for (final double width in <double>[320.0, 360.0]) {
       testWidgets('LONGEST name + row error do not overflow at ${width}px',
           (tester) async {
         _screenSize(tester, width);
         await tester.pumpWidget(_statusChange(
-          _InDeliveryPort(transitionError: kFakeStockIssueShortError),
+          _InDeliveryPort(
+            transitionError: kFakeStockIssueShortError,
+            stalePreview: true,
+          ),
           orderId: kFakeOrderShortStock,
         ));
         await tester.pumpAndSettle();
@@ -423,8 +545,10 @@ void main() {
     testWidgets('a 409 re-reads the preview; a new step clears the banner',
         (tester) async {
       _screenSize(tester, 400.0);
-      final _TwoStepPort port =
-          _TwoStepPort(transitionError: kFakeStockIssueShortError);
+      final _TwoStepPort port = _TwoStepPort(
+        transitionError: kFakeStockIssueShortError,
+        stalePreview: true,
+      );
       await tester
           .pumpWidget(_statusChange(port, orderId: kFakeOrderShortStock));
       await tester.pumpAndSettle();
@@ -516,6 +640,27 @@ void main() {
       expect(tester.widget<AppButton>(confirm).onPressed, isNotNull);
       await _tap(tester, confirm);
       expect(port.issueCalls, 2);
+    });
+
+    testWidgets(
+        'preview blocked ⇒ the sheet shows the CHẶN banner and a LOCKED "Xuất kho (bị chặn)"; the port is never called',
+        (tester) async {
+      _screenSize(tester, 400.0);
+      final _BlockedDetailPort port = _BlockedDetailPort();
+      await tester.pumpWidget(_detail(port));
+      await tester.pumpAndSettle();
+
+      await _tap(tester, find.widgetWithText(AppButton, 'Xuất kho'));
+      expect(find.text(_kBlockedSentence), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Xác nhận xuất kho'), findsNothing);
+      final Finder locked =
+          find.widgetWithText(AppButton, 'Xuất kho (bị chặn)');
+      expect(tester.widget<AppButton>(locked).onPressed, isNull);
+      await tester.ensureVisible(locked);
+      await tester.tap(locked, warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(port.issueCalls, 0);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('cannot issue ⇒ "Chưa xuất kho.", no button', (tester) async {

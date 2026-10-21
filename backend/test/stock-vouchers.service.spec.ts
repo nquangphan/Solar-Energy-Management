@@ -2,7 +2,9 @@ import type { Prisma } from '@prisma/client';
 import type { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
 import type { EventBus } from '../src/events/event-bus';
+import { StockOutBlocked } from '../src/inventory/domain/stock-out-blocked-event';
 import { StockVoucherCreated } from '../src/inventory/domain/stock-voucher-events';
+import { InsufficientStockException } from '../src/inventory/insufficient-stock.exception';
 import { anGiaVonDongPhieu } from '../src/inventory/domain/stock-voucher-visibility';
 import { tinhGiaVonBinhQuan } from '../src/inventory/domain/gia-von';
 import {
@@ -270,7 +272,7 @@ describe('StockVouchersService', () => {
     expect(tx.stockItem.upsert).toHaveBeenCalledTimes(1);
   });
 
-  it('xuất quá tồn (một dòng đủ, một dòng thiếu, một dòng chưa có sổ tồn) ⇒ 409 INSUFFICIENT_STOCK đúng dòng, KHÔNG lệnh ghi nào, 0 event', async () => {
+  it('stock-out beyond on-hand (one line covered, one short, one without a stock record) ⇒ 409 INSUFFICIENT_STOCK on the right lines, NO write, only StockOutBlocked', async () => {
     chuanBi([sanPham(P1, { onHand: 10 }), sanPham(P2, { onHand: 2 })], 'xuat');
 
     const loi = await loiCua(
@@ -301,7 +303,64 @@ describe('StockVouchersService', () => {
     expect(tx.stockItem.upsert).not.toHaveBeenCalled();
     expect(tx.product.update).not.toHaveBeenCalled();
     expect(tx.stockVoucher.create).not.toHaveBeenCalled();
-    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(eventBus.publish).toHaveBeenCalledTimes(1);
+    expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(StockOutBlocked);
+  });
+
+  it('blocked stock-out ⇒ StockOutBlocked exactly once AFTER the rollback (no target, only short lines, onHand under the lock), rethrows the SAME error, no StockVoucherCreated', async () => {
+    chuanBi([sanPham(P1, { onHand: 10 }), sanPham(P2, { onHand: 2 })], 'xuat');
+    let thrown: unknown;
+    try {
+      await service.taoPhieu(
+        {
+          type: 'xuat',
+          lines: [
+            { productId: P1, qty: 10 },
+            { productId: P2, qty: 3 },
+          ],
+        },
+        ACTOR,
+      );
+    } catch (e) {
+      thrown = e;
+    }
+
+    expect(thrown).toBeInstanceOf(InsufficientStockException);
+    expect((thrown as InsufficientStockException).shortages).toEqual([
+      { productId: P2, qty: 3, onHand: 2 },
+    ]);
+    expect(eventBus.publish).toHaveBeenCalledTimes(1);
+    const event = eventBus.publish.mock.calls[0][0] as StockOutBlocked;
+    expect(event).toBeInstanceOf(StockOutBlocked);
+    expect(event.type).toBe('StockOutBlocked');
+    expect(event.actorAccountId).toBe(ACTOR);
+    expect(event.target).toBeUndefined();
+    expect(event.after).toEqual({
+      lines: [{ productId: P2, qty: 3, onHand: 2 }],
+    });
+    expect(event.occurredAt).toBeInstanceOf(Date);
+    expect(
+      eventBus.publish.mock.calls.some(
+        ([e]) => e instanceof StockVoucherCreated,
+      ),
+    ).toBe(false);
+    // The tx body ran (lock + read) before the publish — the publish follows the rollback.
+    expect(thuTu.indexOf('publish')).toBe(thuTu.length - 1);
+    expect(thuTu.indexOf('$queryRaw')).toBeLessThan(thuTu.indexOf('publish'));
+  });
+
+  it('enough stock ⇒ no StockOutBlocked (only StockVoucherCreated)', async () => {
+    chuanBi([sanPham(P1, { onHand: 10 })], 'xuat');
+
+    await service.taoPhieu(
+      { type: 'xuat', lines: [{ productId: P1, qty: 10 }] },
+      ACTOR,
+    );
+
+    expect(eventBus.publish).toHaveBeenCalledTimes(1);
+    expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(
+      StockVoucherCreated,
+    );
   });
 
   it('xuất sản phẩm chưa từng có sổ tồn ⇒ coi onHand = 0 ⇒ 409', async () => {
@@ -340,6 +399,7 @@ describe('StockVouchersService', () => {
       expect(tx.stockItem.upsert).not.toHaveBeenCalled();
       expect(tx.product.update).not.toHaveBeenCalled();
       expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
   }
 
@@ -353,6 +413,22 @@ describe('StockVouchersService', () => {
     expect(loi.message).toContain(P2);
     expect(tx.product.findMany).not.toHaveBeenCalled();
     expect(tx.stockItem.upsert).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+
+  it('other DB error (e.g. unique violation inside the tx) ⇒ no StockOutBlocked, error surfaces', async () => {
+    chuanBi([sanPham(P1, { onHand: 10 })], 'xuat');
+    tx.stockVoucher.create = jest.fn(() =>
+      Promise.reject(new Error('unique constraint')),
+    );
+
+    await expect(
+      service.taoPhieu(
+        { type: 'xuat', lines: [{ productId: P1, qty: 1 }] },
+        ACTOR,
+      ),
+    ).rejects.toThrow('unique constraint');
+    expect(eventBus.publish).not.toHaveBeenCalled();
   });
 
   it('event StockVoucherCreated đúng MỘT lần, sau commit, payload đủ tồn/giá vốn trước–sau', async () => {
@@ -475,7 +551,7 @@ describe('StockVouchersService.issueForOrderInTx', () => {
     stockMovement: { aggregate: jest.Mock; create: jest.Mock };
     stockVoucher: { create: jest.Mock };
   };
-  const prisma = { $transaction: jest.fn() };
+  const prisma = { $transaction: jest.fn(), product: { findMany: jest.fn() } };
   const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
   const service = new StockVouchersService(
     prisma as unknown as PrismaService,
@@ -657,6 +733,12 @@ describe('StockVouchersService.issueForOrderInTx', () => {
     expect(tx.stockItem.upsert).not.toHaveBeenCalled();
     expect(tx.stockMovement.create).not.toHaveBeenCalled();
     expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+    // Typed refusal carrying exactly the short lines; the primitive never publishes itself.
+    expect(err).toBeInstanceOf(InsufficientStockException);
+    expect((err as InsufficientStockException).shortages).toEqual([
+      { productId: P1, qty: 3, onHand: 1 },
+    ]);
+    expect(eventBus.publish).not.toHaveBeenCalled();
   });
 
   it('no stock-tracked line ⇒ voucher null, empty map, event null, NO writes', async () => {
@@ -722,6 +804,31 @@ describe('StockVouchersService.issueForOrderInTx', () => {
       expect(tx.stockMovement.create).not.toHaveBeenCalled();
     },
   );
+
+  describe('previewOrderIssue', () => {
+    it('shortfall per merged line with the SAME rule as the lock check: boundary qty === onHand ⇒ 0, beyond ⇒ qty − onHand, no stock record ⇒ whole qty', async () => {
+      prisma.product.findMany.mockResolvedValue([
+        { ...product(P1, 'A Tấm pin', { onHand: 6 }) },
+        { ...product(P2, 'B Inverter', { onHand: 2 }) },
+        { ...product(P3, 'C Cáp', { onHand: null }) },
+      ]);
+
+      const { lines } = await service.previewOrderIssue([
+        { productId: P1, qty: 4 },
+        { productId: P1, qty: 2 },
+        { productId: P2, qty: 5 },
+        { productId: P3, qty: 1 },
+      ]);
+
+      expect(
+        lines.map((l) => [l.productId, l.qty, l.onHand, l.shortfall]),
+      ).toEqual([
+        [P1, 6, 6, 0],
+        [P2, 5, 2, 3],
+        [P3, 1, 0, 1],
+      ]);
+    });
+  });
 
   describe('lockTrackedProductsInTx', () => {
     function tracked(ids: string[]) {

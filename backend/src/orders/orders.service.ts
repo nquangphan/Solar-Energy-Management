@@ -12,6 +12,12 @@ import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
 import { PERM } from '../accounts/domain/permission-registry';
 import type { StockIssued } from '../inventory/domain/stock-issued-event';
+import { StockOutBlocked } from '../inventory/domain/stock-out-blocked-event';
+import { InsufficientStockException } from '../inventory/insufficient-stock.exception';
+import {
+  StockItemsService,
+  type OrderStockCheckLine,
+} from '../inventory/stock-items.service';
 import {
   StockVouchersService,
   type StockIssuePreviewLine,
@@ -408,6 +414,8 @@ export interface OrderStockIssueView {
   readonly issued: boolean;
   readonly voucher?: StockVoucherDetail;
   readonly canIssue: boolean;
+  /** A line is short right now — a warning; the server re-checks under the lock. */
+  readonly blocked: boolean;
   readonly lines: readonly StockIssuePreviewLine[];
   readonly untrackedItems: readonly string[];
 }
@@ -459,6 +467,9 @@ export class OrdersService {
     // status are ONE transaction this service opens; `inventory/` supplies the primitive that
     // runs inside it.
     private readonly stockVouchers: StockVouchersService,
+    // FIFTH dependency, only for the quote screen's early stock warning: the order and its lines
+    // are read here (scope), the stock figures are computed by `inventory/`.
+    private readonly stockItems: StockItemsService,
   ) {}
 
   /**
@@ -722,7 +733,8 @@ export class OrdersService {
    *  5. Upload R2.
    *  6. `$transaction`: engine ghi status → `createMany` metadata ảnh với CÙNG `occurredAt`.
    *     Transition bị từ chối trong tx ⇒ rollback ⇒ KHÔNG hàng `Attachment` nào (AC-7).
-   *  7. Publish SAU commit (AD-18).
+   *  7. Publish SAU commit (AD-18) — or, when "Đã giao" was refused for insufficient stock,
+   *     publish `StockOutBlocked` AFTER the rollback and rethrow.
    *
    * `occurredAt` là MỘT biến `Date` cho cả lượt — nó vừa là `occurredAt` của `StatusChanged`
    * (tức của hàng audit mà subscriber ghi) vừa là cột `occurred_at` của mọi ảnh trong lượt.
@@ -831,6 +843,7 @@ export class OrdersService {
     const occurredAt = new Date();
     let statusChanged: StatusChanged;
     let stockIssued: StockIssued | null = null;
+    let issueVersionId: string | undefined;
     try {
       statusChanged = await this.prisma.$transaction(async (tx) => {
         const event = await this.applyTransition(tx, {
@@ -848,6 +861,7 @@ export class OrdersService {
           // Re-read under the lock the engine holds — like the standalone path, never the
           // pre-tx snapshot.
           const locked = await this.findOrThrowIn(tx, input.orderId);
+          issueVersionId = locked.currentVersionId ?? undefined;
           stockIssued = (
             await this.issueStockIfNeeded(tx, locked, {
               callerAccountId: input.callerAccountId,
@@ -878,7 +892,15 @@ export class OrdersService {
         return event;
       });
     } catch (error) {
-      if (error !== THU_CONG_GATE_THUA) throw error;
+      if (error !== THU_CONG_GATE_THUA) {
+        await this.publishIfStockOutBlocked(error, {
+          actorAccountId: input.callerAccountId,
+          orderId: input.orderId,
+          orderVersionId: issueVersionId,
+          occurredAt,
+        });
+        throw error;
+      }
       // Thua cổng atomic = một lượt chuyển khác đã commit trước trong khoảng giữa pre-check
       // và row lock. Lane thủ công BÁO LỖI, không no-op: người bấm cần biết lần bấm của
       // mình không phải lần ăn.
@@ -910,6 +932,9 @@ export class OrdersService {
    * IDEMPOTENT (NFR-1): an issued order returns its existing voucher, writes nothing, emits
    * nothing (`created: false`). The order-row lock serialises two concurrent calls — the
    * second sees the first one's voucher.
+   *
+   * Refused for insufficient stock ⇒ the tx rolls back, `StockOutBlocked` is published AFTER
+   * the rollback, the same error is rethrown.
    */
   async issueStock(
     callerAccountId: string,
@@ -927,17 +952,30 @@ export class OrdersService {
     this.assertStockIssuable(before);
 
     const occurredAt = new Date();
-    const result = await this.prisma.$transaction(async (tx) => {
-      await this.lockOrderRow(tx, orderId);
-      const order = await this.findOrThrowIn(tx, orderId);
-      this.assertStockIssuable(order);
-      return this.issueStockIfNeeded(tx, order, {
-        callerAccountId,
-        permissions,
-        occurredAt,
-        requireVoucher: true,
+    let issueVersionId: string | undefined;
+    let result: Awaited<ReturnType<OrdersService['issueStockIfNeeded']>>;
+    try {
+      result = await this.prisma.$transaction(async (tx) => {
+        await this.lockOrderRow(tx, orderId);
+        const order = await this.findOrThrowIn(tx, orderId);
+        this.assertStockIssuable(order);
+        issueVersionId = order.currentVersionId ?? undefined;
+        return this.issueStockIfNeeded(tx, order, {
+          callerAccountId,
+          permissions,
+          occurredAt,
+          requireVoucher: true,
+        });
       });
-    });
+    } catch (error) {
+      await this.publishIfStockOutBlocked(error, {
+        actorAccountId: callerAccountId,
+        orderId,
+        orderVersionId: issueVersionId,
+        occurredAt,
+      });
+      throw error;
+    }
 
     if (result.event !== null) await this.eventBus.publish(result.event);
     // `requireVoucher` ⇒ the helper already threw 409 when there is no voucher.
@@ -945,8 +983,10 @@ export class OrdersService {
   }
 
   /**
-   * Stock-out preview of an order — `GET /:id/stock-issue`. PLAIN READ. `canIssue` is computed
-   * here (the client never derives it, AD-2); no cost, no money.
+   * Stock-out preview of an order — `GET /:id/stock-issue`. PLAIN READ. `canIssue` and
+   * `blocked` are computed here (the client never derives them, AD-2); no cost, no money.
+   * `canIssue` keeps its meaning (allowed to issue at all); `blocked` says "allowed, but short
+   * right now" — kept apart so the screen can tell the two refusals apart.
    */
   async getStockIssue(
     callerAccountId: string,
@@ -969,6 +1009,7 @@ export class OrdersService {
         issued: true,
         voucher,
         canIssue: false,
+        blocked: false,
         lines: [],
         untrackedItems: [],
       };
@@ -988,10 +1029,80 @@ export class OrdersService {
         STOCK_ISSUE_STATUSES.includes(order.status) &&
         lines.length > 0 &&
         permissions.has(PERM.inventoryManage),
+      blocked: lines.some((l) => l.shortfall > 0),
       lines,
       untrackedItems: orderLines
         .filter((l) => l.productId === null || !tracked.has(l.productId))
         .map((l) => l.name),
+    };
+  }
+
+  /**
+   * `error` is a refusal for insufficient stock ⇒ publish `StockOutBlocked` (once). Called by
+   * the owner of a stock-issuing tx AFTER the rollback; the caller rethrows `error` itself.
+   * Every other error (403, 409 status, no tracked line, DB failure) is not a blocked stock-out.
+   */
+  private async publishIfStockOutBlocked(
+    error: unknown,
+    attempt: {
+      readonly actorAccountId: string;
+      readonly orderId: string;
+      readonly orderVersionId: string | undefined;
+      readonly occurredAt: Date;
+    },
+  ): Promise<void> {
+    if (!(error instanceof InsufficientStockException)) return;
+    await this.eventBus.publish(
+      new StockOutBlocked(
+        attempt.actorAccountId,
+        {
+          orderId: attempt.orderId,
+          ...(attempt.orderVersionId !== undefined && {
+            orderVersionId: attempt.orderVersionId,
+          }),
+          lines: error.shortages,
+        },
+        attempt.occurredAt,
+      ),
+    );
+  }
+
+  /**
+   * Early stock warning of an order's current version — `GET /:id/stock-check`. PLAIN READ.
+   * Scope FIRST (`findScopedOrThrow`: out of scope ⇒ same 404 as unknown id); the order lines
+   * are read here (only `orders/` reads order lines), the figures come from `inventory/`. A
+   * warning only: confirming is never blocked by stock. No money, no cost.
+   *
+   * Stock already issued for the current version ⇒ `lines: []`: the goods left the warehouse
+   * for THIS order, so comparing its `qty` with what remains would warn "to bring in" about
+   * goods it already has.
+   */
+  async getStockCheck(
+    callerAccountId: string,
+    permissions: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<{ readonly lines: readonly OrderStockCheckLine[] }> {
+    const order = await this.findScopedOrThrow(
+      callerAccountId,
+      permissions,
+      orderId,
+    );
+    const versionId = this.currentVersionIdOrThrow(order);
+    const voucher = await this.stockVouchers.findOrderIssueVoucher(
+      this.prisma,
+      order.id,
+      versionId,
+    );
+    if (voucher !== null) return { lines: [] };
+    const orderLines = await this.prisma.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      select: { productId: true, qty: true },
+    });
+    return {
+      lines: await this.stockItems.checkOrderLines(
+        order.id,
+        productLines(orderLines),
+      ),
     };
   }
 

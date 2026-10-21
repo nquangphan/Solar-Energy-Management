@@ -104,6 +104,9 @@
 .table .strong{color:var(--ink);font-weight:800}
 .table tr.zebra td{background:#F7FBFA}
 .table .num .icn{width:14px;height:14px}   /* icon trong ô số — kết nối Icon (1.2) */
+/* Cart line stock hint (quote early warning) — display only; ok/danger tone via tokens. */
+.table .stock-hint{font-size:11px;font-weight:700;color:var(--ok)}
+.table .stock-hint--short{color:var(--danger)}
 
 /* Stepper (AC-2/5): 26px nodes + 1.5px bars; done=teal solid, current=teal ring
    (sanctioned double border), gate=dashed border. No disabled/grayed variant —

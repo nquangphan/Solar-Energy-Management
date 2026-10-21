@@ -1317,6 +1317,23 @@ describe('/orders (e2e)', () => {
       );
     });
 
+    it('confirming is NOT blocked by stock: a stock-tracked line with on-hand 0 still confirms (200 dachot), no stock written', async () => {
+      givenPermissions(PERM.ordersConfirm);
+      productRepo.findMany.mockResolvedValue([
+        { ...PIN_580W, sku: 'PIN-580', tracksStock: true, stockItem: null },
+      ]);
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/chot`)
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('dachot');
+      expect(stockItemRepo.upsert).not.toHaveBeenCalled();
+      expect(stockVoucherRepo.create).not.toHaveBeenCalled();
+      expect(stockMovementRepo.create).not.toHaveBeenCalled();
+    });
+
     it('mỗi transition để lại ĐÚNG MỘT vết StatusChanged mang from→to (AD-11)', async () => {
       givenPermissions(PERM.ordersConfirm);
 
@@ -4096,7 +4113,7 @@ describe('/orders (e2e)', () => {
         expect(stockVoucherRepo.create).not.toHaveBeenCalled();
       });
 
-      it('short stock ⇒ 409 INSUFFICIENT_STOCK `lines.0.qty`, no voucher, no photo, no audit row', async () => {
+      it('short stock ⇒ 409 INSUFFICIENT_STOCK `lines.0.qty`, no voucher, no photo, exactly 1 audit row = StockOutBlocked on the order', async () => {
         productRepo.findMany.mockResolvedValue([
           {
             ...PIN_THEO_KHO,
@@ -4124,7 +4141,16 @@ describe('/orders (e2e)', () => {
         ]);
         expect(stockVoucherRepo.create).not.toHaveBeenCalled();
         expect(attachmentRepo.createMany).not.toHaveBeenCalled();
-        expect(auditRepo.create).not.toHaveBeenCalled();
+        // No StatusChanged / StockIssued row — only the blocked attempt.
+        expect(auditRepo.create).toHaveBeenCalledTimes(1);
+        expect(auditRepo.create.mock.calls[0][0]).toMatchObject({
+          data: {
+            eventType: 'StockOutBlocked',
+            targetType: 'Order',
+            targetId: DON_DACOC.id,
+            after: { lines: [{ qty: 8, onHand: 3 }] },
+          },
+        });
       });
 
       it('có Vận chuyển ở `dacoc` gửi `xong_giao` ⇒ 409 PHẠM VI — không nhảy cóc qua `danggiao`', async () => {

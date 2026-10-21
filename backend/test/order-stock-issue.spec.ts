@@ -3,10 +3,13 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import type { AppException } from '../src/common/errors/app.exception';
 import type { EventBus } from '../src/events/event-bus';
 import { StockIssued } from '../src/inventory/domain/stock-issued-event';
+import { StockOutBlocked } from '../src/inventory/domain/stock-out-blocked-event';
+import { InsufficientStockException } from '../src/inventory/insufficient-stock.exception';
 import type {
   StockVoucherDetail,
   StockVouchersService,
 } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import {
   SU_KIEN,
   type TransitionEvent,
@@ -174,6 +177,7 @@ describe('OrdersService — order-bound stock issue', () => {
           unit: 'tấm',
           qty: 10,
           onHand: 40,
+          shortfall: 0,
         },
       ],
       tracked: new Set([P1]),
@@ -245,6 +249,7 @@ describe('OrdersService — order-bound stock issue', () => {
       eventBus as unknown as EventBus,
       storage,
       stockVouchers as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
   });
 
@@ -261,6 +266,30 @@ describe('OrdersService — order-bound stock issue', () => {
     return eventBus.publish.mock.calls.filter(
       ([e]) => (e as { type: string }).type === type,
     ).length;
+  }
+
+  const SHORT = [{ productId: P1, qty: 10, onHand: 4 }];
+  function shortStock(): InsufficientStockException {
+    const error = new InsufficientStockException(SHORT, [
+      {
+        field: 'lines.0.qty',
+        code: 'INSUFFICIENT_STOCK',
+        message: 'Còn 4 tấm, không xuất được 10.',
+      },
+    ]);
+    stockVouchers.issueForOrderInTx = jest.fn(() => {
+      calls.push('primitive');
+      return Promise.reject(error);
+    });
+    return error;
+  }
+
+  function blockedEvent(): StockOutBlocked {
+    const events = eventBus.publish.mock.calls
+      .map(([e]) => e as unknown)
+      .filter((e): e is StockOutBlocked => e instanceof StockOutBlocked);
+    expect(events).toHaveLength(1);
+    return events[0];
   }
 
   describe('standalone path — issueStock', () => {
@@ -413,6 +442,75 @@ describe('OrdersService — order-bound stock issue', () => {
       expect(stockVouchers.issueForOrderInTx).not.toHaveBeenCalled();
     });
 
+    it('short stock ⇒ StockOutBlocked exactly once AFTER the rollback (target = order, version under the lock, short lines), same error rethrown, 0 StockIssued', async () => {
+      const error = shortStock();
+
+      const err = await caught(service.issueStock(ACTOR, WAREHOUSE, ORDER_ID));
+
+      expect(err).toBe(error);
+      expect(calls).not.toContain('tx.commit');
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      expect(published('StockIssued')).toBe(0);
+      const event = blockedEvent();
+      expect(event.actorAccountId).toBe(ACTOR);
+      expect(event.target).toEqual({ type: 'Order', id: ORDER_ID });
+      expect(event.after).toEqual({
+        orderId: ORDER_ID,
+        orderVersionId: 'ver-1',
+        lines: SHORT,
+      });
+      expect(calls.indexOf('publish:StockOutBlocked')).toBeGreaterThan(
+        calls.indexOf('primitive'),
+      );
+      expect(lineRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('the version on StockOutBlocked is the one re-read UNDER the lock, not the pre-tx one', async () => {
+      orderRepo.findFirst = recorded(
+        'order.findFirst',
+        order('danggiao', { currentVersionId: 'ver-old' }),
+      );
+      orderRepo.findUnique = recorded(
+        'order.findUnique',
+        order('danggiao', { currentVersionId: 'ver-locked' }),
+      );
+      shortStock();
+
+      await caught(service.issueStock(ACTOR, WAREHOUSE, ORDER_ID));
+
+      expect(
+        (blockedEvent().after as { orderVersionId: string }).orderVersionId,
+      ).toBe('ver-locked');
+    });
+
+    it('missing inventory.manage under the lock (403) ⇒ no StockOutBlocked', async () => {
+      const err = await caught(
+        service.issueStock(ACTOR, DELIVERY_ONLY, ORDER_ID),
+      );
+
+      expect(err.getStatus()).toBe(403);
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('status refused (409) ⇒ no StockOutBlocked', async () => {
+      givenOrder(order('baogia'));
+
+      await caught(service.issueStock(ACTOR, WAREHOUSE, ORDER_ID));
+
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it('other DB error inside the tx ⇒ no StockOutBlocked', async () => {
+      stockVouchers.issueForOrderInTx = jest.fn(() =>
+        Promise.reject(new Error('unique constraint')),
+      );
+
+      await expect(
+        service.issueStock(ACTOR, WAREHOUSE, ORDER_ID),
+      ).rejects.toThrow('unique constraint');
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
     it('out of scope ⇒ 404 before anything else', async () => {
       orderRepo.findFirst = recorded('order.findFirst', null);
 
@@ -534,6 +632,39 @@ describe('OrdersService — order-bound stock issue', () => {
       await expect(deliver(WAREHOUSE, true)).rejects.toThrow('short-stock');
 
       expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+    });
+
+    it("short stock ⇒ StockOutBlocked exactly once AFTER the rollback, 0 StatusChanged, 0 StockIssued, no photo rows; occurredAt = the attempt's one variable", async () => {
+      const error = shortStock();
+
+      const err = await caught(deliver(WAREHOUSE, true));
+
+      expect(err).toBe(error);
+      expect(calls).not.toContain('tx.commit');
+      expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+      expect(published('StatusChanged')).toBe(0);
+      expect(published('StockIssued')).toBe(0);
+      const event = blockedEvent();
+      expect(event.target).toEqual({ type: 'Order', id: ORDER_ID });
+      expect(event.after).toEqual({
+        orderId: ORDER_ID,
+        orderVersionId: 'ver-1',
+        lines: SHORT,
+      });
+      const primitiveInput = (
+        stockVouchers.issueForOrderInTx.mock.calls[0] as unknown[]
+      )[1] as { occurredAt: Date };
+      expect(event.occurredAt).toBe(primitiveInput.occurredAt);
+    });
+
+    it('lost atomic gate (another transition committed first) ⇒ 409, no StockOutBlocked', async () => {
+      orderRepo.updateMany = recorded('order.updateMany', { count: 0 });
+
+      const err = await caught(deliver(WAREHOUSE));
+
+      expect(err.getStatus()).toBe(409);
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
@@ -930,6 +1061,43 @@ describe('OrdersService — order-bound stock issue', () => {
       ]);
     });
 
+    it('every line covered ⇒ blocked false', async () => {
+      const view = await service.getStockIssue(ACTOR, WAREHOUSE, ORDER_ID);
+      expect(view.blocked).toBe(false);
+      expect(view.lines.map((l) => l.shortfall)).toEqual([0]);
+    });
+
+    it('one line short ⇒ blocked true, canIssue keeps its own meaning (still true)', async () => {
+      stockVouchers.previewOrderIssue = recorded('previewOrderIssue', {
+        lines: [
+          {
+            productId: P1,
+            name: 'Tấm pin',
+            sku: 'PIN',
+            unit: 'tấm',
+            qty: 10,
+            onHand: 4,
+            shortfall: 6,
+          },
+          {
+            productId: 'p-inv',
+            name: 'Inverter',
+            sku: 'INV',
+            unit: 'bộ',
+            qty: 1,
+            onHand: 3,
+            shortfall: 0,
+          },
+        ],
+        tracked: new Set([P1, 'p-inv']),
+      });
+
+      const view = await service.getStockIssue(ACTOR, WAREHOUSE, ORDER_ID);
+
+      expect(view.blocked).toBe(true);
+      expect(view.canIssue).toBe(true);
+    });
+
     it('delivery.confirm only ⇒ canIssue false', async () => {
       const view = await service.getStockIssue(ACTOR, DELIVERY_ONLY, ORDER_ID);
       expect(view.canIssue).toBe(false);
@@ -974,6 +1142,7 @@ describe('OrdersService — order-bound stock issue', () => {
         issued: true,
         voucher: VOUCHER,
         canIssue: false,
+        blocked: false,
         lines: [],
         untrackedItems: [],
       });

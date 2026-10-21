@@ -266,6 +266,7 @@ class OrderStockIssueLine {
     required this.unit,
     required this.qty,
     required this.onHand,
+    required this.shortfall,
   });
 
   final String productId;
@@ -276,8 +277,13 @@ class OrderStockIssueLine {
   /// What the order needs — the backend already summed same-product lines.
   final int qty;
 
-  /// Real on-hand right now, for counting against. NOT a go/no-go signal.
+  /// Real on-hand right now, for counting against. The go/no-go WARNING is
+  /// [shortfall] / the view's `blocked` — never a client-side comparison.
   final int onHand;
+
+  /// Units of [qty] beyond [onHand] right now (≥ 0), computed by the backend.
+  /// A warning: the server re-checks under the lock when issuing.
+  final int shortfall;
 }
 
 /// `GET /orders/:id/stock-issue` — mirrors `OrderStockIssueViewDto`.
@@ -286,12 +292,15 @@ class OrderStockIssueLine {
 /// [lines] (in the backend's canonical order — a 409's `lines.{i}.qty` indexes
 /// into it) and [untrackedItems] (line names that never go on the voucher).
 /// [canIssue] is computed by the BACKEND — the screen does not re-derive it,
-/// and never compares `qty` with `onHand` (AD-2).
+/// and never compares `qty` with `onHand` (AD-2). [blocked] (some line short
+/// right now) is the backend's warning, kept apart from [canIssue] so the
+/// screen can tell "may not issue" from "may issue, but goods are missing".
 class OrderStockIssueView {
   const OrderStockIssueView({
     required this.issued,
     this.voucher,
     required this.canIssue,
+    required this.blocked,
     required this.lines,
     required this.untrackedItems,
   });
@@ -301,9 +310,59 @@ class OrderStockIssueView {
   /// NULL until issued (field absent). Its `unitCost` is null without `costs.view`.
   final StockVoucherDetail? voucher;
   final bool canIssue;
+  final bool blocked;
   final List<OrderStockIssueLine> lines;
   final List<String> untrackedItems;
 }
+
+/// One product of the quote's early stock warning — mirrors
+/// `OrderStockCheckLineDto` field for field. Every figure and [status] are the
+/// backend's; the screen picks its wording from [status] only.
+class OrderStockCheckLine {
+  const OrderStockCheckLine({
+    required this.productId,
+    required this.name,
+    required this.unit,
+    required this.qty,
+    required this.onHand,
+    required this.reserved,
+    required this.available,
+    required this.shortfall,
+    required this.status,
+  });
+
+  final String productId;
+  final String name;
+  final String unit;
+
+  /// What the quote needs — the backend already summed same-product lines.
+  final int qty;
+  final int onHand;
+
+  /// Promised to OTHER orders.
+  final int reserved;
+
+  /// `onHand − reserved`, may be negative.
+  final int available;
+
+  /// What to bring in (≥ 0).
+  final int shortfall;
+
+  /// `enough` | `short`.
+  final String status;
+}
+
+/// `GET /orders/:id/stock-check` — mirrors `OrderStockCheckDto`. One entry per
+/// stock-tracked product of the current version, ordered by name; free-text and
+/// non-tracked lines are absent. A warning only — confirming is never blocked.
+class OrderStockCheck {
+  const OrderStockCheck({required this.lines});
+
+  final List<OrderStockCheckLine> lines;
+}
+
+/// The backend's `status` of a short product in [OrderStockCheckLine].
+const String kStockCheckShort = 'short';
 
 /// `POST /orders/:id/stock-issue` — mirrors `OrderStockIssueResultDto`.
 class OrderStockIssueResult {
@@ -907,4 +966,9 @@ abstract class OrdersPort {
   /// stock-tracked lines; not enough stock — `fieldErrors` key is
   /// `lines.{i}.qty`, indexing [getStockIssue]'s `lines`).
   Future<OrderStockIssueResult> issueStock(String orderId);
+
+  /// Early stock warning of a quote (FR-25) — `GET /orders/:id/stock-check`.
+  /// Read-only, a warning only: confirming is never blocked by stock. Throws
+  /// 403 (neither `quotes.create_edit` nor `inventory.manage`), 404.
+  Future<OrderStockCheck> getStockCheck(String orderId);
 }

@@ -13,6 +13,7 @@ import {
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage, type FakeStorage } from './util/fake-storage';
 
@@ -152,6 +153,7 @@ describe('OrdersService — ảnh bổ sung (Story 5.6)', () => {
       eventBus as unknown as EventBus,
       storage,
       {} as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
     orderRepo.findFirst.mockResolvedValue(DON);
     attachmentRepo.findMany.mockResolvedValue([ANH_BO_SUNG, ANH_THEO_BUOC]);

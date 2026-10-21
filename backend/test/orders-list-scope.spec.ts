@@ -11,6 +11,7 @@ import {
 import { ListOrdersQueryDto } from '../src/orders/dto/list-orders-query.dto';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import { fakeStorage } from './util/fake-storage';
 
 /**
@@ -52,6 +53,7 @@ describe('OrdersService.list — phạm vi theo quyền nằm trong where.AND', 
       {} as unknown as EventBus,
       fakeStorage(),
       {} as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
     return { service, batDuoc };
   }

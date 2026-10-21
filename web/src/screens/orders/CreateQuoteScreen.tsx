@@ -11,6 +11,12 @@
 //
 // A network failure NEVER wipes entered lines (EXPERIENCE Flow 1): the error
 // path only sets a Banner/ErrorState — it never resets `order`.
+//
+// STOCK IS A HINT HERE, NEVER A GATE. After each load/line change the screen
+// reads the backend's stock warning (`getStockCheck`) and only renders it: a
+// per-line label picked from `status`, and one warn banner for short products.
+// A failed read hides the hints — no error banner, the cart is untouched — and
+// "Chốt" never depends on stock (blocking lives at the stock-out step).
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
@@ -59,6 +65,7 @@ import type {
   Order,
   OrderPortError,
   OrdersPort,
+  OrderStockCheck,
   OrderTotals,
   UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
@@ -129,6 +136,10 @@ export function CreateQuoteScreen({
   // Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   // tiếp không được cho tổng cũ đè tổng mới (pattern `latest` của CustomerListScreen).
   const latestTotals = useRef(0);
+  // Backend stock warning of the current lines; null = not loaded / failed ⇒ no hints.
+  const [stockCheck, setStockCheck] = useState<OrderStockCheck | null>(null);
+  // Same ticket pattern: an answer for older lines never overwrites a newer one.
+  const latestStock = useRef(0);
 
   // Catalog picker state.
   const [search, setSearch] = useState('');
@@ -161,12 +172,25 @@ export function CreateQuoteScreen({
     catalogPort.listGroups().then(setGroups, () => setGroups([]));
   }, [picker, catalogPort]);
 
+  /** Backend stock warning of the lines; a failed read only hides the hints. */
+  async function refreshStockCheck(orderId: string) {
+    const ticket = ++latestStock.current;
+    try {
+      const fresh = await ordersPort.getStockCheck(orderId);
+      if (ticket === latestStock.current) setStockCheck(fresh);
+    } catch {
+      if (ticket === latestStock.current) setStockCheck(null);
+    }
+  }
+
   /**
    * MỘT đường code duy nhất cho tổng: echo các dòng backend vừa trả qua
    * `previewTotal` — KHÔNG phép tính nào trong màn (AD-16). Lỗi preview → totals
    * về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp (bất biến k).
    */
   async function refreshTotals(fetched: Order) {
+    // Every path that re-reads lines comes through here — the stock hint follows them.
+    void refreshStockCheck(fetched.id);
     const ticket = ++latestTotals.current;
     // Chiết khấu HIỆU LỰC (Story 4.7): đơn đang chờ duyệt hoặc đã chốt với
     // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc sau
@@ -539,6 +563,16 @@ export function CreateQuoteScreen({
 
   const editable = order.status === 'baogia';
   const lines = order.lineItems;
+  // Wording picked from the backend's `status`; the numbers are its numbers.
+  const stockLines = stockCheck?.lines ?? [];
+  const shortStock = stockLines.filter((s) => s.status === 'short');
+  const stockHintOf = (productId: string | null) => {
+    const s = stockLines.find((x) => x.productId === productId);
+    if (s === undefined) return undefined;
+    return s.status === 'short'
+      ? { label: `Cần nhập ${s.shortfall}`, short: true }
+      : { label: `Kho còn ${s.available}`, short: false };
+  };
 
   // BƯỚC 2 — giỏ hàng (shell của màn này chỉ render từ đây).
   return (
@@ -628,6 +662,16 @@ export function CreateQuoteScreen({
           </Banner>
         )}
 
+        {shortStock.length > 0 && (
+          <Banner tone="warn">
+            {shortStock.map((s) => (
+              <p className="quote-stock-line" key={s.productId}>
+                {`${s.name} — Còn ${s.onHand} · Đã hứa ${s.reserved} · Cần nhập ${s.shortfall}. Vẫn chốt đơn được; chặn nằm ở khâu xuất kho.`}
+              </p>
+            ))}
+          </Banner>
+        )}
+
         <Frame label="Giỏ hàng">
           {lines.length === 0 ? (
             <EmptyState
@@ -672,6 +716,7 @@ export function CreateQuoteScreen({
                     warrantyEditable={editable}
                     onWarrantyChange={(months) => void handleWarrantyChange(line.id, months)}
                     flag={line.isFlexible ? FLAG_LINH_DONG : undefined}
+                    stockHint={stockHintOf(line.productId)}
                     zebra={index % 2 === 1}
                     onQtyChange={(qty) => void handleQtyChange(line.id, qty)}
                     onUnitPriceChange={(price) => void handleUnitPriceChange(line.id, price)}

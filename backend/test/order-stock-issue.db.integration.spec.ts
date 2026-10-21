@@ -243,6 +243,7 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
       bus,
       fakeStorage(),
       vouchers,
+      stockItems,
     );
 
     const facebook = await prisma.customerSource.findUnique({

@@ -13,6 +13,12 @@
 //
 // A network failure NEVER wipes entered lines (EXPERIENCE Flow 1): the error
 // path only sets an error banner — it never resets `_order`.
+//
+// STOCK IS A HINT HERE, NEVER A GATE. After each load/line change the screen
+// reads the backend's stock warning (`getStockCheck`) and only renders it: a
+// per-line label picked from `status`, and one warn banner for short products.
+// A failed read hides the hints — no error banner, the cart is untouched — and
+// "Chốt" never depends on stock (blocking lives at the stock-out step).
 
 import 'package:flutter/widgets.dart';
 
@@ -77,6 +83,12 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
   /// tiếp không được cho tổng cũ đè tổng mới (pattern `_latest` của CustomerListScreen).
   int _latestTotals = 0;
+
+  /// Backend stock warning of the current lines; null = not loaded / failed ⇒ no hints.
+  OrderStockCheck? _stockCheck;
+
+  /// Same ticket pattern: an answer for older lines never overwrites a newer one.
+  int _latestStock = 0;
 
   String? _error;
   Map<String, String> _fieldErrors = const <String, String>{};
@@ -158,10 +170,45 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     });
   }
 
+  /// Products the backend reports short — one warn sentence each.
+  List<OrderStockCheckLine> get _shortStock => <OrderStockCheckLine>[
+        for (final OrderStockCheckLine s
+            in _stockCheck?.lines ?? const <OrderStockCheckLine>[])
+          if (s.status == kStockCheckShort) s,
+      ];
+
+  /// Backend stock warning of the lines; a failed read only hides the hints.
+  Future<void> _refreshStockCheck(String orderId) async {
+    final int ticket = ++_latestStock;
+    try {
+      final OrderStockCheck fresh =
+          await widget.ordersPort.getStockCheck(orderId);
+      if (!mounted || ticket != _latestStock) return;
+      setState(() => _stockCheck = fresh);
+    } catch (_) {
+      if (!mounted || ticket != _latestStock) return;
+      setState(() => _stockCheck = null);
+    }
+  }
+
+  /// Wording picked from the backend's `status`; the numbers are its numbers.
+  AppCartLineStockHint? _stockHintOf(String? productId) {
+    for (final OrderStockCheckLine s
+        in _stockCheck?.lines ?? const <OrderStockCheckLine>[]) {
+      if (s.productId != productId) continue;
+      return s.status == kStockCheckShort
+          ? AppCartLineStockHint(label: 'Cần nhập ${s.shortfall}', short: true)
+          : AppCartLineStockHint(label: 'Kho còn ${s.available}', short: false);
+    }
+    return null;
+  }
+
   /// MỘT đường code duy nhất cho tổng: echo các dòng backend vừa trả qua
   /// `previewTotal` — KHÔNG phép tính nào trong màn (AD-16). Lỗi preview →
   /// totals về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp.
   Future<void> _refreshTotals(Order fetched) async {
+    // Every path that re-reads lines comes through here — the stock hint follows them.
+    _refreshStockCheck(fetched.id);
     final int ticket = ++_latestTotals;
     // Chiết khấu HIỆU LỰC (Story 4.7): đơn đang chờ duyệt hoặc đã chốt với
     // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc
@@ -1026,6 +1073,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     'Chiết khấu bị từ chối — ${order.discount!.resolveNote ?? ''}',
               ),
             ],
+            if (_shortStock.isNotEmpty) ...<Widget>[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(
+                tone: AppBannerTone.warn,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    for (final OrderStockCheckLine s in _shortStock)
+                      Text(
+                        '${s.name} — Còn ${s.onHand} · Đã hứa ${s.reserved} · Cần nhập ${s.shortfall}. Vẫn chốt đơn được; chặn nằm ở khâu xuất kho.',
+                      ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: AppTokens.space12),
             AppFrame(
               label: 'Giỏ hàng',
@@ -1067,6 +1130,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                           onWarrantyChange: (int? months) =>
                               _updateWarranty(line.id, months),
                           flag: line.isFlexible ? kFlagLinhDong : null,
+                          stockHint: _stockHintOf(line.productId),
                           zebra: entry.key.isOdd,
                           onQtyChange: (num qty) => _updateQty(line.id, qty),
                           onUnitPriceChange: (num price) =>

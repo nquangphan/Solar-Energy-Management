@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { STOCK_PAIR } from '../lib/stock-figures.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,6 +75,9 @@ const BANNED = [
   [new RegExp(`\\bonHand\\s*${CMP}`), 'compare onHand'],
   [new RegExp(`\\b\\w*(?:qty|onHand)\\w*\\s*-(?![->])`), 'subtract from a quantity or stock (a shortage is the backend\'s 409)'],
   [new RegExp(`-\\s*[\\w.\\[\\]]*\\b(?:qty|onHand)\\b`), 'subtract a quantity or stock'],
+  // The preview warning is read, never re-derived: `shortfall`/`blocked` come from
+  // the backend; comparing or combining two stock figures is the rule itself.
+  [STOCK_PAIR, 'compare or combine two stock figures (shortfall/blocked are the backend\'s)'],
 ];
 
 /** Hard-coded colours: every colour is a token (AD-13). */
@@ -105,11 +109,15 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
     'const tb = tong / d.qty;',
     'const thieu = line.qty - line.onHand; if (thieu) {}',
     'final int con = tong - l.onHand;',
+    'const blocked = line.shortfall > line.available;',
+    'final bool thieu = l.reserved + l.qty > l.onHand;',
   ];
   for (const sample of samples) {
     assert.ok(BANNED.some(([pattern]) => pattern.test(sample)), `no ban pattern caught: ${sample}`);
   }
   assert.ok(!BANNED.some(([pattern]) => pattern.test("{d.qty}</td><td>{d.onHand}")), 'rendering a number is not a violation');
+  // Reading the backend's figure to pick a sentence is allowed.
+  assert.ok(!BANNED.some(([pattern]) => pattern.test('line.shortfall > 0 ? a : b')), 'reading shortfall is not a violation');
 });
 
 test('ports, fakes and screens never carry the product cost price', () => {
@@ -154,6 +162,11 @@ test('every label is present on BOTH platforms, byte-for-byte (UX-DR-27)', () =>
     'Xuất kho',
     'Xác nhận xuất kho',
     'Chưa xuất kho.',
+    'CHẶN xuất kho — ',
+    ' không đủ tồn thật (cần ',
+    'Đơn này đã được chốt dù thiếu hàng; chặn chỉ nằm ở đây. Nhập hàng trước khi xuất.',
+    'Thiếu ',
+    'Xuất kho (bị chặn)',
   ];
   for (const label of LABELS) {
     assert.ok(web.includes(label), `web must render "${label}"`);
@@ -163,6 +176,15 @@ test('every label is present on BOTH platforms, byte-for-byte (UX-DR-27)', () =>
   // is matched as the frame's exact label, or a removed frame would stay green.
   assert.ok(web.includes('label="Phiếu xuất"'), 'web order detail must keep the "Phiếu xuất" frame');
   assert.ok(mobile.includes("label: 'Phiếu xuất'"), 'mobile order detail must keep the "Phiếu xuất" frame');
+});
+
+test('the confirm buttons lock on the backend\'s `blocked`, on both platforms', () => {
+  const [webStatus, webDetail] = [screens[1][1], screens[2][1]];
+  const [mobStatus, mobDetail] = [screens[WEB.length + 1][1], screens[WEB.length + 2][1]];
+  assert.ok(/stockIssue\.blocked/.test(webStatus), 'web status change must lock on stockIssue.blocked');
+  assert.ok(/disabled=\{issuing \|\| stockIssue\.blocked\}/.test(webDetail), 'web detail sheet must lock on stockIssue.blocked');
+  assert.ok(/_stockIssue!\.blocked/.test(mobStatus), 'mobile status change must lock on blocked');
+  assert.ok(/_sending \|\| _view\.blocked \? null/.test(mobDetail), 'mobile detail sheet must lock on blocked');
 });
 
 test('the row error is placed from the backend\'s `lines.{i}.qty`, on both platforms', () => {

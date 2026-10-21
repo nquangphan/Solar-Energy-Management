@@ -30,6 +30,8 @@ import type {
   OrderLine,
   OrderNextStep,
   OrderPortError,
+  OrderStockCheck,
+  OrderStockCheckLine,
   OrderStockIssueLine,
   OrderStockIssueResult,
   OrderStockIssueView,
@@ -134,6 +136,7 @@ const DEMO_ISSUE_LINES: OrderStockIssueLine[] = [
     unit: 'bộ',
     qty: 1,
     onHand: 5,
+    shortfall: 0,
   },
   {
     productId: 'prod-pin-ae-630',
@@ -142,6 +145,7 @@ const DEMO_ISSUE_LINES: OrderStockIssueLine[] = [
     unit: 'tấm',
     qty: 14,
     onHand: 40,
+    shortfall: 0,
   },
 ];
 const DEMO_SHORT_LINE: OrderStockIssueLine = {
@@ -151,7 +155,64 @@ const DEMO_SHORT_LINE: OrderStockIssueLine = {
   unit: 'bình',
   qty: 2,
   onHand: 0,
+  shortfall: 2,
 };
+
+/**
+ * Quote stock warning rows, typed as the backend returns them — per product,
+ * figures and `status` fixed (the fake owns no stock rule: "short" is a fixed
+ * fact of a fixed product, never a comparison). Keyed by catalogue product so a
+ * quote built in this session gets hints for what it contains.
+ */
+const DEMO_STOCK_BY_PRODUCT: Record<
+  string,
+  Omit<OrderStockCheckLine, 'productId' | 'name' | 'unit' | 'qty'>
+> = {
+  'prod-pin-580': {
+    onHand: 42,
+    reserved: 0,
+    available: 42,
+    shortfall: 0,
+    status: 'enough',
+  },
+  'prod-inverter-8k': {
+    onHand: 1,
+    reserved: 1,
+    available: 0,
+    shortfall: 1,
+    status: 'short',
+  },
+};
+
+/**
+ * Stock warning of an order the fake never created (test fixtures, standalone
+ * demo): one product enough, one short with the LONGEST product name; the
+ * quote's free-text line has no entry, as on the backend.
+ */
+const DEMO_STOCK_CHECK: OrderStockCheckLine[] = [
+  {
+    productId: 'prod-inverter-hybrid-10k',
+    name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+    unit: 'bộ',
+    qty: 2,
+    onHand: 1,
+    reserved: 0,
+    available: 1,
+    shortfall: 1,
+    status: 'short',
+  },
+  {
+    productId: 'prod-pin-580',
+    name: 'Tấm pin JA Solar 580W',
+    unit: 'tấm',
+    qty: 12,
+    onHand: 42,
+    reserved: 0,
+    available: 42,
+    shortfall: 0,
+    status: 'enough',
+  },
+];
 const DEMO_UNTRACKED_ITEMS = ['Công lắp đặt'];
 
 /** The statuses the backend accepts for a standalone stock issue. */
@@ -968,6 +1029,7 @@ export class FakeOrdersPort implements OrdersPort {
         issued: true,
         voucher,
         canIssue: false,
+        blocked: false,
         lines: [],
         untrackedItems: [],
       });
@@ -978,6 +1040,8 @@ export class FakeOrdersPort implements OrdersPort {
     return Promise.resolve({
       issued: false,
       canIssue: status === undefined || DEMO_ISSUABLE_STATUSES.includes(status),
+      // The backend's warning for the fixed short demo order.
+      blocked: orderId === FAKE_ORDER_SHORT_STOCK,
       lines:
         orderId === FAKE_ORDER_SHORT_STOCK
           ? [DEMO_SHORT_LINE, ...DEMO_ISSUE_LINES]
@@ -997,6 +1061,34 @@ export class FakeOrdersPort implements OrdersPort {
       return Promise.reject(FAKE_STOCK_ISSUE_SHORT_ERROR);
     }
     return Promise.resolve({ voucher: this.recordIssue(orderId) });
+  }
+
+  /**
+   * Demo twin of `GET /orders/:id/stock-check`: per stock-tracked product of
+   * the order, same-product lines merged, ordered by name; figures from the
+   * fixed demo table. An order the fake never created gets `DEMO_STOCK_CHECK`.
+   */
+  getStockCheck(orderId: string): Promise<OrderStockCheck> {
+    const order = this.orders.get(orderId);
+    if (order === undefined) {
+      return Promise.resolve({ lines: DEMO_STOCK_CHECK.map((l) => ({ ...l })) });
+    }
+    const merged = new Map<string, OrderStockCheckLine>();
+    for (const line of order.lineItems) {
+      const stock = line.productId === null ? undefined : DEMO_STOCK_BY_PRODUCT[line.productId];
+      if (line.productId === null || stock === undefined) continue;
+      const seen = merged.get(line.productId);
+      merged.set(line.productId, {
+        productId: line.productId,
+        name: line.name,
+        unit: line.unit,
+        qty: (seen?.qty ?? 0) + line.qty,
+        ...stock,
+      });
+    }
+    return Promise.resolve({
+      lines: [...merged.values()].sort((a, b) => a.name.localeCompare(b.name, 'vi')),
+    });
   }
 
   /** The order's one stock-out, as the backend writes it (standalone or "Đã giao"). */

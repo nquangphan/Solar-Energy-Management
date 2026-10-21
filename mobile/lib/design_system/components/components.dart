@@ -34,7 +34,11 @@ export 'money_text.dart' show MoneyText, formatVnd;
 // image upload. Behaviour primitives only — no business logic (money math,
 // status transitions, R2 upload all live on the backend; AD-3/10/11/16).
 export 'cart_line_row.dart'
-    show AppCartLineRow, AppWarrantyMode, formatWarrantyMonths;
+    show
+        AppCartLineRow,
+        AppCartLineStockHint,
+        AppWarrantyMode,
+        formatWarrantyMonths;
 export 'skeleton.dart' show AppSkeleton;
 export 'empty_state.dart' show AppEmptyState;
 export 'error_state.dart' show AppErrorState;

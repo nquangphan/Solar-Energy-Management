@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { stockIssueLines } from './domain/stock-issue-lines';
+import {
+  quoteStockLine,
+  type QuoteStockStatus,
+} from './domain/stock-shortfall';
 import { tinhTonKho, type TonKho } from './domain/ton-kho';
 
 export interface StockItemView extends TonKho {
@@ -20,6 +25,22 @@ export interface CanMuaView {
 export interface StockList {
   items: StockItemView[];
   danhSachCanMua: CanMuaView[];
+}
+
+/** Early stock warning of one quoted product — no money, no cost. */
+export interface OrderStockCheckLine {
+  productId: string;
+  name: string;
+  unit: string;
+  /** Sum of the order's lines of this product. */
+  qty: number;
+  onHand: number;
+  /** Promised to OTHER orders — what this order itself holds is excluded. */
+  reserved: number;
+  /** `onHand − reserved` — may be negative. */
+  available: number;
+  shortfall: number;
+  status: QuoteStockStatus;
 }
 
 /**
@@ -128,5 +149,80 @@ export class StockItemsService {
       }));
 
     return { items, danhSachCanMua };
+  }
+
+  /**
+   * Early stock warning for an order's lines (quote screen). `orderLines` = every line of the
+   * order's current version that has a `productId` — `orders/` reads the order (scope is its
+   * job); products that do not track stock are dropped here, same-product lines merged, same
+   * canonical order as the stock-out (`stockIssueLines`).
+   *
+   * `reserved` excludes what is held for THIS order (ledger `SUM` per order): once confirming
+   * reserves stock, an order must not warn against its own reservation.
+   *
+   * One array-form `REPEATABLE READ` tx — `onHand`, the ledger total and the order's own share
+   * come from the same snapshot (same reason as `lietKeTonKho`).
+   */
+  async checkOrderLines(
+    orderId: string,
+    orderLines: readonly { productId: string; qty: number }[],
+  ): Promise<OrderStockCheckLine[]> {
+    const ids = [...new Set(orderLines.map((l) => l.productId))];
+    if (ids.length === 0) return [];
+
+    const [products, totals, ownHeld] = await this.prisma.$transaction(
+      [
+        this.prisma.product.findMany({
+          where: { id: { in: ids } },
+          include: { stockItem: true },
+        }),
+        this.prisma.stockMovement.groupBy({
+          by: ['stockItemId'],
+          where: { stockItem: { productId: { in: ids } } },
+          orderBy: { stockItemId: 'asc' },
+          _sum: { qty: true },
+        }),
+        this.prisma.stockMovement.groupBy({
+          by: ['stockItemId'],
+          where: { orderId, stockItem: { productId: { in: ids } } },
+          orderBy: { stockItemId: 'asc' },
+          _sum: { qty: true },
+        }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    const sumOf = (rows: typeof totals) =>
+      new Map(rows.map((r) => [r.stockItemId, r._sum?.qty ?? 0]));
+    const totalByStockItem = sumOf(totals);
+    const ownByStockItem = sumOf(ownHeld);
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    return stockIssueLines(
+      orderLines,
+      new Map(
+        products.map((p) => [
+          p.id,
+          { name: p.name, tracksStock: p.tracksStock },
+        ]),
+      ),
+    ).map((line) => {
+      const p = byId.get(line.productId)!;
+      const stockItemId = p.stockItem?.id;
+      const onHand = p.stockItem?.onHand ?? 0;
+      const reserved =
+        stockItemId === undefined
+          ? 0
+          : (totalByStockItem.get(stockItemId) ?? 0) -
+            (ownByStockItem.get(stockItemId) ?? 0);
+      return {
+        productId: p.id,
+        name: p.name,
+        unit: p.unit,
+        qty: line.qty,
+        onHand,
+        reserved,
+        ...quoteStockLine({ qty: line.qty, onHand, reserved }),
+      };
+    });
   }
 }

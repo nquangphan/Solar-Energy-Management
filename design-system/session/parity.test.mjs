@@ -576,6 +576,8 @@ test('the orders port carries the stock-issue surface on BOTH platforms, field f
   assert.match(mobPort, /Future<OrderStockIssueView> getStockIssue\(String orderId\)/, 'mobile getStockIssue(orderId) => OrderStockIssueView');
   assert.match(webPort, /issueStock\(orderId: string\): Promise<OrderStockIssueResult>/, 'web issueStock(orderId) => OrderStockIssueResult');
   assert.match(mobPort, /Future<OrderStockIssueResult> issueStock\(String orderId\)/, 'mobile issueStock(orderId) => OrderStockIssueResult');
+  assert.match(webPort, /getStockCheck\(orderId: string\): Promise<OrderStockCheck>/, 'web getStockCheck(orderId) => OrderStockCheck');
+  assert.match(mobPort, /Future<OrderStockCheck> getStockCheck\(String orderId\)/, 'mobile getStockCheck(orderId) => OrderStockCheck');
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
     // POST :id/stock-issue carries no body — a client that sends lines or quantities
     // has an opinion about what leaves the warehouse, and that is the backend's.
@@ -596,6 +598,8 @@ test('the orders port carries the stock-issue surface on BOTH platforms, field f
     ['OrderStockIssueLineDto', 'OrderStockIssueLine'],
     ['OrderStockIssueViewDto', 'OrderStockIssueView'],
     ['OrderStockIssueResultDto', 'OrderStockIssueResult'],
+    ['OrderStockCheckLineDto', 'OrderStockCheckLine'],
+    ['OrderStockCheckDto', 'OrderStockCheck'],
   ]) {
     const schema = spec.components.schemas[dto];
     assert.ok(schema, `openapi.json missing ${dto}`);
@@ -607,7 +611,16 @@ test('the orders port carries the stock-issue surface on BOTH platforms, field f
     assert.deepEqual(dartFields(mobBody), expected, `mobile ${type} must declare exactly the ${dto} fields with the same nullability`);
     checked += Object.keys(expected).length;
   }
-  assert.ok(checked >= 11, `checked only ${checked} DTO fields — the spec reader went blind`);
+  assert.ok(checked >= 23, `checked only ${checked} DTO fields — the spec reader went blind`);
+  // The stock warning fields are among the compared ones — a spec reader that
+  // skipped them would leave the new contract unguarded.
+  for (const [dto, field] of [
+    ['OrderStockIssueLineDto', 'shortfall'],
+    ['OrderStockIssueViewDto', 'blocked'],
+    ['OrderStockCheckLineDto', 'status'],
+  ]) {
+    assert.ok(spec.components.schemas[dto].properties[field], `openapi.json ${dto} must declare ${field}`);
+  }
 });
 
 /** The `{ … }` body of a declaration, up to the first `}` at column 0. */

@@ -3504,6 +3504,71 @@
         ]
       }
     },
+    "/orders/{id}/stock-check": {
+      "get": {
+        "operationId": "OrdersController_getStockCheck",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Per stock-tracked product of the current version: on-hand, promised to other orders, available, shortfall, enough/short. No money, no cost.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStockCheckDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`id` is not a UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Neither quotes.create_edit nor inventory.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No order with this id, or out of scope (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/orders/{id}/anh": {
       "get": {
         "operationId": "OrdersController_listAttachments",
@@ -6452,6 +6517,11 @@
             "type": "number",
             "description": "Real on-hand right now (unlocked read — for counting against only). No stock record ⇒ 0.",
             "example": 40
+          },
+          "shortfall": {
+            "type": "number",
+            "description": "Units of `qty` beyond `onHand` right now (≥ 0, backend-computed). A warning, not the decision — the server re-checks under the lock when issuing.",
+            "example": 0
           }
         },
         "required": [
@@ -6460,7 +6530,8 @@
           "sku",
           "unit",
           "qty",
-          "onHand"
+          "onHand",
+          "shortfall"
         ]
       },
       "OrderStockIssueViewDto": {
@@ -6482,6 +6553,10 @@
             "type": "boolean",
             "description": "Backend-computed: not issued ∧ status allows a standalone issue (confirmed / deposit paid / in delivery / installing / acceptance) ∧ has stock-tracked lines ∧ caller holds inventory.manage."
           },
+          "blocked": {
+            "type": "boolean",
+            "description": "Backend-computed: some line has `shortfall > 0` right now (always false once issued). A warning, not the decision — the server re-checks under the lock when issuing."
+          },
           "lines": {
             "description": "Lines that will be on the voucher, in canonical order (`fieldErrors` index `lines.{i}.qty` follows it). Empty once issued.",
             "type": "array",
@@ -6500,8 +6575,85 @@
         "required": [
           "issued",
           "canIssue",
+          "blocked",
           "lines",
           "untrackedItems"
+        ]
+      },
+      "OrderStockCheckLineDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product name."
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measure.",
+            "example": "tấm"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Quantity the order needs — sum of the current-version lines of this product.",
+            "example": 16
+          },
+          "onHand": {
+            "type": "number",
+            "description": "Real on-hand now. No stock record ⇒ 0.",
+            "example": 40
+          },
+          "reserved": {
+            "type": "number",
+            "description": "Promised to OTHER orders (ledger sum) — what this order itself holds is excluded.",
+            "example": 0
+          },
+          "available": {
+            "type": "number",
+            "description": "`onHand − reserved` — may be negative.",
+            "example": 40
+          },
+          "shortfall": {
+            "type": "number",
+            "description": "Units of `qty` beyond `available` (≥ 0) — what to bring in.",
+            "example": 0
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "enough",
+              "short"
+            ],
+            "description": "`short` ⇔ `shortfall > 0`."
+          }
+        },
+        "required": [
+          "productId",
+          "name",
+          "unit",
+          "qty",
+          "onHand",
+          "reserved",
+          "available",
+          "shortfall",
+          "status"
+        ]
+      },
+      "OrderStockCheckDto": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "description": "One entry per stock-tracked product of the current version (same-product lines merged), ordered by name then productId. Free-text lines and products that do not track stock are absent. Empty once the stock of the current version has been issued.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderStockCheckLineDto"
+            }
+          }
+        },
+        "required": [
+          "lines"
         ]
       },
       "OrderStockIssueResultDto": {

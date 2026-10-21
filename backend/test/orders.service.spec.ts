@@ -20,6 +20,7 @@ import {
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -195,6 +196,7 @@ describe('OrdersService', () => {
     eventBus as unknown as EventBus,
     fakeStorage(),
     stockVouchers as unknown as StockVouchersService,
+    {} as unknown as StockItemsService,
   );
 
   /** Bắt `AppException` để assert `errorCode`/`fieldErrors`/status. */

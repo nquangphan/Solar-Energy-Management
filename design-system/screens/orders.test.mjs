@@ -237,6 +237,19 @@ test('warranty labels byte-identical across CartLineRow twins (Story 4.9, FR-36)
   }
 });
 
+// (e.3) PARITY — the quote stock hint is ONE display prop with the same name and
+// shape on both CartLineRow twins: `stockHint { label, short }`.
+test('stockHint prop identical across CartLineRow twins (label + short, display only)', () => {
+  const webRow = stripTsx(read('web/src/design-system/components/CartLineRow.tsx'));
+  const mobileRow = stripDart(read('mobile/lib/design_system/components/cart_line_row.dart'));
+  assert.match(webRow, /stockHint\?: CartLineStockHint;/, 'web CartLineRow must take an optional stockHint');
+  assert.match(mobileRow, /final AppCartLineStockHint\? stockHint;/, 'mobile AppCartLineRow must take an optional stockHint');
+  const webHint = /export interface CartLineStockHint \{[\s\S]*?\n\}/.exec(webRow)?.[0] ?? '';
+  const mobileHint = /class AppCartLineStockHint \{[\s\S]*?\n\}/.exec(mobileRow)?.[0] ?? '';
+  assert.deepEqual([...webHint.matchAll(/^\s+(\w+):/gm)].map((m) => m[1]), ['label', 'short'], 'web hint = { label, short }');
+  assert.deepEqual([...mobileHint.matchAll(/^\s+final \w+ (\w+);/gm)].map((m) => m[1]), ['label', 'short'], 'mobile hint = { label, short }');
+});
+
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).
 test('no ad-hoc shadow/gradient/elevation, radius via tokens (Viền nét, UX-DR-4)', () => {
   assert.ok(!/box-shadow/i.test(css), 'orders.css must contain 0 box-shadow');

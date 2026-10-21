@@ -14,6 +14,7 @@ import {
 import { StatusChanged } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage, type FakeStorage } from './util/fake-storage';
 
@@ -135,6 +136,7 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
       eventBus as unknown as EventBus,
       storage,
       stockVouchers as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
     lineRepo.findMany.mockResolvedValue([]);
     stockVouchers.findOrderIssueVoucher.mockResolvedValue(null);

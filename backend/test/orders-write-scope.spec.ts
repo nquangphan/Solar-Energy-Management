@@ -7,6 +7,7 @@ import type { AddLineItemRequestDto } from '../src/orders/dto/add-line-item-requ
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrdersService } from '../src/orders/orders.service';
 import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import { fakeStorage } from './util/fake-storage';
 
 /**
@@ -52,6 +53,7 @@ describe('OrdersService — đường GHI đơn thu hẹp theo phạm vi quyền
       { publish, subscribe: jest.fn() } as unknown as EventBus,
       fakeStorage(),
       {} as unknown as StockVouchersService,
+      {} as unknown as StockItemsService,
     );
     return { service, batDuoc, transaction, queryRaw, publish };
   }

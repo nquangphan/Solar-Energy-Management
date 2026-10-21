@@ -182,11 +182,15 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       .set('Authorization', `Bearer ${token()}`);
   }
 
-  function stockIssuedAuditRows(): number {
+  function auditRows(eventType: string): number {
     return auditRepo.create.mock.calls.filter(
       ([a]) =>
-        (a as { data: { eventType: string } }).data.eventType === 'StockIssued',
+        (a as { data: { eventType: string } }).data.eventType === eventType,
     ).length;
+  }
+
+  function stockIssuedAuditRows(): number {
+    return auditRows('StockIssued');
   }
 
   beforeAll(async () => {
@@ -464,9 +468,36 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(res.body.code).toBe(ErrorCode.CONFLICT);
       expect(res.body.fieldErrors[0].code).toBe('INSUFFICIENT_STOCK');
       expect(res.body.fieldErrors[0].field).toBe('lines.0.qty');
+      expect(res.body.message).toBe(
+        'Không đủ tồn — không thể xuất quá số tồn hiện có.',
+      );
       expect(stockVoucherRepo.create).not.toHaveBeenCalled();
       expect(lineRepo.update).not.toHaveBeenCalled();
       expect(stockIssuedAuditRows()).toBe(0);
+      // Exactly one audit row for the refused attempt, on the order, with the version.
+      expect(auditRepo.create).toHaveBeenCalledTimes(1);
+      expect(auditRepo.create.mock.calls[0][0]).toMatchObject({
+        data: {
+          eventType: 'StockOutBlocked',
+          targetType: 'Order',
+          targetId: ORDER_ID,
+          after: {
+            orderId: ORDER_ID,
+            orderVersionId: VERSION_ID,
+            lines: [{ productId: PANEL, qty: 10, onHand: 3 }],
+          },
+        },
+      });
+    });
+
+    it('refusals that are not a short stock (403, 409 status) ⇒ no StockOutBlocked audit row', async () => {
+      givenPermissions(...ROLE_PRESETS.THO_KS);
+      expect((await post()).status).toBe(403);
+      givenPermissions(...ROLE_PRESETS.KHO_GIAO);
+      currentOrder = order('dagiao');
+      expect((await post()).status).toBe(409);
+
+      expect(auditRows('StockOutBlocked')).toBe(0);
     });
   });
 
@@ -595,6 +626,7 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(res.body).toEqual({
         issued: false,
         canIssue: false,
+        blocked: false,
         lines: [
           {
             productId: PANEL,
@@ -603,9 +635,25 @@ describe('/orders/:id/stock-issue (e2e)', () => {
             unit: 'tấm',
             qty: 10,
             onHand: 40,
+            shortfall: 0,
           },
         ],
         untrackedItems: ['Công lắp đặt'],
+      });
+    });
+
+    it('short right now ⇒ blocked true + the line shortfall (backend-computed warning), canIssue unchanged', async () => {
+      productRepo.findMany.mockResolvedValue(products(3));
+
+      const res = await get();
+
+      expect(res.status).toBe(200);
+      expect(res.body.blocked).toBe(true);
+      expect(res.body.canIssue).toBe(true);
+      expect(res.body.lines[0]).toMatchObject({
+        qty: 10,
+        onHand: 3,
+        shortfall: 7,
       });
     });
 

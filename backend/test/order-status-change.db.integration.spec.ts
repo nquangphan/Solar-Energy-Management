@@ -9,6 +9,7 @@ import type { EventBus } from '../src/events/event-bus';
 import { SU_KIEN } from '../src/orders/domain/allowed-transition';
 import { OrdersService } from '../src/orders/orders.service';
 import { StockVouchersService } from '../src/inventory/stock-vouchers.service';
+import type { StockItemsService } from '../src/inventory/stock-items.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage, type FakeStorage } from './util/fake-storage';
 
@@ -152,6 +153,7 @@ moTa('Chuyển trạng thái thủ công + ảnh trên Postgres THẬT', () => {
       eventBus,
       storage,
       new StockVouchersService(prisma as unknown as PrismaService, eventBus),
+      {} as unknown as StockItemsService,
     );
 
     const facebook = await prisma.customerSource.findUnique({

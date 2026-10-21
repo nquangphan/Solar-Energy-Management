@@ -170,3 +170,8 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* One sentence per short product inside the quote stock-warning banner. */
+.quote-stock-line {
+  margin: 0;
+}

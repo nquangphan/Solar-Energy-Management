@@ -314,7 +314,9 @@ export function OrderStatusChangeScreen({
                 disabled={
                   chon === null ||
                   dangGui ||
-                  (chon === EVENT_DELIVERED && previewState !== 'ready')
+                  (chon === EVENT_DELIVERED && previewState !== 'ready') ||
+                  // "Đã giao" would issue stock the backend already says is short.
+                  (willIssue && stockIssue.blocked)
                 }
                 onClick={gui}
               >

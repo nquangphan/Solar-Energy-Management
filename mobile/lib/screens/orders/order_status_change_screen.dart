@@ -427,7 +427,9 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
           onPressed: _chon == null ||
                   _dangGui ||
                   (_chon == kEventDelivered &&
-                      _previewState != _LoadState.ready)
+                      _previewState != _LoadState.ready) ||
+                  // "Đã giao" would issue stock the backend already says is short.
+                  (_willIssue && _stockIssue!.blocked)
               ? null
               : _gui,
         ),

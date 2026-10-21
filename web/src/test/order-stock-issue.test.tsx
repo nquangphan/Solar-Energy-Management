@@ -57,6 +57,23 @@ class InDeliveryPort extends FakeOrdersPort {
 
 afterEach(() => cleanup());
 
+/**
+ * The race the server still guards: the FIRST preview read saw enough stock
+ * (stale), the click then hits a 409. Later reads are the real (blocked) ones.
+ */
+async function stalePreviewThenReal(port: FakeOrdersPort, orderId: string) {
+  const real = await port.getStockIssue(orderId);
+  const stale: OrderStockIssueView = {
+    ...real,
+    blocked: false,
+    lines: real.lines.map((l) => ({ ...l, shortfall: 0 })),
+  };
+  return vi.spyOn(port, 'getStockIssue').mockResolvedValueOnce(stale).mockResolvedValue(real);
+}
+
+const BLOCKED_SENTENCE =
+  'CHẶN xuất kho — Battery LiFePO4 10kWh không đủ tồn thật (cần 2, còn 0). Đơn này đã được chốt dù thiếu hàng; chặn chỉ nằm ở đây. Nhập hàng trước khi xuất.';
+
 describe('Status change — "Đã giao" issues stock', () => {
   it('shows the preview (LONGEST name, Đơn cần, Tồn thật), the untracked row and the notecard; relabels the button', async () => {
     renderScreen(<OrderStatusChangeScreen port={new InDeliveryPort()} orderId="ord-x" />);
@@ -80,8 +97,39 @@ describe('Status change — "Đã giao" issues stock', () => {
     expect(screen.getByRole('button', { name: 'Xác nhận chuyển' })).toBeTruthy();
   });
 
+  it('preview blocked ⇒ the CHẶN banner (one sentence per short line), "Thiếu N unit" under that row only, the confirm button LOCKED and never reaching the port', async () => {
+    const port = new InDeliveryPort();
+    const transition = vi.spyOn(port, 'chuyenTrangThai');
+    renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
+
+    const button = (await screen.findByRole('button', {
+      name: 'Xác nhận xuất kho & chuyển Đã giao',
+    })) as HTMLButtonElement;
+    expect(screen.getByText(BLOCKED_SENTENCE)).toBeTruthy();
+    expect(screen.getAllByText(/^CHẶN xuất kho/)).toHaveLength(1);
+    const shortRow = screen.getByText('Battery LiFePO4 10kWh').closest('tr')!;
+    expect(shortRow.nextElementSibling?.textContent).toBe('Thiếu 2 bình');
+    const otherRow = screen.getByText(LONGEST_NAME).closest('tr')!;
+    expect(otherRow.nextElementSibling?.textContent ?? '').not.toContain('Thiếu');
+    expect(button.disabled).toBe(true);
+    fireEvent.click(button);
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('preview not blocked ⇒ no CHẶN banner, no "Thiếu" row, button usable', async () => {
+    renderScreen(<OrderStatusChangeScreen port={new InDeliveryPort()} orderId="ord-x" />);
+
+    const button = (await screen.findByRole('button', {
+      name: 'Xác nhận xuất kho & chuyển Đã giao',
+    })) as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    expect(screen.queryByText(/CHẶN xuất kho/)).toBeNull();
+    expect(screen.queryByText(/^Thiếu /)).toBeNull();
+  });
+
   it('409 short stock ⇒ banner with the backend message + error right under row `lines.0`', async () => {
     const port = new InDeliveryPort();
+    await stalePreviewThenReal(port, FAKE_ORDER_SHORT_STOCK);
     vi.spyOn(port, 'chuyenTrangThai').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
     renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
 
@@ -205,7 +253,7 @@ describe('Status change — the "Đã giao" preview gates the button', () => {
   it('a 409 re-reads the preview (current numbers next to the row messages); a new step clears the banner', async () => {
     const port = new TwoStepPort();
     vi.spyOn(port, 'chuyenTrangThai').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
-    const read = vi.spyOn(port, 'getStockIssue');
+    const read = await stalePreviewThenReal(port, FAKE_ORDER_SHORT_STOCK);
     renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
 
     fireEvent.click(await screen.findByDisplayValue('xong_giao'));
@@ -281,6 +329,26 @@ describe('Order detail — Phiếu xuất', () => {
     await vi.waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
   });
 
+  it('preview blocked ⇒ the Sheet shows the CHẶN banner and a LOCKED "Xuất kho (bị chặn)"; the port is never called', async () => {
+    const port = new FakeOrdersPort();
+    const order = await seeded(port);
+    const real = await port.getStockIssue(FAKE_ORDER_SHORT_STOCK);
+    vi.spyOn(port, 'getStockIssue').mockResolvedValue(real);
+    const issue = vi.spyOn(port, 'issueStock');
+    renderScreen(<OrderDetailScreen port={port} orderId={order.id} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xuất kho' }));
+    const sheet = within(await screen.findByRole('dialog'));
+    expect(sheet.getByText(BLOCKED_SENTENCE)).toBeTruthy();
+    expect(sheet.queryByRole('button', { name: 'Xác nhận xuất kho' })).toBeNull();
+    const locked = sheet.getByRole('button', {
+      name: 'Xuất kho (bị chặn)',
+    }) as HTMLButtonElement;
+    expect(locked.disabled).toBe(true);
+    fireEvent.click(locked);
+    expect(issue).not.toHaveBeenCalled();
+  });
+
   it('the Sheet cannot be dismissed while the issue is in flight', async () => {
     const port = new FakeOrdersPort();
     const order = await seeded(port);
@@ -315,6 +383,7 @@ describe('Order detail — Phiếu xuất', () => {
     vi.spyOn(port, 'getStockIssue').mockResolvedValue({
       issued: false,
       canIssue: false,
+      blocked: false,
       lines: [],
       untrackedItems: [],
     });

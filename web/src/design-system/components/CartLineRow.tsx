@@ -20,6 +20,16 @@ export function formatWarrantyMonths(months: number | null): string {
   return months % 12 === 0 ? `${months / 12} năm` : `${months} tháng`;
 }
 
+/**
+ * Stock hint under the line name (quote early warning). Display only — the
+ * label is built by the SCREEN from backend figures, `short` picks the tone. It
+ * never affects money and never blocks anything.
+ */
+export interface CartLineStockHint {
+  label: string;
+  short: boolean;
+}
+
 export interface CartLineRowProps {
   name: string;
   sku?: string;
@@ -46,6 +56,7 @@ export interface CartLineRowProps {
   warrantyEditable?: boolean;
   onWarrantyChange?: (months: number | null) => void;
   flag?: string; // display-only badge (e.g. "linh động"/"dự kiến") — never affects price
+  stockHint?: CartLineStockHint;
   zebra?: boolean;
   onQtyChange?: (qty: number) => void;
   onUnitPriceChange?: (unitPrice: number) => void;
@@ -80,6 +91,7 @@ export function CartLineRow({
   warrantyEditable,
   onWarrantyChange,
   flag,
+  stockHint,
   zebra,
   onQtyChange,
   onUnitPriceChange,
@@ -153,6 +165,14 @@ export function CartLineRow({
           <>
             <br />
             <span className="micro muted">{flag}</span>
+          </>
+        )}
+        {stockHint && (
+          <>
+            <br />
+            <span className={stockHint.short ? 'stock-hint stock-hint--short' : 'stock-hint'}>
+              {stockHint.label}
+            </span>
           </>
         )}
       </td>

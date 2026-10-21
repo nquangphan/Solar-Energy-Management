@@ -60,6 +60,7 @@ const List<OrderStockIssueLine> _kDemoIssueLines = <OrderStockIssueLine>[
     unit: 'bộ',
     qty: 1,
     onHand: 5,
+    shortfall: 0,
   ),
   OrderStockIssueLine(
     productId: 'prod-pin-ae-630',
@@ -68,6 +69,7 @@ const List<OrderStockIssueLine> _kDemoIssueLines = <OrderStockIssueLine>[
     unit: 'tấm',
     qty: 14,
     onHand: 40,
+    shortfall: 0,
   ),
 ];
 const OrderStockIssueLine _kDemoShortLine = OrderStockIssueLine(
@@ -77,7 +79,66 @@ const OrderStockIssueLine _kDemoShortLine = OrderStockIssueLine(
   unit: 'bình',
   qty: 2,
   onHand: 0,
+  shortfall: 2,
 );
+
+/// Quote stock warning figures, typed as the backend returns them — per
+/// product, figures and `status` fixed (the fake owns no stock rule: "short" is
+/// a fixed fact of a fixed product, never a comparison). Keyed by catalogue
+/// product so a quote built in this session gets hints for what it contains.
+const Map<String, OrderStockCheckLine> _kDemoStockByProduct =
+    <String, OrderStockCheckLine>{
+  'prod-pin-580': OrderStockCheckLine(
+    productId: 'prod-pin-580',
+    name: 'Tấm pin JA Solar 580W',
+    unit: 'tấm',
+    qty: 0,
+    onHand: 42,
+    reserved: 0,
+    available: 42,
+    shortfall: 0,
+    status: 'enough',
+  ),
+  'prod-inverter-8k': OrderStockCheckLine(
+    productId: 'prod-inverter-8k',
+    name: 'Inverter Hybrid 8kW',
+    unit: 'bộ',
+    qty: 0,
+    onHand: 1,
+    reserved: 1,
+    available: 0,
+    shortfall: 1,
+    status: 'short',
+  ),
+};
+
+/// Stock warning of an order the fake never created (test fixtures, standalone
+/// demo): one product enough, one short with the LONGEST product name; the
+/// quote's free-text line has no entry, as on the backend.
+const List<OrderStockCheckLine> _kDemoStockCheck = <OrderStockCheckLine>[
+  OrderStockCheckLine(
+    productId: 'prod-inverter-hybrid-10k',
+    name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+    unit: 'bộ',
+    qty: 2,
+    onHand: 1,
+    reserved: 0,
+    available: 1,
+    shortfall: 1,
+    status: 'short',
+  ),
+  OrderStockCheckLine(
+    productId: 'prod-pin-580',
+    name: 'Tấm pin JA Solar 580W',
+    unit: 'tấm',
+    qty: 12,
+    onHand: 42,
+    reserved: 0,
+    available: 42,
+    shortfall: 0,
+    status: 'enough',
+  ),
+];
 const List<String> _kDemoUntrackedItems = <String>['Công lắp đặt'];
 
 const OrderPortException kFakeStockIssueShortError = OrderPortException(
@@ -206,6 +267,7 @@ class FakeOrdersPort implements OrdersPort {
         issued: true,
         voucher: voucher,
         canIssue: false,
+        blocked: false,
         lines: const <OrderStockIssueLine>[],
         untrackedItems: const <String>[],
       );
@@ -216,6 +278,8 @@ class FakeOrdersPort implements OrdersPort {
     return OrderStockIssueView(
       issued: false,
       canIssue: status == null || _kDemoIssuableStatuses.contains(status),
+      // The backend's warning for the fixed short demo order.
+      blocked: orderId == kFakeOrderShortStock,
       lines: <OrderStockIssueLine>[
         if (orderId == kFakeOrderShortStock) _kDemoShortLine,
         ..._kDemoIssueLines,
@@ -232,6 +296,43 @@ class FakeOrdersPort implements OrdersPort {
     if (existing != null) return OrderStockIssueResult(voucher: existing);
     if (orderId == kFakeOrderShortStock) throw kFakeStockIssueShortError;
     return OrderStockIssueResult(voucher: _recordIssue(orderId));
+  }
+
+  /// Demo twin of `GET /orders/:id/stock-check`: per stock-tracked product of
+  /// the order, same-product lines merged, ordered by name; figures from the
+  /// fixed demo table. An order the fake never created gets the fixed demo.
+  @override
+  Future<OrderStockCheck> getStockCheck(String orderId) async {
+    final Order? order = _orders[orderId];
+    if (order == null) {
+      return const OrderStockCheck(lines: _kDemoStockCheck);
+    }
+    final Map<String, int> qtyByProduct = <String, int>{};
+    for (final OrderLine line in order.lineItems) {
+      final String? productId = line.productId;
+      if (productId == null || !_kDemoStockByProduct.containsKey(productId)) {
+        continue;
+      }
+      qtyByProduct[productId] = (qtyByProduct[productId] ?? 0) + line.qty;
+    }
+    final List<OrderStockCheckLine> lines = <OrderStockCheckLine>[
+      for (final MapEntry<String, int> e in qtyByProduct.entries)
+        OrderStockCheckLine(
+          productId: e.key,
+          name: _kDemoStockByProduct[e.key]!.name,
+          unit: _kDemoStockByProduct[e.key]!.unit,
+          qty: e.value,
+          onHand: _kDemoStockByProduct[e.key]!.onHand,
+          reserved: _kDemoStockByProduct[e.key]!.reserved,
+          available: _kDemoStockByProduct[e.key]!.available,
+          shortfall: _kDemoStockByProduct[e.key]!.shortfall,
+          status: _kDemoStockByProduct[e.key]!.status,
+        ),
+    ]..sort(
+        (OrderStockCheckLine a, OrderStockCheckLine b) =>
+            a.name.compareTo(b.name),
+      );
+    return OrderStockCheck(lines: lines);
   }
 
   /// The order's one stock-out, as the backend writes it (standalone or

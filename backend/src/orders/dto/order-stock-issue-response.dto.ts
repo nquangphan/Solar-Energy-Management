@@ -5,7 +5,7 @@ import { StockVoucherDetailDto } from '../../inventory/dto/stock-voucher-respons
  * Responses of `/orders/:id/stock-issue` — only so OpenAPI has a real schema (AD-12); the
  * service returns plain objects. Every flag (`issued`, `canIssue`) and the line order are
  * computed by the BACKEND — the client only renders them and NEVER compares `qty` with
- * `onHand`.
+ * `onHand` (it reads `shortfall` / `blocked`).
  *
  * The preview carries NO `Product.costPrice` and no money. The issued voucher's line cost
  * (`voucher.lines[].unitCost`) is present only when the caller holds `costs.view`.
@@ -36,6 +36,13 @@ export class OrderStockIssueLineDto {
     example: 40,
   })
   onHand!: number;
+
+  @ApiProperty({
+    description:
+      'Units of `qty` beyond `onHand` right now (≥ 0, backend-computed). A warning, not the decision — the server re-checks under the lock when issuing.',
+    example: 0,
+  })
+  shortfall!: number;
 }
 
 export class OrderStockIssueViewDto {
@@ -57,6 +64,12 @@ export class OrderStockIssueViewDto {
       'Backend-computed: not issued ∧ status allows a standalone issue (confirmed / deposit paid / in delivery / installing / acceptance) ∧ has stock-tracked lines ∧ caller holds inventory.manage.',
   })
   canIssue!: boolean;
+
+  @ApiProperty({
+    description:
+      'Backend-computed: some line has `shortfall > 0` right now (always false once issued). A warning, not the decision — the server re-checks under the lock when issuing.',
+  })
+  blocked!: boolean;
 
   @ApiProperty({
     type: [OrderStockIssueLineDto],

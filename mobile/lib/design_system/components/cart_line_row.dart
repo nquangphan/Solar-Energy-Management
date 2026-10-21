@@ -25,6 +25,17 @@ const Color _zebraFill = Color(0xFFF7FBFA);
 /// `link` (a "+ Thêm bảo hành" control that reveals the input).
 enum AppWarrantyMode { input, none, link }
 
+/// Stock hint under the line name (quote early warning), mirror of the web
+/// `CartLineStockHint`. Display only — the label is built by the SCREEN from
+/// backend figures, [short] picks the tone. It never affects money and never
+/// blocks anything.
+class AppCartLineStockHint {
+  const AppCartLineStockHint({required this.label, required this.short});
+
+  final String label;
+  final bool short;
+}
+
 /// Format a warranty duration for display: whole years as "X năm", else "X
 /// tháng", `null` as empty. SAME rule as the backend `formatWarranty` and the web
 /// twin `formatWarrantyMonths` — one rule in three places, pinned by parity.
@@ -53,6 +64,7 @@ class AppCartLineRow extends StatelessWidget {
     this.warrantyEditable,
     this.onWarrantyChange,
     this.flag,
+    this.stockHint,
     this.zebra = false,
     this.onQtyChange,
     this.onUnitPriceChange,
@@ -98,6 +110,9 @@ class AppCartLineRow extends StatelessWidget {
 
   /// Display-only badge (e.g. "linh động"/"dự kiến") — never affects price.
   final String? flag;
+
+  /// Quote stock hint under the name ("Kho còn N" / "Cần nhập N").
+  final AppCartLineStockHint? stockHint;
   final bool zebra;
   final ValueChanged<num>? onQtyChange;
   final ValueChanged<num>? onUnitPriceChange;
@@ -201,6 +216,16 @@ class AppCartLineRow extends StatelessWidget {
         ),
         if (sub != null) _microMuted(sub),
         if (flag != null) _microMuted(flag!),
+        if (stockHint != null)
+          Text(
+            stockHint!.label,
+            style: TextStyle(
+              color: stockHint!.short ? AppTokens.danger : AppTokens.ok,
+              fontFamily: AppTokens.fontFamily,
+              fontSize: 11.0,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
       ],
     );
   }

@@ -13,6 +13,8 @@ import {
   type LoaiPhieu,
 } from './domain/gia-von';
 import { stockIssueLines } from './domain/stock-issue-lines';
+import { StockOutBlocked } from './domain/stock-out-blocked-event';
+import { issueShortfall } from './domain/stock-shortfall';
 import {
   StockIssued,
   type StockIssuedLineSnapshot,
@@ -21,6 +23,7 @@ import {
   StockVoucherCreated,
   type StockVoucherLineSnapshot,
 } from './domain/stock-voucher-events';
+import { InsufficientStockException } from './insufficient-stock.exception';
 
 export interface StockVoucherSummary {
   id: string;
@@ -81,24 +84,40 @@ export interface StockIssuePreviewLine {
   unit: string;
   qty: number;
   onHand: number;
+  /** `qty` beyond `onHand` — the SAME rule as the check under the lock; a warning only. */
+  shortfall: number;
 }
 
-const INSUFFICIENT_STOCK_MESSAGE =
-  'Không đủ tồn — không thể xuất quá số tồn hiện có.';
-
-/** One line issued beyond on-hand — shared by free-standing and order-bound stock-outs. */
+/**
+ * Stock check of a stock-out under the lock — shared by free-standing and order-bound
+ * stock-outs. `lines[i]` maps to field `lines.{i}.qty`. `null` ⇒ every line is covered.
+ */
 function insufficientStockError(
-  field: string,
-  qty: number,
-  onHand: number,
-  unit: string,
-): FieldErrorDto | null {
-  if (qty <= onHand) return null;
-  return {
-    field,
-    code: INSUFFICIENT_STOCK,
-    message: `Còn ${onHand} ${unit}, không xuất được ${qty}.`,
-  };
+  lines: readonly {
+    productId: string;
+    qty: number;
+    onHand: number;
+    unit: string;
+  }[],
+): InsufficientStockException | null {
+  const shortages: { productId: string; qty: number; onHand: number }[] = [];
+  const fieldErrors: FieldErrorDto[] = [];
+  lines.forEach((line, i) => {
+    if (issueShortfall(line.qty, line.onHand) === 0) return;
+    shortages.push({
+      productId: line.productId,
+      qty: line.qty,
+      onHand: line.onHand,
+    });
+    fieldErrors.push({
+      field: `lines.${i}.qty`,
+      code: INSUFFICIENT_STOCK,
+      message: `Còn ${line.onHand} ${line.unit}, không xuất được ${line.qty}.`,
+    });
+  });
+  return shortages.length === 0
+    ? null
+    : new InsufficientStockException(shortages, fieldErrors);
 }
 
 /** Trần danh sách phiếu — Phase 1 không phân trang (~20 user nội bộ, khối lượng thấp). */
@@ -173,6 +192,8 @@ function chiTiet(phieu: PhieuChiTietRow): StockVoucherDetail {
  *    (READ COMMITTED lấy ảnh chụp mới cho mỗi câu lệnh).
  *
  * Lỗi nghiệp vụ ném TRONG tx ⇒ rollback toàn phiếu. Event publish SAU commit (AD-18).
+ * A stock-out refused for insufficient stock publishes `StockOutBlocked` AFTER the rollback
+ * (nothing commits, the attempt itself is the fact), then rethrows the same error.
  */
 @Injectable()
 export class StockVouchersService {
@@ -188,8 +209,12 @@ export class StockVouchersService {
     const { type } = input;
     const ids = input.lines.map((l) => l.productId);
 
-    const { phieu, dongSnapshot } = await this.prisma.$transaction(
-      async (tx) => {
+    let committed: {
+      phieu: PhieuChiTietRow;
+      dongSnapshot: StockVoucherLineSnapshot[];
+    };
+    try {
+      committed = await this.prisma.$transaction(async (tx) => {
         const khoa = await tx.$queryRaw<{ id: string }[]>`
           SELECT id FROM products WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
         if (khoa.length !== new Set(ids).size) {
@@ -207,37 +232,39 @@ export class StockVouchersService {
         });
         const theoId = new Map(products.map((p) => [p.id, p]));
 
-        const loi: FieldErrorDto[] = [];
-        input.lines.forEach((dong, i) => {
-          const p = theoId.get(dong.productId)!;
-          const onHand = p.stockItem?.onHand ?? 0;
-          if (type === 'nhap' && !(p.tracksStock && p.isActive)) {
-            loi.push({
-              field: `lines.${i}.productId`,
-              code: PRODUCT_NOT_STOCKABLE,
-              message: `${p.name} không theo dõi tồn hoặc đã ngừng bán — không nhập kho được.`,
-            });
-          }
-          const shortage =
-            type === 'xuat'
-              ? insufficientStockError(
-                  `lines.${i}.qty`,
-                  dong.qty,
-                  onHand,
-                  p.unit,
-                )
-              : null;
-          if (shortage) loi.push(shortage);
-        });
-        if (loi.length > 0) {
-          throw new AppException(
-            ErrorCode.CONFLICT,
-            409,
-            type === 'xuat'
-              ? INSUFFICIENT_STOCK_MESSAGE
-              : 'Có sản phẩm không nhập kho được.',
-            loi,
+        if (type === 'xuat') {
+          const shortage = insufficientStockError(
+            input.lines.map((dong) => {
+              const p = theoId.get(dong.productId)!;
+              return {
+                productId: p.id,
+                qty: dong.qty,
+                onHand: p.stockItem?.onHand ?? 0,
+                unit: p.unit,
+              };
+            }),
           );
+          if (shortage) throw shortage;
+        } else {
+          const loi: FieldErrorDto[] = [];
+          input.lines.forEach((dong, i) => {
+            const p = theoId.get(dong.productId)!;
+            if (!(p.tracksStock && p.isActive)) {
+              loi.push({
+                field: `lines.${i}.productId`,
+                code: PRODUCT_NOT_STOCKABLE,
+                message: `${p.name} không theo dõi tồn hoặc đã ngừng bán — không nhập kho được.`,
+              });
+            }
+          });
+          if (loi.length > 0) {
+            throw new AppException(
+              ErrorCode.CONFLICT,
+              409,
+              'Có sản phẩm không nhập kho được.',
+              loi,
+            );
+          }
         }
 
         const dongSnapshot: StockVoucherLineSnapshot[] = [];
@@ -297,8 +324,20 @@ export class StockVouchersService {
           include: CHI_TIET_INCLUDE,
         });
         return { phieu, dongSnapshot };
-      },
-    );
+      });
+    } catch (error) {
+      if (error instanceof InsufficientStockException) {
+        await this.eventBus.publish(
+          new StockOutBlocked(
+            actorAccountId,
+            { lines: error.shortages },
+            new Date(),
+          ),
+        );
+      }
+      throw error;
+    }
+    const { phieu, dongSnapshot } = committed;
 
     const ketQua = chiTiet(phieu);
     await this.eventBus.publish(
@@ -375,24 +414,18 @@ export class StockVouchersService {
     );
     if (lines.length === 0) return nothing;
 
-    const errors = lines.flatMap((line, i) => {
-      const p = byId.get(line.productId)!;
-      const shortage = insufficientStockError(
-        `lines.${i}.qty`,
-        line.qty,
-        p.stockItem?.onHand ?? 0,
-        p.unit,
-      );
-      return shortage ? [shortage] : [];
-    });
-    if (errors.length > 0) {
-      throw new AppException(
-        ErrorCode.CONFLICT,
-        409,
-        INSUFFICIENT_STOCK_MESSAGE,
-        errors,
-      );
-    }
+    const shortage = insufficientStockError(
+      lines.map((line) => {
+        const p = byId.get(line.productId)!;
+        return {
+          productId: p.id,
+          qty: line.qty,
+          onHand: p.stockItem?.onHand ?? 0,
+          unit: p.unit,
+        };
+      }),
+    );
+    if (shortage) throw shortage;
 
     const snapshots: StockIssuedLineSnapshot[] = [];
     for (const line of lines) {
@@ -505,9 +538,10 @@ export class StockVouchersService {
   }
 
   /**
-   * Preview of an order-bound stock-out — PLAIN READ, no lock: on-hand is shown for whoever
-   * counts the goods; enough/short is decided by the write path under the lock. `tracked` =
-   * the products that will be on the voucher.
+   * Preview of an order-bound stock-out — PLAIN READ, no lock. `shortfall` warns BEFORE the
+   * click with the same rule as the write path (`issueShortfall`), but the decision is still
+   * the check under the lock (stock may move between preview and click). `tracked` = the
+   * products that will be on the voucher.
    */
   async previewOrderIssue(
     orderLines: readonly { productId: string; qty: number }[],
@@ -539,13 +573,15 @@ export class StockVouchersService {
       ),
     ).map((line) => {
       const p = byId.get(line.productId)!;
+      const onHand = p.stockItem?.onHand ?? 0;
       return {
         productId: line.productId,
         name: line.name,
         sku: p.sku,
         unit: p.unit,
         qty: line.qty,
-        onHand: p.stockItem?.onHand ?? 0,
+        onHand,
+        shortfall: issueShortfall(line.qty, onHand),
       };
     });
     return { lines, tracked: new Set(lines.map((l) => l.productId)) };

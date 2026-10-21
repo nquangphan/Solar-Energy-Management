@@ -733,12 +733,13 @@ export function OrderDetailScreen({
                 {issueError}
               </Banner>
             )}
+            {/* Locked while the backend warns the stock is short right now. */}
             <Button
               variant="primary"
-              disabled={issuing}
+              disabled={issuing || stockIssue.blocked}
               onClick={() => void confirmIssue()}
             >
-              Xác nhận xuất kho
+              {stockIssue.blocked ? 'Xuất kho (bị chặn)' : 'Xác nhận xuất kho'}
             </Button>
           </div>
         )}

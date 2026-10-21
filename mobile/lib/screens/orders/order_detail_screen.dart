@@ -887,10 +887,11 @@ class _StockIssueSheetState extends State<_StockIssueSheet> {
               AppBanner(tone: AppBannerTone.danger, message: _error),
             ],
             const SizedBox(height: AppTokens.space12),
+            // Locked while the backend warns the stock is short right now.
             AppButton(
-              label: 'Xác nhận xuất kho',
+              label: _view.blocked ? 'Xuất kho (bị chặn)' : 'Xác nhận xuất kho',
               variant: AppButtonVariant.primary,
-              onPressed: _sending ? null : _confirm,
+              onPressed: _sending || _view.blocked ? null : _confirm,
             ),
           ],
         ),

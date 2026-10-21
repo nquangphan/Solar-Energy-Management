@@ -13,15 +13,19 @@ import { StockVouchersService } from './stock-vouchers.service';
  * `costs.view` tươi mỗi request (che giá vốn dòng phiếu). `PrismaModule` + `EventsModule` đều
  * `@Global`; quyền route do `PermissionsGuard` toàn cục lo.
  *
- * `exports: [StockVouchersService]` — ONE reason: an order-bound stock issue runs inside the
- * `OrdersService` transaction (stock + order-line cost + order status must be atomic), so
- * `orders/` calls this module's `issueForOrderInTx` primitive. The reverse is forbidden:
- * `inventory/` NEVER imports `OrdersModule` (dependency cycle).
+ * `exports` — TWO reasons, both from `orders/`:
+ *  - `StockVouchersService`: an order-bound stock issue runs inside the `OrdersService`
+ *    transaction (stock + order-line cost + order status must be atomic), so `orders/` calls
+ *    this module's `issueForOrderInTx` primitive.
+ *  - `StockItemsService`: the quote screen's early stock warning is read per ORDER (scope and
+ *    order lines belong to `orders/`), while the stock figures are computed here
+ *    (`checkOrderLines`).
+ * The reverse is forbidden: `inventory/` NEVER imports `OrdersModule` (dependency cycle).
  */
 @Module({
   imports: [AccountsModule],
   controllers: [StockItemsController, StockVouchersController],
   providers: [StockItemsService, StockVouchersService],
-  exports: [StockVouchersService],
+  exports: [StockVouchersService, StockItemsService],
 })
 export class InventoryModule {}

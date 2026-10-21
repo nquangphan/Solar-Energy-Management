@@ -50,6 +50,8 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     // Order-bound stock (read or write) also touches the order: previewing the stock-out of an
     // out-of-scope order leaks just like issuing it.
     /this\.stockVouchers\.\w+\s*\(/,
+    // The quote stock warning is read per order too: out of scope must be refused before it.
+    /this\.stockItems\.\w+\s*\(/,
     /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
   ];
 
@@ -187,6 +189,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
           'chuyenTrangThaiTuDong',
           'issueStock',
           'getStockIssue',
+          'getStockCheck',
         ]),
       );
       const xuat = trichMethod(docFile('quote-export.service.ts'))

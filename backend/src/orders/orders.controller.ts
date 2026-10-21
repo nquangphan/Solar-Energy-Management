@@ -66,6 +66,7 @@ import {
   OrderStockIssueResultDto,
   OrderStockIssueViewDto,
 } from './dto/order-stock-issue-response.dto';
+import { OrderStockCheckDto } from './dto/order-stock-check-response.dto';
 import { OrderVersionsResponseDto } from './dto/order-versions-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
@@ -993,6 +994,42 @@ export class OrdersController {
         ),
       }),
     } as OrderStockIssueViewDto;
+  }
+
+  /**
+   * Early stock warning of an order (quote screen). OR gate like `GET /stock-items`: the seller
+   * (`quotes.create_edit`) sees it while quoting, the warehouse (`inventory.manage`) too. Order
+   * scope is closed by the service (`findScopedOrThrow`). A warning only — never blocks Chốt.
+   */
+  @Get(':id/stock-check')
+  @RequireAnyPermissions(PERM.quotesCreateEdit, PERM.inventoryManage)
+  @ApiOkResponse({
+    type: OrderStockCheckDto,
+    description:
+      'Per stock-tracked product of the current version: on-hand, promised to other orders, available, shortfall, enough/short. No money, no cost.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description: '`id` is not a UUID (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Neither quotes.create_edit nor inventory.manage (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'No order with this id, or out of scope (NOT_FOUND).',
+  })
+  async getStockCheck(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<OrderStockCheckDto> {
+    const permissions = await this.quyenCuaNguoiGoi(account.id);
+    return (await this.orders.getStockCheck(
+      account.id,
+      permissions,
+      id,
+    )) as OrderStockCheckDto;
   }
 
   /**

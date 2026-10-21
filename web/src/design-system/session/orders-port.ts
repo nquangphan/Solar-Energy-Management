@@ -200,8 +200,16 @@ export interface OrderStockIssueLine {
   unit: string;
   /** What the order needs — the backend already summed same-product lines. */
   qty: number;
-  /** Real on-hand right now, for counting against. NOT a go/no-go signal. */
+  /**
+   * Real on-hand right now, for counting against. The go/no-go WARNING is
+   * `shortfall` / the view's `blocked` — never a client-side comparison.
+   */
   onHand: number;
+  /**
+   * Units of `qty` beyond `onHand` right now (≥ 0), computed by the backend.
+   * A warning: the server re-checks under the lock when issuing.
+   */
+  shortfall: number;
 }
 
 /**
@@ -212,14 +220,48 @@ export interface OrderStockIssueLine {
  * into it) and `untrackedItems` (line names that never go on the voucher).
  * `canIssue` is computed by the BACKEND (status, stock lines, permission) — the
  * screen does not re-derive it, and never compares `qty` with `onHand` (AD-2).
+ * `blocked` (some line short right now) is the backend's warning; it is kept
+ * apart from `canIssue` so the screen can tell "may not issue" from "may issue,
+ * but goods are missing".
  */
 export interface OrderStockIssueView {
   issued: boolean;
   /** ABSENT until issued. Its `unitCost` is absent without `costs.view`. */
   voucher?: StockVoucherDetail;
   canIssue: boolean;
+  blocked: boolean;
   lines: OrderStockIssueLine[];
   untrackedItems: string[];
+}
+
+/**
+ * One product of the quote's early stock warning — mirrors
+ * `OrderStockCheckLineDto` field for field. Every figure and `status` are the
+ * backend's; the screen picks its wording from `status` only.
+ */
+export interface OrderStockCheckLine {
+  productId: string;
+  name: string;
+  unit: string;
+  /** What the quote needs — the backend already summed same-product lines. */
+  qty: number;
+  onHand: number;
+  /** Promised to OTHER orders. */
+  reserved: number;
+  /** `onHand − reserved`, may be negative. */
+  available: number;
+  /** What to bring in (≥ 0). */
+  shortfall: number;
+  status: 'enough' | 'short';
+}
+
+/**
+ * `GET /orders/:id/stock-check` — mirrors `OrderStockCheckDto`. One entry per
+ * stock-tracked product of the current version, ordered by name; free-text and
+ * non-tracked lines are absent. A warning only — confirming is never blocked.
+ */
+export interface OrderStockCheck {
+  lines: OrderStockCheckLine[];
 }
 
 /** `POST /orders/:id/stock-issue` — mirrors `OrderStockIssueResultDto`. */
@@ -705,4 +747,11 @@ export interface OrdersPort {
    * `lines.{i}.qty`, indexing `getStockIssue().lines`).
    */
   issueStock(orderId: string): Promise<OrderStockIssueResult>;
+
+  /**
+   * Early stock warning of a quote (FR-25) — `GET /orders/:id/stock-check`.
+   * Read-only, a warning only: confirming is never blocked by stock. Rejects
+   * 403 (neither `quotes.create_edit` nor `inventory.manage`), 404.
+   */
+  getStockCheck(orderId: string): Promise<OrderStockCheck>;
 }
