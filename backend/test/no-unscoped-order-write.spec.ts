@@ -44,6 +44,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       file: 'payments/payments.service.ts',
       goiPhamVi: /this\.orders\.getScopedTotal\s*\(/,
     },
+    {
+      file: 'contracts/contracts.service.ts',
+      goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
+    },
   ];
 
   /**
@@ -77,6 +81,11 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     /this\.orders\.autoTransitionInTx\s*\(/,
     /this\.(?:schedules\.)?viewFor\s*\(/,
     /\.\$queryRaw\b/,
+    // A contract belongs to one order: reading or writing contract rows, rendering its PDF, or
+    // reading the inputs it is built from (customer, version, schedule) touches that order.
+    /\.contract\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
+    /this\.renderer\.\w+\s*\(/,
+    /this\.loadInputs\s*\(/,
   ];
 
   /**
@@ -258,6 +267,38 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       expect(record?.than).toMatch(/\.payment\.create\s*\(/);
       expect(record?.than).toMatch(/this\.orders\.autoTransitionInTx\s*\(/);
       expect(viTriChamDau(record?.than ?? '')).toBeGreaterThan(-1);
+    });
+
+    it('extracts the public methods of ContractsService with full bodies, all touching the order', () => {
+      const methods = trichMethod(docFile('contracts/contracts.service.ts'));
+      const generate = methods.find((m) => m.congKhai && m.ten === 'generate');
+      const overview = methods.find((m) => m.congKhai && m.ten === 'overview');
+      const getPdf = methods.find((m) => m.congKhai && m.ten === 'getPdf');
+      expect(generate?.than.length).toBeGreaterThan(0);
+      expect(generate?.than).toMatch(/this\.orders\.getScoped\s*\(/);
+      expect(generate?.than).toMatch(/\.contract\.create\s*\(/);
+      expect(generate?.than).toMatch(/this\.renderer\.renderPdf\s*\(/);
+      expect(overview?.than).toMatch(/\.contract\.findMany\s*\(/);
+      expect(getPdf?.than).toMatch(/this\.orders\.assertScoped\s*\(/);
+      expect(getPdf?.than).toMatch(/this\.storage\.getObject\s*\(/);
+      for (const m of [generate, overview, getPdf]) {
+        expect(viTriChamDau(m?.than ?? '')).toBeGreaterThan(-1);
+      }
+    });
+
+    it('BẮT a contract read placed before the scoped read', () => {
+      const mau = [
+        'class X {',
+        '  async getPdf(actor: string, q: Set<string>, id: string) {',
+        '    await this.prisma.contract.findFirst({ where: {} });',
+        '    await this.orders.assertScoped(actor, q, id);',
+        '  }',
+        '}',
+        '',
+      ].join('\n');
+      expect(
+        viPham(mau, /this\.orders\.(?:getScoped|assertScoped)\s*\(/),
+      ).toEqual(['getPdf']);
     });
 
     it('BẮT a payment read placed before the scoped read', () => {

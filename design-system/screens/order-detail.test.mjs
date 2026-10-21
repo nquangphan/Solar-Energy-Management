@@ -259,6 +259,8 @@ test('the not-found state is distinct from the load-error state (AC-13, UX-DR-19
 // as its own screen reached by an action button — but a Thanh toán TAB is still
 // forbidden (the full tab needs payment recording too), so the tab list itself
 // is checked for it. The rule did not weaken — the set of shipped surfaces grew.
+// "Hợp đồng" left the RAW-TEXT list the same way in Story 7.3: contracts shipped as
+// their own screen reached by an action button; a Hợp đồng TAB is still forbidden.
 test('exactly the three owned tabs render — no placeholder tabs for future stories', () => {
   // Stripped code, not raw text: both screens explain in a comment WHICH tabs
   // they deliberately do not render, and that explanation is worth keeping.
@@ -270,10 +272,11 @@ test('exactly the three owned tabs render — no placeholder tabs for future sto
     const m = re.exec(src);
     assert.ok(m !== null && m[1].includes('Ảnh'), `${name}: the tab list must be found (guard not blind)`);
     assert.ok(!m[1].includes('Thanh toán'), `${name} must not render a "Thanh toán" tab — payment recording owns it`);
+    assert.ok(!m[1].includes('Hợp đồng'), `${name} must not render a "Hợp đồng" tab — contracts are a screen behind a button`);
     assert.equal((m[1].match(/label:/g) ?? []).length, 3, `${name} must render exactly three tabs`);
   }
   for (const [name, src] of allCode) {
-    for (const notYet of ['Hợp đồng', 'Hoá đơn', 'HĐ & HĐơn']) {
+    for (const notYet of ['Hoá đơn', 'HĐ & HĐơn']) {
       assert.ok(!src.includes(notYet), `${name} must not render a "${notYet}" tab — that story owns it`);
     }
     // Positive assertion: the Ảnh tab must ACTUALLY be there on both platforms.
@@ -368,6 +371,25 @@ test('the "Thanh toán" button is gated on the onOpenPaymentSchedule callback', 
     /if\s*\(widget\.onOpenPaymentSchedule != null\)/,
     'mobile: directly under `if (widget.onOpenPaymentSchedule != null)`',
   );
+});
+
+// (e.7) THE "Hợp đồng" BUTTON (Story 7.3) renders ONLY when the caller passes the
+// callback (the caller passes it only with contracts.generate) — no button to nowhere.
+test('the "Hợp đồng" button is gated on the onOpenContracts callback', () => {
+  assert.ok(webCode.includes('>Hợp đồng<'), 'the web detail must render the "Hợp đồng" button');
+  const webBtn = webCode.slice(0, webCode.indexOf('>Hợp đồng<'));
+  assert.match(webBtn.slice(-200), /onOpenContracts\s*&&/, 'web: directly under `onOpenContracts &&`');
+  assert.ok(mobileCode.includes("'Hợp đồng'"), 'the mobile detail must render the "Hợp đồng" button');
+  const mobBtn = mobileCode.slice(0, mobileCode.indexOf("'Hợp đồng'"));
+  assert.match(
+    mobBtn.slice(-250),
+    /if\s*\(widget\.onOpenContracts != null\)/,
+    'mobile: directly under `if (widget.onOpenContracts != null)`',
+  );
+  // The action container itself must open on the callback, or the button is unreachable
+  // whenever no other action applies.
+  assert.match(webCode, /\|\|\s*onOpenContracts\s*\)\s*&&\s*\(/, 'web: .od-actions opens on onOpenContracts');
+  assert.match(mobileCode, /widget\.onOpenContracts != null\)\s*\.\.\.<Widget>\[/, 'mobile: the action block opens on onOpenContracts');
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).

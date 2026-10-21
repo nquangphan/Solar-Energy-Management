@@ -56,6 +56,25 @@ export class PuppeteerQuoteRenderer
     }
   }
 
+  async renderPdf(html: string): Promise<Buffer> {
+    const browser = await this.resolveBrowser();
+    const page = await browser.newPage();
+    try {
+      await page.setContent(html, { waitUntil: 'load' });
+      // `preferCSSPageSize`: the template's `@page { size; margin }` wins — no second source of
+      // margins passed here.
+      return Buffer.from(
+        await page.pdf({
+          format: 'A4',
+          printBackground: true,
+          preferCSSPageSize: true,
+        }),
+      );
+    } finally {
+      await page.close();
+    }
+  }
+
   async onModuleDestroy(): Promise<void> {
     if (this.browserPromise) {
       const browser = await this.browserPromise;

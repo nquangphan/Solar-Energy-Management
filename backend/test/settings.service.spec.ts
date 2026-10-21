@@ -1,5 +1,6 @@
 import { SettingsService } from '../src/settings/settings.service';
 import { SystemSettingChanged } from '../src/settings/domain/setting-events';
+import type { CompanyLegalEntity } from '../src/settings/domain/company-legal-entity';
 import { SETTING } from '../src/settings/domain/setting-registry';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import type { EventBus } from '../src/events/event-bus';
@@ -142,5 +143,146 @@ describe('SettingsService (unit, hermetic)', () => {
 
       expect(thuTu).toEqual(['write', 'publish']);
     });
+  });
+});
+
+describe('SettingsService — company legal entity (unit, hermetic)', () => {
+  const EMPTY: CompanyLegalEntity = {
+    legalName: '',
+    taxCode: '',
+    address: '',
+    representative: '',
+    representativeTitle: '',
+    phone: '',
+    bankAccount: '',
+  };
+  let findMany: jest.Mock;
+  let upsert: jest.Mock;
+  let transaction: jest.Mock;
+  let publish: jest.Mock;
+  let service: SettingsService;
+  let order: string[];
+
+  beforeEach(() => {
+    order = [];
+    findMany = jest.fn().mockResolvedValue([]);
+    upsert = jest.fn().mockImplementation(({ create }) => ({ upsert: create }));
+    transaction = jest.fn().mockImplementation((ops: unknown[]) => {
+      order.push('commit');
+      return Promise.resolve(ops);
+    });
+    publish = jest.fn().mockImplementation(() => {
+      order.push('publish');
+      return Promise.resolve();
+    });
+    const prisma = {
+      systemSetting: { findMany, upsert },
+      $transaction: transaction,
+    } as unknown as PrismaService;
+    service = new SettingsService(prisma, { publish } as unknown as EventBus);
+  });
+
+  it('no rows ⇒ every field empty, ONE read of the 7 company.* keys', async () => {
+    await expect(service.companyLegalEntity()).resolves.toEqual(EMPTY);
+    expect(findMany).toHaveBeenCalledTimes(1);
+    const keys = findMany.mock.calls[0][0].where.key.in as string[];
+    expect([...keys].sort()).toEqual(
+      [
+        SETTING.companyLegalName,
+        SETTING.companyTaxCode,
+        SETTING.companyAddress,
+        SETTING.companyRepresentative,
+        SETTING.companyRepresentativeTitle,
+        SETTING.companyPhone,
+        SETTING.companyBankAccount,
+      ].sort(),
+    );
+  });
+
+  it('rows map back to their fields', async () => {
+    findMany.mockResolvedValue([
+      { key: SETTING.companyLegalName, value: 'CÔNG TY A' },
+      { key: SETTING.companyTaxCode, value: '0123' },
+    ]);
+
+    await expect(service.companyLegalEntity()).resolves.toEqual({
+      ...EMPTY,
+      legalName: 'CÔNG TY A',
+      taxCode: '0123',
+    });
+  });
+
+  it('two changed keys ⇒ 2 upserts in ONE transaction, then exactly 2 events with before ""', async () => {
+    const result = await service.updateCompanyLegalEntity(ACTOR_ID, {
+      ...EMPTY,
+      legalName: '  CÔNG TY A  ',
+      taxCode: '0123',
+    });
+
+    expect(result).toEqual({
+      ...EMPTY,
+      legalName: 'CÔNG TY A',
+      taxCode: '0123',
+    });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert).toHaveBeenCalledWith({
+      where: { key: SETTING.companyLegalName },
+      create: { key: SETTING.companyLegalName, value: 'CÔNG TY A' },
+      update: { value: 'CÔNG TY A' },
+    });
+    expect(publish).toHaveBeenCalledTimes(2);
+    const events = publish.mock.calls.map(
+      (call) => call[0] as SystemSettingChanged,
+    );
+    expect(events.map((e) => [e.target, e.before, e.after])).toEqual([
+      [
+        { type: 'SystemSetting', id: SETTING.companyLegalName },
+        { key: SETTING.companyLegalName, value: '' },
+        { key: SETTING.companyLegalName, value: 'CÔNG TY A' },
+      ],
+      [
+        { type: 'SystemSetting', id: SETTING.companyTaxCode },
+        { key: SETTING.companyTaxCode, value: '' },
+        { key: SETTING.companyTaxCode, value: '0123' },
+      ],
+    ]);
+    expect(order).toEqual(['commit', 'publish', 'publish']);
+  });
+
+  it('same values again (after trim) ⇒ 0 upserts, 0 events', async () => {
+    findMany.mockResolvedValue([
+      { key: SETTING.companyLegalName, value: 'CÔNG TY A' },
+    ]);
+
+    const result = await service.updateCompanyLegalEntity(ACTOR_ID, {
+      ...EMPTY,
+      legalName: ' CÔNG TY A ',
+    });
+
+    expect(result).toEqual({ ...EMPTY, legalName: 'CÔNG TY A' });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('clearing a field is a change: before = old value, after = ""', async () => {
+    findMany.mockResolvedValue([{ key: SETTING.companyPhone, value: '0909' }]);
+
+    await service.updateCompanyLegalEntity(ACTOR_ID, EMPTY);
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    const event = publish.mock.calls[0][0] as SystemSettingChanged;
+    expect(event.before).toEqual({ key: SETTING.companyPhone, value: '0909' });
+    expect(event.after).toEqual({ key: SETTING.companyPhone, value: '' });
+  });
+
+  it('transaction fails ⇒ no event', async () => {
+    transaction.mockRejectedValue(new Error('db down'));
+
+    await expect(
+      service.updateCompanyLegalEntity(ACTOR_ID, { ...EMPTY, phone: '1' }),
+    ).rejects.toThrow('db down');
+    expect(publish).not.toHaveBeenCalled();
   });
 });

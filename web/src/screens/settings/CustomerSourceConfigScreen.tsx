@@ -34,6 +34,7 @@ import type {
   CustomerSourcesPort,
 } from '../../design-system/session/customer-sources-port';
 import type {
+  CompanyLegalEntity,
   SettingsPort,
   SettingsPortError,
 } from '../../design-system/session/settings-port';
@@ -74,6 +75,34 @@ function asSettingsError(err: unknown): SettingsPortError {
     ? envelope
     : { message: 'Không lưu được thuế suất.' };
 }
+
+/** Narrow an unknown rejection to the AD-5 envelope for the legal-entity save. */
+function asLegalError(err: unknown): SettingsPortError {
+  const envelope = err as SettingsPortError;
+  return typeof envelope?.message === 'string'
+    ? envelope
+    : { message: 'Không lưu được thông tin pháp nhân.' };
+}
+
+const LEGAL_ENTITY_FIELDS: readonly [keyof CompanyLegalEntity, string][] = [
+  ['legalName', 'Tên công ty'],
+  ['taxCode', 'Mã số thuế'],
+  ['address', 'Địa chỉ'],
+  ['representative', 'Người đại diện'],
+  ['representativeTitle', 'Chức danh'],
+  ['phone', 'Điện thoại'],
+  ['bankAccount', 'Tài khoản ngân hàng'],
+];
+
+const EMPTY_LEGAL_ENTITY: CompanyLegalEntity = {
+  legalName: '',
+  taxCode: '',
+  address: '',
+  representative: '',
+  representativeTitle: '',
+  phone: '',
+  bankAccount: '',
+};
 
 export function CustomerSourceConfigScreen({
   port,
@@ -128,6 +157,40 @@ export function CustomerSourceConfigScreen({
       })
       .catch((err: unknown) => setVatError(asSettingsError(err)))
       .finally(() => setVatBusy(false));
+  };
+
+  // Company legal entity (Story 7.3), printed as the company party of a contract. An
+  // empty string = not configured; PUT replaces all 7 fields and every validation rule
+  // is the backend's (400 + fieldErrors). The form only shows once the saved entity is
+  // loaded: saving the empty initial state would blank every configured field.
+  const [legal, setLegal] = useState<CompanyLegalEntity>(EMPTY_LEGAL_ENTITY);
+  const [legalState, setLegalState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [legalError, setLegalError] = useState<SettingsPortError | null>(null);
+  const [legalBusy, setLegalBusy] = useState(false);
+
+  const loadLegal = useCallback(() => {
+    setLegalState('loading');
+    settingsPort.getCompanyLegalEntity().then(
+      (entity) => {
+        setLegal(entity);
+        setLegalState('ready');
+      },
+      () => setLegalState('error'),
+    );
+  }, [settingsPort]);
+
+  useEffect(() => {
+    loadLegal();
+  }, [loadLegal]);
+
+  const saveLegal = () => {
+    setLegalError(null);
+    setLegalBusy(true);
+    settingsPort
+      .updateCompanyLegalEntity(legal)
+      .then((entity) => setLegal(entity))
+      .catch((err: unknown) => setLegalError(asLegalError(err)))
+      .finally(() => setLegalBusy(false));
   };
 
   const load = useCallback(async () => {
@@ -367,6 +430,44 @@ export function CustomerSourceConfigScreen({
           {vatError?.fieldErrors?.find((e) => e.field === 'ratePercent') !== undefined && (
             <div className="set-field-error">
               {vatError.fieldErrors.find((e) => e.field === 'ratePercent')?.message}
+            </div>
+          )}
+        </Frame>
+
+        <Frame label="Thông tin pháp nhân (in trên hợp đồng)">
+          {legalState === 'loading' && <Skeleton />}
+          {legalState === 'error' && (
+            <ErrorState
+              message="Không tải được thông tin pháp nhân."
+              onRetry={loadLegal}
+              retryLabel="Thử lại"
+            />
+          )}
+          {legalState === 'ready' && legalError !== null && (
+            <Banner tone="danger" role="alert">
+              {legalError.message}
+            </Banner>
+          )}
+          {legalState === 'ready' && (
+            <div className="set-form">
+              {LEGAL_ENTITY_FIELDS.map(([key, label]) => {
+                const message = legalError?.fieldErrors?.find((e) => e.field === key)?.message;
+                return (
+                  <div key={key}>
+                    <Field
+                      label={label}
+                      value={legal[key]}
+                      onChange={(e) => setLegal((current) => ({ ...current, [key]: e.target.value }))}
+                    />
+                    {message !== undefined && <div className="set-field-error">{message}</div>}
+                  </div>
+                );
+              })}
+              <div>
+                <Button variant="primary" type="button" disabled={legalBusy} onClick={saveLegal}>
+                  Lưu thông tin pháp nhân
+                </Button>
+              </div>
             </div>
           )}
         </Frame>

@@ -42,7 +42,11 @@ export type {
 } from './orders-port';
 // WEB-ONLY on purpose (Story 4.4): system config is desk work — same decision as
 // customer-sources-port.ts, no Dart mirror. See the file header.
-export type { SettingsPort, SettingsPortError } from './settings-port';
+export type {
+  SettingsPort,
+  SettingsPortError,
+  CompanyLegalEntity,
+} from './settings-port';
 // Warranty-lookup seam (Story 5.9): READ-ONLY — the backend computes every date
 // and the status; the screen only renders them.
 export type {
@@ -96,6 +100,15 @@ export type {
   RecordPaymentResult,
   AutoTransitionResult,
 } from './payments-port';
+// Contracts seam (Story 7.3): the backend decides whether an order can be turned
+// into a contract, the total and the schedule label; the screen only renders them.
+export type {
+  ContractsPort,
+  ContractsOverview,
+  ContractSummary,
+  ContractType,
+  ContractsPortError,
+} from './contracts-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -142,6 +155,7 @@ export {
   DEMO_PAYMENT_SCHEDULE_DEPOSIT_PAID,
   DEMO_RECORD_DEPOSIT_RESULT,
 } from './fake-payments-port';
+export { FakeContractsPort, DEMO_CONTRACT_SUMMARY } from './fake-contracts-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

@@ -48,6 +48,7 @@ model Account {
   attachmentsUploaded  Attachment[]      @relation("AttachmentUploadedBy")
   stockVouchersCreated StockVoucher[]    @relation("StockVoucherCreatedBy")
   paymentsRecorded     Payment[]         @relation("PaymentRecordedBy")
+  contractsCreated     Contract[]        @relation("ContractCreatedBy")
 
   @@map("accounts")
 }
@@ -501,6 +502,7 @@ model Order {
   stockVouchers     StockVoucher[]
   paymentSchedule   PaymentSchedule?
   payments          Payment[]
+  contracts         Contract[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -541,6 +543,7 @@ model OrderVersion {
   quoteExports   QuoteExport[]
   stockMovements StockMovement[]
   stockVouchers  StockVoucher[]
+  contracts      Contract[]
 
   @@unique([orderId, versionNo])
   @@map("order_versions")
@@ -707,6 +710,32 @@ model Payment {
   @@index([orderId])
   @@index([installmentId])
   @@map("payments")
+}
+
+/// A generated contract PDF of one order (FR-13). Append-only: every generation is a new row with
+/// a new number — a contract already printed and signed is never overwritten. Bytes live in R2
+/// (AD-3); this row keeps the key + metadata only.
+/// CHECK constraints (known type, pdf_size > 0) live in the migration.
+model Contract {
+  id                 String       @id @default(uuid())
+  /// Global serial reserved BEFORE rendering (the number is printed inside the PDF).
+  seq                Int          @unique @default(autoincrement())
+  orderId            String       @map("order_id")
+  order              Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderVersionId     String       @map("order_version_id")
+  orderVersion       OrderVersion @relation(fields: [orderVersionId], references: [id], onDelete: Restrict)
+  type               String
+  contractNo         String       @unique @map("contract_no")
+  pdfKey             String       @map("pdf_key")
+  pdfSize            Int          @map("pdf_size")
+  fileName           String       @map("file_name")
+  createdByAccountId String       @map("created_by_account_id")
+  createdBy          Account      @relation("ContractCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  @@index([orderId])
+  @@index([orderVersionId])
+  @@map("contracts")
 }
 
 /// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2

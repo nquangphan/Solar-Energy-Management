@@ -314,6 +314,30 @@ test('the VAT-rate section ships as a Frame (Story 4.4) — still no Tabs bar', 
   assert.match(code, /disabled=\{vatBusy \|\| vatText\.trim\(\) === ''\}/, 'Lưu (VAT) must be disabled in flight and on an empty box');
 });
 
+// (h.1b) THE COMPANY LEGAL ENTITY (Story 7.3) — a second Frame below VAT, same rules:
+// design-system <Field>/<Button>, port-only transport, server-side validation, no Tabs.
+test('the legal-entity section ships as a Frame of 7 Fields + one Button (Story 7.3)', () => {
+  for (const label of [
+    'Thông tin pháp nhân (in trên hợp đồng)',
+    'Tên công ty',
+    'Mã số thuế',
+    'Địa chỉ',
+    'Người đại diện',
+    'Chức danh',
+    'Điện thoại',
+    'Tài khoản ngân hàng',
+    'Lưu thông tin pháp nhân',
+  ]) {
+    assert.ok(src.includes(label), `the config screen is missing the label "${label}"`);
+  }
+  assert.match(code, /<Frame label="Thông tin pháp nhân \(in trên hợp đồng\)">/, 'the section must be a Frame');
+  assert.match(code, /settingsPort\.getCompanyLegalEntity\(\)/, 'load through settingsPort.getCompanyLegalEntity()');
+  assert.match(code, /settingsPort\s*[\s\S]{0,30}?\.updateCompanyLegalEntity\(/, 'save through settingsPort.updateCompanyLegalEntity()');
+  assert.match(code, /disabled=\{legalBusy\}/, 'Lưu thông tin pháp nhân must be disabled in flight');
+  assert.match(code, /fieldErrors\?\.find\(\(e\) => e\.field === key\)/, 'fieldErrors must be pinned per field');
+  assert.ok(!/<Tabs\b/.test(code), 'still no Tabs bar (AD-13)');
+});
+
 // (h.2) 🔴 NEGATIVE ASSERT — THE FLAGGED ROW HAS AN EDIT PATH BUT NO SWITCH-OFF PATH
 // (AC-2, AC-3). This is the hinge of the whole design:
 //   · Renaming it MUST stay possible — the backend recognises "Khác" by its FLAG, so

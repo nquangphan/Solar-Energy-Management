@@ -1,5 +1,6 @@
 import { OrdersModule } from '../src/orders/orders.module';
 import { OrdersService } from '../src/orders/orders.service';
+import { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
 
 /**
  * Wiring test AC-4 (Story 5.2): `OrdersModule` phải EXPORT `OrdersService`.
@@ -28,13 +29,32 @@ describe('OrdersModule wiring — cửa cho module ngoài (AC-4)', () => {
   });
 
   it('thứ được export cũng phải được provide (export suông là lỗi lúc boot)', () => {
-    const providers = metadata(PROVIDERS);
+    // A provider is either the class itself or a `{ provide: Token, … }` binding.
+    const provided = metadata(PROVIDERS).map((p) =>
+      typeof p === 'object' && p !== null && 'provide' in p
+        ? (p as { provide: unknown }).provide
+        : p,
+    );
     for (const exported of metadata(EXPORTS)) {
-      expect(providers).toContain(exported);
+      expect(provided).toContain(exported);
     }
   });
 
-  it('CHỈ OrdersService được export — mở thêm cửa là mở thêm bề mặt phải canh', () => {
-    expect(metadata(EXPORTS)).toEqual([OrdersService]);
+  it('exports exactly OrdersService + QuoteRendererPort — every extra door is surface to guard', () => {
+    // QuoteRendererPort (7.3): contracts/ renders through the SAME binding — one Chromium.
+    expect(metadata(EXPORTS)).toEqual([OrdersService, QuoteRendererPort]);
+  });
+});
+
+describe('ContractsModule wiring — shares the orders renderer', () => {
+  it('provides only ContractsService (no second QuoteRendererPort binding ⇒ no second Chromium)', async () => {
+    const { ContractsModule } =
+      await import('../src/contracts/contracts.module');
+    expect(Reflect.getMetadata('providers', ContractsModule)).toEqual([
+      (await import('../src/contracts/contracts.service')).ContractsService,
+    ]);
+    expect(Reflect.getMetadata('imports', ContractsModule)).toContain(
+      OrdersModule,
+    );
   });
 });

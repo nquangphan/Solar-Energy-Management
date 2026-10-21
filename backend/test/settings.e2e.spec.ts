@@ -42,12 +42,17 @@ describe('/settings/vat-rate (e2e)', () => {
     updatedAt: new Date(),
   };
 
-  const systemSettingRepo = { findUnique: jest.fn(), upsert: jest.fn() };
+  const systemSettingRepo = {
+    findUnique: jest.fn(),
+    findMany: jest.fn(),
+    upsert: jest.fn(),
+  };
   // `auditLog` có mặt vì `AuditSubscriber` THẬT chạy trong `AppModule`.
   const auditRepo = { create: jest.fn().mockResolvedValue({}) };
   const prismaMock = {
     systemSetting: systemSettingRepo,
     auditLog: auditRepo,
+    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
   };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),
@@ -89,6 +94,7 @@ describe('/settings/vat-rate (e2e)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     systemSettingRepo.findUnique.mockResolvedValue(null);
+    systemSettingRepo.findMany.mockResolvedValue([]);
     systemSettingRepo.upsert.mockImplementation(
       ({ create }: { create: { key: string; value: string } }) =>
         Promise.resolve({ ...create, updatedAt: new Date() }),
@@ -105,6 +111,14 @@ describe('/settings/vat-rate (e2e)', () => {
       {
         name: 'PATCH /settings/vat-rate',
         call: () => request(server()).patch('/settings/vat-rate'),
+      },
+      {
+        name: 'GET /settings/company-legal-entity',
+        call: () => request(server()).get('/settings/company-legal-entity'),
+      },
+      {
+        name: 'PUT /settings/company-legal-entity',
+        call: () => request(server()).put('/settings/company-legal-entity'),
       },
     ];
 
@@ -266,6 +280,164 @@ describe('/settings/vat-rate (e2e)', () => {
         .send({ ratePercent: 100 });
       expect(tram.status).toBe(200);
       expect(tram.body).toEqual({ ratePercent: 100 });
+    });
+  });
+
+  describe('/settings/company-legal-entity', () => {
+    const FULL = {
+      legalName: 'CÔNG TY TNHH A',
+      taxCode: '0123456789',
+      address: 'Số 1 Đường B',
+      representative: 'Nguyễn Văn C',
+      representativeTitle: 'Giám đốc',
+      phone: '0909000000',
+      bankAccount: '123 tại VIB',
+    };
+
+    it('GET nothing configured ⇒ 200, 7 empty fields', async () => {
+      givenPermissions(PERM.settingsManage);
+
+      const res = await request(server())
+        .get('/settings/company-legal-entity')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        legalName: '',
+        taxCode: '',
+        address: '',
+        representative: '',
+        representativeTitle: '',
+        phone: '',
+        bankAccount: '',
+      });
+    });
+
+    it('PUT all 7 fields ⇒ 200 trimmed entity, 7 upserts, 7 audit rows', async () => {
+      givenPermissions(PERM.settingsManage);
+
+      const res = await request(server())
+        .put('/settings/company-legal-entity')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ ...FULL, legalName: '  CÔNG TY TNHH A  ' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(FULL);
+      expect(systemSettingRepo.upsert).toHaveBeenCalledTimes(7);
+      expect(auditRepo.create).toHaveBeenCalledTimes(7);
+    });
+
+    it.each([
+      ['missing field', (b: Record<string, unknown>) => delete b.taxCode],
+      ['null field', (b: Record<string, unknown>) => (b.taxCode = null)],
+      ['number field', (b: Record<string, unknown>) => (b.taxCode = 123)],
+      [
+        'field over 200 chars',
+        (b: Record<string, unknown>) => (b.taxCode = 'x'.repeat(201)),
+      ],
+    ])(
+      '%s ⇒ 400 fieldErrors on taxCode (Vietnamese), no write',
+      async (_name, mutate) => {
+        givenPermissions(PERM.settingsManage);
+        const body: Record<string, unknown> = { ...FULL };
+        mutate(body);
+
+        const res = await request(server())
+          .put('/settings/company-legal-entity')
+          .set('Authorization', `Bearer ${token()}`)
+          .send(body);
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        const fieldError = (
+          res.body.fieldErrors as { field: string; message: string }[]
+        ).find((e) => e.field === 'taxCode');
+        expect(fieldError?.message).toMatch(
+          /Phải là chuỗi ký tự|Tối đa 200 ký tự/,
+        );
+        expect(systemSettingRepo.upsert).not.toHaveBeenCalled();
+      },
+    );
+
+    it('configured entity: PUT changing 2 fields ⇒ 2 upserts, 2 audit rows before→after; same body again ⇒ no write, no audit', async () => {
+      givenPermissions(PERM.settingsManage);
+      systemSettingRepo.findMany.mockResolvedValue([
+        { key: 'company.legal_name', value: FULL.legalName },
+        { key: 'company.tax_code', value: FULL.taxCode },
+        { key: 'company.address', value: FULL.address },
+        { key: 'company.representative', value: FULL.representative },
+        {
+          key: 'company.representative_title',
+          value: FULL.representativeTitle,
+        },
+        { key: 'company.phone', value: FULL.phone },
+        { key: 'company.bank_account', value: FULL.bankAccount },
+      ]);
+      const put = (body: typeof FULL) =>
+        request(server())
+          .put('/settings/company-legal-entity')
+          .set('Authorization', `Bearer ${token()}`)
+          .send(body);
+
+      const changed = await put({ ...FULL, phone: '0911111111', address: '' });
+
+      expect(changed.status).toBe(200);
+      expect(changed.body).toEqual({
+        ...FULL,
+        phone: '0911111111',
+        address: '',
+      });
+      expect(systemSettingRepo.upsert).toHaveBeenCalledTimes(2);
+      expect(auditRepo.create).toHaveBeenCalledTimes(2);
+      const audits = auditRepo.create.mock.calls.map(
+        ([a]) =>
+          (
+            a as {
+              data: {
+                eventType: string;
+                targetId: string;
+                before: unknown;
+                after: unknown;
+              };
+            }
+          ).data,
+      );
+      expect(audits).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            eventType: 'SystemSettingChanged',
+            targetId: 'company.phone',
+            before: { key: 'company.phone', value: FULL.phone },
+            after: { key: 'company.phone', value: '0911111111' },
+          }),
+          expect.objectContaining({
+            eventType: 'SystemSettingChanged',
+            targetId: 'company.address',
+            before: { key: 'company.address', value: FULL.address },
+            after: { key: 'company.address', value: '' },
+          }),
+        ]),
+      );
+
+      jest.clearAllMocks();
+      const same = await put({ ...FULL, legalName: `  ${FULL.legalName}  ` });
+
+      expect(same.status).toBe(200);
+      expect(same.body).toEqual(FULL);
+      expect(systemSettingRepo.upsert).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('200 chars exactly is accepted', async () => {
+      givenPermissions(PERM.settingsManage);
+
+      const res = await request(server())
+        .put('/settings/company-legal-entity')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ ...FULL, address: 'x'.repeat(200) });
+
+      expect(res.status).toBe(200);
     });
   });
 });

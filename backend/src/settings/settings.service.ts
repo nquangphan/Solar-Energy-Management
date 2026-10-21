@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventBus } from '../events/event-bus';
+import {
+  LEGAL_ENTITY_FIELDS,
+  type CompanyLegalEntity,
+} from './domain/company-legal-entity';
 import { SystemSettingChanged } from './domain/setting-events';
 import { SETTING, SETTING_DEFAULTS } from './domain/setting-registry';
 
@@ -63,5 +67,69 @@ export class SettingsService {
     );
 
     return Number(row.value);
+  }
+
+  /**
+   * Company legal entity printed on contracts (F-4). ONE read of the 7 keys; a missing row is
+   * the registry default `''` (not configured) — never an error.
+   */
+  async companyLegalEntity(): Promise<CompanyLegalEntity> {
+    const rows = await this.prisma.systemSetting.findMany({
+      where: { key: { in: LEGAL_ENTITY_FIELDS.map(({ key }) => key) } },
+    });
+    const byKey = new Map(rows.map((row) => [row.key, row.value]));
+    return Object.fromEntries(
+      LEGAL_ENTITY_FIELDS.map(({ field, key }) => [
+        field,
+        byKey.get(key) ?? SETTING_DEFAULTS[key],
+      ]),
+    ) as unknown as CompanyLegalEntity;
+  }
+
+  /**
+   * Replace the company legal entity. Each field is trimmed and compared with its EFFECTIVE
+   * value; only changed keys are upserted, in one transaction. AFTER commit, one
+   * `SystemSettingChanged` per changed key (`before.value` = previous effective value, `''` the
+   * first time). Nothing changed ⇒ no write, no event.
+   */
+  async updateCompanyLegalEntity(
+    actorAccountId: string,
+    input: CompanyLegalEntity,
+  ): Promise<CompanyLegalEntity> {
+    const before = await this.companyLegalEntity();
+    const changes = LEGAL_ENTITY_FIELDS.map(({ field, key }) => ({
+      key,
+      before: before[field],
+      after: input[field].trim(),
+    })).filter((change) => change.after !== change.before);
+    if (changes.length === 0) return before;
+
+    await this.prisma.$transaction(
+      changes.map(({ key, after }) =>
+        this.prisma.systemSetting.upsert({
+          where: { key },
+          create: { key, value: after },
+          update: { value: after },
+        }),
+      ),
+    );
+
+    const occurredAt = new Date();
+    for (const change of changes) {
+      await this.eventBus.publish(
+        new SystemSettingChanged(
+          actorAccountId,
+          { key: change.key, value: change.before },
+          { key: change.key, value: change.after },
+          occurredAt,
+        ),
+      );
+    }
+
+    const after = { ...before };
+    for (const { field } of LEGAL_ENTITY_FIELDS) {
+      (after as Record<string, string>)[field] = input[field].trim();
+    }
+    return after;
   }
 }

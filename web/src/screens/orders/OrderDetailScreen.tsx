@@ -85,6 +85,8 @@ export interface OrderDetailScreenProps {
   onChangeStatus?: () => void;
   /** Opens the payment-schedule screen (Story 7.1). Absent = the button never renders. */
   onOpenPaymentSchedule?: () => void;
+  /** Opens the contracts screen (Story 7.3). Absent = the button never renders. */
+  onOpenContracts?: () => void;
 }
 
 // 'notfound' is its own state, NOT a flavour of 'error': "this order does not
@@ -168,6 +170,7 @@ export function OrderDetailScreen({
   onBack,
   onChangeStatus,
   onOpenPaymentSchedule,
+  onOpenContracts,
 }: OrderDetailScreenProps) {
   const { perms } = usePermissions();
 
@@ -478,7 +481,8 @@ export function OrderDetailScreen({
               <Stepper steps={toStepItems(steps)} />
               {((buocKeTiep.length > 0 && onChangeStatus) ||
                 coTheHuy ||
-                onOpenPaymentSchedule) && (
+                onOpenPaymentSchedule ||
+                onOpenContracts) && (
                 <div className="od-actions">
                   {buocKeTiep.length > 0 && onChangeStatus && (
                     <Button variant="primary" onClick={onChangeStatus}>
@@ -488,6 +492,7 @@ export function OrderDetailScreen({
                   {onOpenPaymentSchedule && (
                     <Button onClick={onOpenPaymentSchedule}>Thanh toán</Button>
                   )}
+                  {onOpenContracts && <Button onClick={onOpenContracts}>Hợp đồng</Button>}
                   {coTheHuy && (
                     <Button variant="danger" onClick={moDialogHuy}>
                       Huỷ đơn

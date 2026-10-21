@@ -31,7 +31,10 @@ import { QuoteRendererPort } from './quote/quote-renderer.port';
  * KHÔNG import `PrismaModule`/`EventsModule` (cả hai `@Global`), KHÔNG re-register guard
  * (`APP_GUARD` đã có ở `AuthModule`).
  *
- * `exports` — LÝ DO DUY NHẤT: `payments/` (7.2) phải đổi trạng thái đơn theo sự kiện nghiệp
+ * `exports` — `QuoteRendererPort`: `contracts/` (7.3) renders its PDF through the SAME renderer
+ * binding, so the app never launches a second Chromium; `ContractsModule` does not bind one.
+ *
+ * `exports` — `OrdersService`: `payments/` (7.2) phải đổi trạng thái đơn theo sự kiện nghiệp
  * vụ, và AD-11 nói chỉ có MỘT đường ghi `Order.status`. (Stock issue goes the OTHER way:
  * `orders/` calls `inventory/` inside its own tx — it does not need this door.) Không export thì
  * module ngoài buộc phải phát minh đường ghi riêng — đúng thứ engine 5.1 sinh ra để chặn.
@@ -53,6 +56,6 @@ import { QuoteRendererPort } from './quote/quote-renderer.port';
     QuoteExportService,
     { provide: QuoteRendererPort, useClass: PuppeteerQuoteRenderer },
   ],
-  exports: [OrdersService],
+  exports: [OrdersService, QuoteRendererPort],
 })
 export class OrdersModule {}

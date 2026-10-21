@@ -6,6 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StoragePort } from '../storage/storage.port';
 import { QuoteExported } from './domain/order-events';
 import { resolveOrderTotals } from './domain/order-totals';
+import { quoteNumberOf } from './domain/quote-number';
 import { OrdersService } from './orders.service';
 import { QuoteRendererPort } from './quote/quote-renderer.port';
 import { buildQuoteHtml } from './quote/quote-template';
@@ -86,7 +87,7 @@ export class QuoteExportService {
     const fileBase = `bao-gia-${orderId8}`;
     const exportedAt = new Date();
     const html = buildQuoteHtml({
-      quoteNo: `BG-${orderId8.toUpperCase()}`,
+      quoteNo: quoteNumberOf(orderId),
       exportedAt,
       validityNote: order.validityNote,
       kWp: order.kWp,

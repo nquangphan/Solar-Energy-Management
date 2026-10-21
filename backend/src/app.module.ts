@@ -13,6 +13,7 @@ import { OrdersModule } from './orders/orders.module';
 import { SettingsModule } from './settings/settings.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ContractsModule } from './contracts/contracts.module';
 
 /**
  * Root module.
@@ -49,6 +50,10 @@ import { PaymentsModule } from './payments/payments.module';
  *
  * Story 7.1 — `PaymentsModule`: payment schedule of an order (FR-11), served as
  * `/orders/{id}/payment-schedule`; it imports `OrdersModule`, never the other way round.
+ *
+ * Story 7.3 — `ContractsModule`: contract PDF of an order (FR-13), served as
+ * `/orders/{id}/contracts`; it imports `OrdersModule` (scope + shared renderer), never the other
+ * way round.
  */
 @Module({
   imports: [
@@ -66,6 +71,7 @@ import { PaymentsModule } from './payments/payments.module';
     SettingsModule,
     InventoryModule,
     PaymentsModule,
+    ContractsModule,
   ],
 })
 export class AppModule {}

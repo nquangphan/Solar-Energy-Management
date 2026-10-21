@@ -11,6 +11,17 @@
 // `settings.manage` gate on BOTH reads and writes, the Int 0..100 validation.
 // Nothing here is a security boundary.
 
+/** Mirrors `CompanyLegalEntityDto`: the seller party printed on contracts. Empty string = not configured. */
+export interface CompanyLegalEntity {
+  legalName: string;
+  taxCode: string;
+  address: string;
+  representative: string;
+  representativeTitle: string;
+  phone: string;
+  bankAccount: string;
+}
+
 /**
  * The AD-5 error envelope this port rejects with when the backend refuses a call
  * (400 validation, 403 missing settings.manage). Mirrors `CustomerSourcePortError`.
@@ -35,4 +46,10 @@ export interface SettingsPort {
 
   /** Change the VAT rate (%). Rejects 400 (not an Int 0..100) / 403. Resolves the new rate. */
   updateVatRate(ratePercent: number): Promise<number>;
+
+  /** The company legal entity printed on contracts (all-empty when never configured). */
+  getCompanyLegalEntity(): Promise<CompanyLegalEntity>;
+
+  /** Replaces all 7 fields. Rejects 400 (`fieldErrors` keyed by field name) / 403. */
+  updateCompanyLegalEntity(input: CompanyLegalEntity): Promise<CompanyLegalEntity>;
 }

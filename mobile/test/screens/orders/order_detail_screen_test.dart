@@ -475,4 +475,46 @@ void main() {
 
     expect(find.text('Thanh toán'), findsNothing);
   });
+
+  testWidgets('onOpenContracts alone ⇒ "Hợp đồng" renders and taps through',
+      (WidgetTester tester) async {
+    bool opened = false;
+    // Every other callback that could open the action block is OFF (no next
+    // step, no cancel permission, no payment schedule), so only onOpenContracts
+    // can be what shows the button.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onOpenContracts: () => opened = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thanh toán'), findsNothing);
+    expect(find.text('Chuyển trạng thái'), findsNothing);
+    expect(find.text('Hợp đồng'), findsOneWidget);
+    await tester.tap(find.text('Hợp đồng'));
+    await tester.pumpAndSettle();
+    expect(opened, isTrue);
+  });
+
+  testWidgets('no onOpenContracts ⇒ no "Hợp đồng" button',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onOpenPaymentSchedule: () {},
+          onChangeStatus: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hợp đồng'), findsNothing);
+  });
 }

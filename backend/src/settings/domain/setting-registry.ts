@@ -13,14 +13,23 @@
  *
  * Value bảng là String — parse theo kiểu ở service (`Number(value)` cho vat.rate_percent).
  *
- * YAGNI: đúng MỘT setting. Không dựng framework settings tổng quát (kiểu động, schema
- * validation per-key, nhóm/tab) — không ai yêu cầu, một bảng key/value là đủ.
+ * YAGNI: a flat list of keys, no general settings framework (dynamic types, per-key schema
+ * validation, groups/tabs) — nobody asked for one, a key/value table is enough. Each key is
+ * read by the service that needs it.
  */
 
 /** Định danh có tên → chuỗi key chính tắc. `as const` giữ literal narrow để suy `SettingKey`. */
 export const SETTING = {
   /** Thuế suất VAT (%) áp cho báo giá (FR-3) — Int 0..100, mặc định 8. */
   vatRatePercent: 'vat.rate_percent',
+  /** Company legal entity printed on contracts (7.3, F-4) — free text, default empty. */
+  companyLegalName: 'company.legal_name',
+  companyTaxCode: 'company.tax_code',
+  companyAddress: 'company.address',
+  companyRepresentative: 'company.representative',
+  companyRepresentativeTitle: 'company.representative_title',
+  companyPhone: 'company.phone',
+  companyBankAccount: 'company.bank_account',
 } as const;
 
 /** Union mọi key setting hợp lệ. */
@@ -32,4 +41,12 @@ export type SettingKey = (typeof SETTING)[keyof typeof SETTING];
  */
 export const SETTING_DEFAULTS: Readonly<Record<SettingKey, string>> = {
   [SETTING.vatRatePercent]: '8',
+  // Seeded EMPTY: no row = not configured yet; a contract prints "Chưa cấu hình" (F-4).
+  [SETTING.companyLegalName]: '',
+  [SETTING.companyTaxCode]: '',
+  [SETTING.companyAddress]: '',
+  [SETTING.companyRepresentative]: '',
+  [SETTING.companyRepresentativeTitle]: '',
+  [SETTING.companyPhone]: '',
+  [SETTING.companyBankAccount]: '',
 };

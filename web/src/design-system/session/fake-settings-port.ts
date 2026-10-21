@@ -5,7 +5,7 @@
 // Int 0..100 rule is mimicked so the demo shows the real error surface, NOT
 // because this is where it is enforced — that is the server's job (AD-4).
 
-import type { SettingsPort, SettingsPortError } from './settings-port';
+import type { CompanyLegalEntity, SettingsPort, SettingsPortError } from './settings-port';
 
 /** An AD-5-shaped rejection, so the screen exercises its real error path in the demo. */
 function reject(error: SettingsPortError): Promise<never> {
@@ -21,6 +21,15 @@ export class FakeSettingsPort implements SettingsPort {
   // stripping types, and that TS-only shorthand cannot be stripped (see
   // fake-customer-sources-port.ts for the precedent).
   private ratePercent: number;
+  private legalEntity: CompanyLegalEntity = {
+    legalName: '',
+    taxCode: '',
+    address: '',
+    representative: '',
+    representativeTitle: '',
+    phone: '',
+    bankAccount: '',
+  };
 
   constructor(ratePercent: number = 8) {
     this.ratePercent = ratePercent;
@@ -41,5 +50,14 @@ export class FakeSettingsPort implements SettingsPort {
     }
     this.ratePercent = ratePercent;
     return Promise.resolve(this.ratePercent);
+  }
+
+  getCompanyLegalEntity(): Promise<CompanyLegalEntity> {
+    return Promise.resolve({ ...this.legalEntity });
+  }
+
+  updateCompanyLegalEntity(input: CompanyLegalEntity): Promise<CompanyLegalEntity> {
+    this.legalEntity = { ...input };
+    return Promise.resolve({ ...this.legalEntity });
   }
 }

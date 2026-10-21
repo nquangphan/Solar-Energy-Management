@@ -53,7 +53,7 @@ export interface QuoteTemplateData {
 }
 
 /** Escape mọi dữ liệu động trước khi nhúng HTML — tên khách chứa `<b>` không thành tag. */
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -63,19 +63,19 @@ function escapeHtml(value: string): string {
 }
 
 /** Format số kiểu VN dấu chấm ngàn: 76862000 → `76.862.000` (regex thuần, không locale). */
-function formatMoney(value: number): string {
+export function formatMoney(value: number): string {
   return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 }
 
 /** Cột Bảo hành: chia hết 12 → "X năm", khác → "X tháng", null → rỗng (quyết định khách L200). */
-function formatWarranty(months: number | null): string {
+export function formatWarranty(months: number | null): string {
   if (months === null) return '';
   if (months % 12 === 0) return `${months / 12} năm`;
   return `${months} tháng`;
 }
 
 /** dd/MM/yyyy theo UTC+7 (client hiển thị giờ VN — mirror quy ước hiển thị chung). */
-function formatDateVn(date: Date): string {
+export function formatDateVn(date: Date): string {
   const utc7 = new Date(date.getTime() + 7 * 60 * 60 * 1000);
   const dd = String(utc7.getUTCDate()).padStart(2, '0');
   const mm = String(utc7.getUTCMonth() + 1).padStart(2, '0');
@@ -104,7 +104,7 @@ function resolveAssetsDir(): string | null {
   return null;
 }
 
-interface QuoteAssets {
+export interface QuoteAssets {
   readonly fontRegularBase64: string | null;
   readonly fontSemiBoldBase64: string | null;
   readonly logoBase64: string | null;
@@ -112,7 +112,7 @@ interface QuoteAssets {
 
 let cachedAssets: QuoteAssets | null = null;
 
-function loadAssets(): QuoteAssets {
+export function loadAssets(): QuoteAssets {
   if (cachedAssets) return cachedAssets;
   const dir = resolveAssetsDir();
   const readBase64 = (relPath: string): string | null => {
@@ -129,7 +129,7 @@ function loadAssets(): QuoteAssets {
   return cachedAssets;
 }
 
-function buildFontFaces(assets: QuoteAssets): string {
+export function buildFontFaces(assets: QuoteAssets): string {
   const faces: string[] = [];
   if (assets.fontRegularBase64) {
     faces.push(`@font-face {

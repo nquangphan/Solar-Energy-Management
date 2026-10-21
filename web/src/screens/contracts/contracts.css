@@ -1,0 +1,68 @@
+/* hand-authored — screen-local layout for Sinh hợp đồng (Story 7.3).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class — this file invents no palette (AD-13). */
+
+.ct-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.ct-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.ct-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.ct-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  align-items: baseline;
+}
+
+.ct-row dt {
+  min-width: 96px;
+}
+
+.ct-row dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.ct-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.ct-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.ct-item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

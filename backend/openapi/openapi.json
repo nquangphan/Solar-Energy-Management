@@ -3943,6 +3943,96 @@
         ]
       }
     },
+    "/settings/company-legal-entity": {
+      "get": {
+        "operationId": "SettingsController_getCompanyLegalEntity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Thông tin pháp nhân công ty in trên hợp đồng. Chưa cấu hình ⇒ cả 7 ô là chuỗi rỗng (không seed).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyLegalEntityDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settings"
+        ]
+      },
+      "put": {
+        "operationId": "SettingsController_updateCompanyLegalEntity",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompanyLegalEntityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thông tin pháp nhân sau khi lưu (đã trim). Thay toàn bộ 7 ô; chuỗi rỗng = xoá cấu hình ô đó. Gửi lại y hệt ⇒ không ghi gì.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyLegalEntityDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thiếu ô, ô không phải chuỗi (kể cả null), hoặc quá 200 ký tự (VALIDATION_ERROR) — kèm `fieldErrors`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu settings.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/stock-items": {
       "get": {
         "operationId": "StockItemsController_lietKe",
@@ -4532,6 +4622,218 @@
         ],
         "tags": [
           "payments"
+        ]
+      }
+    },
+    "/orders/{id}/contracts": {
+      "get": {
+        "operationId": "ContractsController_overview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trường động sẽ đưa vào hợp đồng, server có sinh được không (generatable/blockedReason — cùng luật với POST), và các hợp đồng đã sinh (mới nhất trước).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractsOverviewResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu contracts.generate, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "contracts"
+        ]
+      },
+      "post": {
+        "operationId": "ContractsController_generate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Hợp đồng mới (số mới, file mới ở R2 — AD-3). Body rỗng. Loại theo cờ phạm vi của đơn; pháp nhân công ty chưa cấu hình in \"Chưa cấu hình\", không chặn. Sinh lại = bản mới, bản cũ giữ nguyên.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID, hoặc đơn chưa có dòng vật tư (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu contracts.generate, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn chưa chốt hoặc đã huỷ, đơn chưa có lịch thanh toán, hoặc tổng các đợt lệch tổng đơn (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "contracts"
+        ]
+      }
+    },
+    "/orders/{id}/contracts/{contractId}/pdf": {
+      "get": {
+        "operationId": "ContractsController_downloadPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "contractId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bytes PDF của một hợp đồng đã sinh.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id hoặc contractId không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu contracts.generate, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này, đơn ngoài phạm vi, hoặc hợp đồng không thuộc đơn này (NOT_FOUND).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "contracts"
         ]
       }
     }
@@ -7172,6 +7474,48 @@
           "ratePercent"
         ]
       },
+      "CompanyLegalEntityDto": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string",
+            "description": "Tên công ty (pháp nhân) — chuỗi rỗng = chưa cấu hình."
+          },
+          "taxCode": {
+            "type": "string",
+            "description": "Mã số thuế công ty."
+          },
+          "address": {
+            "type": "string",
+            "description": "Địa chỉ công ty."
+          },
+          "representative": {
+            "type": "string",
+            "description": "Người đại diện ký hợp đồng."
+          },
+          "representativeTitle": {
+            "type": "string",
+            "description": "Chức danh người đại diện."
+          },
+          "phone": {
+            "type": "string",
+            "description": "Điện thoại công ty."
+          },
+          "bankAccount": {
+            "type": "string",
+            "description": "Tài khoản ngân hàng nhận thanh toán (in trên hợp đồng)."
+          }
+        },
+        "required": [
+          "legalName",
+          "taxCode",
+          "address",
+          "representative",
+          "representativeTitle",
+          "phone",
+          "bankAccount"
+        ]
+      },
       "StockItemViewDto": {
         "type": "object",
         "properties": {
@@ -7803,6 +8147,134 @@
           "schedule",
           "orderStatus",
           "autoTransition"
+        ]
+      },
+      "ContractResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "contractNo": {
+            "type": "string",
+            "description": "Số hợp đồng in trong PDF — `HĐTC-{n}/{năm}` hoặc `HĐMB-{n}/{năm}`.",
+            "example": "HĐTC-2048/2026"
+          },
+          "contractType": {
+            "type": "string",
+            "enum": [
+              "construction",
+              "sale"
+            ],
+            "description": "construction = HĐ Thi công (đơn có cờ Thi công); sale = HĐ Mua bán (chỉ Thiết bị)."
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản đơn (version) đã in.",
+            "example": 1
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Tên file không đuôi (ASCII); route tải thêm `.pdf`.",
+            "example": "hop-dong-thi-cong-2048"
+          },
+          "pdfSize": {
+            "type": "number",
+            "description": "Kích thước file PDF (byte).",
+            "example": 48213
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm sinh (ISO-8601 UTC)."
+          }
+        },
+        "required": [
+          "id",
+          "contractNo",
+          "contractType",
+          "versionNo",
+          "fileName",
+          "pdfSize",
+          "createdAt"
+        ]
+      },
+      "ContractsOverviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "contractType": {
+            "type": "string",
+            "enum": [
+              "construction",
+              "sale"
+            ],
+            "description": "Loại hợp đồng server suy từ cờ phạm vi của đơn — không chọn tay."
+          },
+          "generatable": {
+            "type": "boolean",
+            "description": "true ⇒ POST sẽ sinh được; false ⇒ blockedReason nói vì sao (cùng message POST trả)."
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do không sinh được (tiếng Việt), null khi generatable."
+          },
+          "quoteNo": {
+            "type": "string",
+            "description": "Số báo giá tham chiếu — trùng số in trên báo giá của đơn.",
+            "example": "BG-3F2A9B1C"
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản đơn hiệu lực.",
+            "example": 1
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "number",
+            "description": "Số dòng vật tư của bản hiệu lực.",
+            "example": 4
+          },
+          "orderTotal": {
+            "type": "number",
+            "description": "Tổng đơn sau VAT in vào hợp đồng — số nguyên đồng.",
+            "example": 83010960
+          },
+          "scheduleLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Tóm tắt lịch thanh toán: \"20/70/10\" khi mọi đợt theo %, \"N đợt\" khi có đợt theo số tiền, null khi chưa có lịch.",
+            "example": "20/70/10"
+          },
+          "missingPartyFields": {
+            "description": "Nhãn các ô pháp nhân công ty chưa cấu hình (in \"Chưa cấu hình\" — không chặn sinh).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "contracts": {
+            "description": "Hợp đồng đã sinh của đơn, mới nhất trước.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ContractResponseDto"
+            }
+          }
+        },
+        "required": [
+          "contractType",
+          "generatable",
+          "blockedReason",
+          "quoteNo",
+          "versionNo",
+          "customerName",
+          "lineCount",
+          "orderTotal",
+          "scheduleLabel",
+          "missingPartyFields",
+          "contracts"
         ]
       }
     }

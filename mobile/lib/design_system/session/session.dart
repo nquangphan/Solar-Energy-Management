@@ -25,6 +25,8 @@ export 'stock_vouchers_port.dart';
 // Payments seam (Stories 7.1–7.2): the backend owns every amount, the totals
 // verdict and what is paid; the client sends only what the user typed.
 export 'payments_port.dart';
+// Contracts seam (Story 7.3): the backend owns the number, the total and what blocks generation.
+export 'contracts_port.dart';
 // Client-generated idempotency keys for money writes (Story 7.2).
 export 'idempotency_key.dart';
 export 'app_session.dart';
@@ -41,3 +43,4 @@ export 'fake_warranty_port.dart';
 export 'fake_inventory_port.dart';
 export 'fake_stock_vouchers_port.dart';
 export 'fake_payments_port.dart';
+export 'fake_contracts_port.dart';
