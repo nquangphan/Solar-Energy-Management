@@ -415,10 +415,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           child: Row(
             children: <Widget>[
               SizedBox(width: 120.0, child: _label('Trạng thái')),
-              if (key != null)
-                AppStatusChip(status: key)
-              else
-                Text(order.status),
+              // The chip never wraps or truncates, so on a narrow phone the
+              // longest label is scaled down to the room left rather than
+              // overflowing; at normal widths it renders at natural size.
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: key != null
+                        ? AppStatusChip(status: key)
+                        : Text(order.status),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
