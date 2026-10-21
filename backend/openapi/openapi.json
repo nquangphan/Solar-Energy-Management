@@ -2317,7 +2317,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2502,7 +2502,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2567,7 +2567,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2652,7 +2652,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2737,7 +2737,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2822,7 +2822,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2915,7 +2915,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
+            "description": "Không có đơn, đơn ngoài phạm vi, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2979,7 +2979,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
+            "description": "Không có đơn, đơn ngoài phạm vi, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3054,7 +3054,7 @@
             }
           },
           "404": {
-            "description": "Không có đơn với id này (NOT_FOUND).",
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3110,7 +3110,7 @@
             }
           },
           "404": {
-            "description": "Đơn này chưa xuất báo giá lần nào (NOT_FOUND).",
+            "description": "Không có đơn với id này, đơn ngoài phạm vi, hoặc đơn chưa xuất báo giá lần nào (NOT_FOUND).",
             "content": {
               "image/png": {
                 "schema": {
@@ -3166,7 +3166,7 @@
             }
           },
           "404": {
-            "description": "Đơn này chưa xuất báo giá lần nào (NOT_FOUND).",
+            "description": "Không có đơn với id này, đơn ngoài phạm vi, hoặc đơn chưa xuất báo giá lần nào (NOT_FOUND).",
             "content": {
               "application/pdf": {
                 "schema": {

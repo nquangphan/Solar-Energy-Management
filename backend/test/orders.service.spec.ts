@@ -124,6 +124,7 @@ describe('OrdersService', () => {
 
   const orderRepo = {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     updateMany: jest.fn(),
@@ -202,6 +203,13 @@ describe('OrdersService', () => {
     jest.clearAllMocks();
     customerRepo.findUnique.mockResolvedValue(KHACH);
     orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
+    // Lần đọc đầu của đường đọc/ghi do người gọi kích hoạt đi qua `findScopedOrThrow`
+    // (`findFirst` + `where.AND`). Spec này KHÔNG về phạm vi (đã có `orders-write-scope.spec.ts`)
+    // nên `findFirst` đọc lại qua `findUnique`: mọi chuỗi `mockResolvedValueOnce` của
+    // `findUnique` vẫn được tiêu thụ đúng thứ tự như trước khi đường ghi được scope.
+    orderRepo.findFirst.mockImplementation((...args: unknown[]) =>
+      orderRepo.findUnique(...args),
+    );
     orderRepo.create.mockResolvedValue({
       ...DON_BAOGIA,
       currentVersionId: null,
@@ -336,6 +344,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { productId: PIN_580W.id, qty: 10 },
         true,
+        TOAN_QUYEN,
       );
 
       expect(lineRepo.create).toHaveBeenCalledWith({
@@ -363,6 +372,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { productId: PIN_580W.id, qty: 10 },
         false,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -378,6 +388,7 @@ describe('OrdersService', () => {
           DON_BAOGIA.id,
           { productId: PIN_580W.id, qty: 1, unitPrice: 1 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -394,6 +405,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { productId: PHI_LAP_DAT.id, qty: 1, unitPrice: 4_000_000 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -418,6 +430,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { productId: PHI_LAP_DAT.id, qty: 1, unitPrice: 4_000_000 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -437,6 +450,7 @@ describe('OrdersService', () => {
           DON_BAOGIA.id,
           { productId: 'prod-ma', qty: 1 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -467,6 +481,7 @@ describe('OrdersService', () => {
           note: 'kèm jack MC4',
         },
         true,
+        TOAN_QUYEN,
       );
 
       expect(lineRepo.findFirst).toHaveBeenCalledWith({
@@ -499,7 +514,12 @@ describe('OrdersService', () => {
         currentVersionId: null,
       });
 
-      const view = await service.get(DON_BAOGIA.id, true);
+      const view = await service.getScoped(
+        ACTOR,
+        TOAN_QUYEN,
+        DON_BAOGIA.id,
+        true,
+      );
 
       expect(view.lineItems).toEqual([]);
       expect(lineRepo.findMany).not.toHaveBeenCalled();
@@ -517,6 +537,7 @@ describe('OrdersService', () => {
           DON_BAOGIA.id,
           { productId: PIN_580W.id, qty: 1 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -535,6 +556,7 @@ describe('OrdersService', () => {
           DONG_CATALOG.id,
           { unitPrice: 1 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -552,6 +574,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { qty: 12, isFlexible: true },
         true,
+        TOAN_QUYEN,
       );
 
       expect(lineRepo.update).toHaveBeenCalledWith({
@@ -586,6 +609,7 @@ describe('OrdersService', () => {
         dongPhiLapDat.id,
         { unitPrice: 4_500_000 },
         true,
+        TOAN_QUYEN,
       );
 
       expect(lineRepo.update).toHaveBeenCalledWith({
@@ -616,6 +640,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { note: null },
         true,
+        TOAN_QUYEN,
       );
 
       expect(lineRepo.update).toHaveBeenCalledWith({
@@ -642,6 +667,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { warrantyMonths: 24 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -664,6 +690,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { warrantyMonths: null },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -685,6 +712,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { qty: 5 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -713,6 +741,7 @@ describe('OrdersService', () => {
         dongCongLap.id,
         { warrantyMonths: 12 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -743,6 +772,7 @@ describe('OrdersService', () => {
         dongTuDo.id,
         { warrantyMonths: 18 },
         true,
+        TOAN_QUYEN,
       );
 
       const data = (
@@ -766,6 +796,7 @@ describe('OrdersService', () => {
           DONG_CATALOG.id,
           { qty: 2 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -774,7 +805,12 @@ describe('OrdersService', () => {
     });
 
     it('xoá dòng: delete đúng where, publish OrderLineRemoved mang before', async () => {
-      await service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id);
+      await service.removeLine(
+        ACTOR,
+        DON_BAOGIA.id,
+        DONG_CATALOG.id,
+        TOAN_QUYEN,
+      );
 
       expect(lineRepo.delete).toHaveBeenCalledWith({
         where: { id: DONG_CATALOG.id },
@@ -798,6 +834,7 @@ describe('OrdersService', () => {
             DON_BAOGIA.id,
             { productId: PIN_580W.id, qty: 1 },
             true,
+            TOAN_QUYEN,
           ),
       ],
       [
@@ -809,11 +846,13 @@ describe('OrdersService', () => {
             DONG_CATALOG.id,
             { qty: 2 },
             true,
+            TOAN_QUYEN,
           ),
       ],
       [
         'removeLine',
-        () => service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id),
+        () =>
+          service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id, TOAN_QUYEN),
       ],
     ])(
       '%s trên đơn đã chốt ⇒ 409 CONFLICT, DB không bị ghi',
@@ -868,6 +907,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { productId: PIN_580W.id, qty: 8 },
         true,
+        TOAN_QUYEN,
       );
 
       expect(thuTu).toEqual(['write', 'publish']);
@@ -886,6 +926,7 @@ describe('OrdersService', () => {
         DONG_CATALOG.id,
         { qty: 12 },
         true,
+        TOAN_QUYEN,
       );
 
       const event = eventBus.publish.mock.calls[0][0] as OrderLineUpdated;
@@ -907,6 +948,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { scopeThiCong: true },
         true,
+        TOAN_QUYEN,
       );
 
       // Partial đúng nghĩa: field không gửi phải là undefined (Prisma bỏ qua),
@@ -923,7 +965,13 @@ describe('OrdersService', () => {
       orderRepo.findUnique.mockResolvedValue(null);
 
       const err = await bat(
-        service.update(ACTOR, 'ord-x', { scopeThiCong: true }, true),
+        service.update(
+          ACTOR,
+          'ord-x',
+          { scopeThiCong: true },
+          true,
+          TOAN_QUYEN,
+        ),
       );
 
       expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
@@ -938,7 +986,13 @@ describe('OrdersService', () => {
       });
 
       const err = await bat(
-        service.update(ACTOR, DON_BAOGIA.id, { scopeVanChuyen: true }, true),
+        service.update(
+          ACTOR,
+          DON_BAOGIA.id,
+          { scopeVanChuyen: true },
+          true,
+          TOAN_QUYEN,
+        ),
       );
 
       expect(err.errorCode).toBe(ErrorCode.CONFLICT);
@@ -962,6 +1016,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { scopeVanChuyen: true },
         true,
+        TOAN_QUYEN,
       );
 
       expect(thuTu).toEqual(['write', 'publish']);
@@ -985,6 +1040,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { scopeThiCong: true, scopeVanChuyen: true },
         true,
+        TOAN_QUYEN,
       );
 
       expect(orderRepo.update).toHaveBeenCalledWith({
@@ -996,7 +1052,13 @@ describe('OrdersService', () => {
     });
 
     it('body rỗng (không field nào) ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event', async () => {
-      const view = await service.update(ACTOR, DON_BAOGIA.id, {}, true);
+      const view = await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        {},
+        true,
+        TOAN_QUYEN,
+      );
 
       expect(view.scopeThiCong).toBe(DON_BAOGIA.scopeThiCong);
       expect(orderRepo.update).not.toHaveBeenCalled();
@@ -1016,6 +1078,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { vatMode: 'khong_vat' },
         true,
+        TOAN_QUYEN,
       );
 
       expect(orderRepo.update).toHaveBeenCalledWith({
@@ -1052,6 +1115,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { kWp: 8.82, validityNote: '48h kể từ ngày lên PO' },
         true,
+        TOAN_QUYEN,
       );
 
       expect(orderRepo.update).toHaveBeenCalledWith({
@@ -1092,6 +1156,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { kWp: null, validityNote: null },
         true,
+        TOAN_QUYEN,
       );
 
       expect(orderRepo.update).toHaveBeenCalledWith({
@@ -1114,7 +1179,13 @@ describe('OrdersService', () => {
         scopeThiCong: true,
       });
 
-      await service.update(ACTOR, DON_BAOGIA.id, { scopeThiCong: true }, true);
+      await service.update(
+        ACTOR,
+        DON_BAOGIA.id,
+        { scopeThiCong: true },
+        true,
+        TOAN_QUYEN,
+      );
 
       expect(eventBus.publish).toHaveBeenCalledTimes(1);
       expect(eventBus.publish.mock.calls[0][0]).toBeInstanceOf(
@@ -1139,6 +1210,7 @@ describe('OrdersService', () => {
         DON_BAOGIA.id,
         { scopeVanChuyen: true, vatMode: 'khong_vat' },
         true,
+        TOAN_QUYEN,
       );
 
       expect(thuTu).toEqual(['write', 'publish-scope', 'publish-meta']);
@@ -1158,7 +1230,13 @@ describe('OrdersService', () => {
       });
 
       const err = await bat(
-        service.update(ACTOR, DON_BAOGIA.id, { vatMode: 'khong_vat' }, true),
+        service.update(
+          ACTOR,
+          DON_BAOGIA.id,
+          { vatMode: 'khong_vat' },
+          true,
+          TOAN_QUYEN,
+        ),
       );
 
       expect(err.errorCode).toBe(ErrorCode.CONFLICT);
@@ -1654,7 +1732,12 @@ describe('OrdersService', () => {
         { ...PIN_580W, price: 9_999_999 },
       ]);
 
-      const view = await service.get(DON_BAOGIA.id, true);
+      const view = await service.getScoped(
+        ACTOR,
+        TOAN_QUYEN,
+        DON_BAOGIA.id,
+        true,
+      );
 
       expect(view.lineItems[0].unitPrice).toBe(2_400_000);
       expect(view.lineItems[0].amount).toBe(lineAmount(2_400_000, 8));
@@ -1756,7 +1839,12 @@ describe('OrdersService', () => {
       ]);
       productRepo.findMany.mockResolvedValue([TU_DIEN]);
 
-      const view = await service.get(DON_BAOGIA.id, true);
+      const view = await service.getScoped(
+        ACTOR,
+        TOAN_QUYEN,
+        DON_BAOGIA.id,
+        true,
+      );
 
       expect(view.lineItems[0].unitPrice).toBe(2_400_000);
       expect(view.lineItems[1].unitPrice).toBe(1_800_000);
@@ -2846,10 +2934,18 @@ describe('OrdersService', () => {
     });
 
     it('CÓ costs.view: item đúng shape, subtotal/afterDiscount backend tính, margin half-up biên (33.4→33, 33.5→34), null cho tự do/giá 0', async () => {
-      const items = await service.listPendingDiscounts(true, true);
+      const items = await service.listPendingDiscounts(
+        true,
+        true,
+        ACTOR,
+        TOAN_QUYEN,
+      );
 
       expect(discountApprovalRepo.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { status: 'cho_duyet' } }),
+        expect.objectContaining({
+          // TOAN_QUYEN có view_all ⇒ mệnh đề phạm vi rỗng.
+          where: { status: 'cho_duyet', order: { AND: [] } },
+        }),
       );
       expect(items).toHaveLength(1);
       const item = items[0];
@@ -2873,7 +2969,12 @@ describe('OrdersService', () => {
     });
 
     it('KHÔNG costs.view: mọi margin null VÀ KHÔNG query costPrice (fence FR-37 hai chiều)', async () => {
-      const items = await service.listPendingDiscounts(false, true);
+      const items = await service.listPendingDiscounts(
+        false,
+        true,
+        ACTOR,
+        TOAN_QUYEN,
+      );
 
       expect(
         items[0].lines.every((line) => line.estimatedMarginPct === null),
@@ -2889,7 +2990,12 @@ describe('OrdersService', () => {
     it('không approval pending nào ⇒ mảng rỗng, KHÔNG tra dòng/product', async () => {
       discountApprovalRepo.findMany.mockResolvedValue([]);
 
-      const items = await service.listPendingDiscounts(true, true);
+      const items = await service.listPendingDiscounts(
+        true,
+        true,
+        ACTOR,
+        TOAN_QUYEN,
+      );
 
       expect(items).toEqual([]);
       expect(lineRepo.findMany).not.toHaveBeenCalled();
@@ -2905,7 +3011,12 @@ describe('OrdersService', () => {
         { ...PIN_580W, price: 2_600_000, prices: [] },
       ]);
 
-      const view = await service.get(DON_BAOGIA.id, true);
+      const view = await service.getScoped(
+        ACTOR,
+        TOAN_QUYEN,
+        DON_BAOGIA.id,
+        true,
+      );
 
       expect(view.lineItems[0].unitPrice).toBe(2_600_000);
       expect(view.lineItems[0].amount).toBe(lineAmount(2_600_000, 8));
@@ -2924,7 +3035,12 @@ describe('OrdersService', () => {
       };
       lineRepo.findMany.mockResolvedValue([dongPhiLapDat]);
 
-      const view = await service.get(DON_BAOGIA.id, true);
+      const view = await service.getScoped(
+        ACTOR,
+        TOAN_QUYEN,
+        DON_BAOGIA.id,
+        true,
+      );
 
       expect(view.lineItems[0].unitPrice).toBe(4_000_000);
       expect(view.lineItems[0].amount).toBe(4_000_000);
@@ -2939,7 +3055,7 @@ describe('OrdersService', () => {
         { ...PIN_580W, costPrice: 1_950_000 },
       ]);
 
-      await service.get(DON_BAOGIA.id, true);
+      await service.getScoped(ACTOR, TOAN_QUYEN, DON_BAOGIA.id, true);
 
       const select = (
         productRepo.findMany.mock.calls[0][0] as {
@@ -3484,6 +3600,7 @@ describe('OrdersService', () => {
             DON_BAOGIA.id,
             { productId: PIN_580W.id, qty: 2 },
             true,
+            TOAN_QUYEN,
           ),
       ],
       [
@@ -3495,16 +3612,24 @@ describe('OrdersService', () => {
             DONG_CATALOG.id,
             { qty: 3 },
             true,
+            TOAN_QUYEN,
           ),
       ],
       [
         'removeLine',
-        () => service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id),
+        () =>
+          service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id, TOAN_QUYEN),
       ],
       [
         'update (PATCH đơn)',
         () =>
-          service.update(ACTOR, DON_BAOGIA.id, { scopeThiCong: true }, true),
+          service.update(
+            ACTOR,
+            DON_BAOGIA.id,
+            { scopeThiCong: true },
+            true,
+            TOAN_QUYEN,
+          ),
       ],
     ])('%s lấy khoá FOR UPDATE trước khi ghi', async (_ten, goi) => {
       const thuTu: string[] = [];
@@ -3542,6 +3667,7 @@ describe('OrdersService', () => {
           DON_BAOGIA.id,
           { productId: PIN_580W.id, qty: 2 },
           true,
+          TOAN_QUYEN,
         ),
       );
 
@@ -3575,6 +3701,7 @@ describe('OrdersService', () => {
             DONG_CATALOG.id,
             { qty: 3 },
             true,
+            TOAN_QUYEN,
           ),
         );
 
@@ -3588,7 +3715,7 @@ describe('OrdersService', () => {
         repointGiuaChung();
 
         const err = await bat(
-          service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id),
+          service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id, TOAN_QUYEN),
         );
 
         expect(err.errorCode).toBe(ErrorCode.NOT_FOUND);
@@ -3606,8 +3733,14 @@ describe('OrdersService', () => {
           DONG_CATALOG.id,
           { qty: 3 },
           true,
+          TOAN_QUYEN,
         );
-        await service.removeLine(ACTOR, DON_BAOGIA.id, DONG_CATALOG.id);
+        await service.removeLine(
+          ACTOR,
+          DON_BAOGIA.id,
+          DONG_CATALOG.id,
+          TOAN_QUYEN,
+        );
 
         expect(lineRepo.update).toHaveBeenCalled();
         expect(lineRepo.delete).toHaveBeenCalled();

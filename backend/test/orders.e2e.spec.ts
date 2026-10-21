@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AccountPermissionsService } from '../src/accounts/account-permissions.service';
 import { AccountsService } from '../src/accounts/accounts.service';
 import { PERM } from '../src/accounts/domain/permission-registry';
+import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
 import { SU_KIEN } from '../src/orders/domain/allowed-transition';
@@ -4116,6 +4117,300 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toHaveProperty('found');
       expect(orderRepo.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * Đường GHI đơn qua dây: người chỉ có `orders.view_own` (preset Thợ KS THẬT) không xem được
+   * đơn người khác thì cũng KHÔNG sửa/chốt/áp chiết khấu/thêm-sửa-xoá dòng/xuất báo giá được.
+   * Mã HTTP đo ở lane này vì nó đi qua guard + ValidationPipe + filter envelope thật — gọi
+   * thẳng service không chứng minh được client nhận 404 chứ không 403/400/500.
+   *
+   * Body mọi request đều HỢP LỆ: một body sai sẽ ăn 400 ở pipe và ca 404 xanh giả.
+   */
+  describe('đường GHI đơn ngoài phạm vi ⇒ 404 qua dây, không lộ sự tồn tại', () => {
+    const NGUOI_KHAC = 'acc-tho-ks-b';
+    const THONG_DIEP = `Không tìm thấy đơn hàng: ${ORDER_ID}`;
+
+    const DUONG_GHI: readonly [string, () => request.Test][] = [
+      [
+        'PATCH /orders/:id',
+        () =>
+          request(server())
+            .patch(`/orders/${ORDER_ID}`)
+            .send({ scopeThiCong: true }),
+      ],
+      [
+        'POST /:id/chot',
+        () => request(server()).post(`/orders/${ORDER_ID}/chot`),
+      ],
+      [
+        'POST /:id/mo-lai',
+        () => request(server()).post(`/orders/${ORDER_ID}/mo-lai`),
+      ],
+      [
+        'POST /:id/ap-chiet-khau',
+        () =>
+          request(server())
+            .post(`/orders/${ORDER_ID}/ap-chiet-khau`)
+            .send({ amount: 1_000_000 }),
+      ],
+      [
+        'POST /:id/line-items',
+        () =>
+          request(server())
+            .post(`/orders/${ORDER_ID}/line-items`)
+            .send({ productId: PIN_580W.id, qty: 2 }),
+      ],
+      [
+        'PATCH /:id/line-items/:lineId',
+        () =>
+          request(server())
+            .patch(`/orders/${ORDER_ID}/line-items/${DONG_CATALOG.id}`)
+            .send({ qty: 3 }),
+      ],
+      [
+        'DELETE /:id/line-items/:lineId',
+        () =>
+          request(server()).delete(
+            `/orders/${ORDER_ID}/line-items/${DONG_CATALOG.id}`,
+          ),
+      ],
+      [
+        'POST /:id/xuat-bao-gia',
+        () => request(server()).post(`/orders/${ORDER_ID}/xuat-bao-gia`),
+      ],
+    ];
+
+    function khongGhiGi(): void {
+      expect(transaction).not.toHaveBeenCalled();
+      expect(queryRaw).not.toHaveBeenCalled();
+      expect(orderRepo.update).not.toHaveBeenCalled();
+      expect(lineRepo.create).not.toHaveBeenCalled();
+      expect(lineRepo.update).not.toHaveBeenCalled();
+      expect(lineRepo.delete).not.toHaveBeenCalled();
+      expect(rendererStub.render).not.toHaveBeenCalled();
+      expect(quoteExportRepo.upsert).not.toHaveBeenCalled();
+      expect(auditRepo.create).not.toHaveBeenCalled();
+    }
+
+    it('bảng đủ 8 route ghi (chống bảng rỗng ⇒ it.each xanh giả)', () => {
+      expect(DUONG_GHI).toHaveLength(8);
+    });
+
+    it.each(DUONG_GHI)(
+      'Thợ KS A trên đơn của Thợ KS B: %s ⇒ 404 NOT_FOUND, không ghi gì',
+      async (_ten, goi) => {
+        givenPermissions(...ROLE_PRESETS.THO_KS);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_BAOGIA,
+          ownerAccountId: NGUOI_KHAC,
+          assigneeAccountId: null,
+        });
+
+        const res = await goi().set('Authorization', `Bearer ${token()}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(res.body.message).toBe(THONG_DIEP);
+        khongGhiGi();
+      },
+    );
+
+    it.each(DUONG_GHI)(
+      'ngoài phạm vi và KHÔNG tồn tại trả CÙNG một phản hồi: %s',
+      async (_ten, goi) => {
+        givenPermissions(...ROLE_PRESETS.THO_KS);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_BAOGIA,
+          ownerAccountId: NGUOI_KHAC,
+          assigneeAccountId: null,
+        });
+        const ngoaiPhamVi = await goi().set(
+          'Authorization',
+          `Bearer ${token()}`,
+        );
+        orderRepo.findUnique.mockResolvedValue(null);
+        const khongTonTai = await goi().set(
+          'Authorization',
+          `Bearer ${token()}`,
+        );
+
+        expect(ngoaiPhamVi.status).toBe(khongTonTai.status);
+        expect(ngoaiPhamVi.body.code).toBe(khongTonTai.body.code);
+        expect(ngoaiPhamVi.body.message).toBe(khongTonTai.body.message);
+      },
+    );
+
+    it('POST /:id/duyet-chiet-khau: có discounts.approve nhưng CHỈ view_own, đơn người khác ⇒ 404', async () => {
+      givenPermissions(PERM.discountsApprove, PERM.ordersViewOwn);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        status: 'choduyet',
+        ownerAccountId: NGUOI_KHAC,
+        assigneeAccountId: null,
+      });
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/duyet-chiet-khau`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ approve: true });
+
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+      expect(res.body.message).toBe(THONG_DIEP);
+      expect(discountApprovalRepo.findFirst).not.toHaveBeenCalled();
+      khongGhiGi();
+    });
+
+    describe('tải file báo giá đã xuất — phạm vi chạy TRƯỚC hồ sơ xuất và R2', () => {
+      beforeEach(() => {
+        // Đơn của B ĐÃ xuất báo giá: không có phạm vi, A sẽ tải được bytes thật.
+        quoteExportRow = {
+          orderId: ORDER_ID,
+          orderVersionId: VERSION_ID,
+          imageKey: `quotes/${ORDER_ID}/bao-gia.png`,
+          pdfKey: `quotes/${ORDER_ID}/bao-gia.pdf`,
+          fileName: 'bao-gia-b',
+        };
+        storageMap.set(`quotes/${ORDER_ID}/bao-gia.png`, {
+          body: Buffer.from('png-cua-b'),
+          contentType: 'image/png',
+        });
+        storageMap.set(`quotes/${ORDER_ID}/bao-gia.pdf`, {
+          body: Buffer.from('%PDF-cua-b'),
+          contentType: 'application/pdf',
+        });
+      });
+
+      it.each(['anh', 'pdf'])(
+        'Thợ KS A tải /bao-gia/%s của đơn B ⇒ 404 "không tìm thấy đơn", không đọc hồ sơ xuất',
+        async (kind) => {
+          givenPermissions(...ROLE_PRESETS.THO_KS);
+          orderRepo.findUnique.mockResolvedValue({
+            ...DON_BAOGIA,
+            ownerAccountId: NGUOI_KHAC,
+            assigneeAccountId: null,
+          });
+
+          const res = await request(server())
+            .get(`/orders/${ORDER_ID}/bao-gia/${kind}`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(404);
+          expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+          // Thông điệp của ĐƠN, không phải "chưa xuất" — cái sau xác nhận đơn có thật.
+          expect(res.body.message).toBe(THONG_DIEP);
+          expect(quoteExportRepo.findUnique).not.toHaveBeenCalled();
+        },
+      );
+
+      it.each(['anh', 'pdf'])(
+        'chủ đơn vẫn tải được /bao-gia/%s',
+        async (kind) => {
+          givenPermissions(...ROLE_PRESETS.THO_KS);
+
+          const res = await request(server())
+            .get(`/orders/${ORDER_ID}/bao-gia/${kind}`)
+            .set('Authorization', `Bearer ${token()}`);
+
+          expect(res.status).toBe(200);
+        },
+      );
+    });
+
+    it('GET /cho-duyet-chiet-khau: chỉ view_own ⇒ hàng chờ lọc theo owner/assignee của người gọi', async () => {
+      givenPermissions(PERM.discountsApprove, PERM.ordersViewOwn);
+
+      const res = await request(server())
+        .get('/orders/cho-duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(discountApprovalRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            status: 'cho_duyet',
+            order: {
+              AND: [
+                {
+                  OR: [
+                    { ownerAccountId: ACCOUNT_ID },
+                    { assigneeAccountId: ACCOUNT_ID },
+                  ],
+                },
+              ],
+            },
+          },
+        }),
+      );
+    });
+
+    it('GET /cho-duyet-chiet-khau: view_all ⇒ KHÔNG mệnh đề phạm vi', async () => {
+      givenPermissions(...ROLE_PRESETS.QUAN_LY);
+
+      const res = await request(server())
+        .get('/orders/cho-duyet-chiet-khau')
+        .set('Authorization', `Bearer ${token()}`);
+
+      expect(res.status).toBe(200);
+      expect(discountApprovalRepo.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: 'cho_duyet', order: { AND: [] } },
+        }),
+      );
+    });
+
+    it('Thợ KS vẫn PATCH được đơn CỦA MÌNH (owner) — phạm vi không chặn nhầm', async () => {
+      givenPermissions(...ROLE_PRESETS.THO_KS);
+      orderRepo.update.mockResolvedValue({ ...DON_BAOGIA, scopeThiCong: true });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThiCong: true });
+
+      expect(res.status).toBe(200);
+      expect(orderRepo.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('Thợ KS vẫn thêm dòng được trên đơn GIAO cho mình (nhánh assignee)', async () => {
+      givenPermissions(...ROLE_PRESETS.THO_KS);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        ownerAccountId: NGUOI_KHAC,
+        assigneeAccountId: ACCOUNT_ID,
+      });
+
+      const res = await request(server())
+        .post(`/orders/${ORDER_ID}/line-items`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ productId: PIN_580W.id, qty: 2 });
+
+      expect(res.status).toBe(201);
+      expect(lineRepo.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('Quản lý (orders.view_all) vẫn PATCH được đơn của người khác', async () => {
+      givenPermissions(...ROLE_PRESETS.QUAN_LY);
+      orderRepo.findUnique.mockResolvedValue({
+        ...DON_BAOGIA,
+        ownerAccountId: NGUOI_KHAC,
+        assigneeAccountId: null,
+      });
+      orderRepo.update.mockResolvedValue({
+        ...DON_BAOGIA,
+        ownerAccountId: NGUOI_KHAC,
+        scopeThiCong: true,
+      });
+
+      const res = await request(server())
+        .patch(`/orders/${ORDER_ID}`)
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ scopeThiCong: true });
+
+      expect(res.status).toBe(200);
+      expect(orderRepo.update).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -408,6 +408,10 @@ export class OrdersService {
     return sdt;
   }
 
+  /**
+   * Đọc TRẦN, không phạm vi — chỉ dành cho đường hệ thống không có người gọi
+   * (`chuyenTrangThaiTuDong`) và cho lần đọc LẠI sau khi `findScopedOrThrow` đã qua.
+   */
   private async findOrThrow(id: string): Promise<Order> {
     return this.findOrThrowIn(this.prisma, id);
   }
@@ -625,7 +629,7 @@ export class OrdersService {
    *
    * THỨ TỰ BẮT BUỘC — mỗi bước đứng trước bước sau vì một lý do, đảo là hỏng:
    *  1. Đọc đơn qua `findScopedOrThrow` — phạm vi đóng ở ĐƯỜNG ĐỌC DÙNG CHUNG, endpoint
-   *     không thể quên. (`get()` KHÔNG scope, đường nội bộ, không dùng ở đây.)
+   *     không thể quên.
    *  2. Chặn sự kiện ngoài `SU_KIEN_THU_CONG` — TRƯỚC `evaluateTransition()`, vì năm sự kiện
    *     kia HỢP LỆ với bảng: để engine trả `ok` rồi mới chặn là đã tin vào thứ tự may rủi.
    *  3. Pre-check thuần `evaluateTransition()` — từ chối 403/409 TRƯỚC khi trả tiền bytes lên
@@ -1264,20 +1268,11 @@ export class OrdersService {
   }
 
   /**
-   * Đơn + dòng của bản hiệu lực (qua `currentVersionId`), mỗi dòng kèm `amount` server tính.
-   *
-   * ⚠️ KHÔNG scope — đường đọc NỘI BỘ, chỉ còn `QuoteExportService` dùng. Mọi đường HTTP đọc
-   * đơn theo id phải đi qua `getScoped()`.
-   */
-  async get(id: string, tieredPricingEnabled: boolean): Promise<OrderView> {
-    const order = await this.findOrThrow(id);
-    return this.viewOf(order, tieredPricingEnabled);
-  }
-
-  /**
    * ĐƯỜNG ĐỌC SCOPED DÙNG CHUNG DUY NHẤT cho mọi endpoint đọc-theo-id của màn chi tiết
-   * (`GET /:id`, `/:id/vong-doi`, `/:id/phien-ban`). Một chỗ đóng phạm vi ⇒ endpoint mới
-   * KHÔNG THỂ quên nó.
+   * (`GET /:id`, `/:id/vong-doi`, `/:id/phien-ban`) VÀ là lần đọc ĐẦU TIÊN của mọi đường
+   * GHI do người gọi kích hoạt (sửa/chốt/mở lại/chiết khấu/dòng/xuất báo giá…): không xem
+   * được đơn thì cũng không sửa được nó. Một chỗ đóng phạm vi ⇒ endpoint mới KHÔNG THỂ quên
+   * nó — source-guard `no-unscoped-order-write.spec.ts` canh điều đó.
    *
    * Ngoài phạm vi và không tồn tại trả CÙNG một 404 với CÙNG thông điệp: 403 sẽ xác nhận đơn
    * có tồn tại — một bit rò ra cho người không được thấy nó (AD-4/AD-15).
@@ -1289,17 +1284,10 @@ export class OrdersService {
     quyen: ReadonlySet<string>,
     id: string,
   ): Promise<Order> {
-    const dieuKien: Prisma.OrderWhereInput[] = [{ id }];
-    if (!quyen.has(PERM.ordersViewAll)) {
-      dieuKien.push({
-        OR: [
-          { ownerAccountId: callerAccountId },
-          { assigneeAccountId: callerAccountId },
-        ],
-      });
-    }
     const order = await this.prisma.order.findFirst({
-      where: { AND: dieuKien },
+      where: {
+        AND: [{ id }, ...this.dieuKienPhamVi(callerAccountId, quyen)],
+      },
     });
     if (order === null) {
       throw new AppException(
@@ -1309,6 +1297,38 @@ export class OrdersService {
       );
     }
     return order;
+  }
+
+  /**
+   * Mệnh đề phạm vi DUY NHẤT trên `Order`: `view_all` ⇒ không thêm gì; còn lại ⇒ người gọi là
+   * owner HOẶC assignee. Trả MẢNG để gom vào `AND` (gán thẳng `OR` sẽ bị bộ lọc khác chiếm chỗ).
+   */
+  private dieuKienPhamVi(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+  ): Prisma.OrderWhereInput[] {
+    if (quyen.has(PERM.ordersViewAll)) return [];
+    return [
+      {
+        OR: [
+          { ownerAccountId: callerAccountId },
+          { assigneeAccountId: callerAccountId },
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Cửa phạm vi cho service KHÁC trong module (`QuoteExportService`) phải chặn đơn ngoài phạm vi
+   * TRƯỚC khi chạm R2, mà không cần dựng cả view như `getScoped()` (live-resolve giá từng dòng).
+   * Cùng mệnh đề, cùng 404 với `findScopedOrThrow`.
+   */
+  async assertScoped(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<void> {
+    await this.findScopedOrThrow(callerAccountId, quyen, orderId);
   }
 
   /** `GET /orders/:id` — đơn trong phạm vi người gọi, kèm dòng của bản hiệu lực. */
@@ -1575,7 +1595,7 @@ export class OrdersService {
    * gate máy trạng thái Epic 5 (AD-7); 4.5 snapshot vatRate/vatMode lúc Chốt, đổi tick sau
    * chốt là đổi tiền đã đóng băng — cùng ngữ nghĩa 409 với line-items.
    *
-   * Nhận `tieredPricingEnabled` như `get()` vì `toViews` re-resolve giá SỐNG cho dòng catalog.
+   * Nhận `tieredPricingEnabled` như `getScoped()` vì `toViews` re-resolve giá SỐNG cho dòng catalog.
    * Body rỗng ⇒ trả view hiện tại, KHÔNG ghi, KHÔNG event (không có mutation để audit).
    */
   async update(
@@ -1583,8 +1603,13 @@ export class OrdersService {
     orderId: string,
     dto: UpdateOrderRequestDto,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
-    const before = await this.findOrThrow(orderId);
+    const before = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     this.assertMutable(before);
 
     const coScope =
@@ -1675,7 +1700,11 @@ export class OrdersService {
     tieredPricingEnabled: boolean,
     actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
-    const before = await this.findOrThrow(orderId);
+    const before = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     if (before.status === TRANG_THAI_DA_CHOT) {
       // Retry sau khi đã chốt: 200 view hiện tại — KHÔNG ghi lại snapshot, KHÔNG event.
       return this.viewOf(before, tieredPricingEnabled);
@@ -1898,7 +1927,11 @@ export class OrdersService {
     tieredPricingEnabled: boolean,
     actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
-    const before = await this.findOrThrow(orderId);
+    const before = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     if (before.status === TRANG_THAI_BAO_GIA) {
       // Đơn đang mở sẵn (retry mo-lai, hoặc đơn chưa từng chốt): no-op vô hại.
       return this.viewOf(before, tieredPricingEnabled);
@@ -2044,7 +2077,11 @@ export class OrdersService {
     tieredPricingEnabled: boolean,
     actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
-    const before = await this.findOrThrow(orderId);
+    const before = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     if (before.status !== TRANG_THAI_BAO_GIA) {
       throw new AppException(
         ErrorCode.CONFLICT,
@@ -2162,7 +2199,11 @@ export class OrdersService {
     tieredPricingEnabled: boolean,
     actorPermissions: ReadonlySet<string>,
   ): Promise<OrderView> {
-    const before = await this.findOrThrow(orderId);
+    const before = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     const approval = await this.prisma.discountApproval.findFirst({
       where: { orderId: before.id },
       orderBy: { createdAt: 'desc' },
@@ -2388,9 +2429,17 @@ export class OrdersService {
   async listPendingDiscounts(
     hasCostsView: boolean,
     tieredPricingEnabled: boolean,
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
   ): Promise<DiscountPendingView[]> {
     const approvals = await this.prisma.discountApproval.findMany({
-      where: { status: CHIET_KHAU_CHO_DUYET },
+      // Phạm vi cùng mệnh đề với đường đọc chi tiết: người không xem được đơn thì cũng không
+      // thấy nó trong hàng chờ duyệt (preset hiện tại có `discounts.approve` đều kèm `view_all`
+      // — đây là phòng thủ cho account tick quyền lẻ).
+      where: {
+        status: CHIET_KHAU_CHO_DUYET,
+        order: { AND: this.dieuKienPhamVi(callerAccountId, quyen) },
+      },
       orderBy: { createdAt: 'asc' },
       include: {
         order: true,
@@ -2483,8 +2532,13 @@ export class OrdersService {
     orderId: string,
     dto: AddLineItemRequestDto,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderLineView> {
-    const order = await this.findOrThrow(orderId);
+    const order = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     this.assertMutable(order);
     const versionId = this.currentVersionIdOrThrow(order);
 
@@ -2621,8 +2675,13 @@ export class OrdersService {
     lineId: string,
     dto: UpdateLineItemRequestDto,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<OrderLineView> {
-    const order = await this.findOrThrow(orderId);
+    const order = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     this.assertMutable(order);
     const before = await this.findLineOrThrow(order, lineId);
 
@@ -2694,8 +2753,13 @@ export class OrdersService {
     actorAccountId: string,
     orderId: string,
     lineId: string,
+    actorPermissions: ReadonlySet<string>,
   ): Promise<void> {
-    const order = await this.findOrThrow(orderId);
+    const order = await this.findScopedOrThrow(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+    );
     this.assertMutable(order);
     const before = await this.findLineOrThrow(order, lineId);
 

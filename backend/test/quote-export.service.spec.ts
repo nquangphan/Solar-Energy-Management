@@ -1,4 +1,6 @@
+import { PERM } from '../src/accounts/domain/permission-registry';
 import { AppException } from '../src/common/errors/app.exception';
+import { ErrorCode } from '../src/common/errors/error-code';
 import type { EventBus } from '../src/events/event-bus';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import type { StoragePort } from '../src/storage/storage.port';
@@ -6,6 +8,9 @@ import { QuoteExported } from '../src/orders/domain/order-events';
 import type { OrdersService, OrderView } from '../src/orders/orders.service';
 import { QuoteExportService } from '../src/orders/quote-export.service';
 import type { QuoteRendererPort } from '../src/orders/quote/quote-renderer.port';
+
+/** Bộ quyền xem-hết — phạm vi do `getScoped()` lo, các ca dưới không về phạm vi. */
+const XEM_TAT_CA: ReadonlySet<string> = new Set([PERM.ordersViewAll]);
 
 /**
  * QuoteExportService (Story 4.8) — unit, mock đủ 5 dep. Assert PAYLOAD từng bước +
@@ -88,7 +93,8 @@ describe('QuoteExportService (unit, hermetic)', () => {
   /** Nhật ký thứ tự pipeline — mọi mock đẩy nhãn vào đây. */
   let callLog: string[];
 
-  const ordersGet = jest.fn();
+  const ordersGetScoped = jest.fn();
+  const ordersAssertScoped = jest.fn();
   const customerFindUnique = jest.fn();
   const versionFindUnique = jest.fn();
   const quoteExportUpsert = jest.fn();
@@ -99,7 +105,10 @@ describe('QuoteExportService (unit, hermetic)', () => {
   const publish = jest.fn();
 
   const service = new QuoteExportService(
-    { get: ordersGet } as unknown as OrdersService,
+    {
+      getScoped: ordersGetScoped,
+      assertScoped: ordersAssertScoped,
+    } as unknown as OrdersService,
     {
       customer: { findUnique: customerFindUnique },
       orderVersion: { findUnique: versionFindUnique },
@@ -122,7 +131,8 @@ describe('QuoteExportService (unit, hermetic)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     callLog = [];
-    ordersGet.mockResolvedValue(VIEW_DA_CHOT);
+    ordersGetScoped.mockResolvedValue(VIEW_DA_CHOT);
+    ordersAssertScoped.mockResolvedValue(undefined);
     customerFindUnique.mockResolvedValue(KHACH);
     versionFindUnique.mockResolvedValue(VERSION_SNAPSHOT);
     render.mockImplementation(async () => {
@@ -142,7 +152,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it('happy path: html nhận totals ĐÚNG từ computeOrderTotals (discount trừ trước VAT)', async () => {
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
 
     expect(render).toHaveBeenCalledTimes(1);
     const html = render.mock.calls[0][0] as string;
@@ -159,8 +169,43 @@ describe('QuoteExportService (unit, hermetic)', () => {
     expect(html).toContain('5 năm');
   });
 
+  it('phạm vi: đọc đơn qua getScoped(actor, quyền người gọi) — KHÔNG đường đọc trần', async () => {
+    const quyen = new Set<string>([PERM.ordersViewOwn]);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, quyen);
+
+    expect(ordersGetScoped).toHaveBeenCalledTimes(1);
+    expect(ordersGetScoped).toHaveBeenCalledWith(ACTOR, quyen, ORDER_ID, false);
+  });
+
+  it('phạm vi: đơn ngoài phạm vi (getScoped ném 404) ⇒ KHÔNG render, KHÔNG upload R2, KHÔNG ghi, KHÔNG publish', async () => {
+    ordersGetScoped.mockRejectedValue(
+      new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        `Không tìm thấy đơn hàng: ${ORDER_ID}`,
+      ),
+    );
+
+    const loi = await bat(
+      service.exportQuote(
+        ACTOR,
+        ORDER_ID,
+        8,
+        false,
+        new Set<string>([PERM.ordersViewOwn]),
+      ),
+    );
+
+    expect(loi.errorCode).toBe('NOT_FOUND');
+    expect(loi.getStatus()).toBe(404);
+    expect(render).not.toHaveBeenCalled();
+    expect(putObject).not.toHaveBeenCalled();
+    expect(quoteExportUpsert).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
   it('happy path: putObject ×2 đúng key deterministic + contentType; upsert đúng where/create/update', async () => {
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
 
     expect(putObject).toHaveBeenNthCalledWith(
       1,
@@ -191,7 +236,13 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it('happy path: publish QuoteExported SAU upsert — thứ tự [render, put, put, write, publish]', async () => {
-    const ketQua = await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    const ketQua = await service.exportQuote(
+      ACTOR,
+      ORDER_ID,
+      8,
+      false,
+      XEM_TAT_CA,
+    );
 
     expect(callLog).toEqual(['render', 'put', 'put', 'write', 'publish']);
     const event = publish.mock.calls[0][0] as QuoteExported;
@@ -218,9 +269,11 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it('0 dòng → 400 VALIDATION_ERROR, KHÔNG render/upload/upsert/event', async () => {
-    ordersGet.mockResolvedValue({ ...VIEW_DA_CHOT, lineItems: [] });
+    ordersGetScoped.mockResolvedValue({ ...VIEW_DA_CHOT, lineItems: [] });
 
-    const loi = await bat(service.exportQuote(ACTOR, ORDER_ID, 8, false));
+    const loi = await bat(
+      service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA),
+    );
     expect(loi.errorCode).toBe('VALIDATION_ERROR');
     expect(loi.getStatus()).toBe(400);
     expect(callLog).toEqual([]);
@@ -229,9 +282,9 @@ describe('QuoteExportService (unit, hermetic)', () => {
   it('renderer throw → propagate, KHÔNG putObject/upsert/event', async () => {
     render.mockRejectedValue(new Error('Chromium chết'));
 
-    await expect(service.exportQuote(ACTOR, ORDER_ID, 8, false)).rejects.toThrow(
-      'Chromium chết',
-    );
+    await expect(
+      service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA),
+    ).rejects.toThrow('Chromium chết');
     expect(putObject).not.toHaveBeenCalled();
     expect(quoteExportUpsert).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
@@ -240,15 +293,15 @@ describe('QuoteExportService (unit, hermetic)', () => {
   it('storage throw → propagate, KHÔNG upsert KHÔNG event', async () => {
     putObject.mockRejectedValue(new Error('R2 sập'));
 
-    await expect(service.exportQuote(ACTOR, ORDER_ID, 8, false)).rejects.toThrow(
-      'R2 sập',
-    );
+    await expect(
+      service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA),
+    ).rejects.toThrow('R2 sập');
     expect(quoteExportUpsert).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
   it("totals rule: đơn 'baogia' chưa chốt → rate settings + discount 0 (KHÔNG dùng approval cũ)", async () => {
-    ordersGet.mockResolvedValue({
+    ordersGetScoped.mockResolvedValue({
       ...VIEW_DA_CHOT,
       status: 'baogia',
       // Approval bị TỪ CHỐI còn nằm làm hồ sơ — không được trừ tiền.
@@ -270,7 +323,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
     });
 
     // Settings rate 10 (≠ snapshot 8 — chứng minh nguồn rate): VAT 10% trên 10tr = 1.000.000.
-    await service.exportQuote(ACTOR, ORDER_ID, 10, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 10, false, XEM_TAT_CA);
     const html = render.mock.calls[0][0] as string;
     expect(html).toContain('VAT (10%)');
     expect(html).toContain('1.000.000');
@@ -280,7 +333,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it("totals rule: đơn 'choduyet' + approval dong_y chưa snapshot → discount từ approval (mirror refreshTotals 4.7)", async () => {
-    ordersGet.mockResolvedValue({
+    ordersGetScoped.mockResolvedValue({
       ...VIEW_DA_CHOT,
       status: 'choduyet',
       discount: {
@@ -300,7 +353,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       discountAmount: null,
     });
 
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
     const html = render.mock.calls[0][0] as string;
     // 10tr − 1tr = 9tr ⇒ VAT 720.000 — giống snapshot case nhưng nguồn là approval.
     expect(html).toContain('-1.000.000');
@@ -309,7 +362,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it("applyVat rule: đơn chưa chốt vatMode 'khong_vat' → KHÔNG tính VAT (mutant luôn-áp-VAT lộ ngay)", async () => {
-    ordersGet.mockResolvedValue({
+    ordersGetScoped.mockResolvedValue({
       ...VIEW_DA_CHOT,
       status: 'baogia',
       vatMode: 'khong_vat',
@@ -322,7 +375,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       discountAmount: null,
     });
 
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
     const html = render.mock.calls[0][0] as string;
     // Không áp VAT: label 'VAT' trần (không '(8%)'), KHÔNG có 800.000 (= 8% subtotal).
     expect(html).not.toContain('VAT (');
@@ -339,7 +392,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       vatMode: 'khong_vat',
     });
 
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
     const html = render.mock.calls[0][0] as string;
     // Discount snapshot 1tr vẫn trừ: tổng = 10tr − 1tr = 9.000.000; VAT 0 (không 720.000).
     expect(html).toContain('-1.000.000');
@@ -349,7 +402,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
   });
 
   it("totals rule: đơn 'choduyet' + approval CHO_DUYET (chưa quyết) → discount vẫn trừ (mirror refreshTotals 4.7)", async () => {
-    ordersGet.mockResolvedValue({
+    ordersGetScoped.mockResolvedValue({
       ...VIEW_DA_CHOT,
       status: 'choduyet',
       discount: {
@@ -369,7 +422,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       discountAmount: null,
     });
 
-    await service.exportQuote(ACTOR, ORDER_ID, 8, false);
+    await service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA);
     const html = render.mock.calls[0][0] as string;
     // Thứ khách thấy trên màn (đang chờ duyệt vẫn hiện chiết khấu) = thứ in ra giấy.
     expect(html).toContain('-1.000.000');
@@ -379,23 +432,53 @@ describe('QuoteExportService (unit, hermetic)', () => {
 
   it('dữ liệu hỏng: customer hoặc version null → 404 NOT_FOUND, KHÔNG render/upload', async () => {
     customerFindUnique.mockResolvedValue(null);
-    const loiKhach = await bat(service.exportQuote(ACTOR, ORDER_ID, 8, false));
+    const loiKhach = await bat(
+      service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA),
+    );
     expect(loiKhach.errorCode).toBe('NOT_FOUND');
     expect(loiKhach.getStatus()).toBe(404);
 
     customerFindUnique.mockResolvedValue(KHACH);
     versionFindUnique.mockResolvedValue(null);
-    const loiVersion = await bat(service.exportQuote(ACTOR, ORDER_ID, 8, false));
+    const loiVersion = await bat(
+      service.exportQuote(ACTOR, ORDER_ID, 8, false, XEM_TAT_CA),
+    );
     expect(loiVersion.errorCode).toBe('NOT_FOUND');
     expect(loiVersion.getStatus()).toBe(404);
 
     expect(callLog).toEqual([]);
   });
 
+  it.each(['anh', 'pdf'] as const)(
+    'getExportFile(%s): kiểm phạm vi với quyền người gọi; ngoài phạm vi ⇒ 404 TRƯỚC khi đọc hồ sơ xuất và R2',
+    async (kind) => {
+      const quyen = new Set<string>([PERM.ordersViewOwn]);
+      ordersAssertScoped.mockRejectedValue(
+        new AppException(
+          ErrorCode.NOT_FOUND,
+          404,
+          `Không tìm thấy đơn hàng: ${ORDER_ID}`,
+        ),
+      );
+
+      const loi = await bat(
+        service.getExportFile(ACTOR, quyen, ORDER_ID, kind),
+      );
+
+      expect(ordersAssertScoped).toHaveBeenCalledWith(ACTOR, quyen, ORDER_ID);
+      expect(loi.getStatus()).toBe(404);
+      expect(loi.message).toBe(`Không tìm thấy đơn hàng: ${ORDER_ID}`);
+      expect(quoteExportFindUnique).not.toHaveBeenCalled();
+      expect(getObject).not.toHaveBeenCalled();
+    },
+  );
+
   it('getExportFile: chưa xuất lần nào → 404 NOT_FOUND, KHÔNG gọi storage', async () => {
     quoteExportFindUnique.mockResolvedValue(null);
 
-    const loi = await bat(service.getExportFile(ORDER_ID, 'anh'));
+    const loi = await bat(
+      service.getExportFile(ACTOR, XEM_TAT_CA, ORDER_ID, 'anh'),
+    );
     expect(loi.errorCode).toBe('NOT_FOUND');
     expect(loi.getStatus()).toBe(404);
     expect(getObject).not.toHaveBeenCalled();
@@ -413,7 +496,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       contentType: 'application/octet-stream',
     });
 
-    const anh = await service.getExportFile(ORDER_ID, 'anh');
+    const anh = await service.getExportFile(ACTOR, XEM_TAT_CA, ORDER_ID, 'anh');
     expect(getObject).toHaveBeenLastCalledWith(`quotes/${ORDER_ID}/bao-gia.png`);
     expect(anh.contentType).toBe('image/png');
     expect(anh.fileName).toBe(`bao-gia-${ORDER_ID8}.png`);
@@ -423,7 +506,7 @@ describe('QuoteExportService (unit, hermetic)', () => {
       body: PDF_BYTES,
       contentType: 'application/octet-stream',
     });
-    const pdf = await service.getExportFile(ORDER_ID, 'pdf');
+    const pdf = await service.getExportFile(ACTOR, XEM_TAT_CA, ORDER_ID, 'pdf');
     expect(getObject).toHaveBeenLastCalledWith(`quotes/${ORDER_ID}/bao-gia.pdf`);
     expect(pdf.contentType).toBe('application/pdf');
     expect(pdf.fileName).toBe(`bao-gia-${ORDER_ID8}.pdf`);

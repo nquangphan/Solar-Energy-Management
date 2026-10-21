@@ -20,7 +20,7 @@ import { buildQuoteHtml } from './quote/quote-template';
  * Xuất báo giá PDF + ảnh (Story 4.8, FR-21) — service RIÊNG, KHÔNG nằm trong
  * `orders.service.ts`: file đó tuyên bố bất biến "đúng 2 dependency (Prisma + EventBus)",
  * còn export cần thêm `StoragePort` + `QuoteRendererPort` + chính `OrdersService`
- * (tái dùng đường đọc `get()` per-line snapshot-first — KHÔNG viết resolve thứ hai).
+ * (tái dùng đường đọc `getScoped()` per-line snapshot-first — KHÔNG viết resolve thứ hai).
  *
  * Totals trên báo giá = `computeOrderTotals` (MỘT hàm — AD-16) với resolution rule:
  *  - vatRate/applyVat: version snapshot khi đã chốt (`OrderVersion.vatRate`/`vatMode`),
@@ -49,9 +49,16 @@ export class QuoteExportService {
     orderId: string,
     vatRatePercent: number,
     tieredPricingEnabled: boolean,
+    actorPermissions: ReadonlySet<string>,
   ) {
-    // 404 đơn ma tự có từ get(); view mang lineItems (amount server tính) + discount view.
-    const order = await this.orders.get(orderId, tieredPricingEnabled);
+    // 404 (đơn ma HOẶC ngoài phạm vi — cùng thông điệp) tự có từ getScoped(), TRƯỚC khi
+    // render/upload R2/ghi `quoteExport`; view mang lineItems (amount server tính) + discount.
+    const order = await this.orders.getScoped(
+      actorAccountId,
+      actorPermissions,
+      orderId,
+      tieredPricingEnabled,
+    );
     if (order.lineItems.length === 0) {
       throw new AppException(
         ErrorCode.VALIDATION_ERROR,
@@ -154,11 +161,19 @@ export class QuoteExportService {
     };
   }
 
-  /** Đọc file đã xuất cho 2 route proxy (AD-3) — chưa xuất lần nào ⇒ 404. */
+  /**
+   * Đọc file đã xuất cho 2 route proxy (AD-3) — chưa xuất lần nào ⇒ 404.
+   *
+   * Phạm vi chạy TRƯỚC khi đọc hồ sơ xuất và TRƯỚC khi chạm R2: đơn ngoài phạm vi trả CÙNG 404
+   * "không tìm thấy đơn" như đơn không tồn tại — báo "chưa xuất" sẽ xác nhận đơn có thật.
+   */
   async getExportFile(
+    callerAccountId: string,
+    actorPermissions: ReadonlySet<string>,
     orderId: string,
     kind: 'anh' | 'pdf',
   ): Promise<{ body: Buffer; contentType: string; fileName: string }> {
+    await this.orders.assertScoped(callerAccountId, actorPermissions, orderId);
     const row = await this.prisma.quoteExport.findUnique({
       where: { orderId },
     });

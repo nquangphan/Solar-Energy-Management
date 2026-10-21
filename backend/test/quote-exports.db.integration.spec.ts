@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
@@ -20,6 +21,9 @@ import { fakeStorage } from './util/fake-storage';
  */
 const coDb = Boolean(process.env.DATABASE_URL);
 const moTa = coDb ? describe : describe.skip;
+
+/** Bộ quyền xem-hết — các ca ở đây không về phạm vi, chỉ cần qua cửa `findScopedOrThrow`. */
+const XEM_TAT_CA: ReadonlySet<string> = new Set([PERM.ordersViewAll]);
 
 if (!coDb) {
   console.log(
@@ -157,7 +161,13 @@ moTa('Ràng buộc tầng DB của hồ sơ xuất báo giá (Postgres THẬT)',
     versionId: string;
   }> {
     const view = await service.create(accountId, { customerSdt: SDT });
-    await service.addLine(accountId, view.id, { productId, qty: 3 }, false);
+    await service.addLine(
+      accountId,
+      view.id,
+      { productId, qty: 3 },
+      false,
+      XEM_TAT_CA,
+    );
     const order = await prisma.order.findUniqueOrThrow({
       where: { id: view.id },
     });

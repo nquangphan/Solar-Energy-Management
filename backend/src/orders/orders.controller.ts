@@ -220,6 +220,8 @@ export class OrdersController {
     return (await this.orders.listPendingDiscounts(
       permissions.has(PERM.costsView),
       await this.tieredPricingEnabled(),
+      account.id,
+      permissions,
     )) as DiscountPendingItemDto[];
   }
 
@@ -400,7 +402,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -417,6 +419,7 @@ export class OrdersController {
       id,
       body,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderResponseDto;
   }
 
@@ -445,7 +448,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -488,7 +491,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -531,7 +534,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -575,7 +578,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -615,7 +618,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -632,6 +635,7 @@ export class OrdersController {
       id,
       body,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderLineItemResponseDto;
   }
 
@@ -653,7 +657,7 @@ export class OrdersController {
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).',
+      'Không có đơn, đơn ngoài phạm vi, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -671,6 +675,7 @@ export class OrdersController {
       lineId,
       body,
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as OrderLineItemResponseDto;
   }
 
@@ -685,7 +690,7 @@ export class OrdersController {
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Không có đơn, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).',
+      'Không có đơn, đơn ngoài phạm vi, hoặc dòng không thuộc bản hiệu lực của đơn này (NOT_FOUND).',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -696,7 +701,12 @@ export class OrdersController {
     @Param('id') id: string,
     @Param('lineId') lineId: string,
   ): Promise<void> {
-    await this.orders.removeLine(account.id, id, lineId);
+    await this.orders.removeLine(
+      account.id,
+      id,
+      lineId,
+      await this.quyenCuaNguoiGoi(account.id),
+    );
   }
 
   // Xuất báo giá PDF + ảnh (Story 4.8, FR-21) — action nghiệp vụ là sub-resource POST
@@ -722,7 +732,7 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Không có đơn với id này (NOT_FOUND).',
+    description: 'Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).',
   })
   async exportQuote(
     @CurrentAccount() account: AuthenticatedAccount,
@@ -735,6 +745,7 @@ export class OrdersController {
       id,
       await this.settings.vatRatePercent(),
       await this.tieredPricingEnabled(),
+      await this.quyenCuaNguoiGoi(account.id),
     )) as QuoteExportResponseDto;
   }
 
@@ -754,10 +765,19 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Đơn này chưa xuất báo giá lần nào (NOT_FOUND).',
+    description:
+      'Không có đơn với id này, đơn ngoài phạm vi, hoặc đơn chưa xuất báo giá lần nào (NOT_FOUND).',
   })
-  async downloadQuoteImage(@Param('id') id: string): Promise<StreamableFile> {
-    const file = await this.quoteExport.getExportFile(id, 'anh');
+  async downloadQuoteImage(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<StreamableFile> {
+    const file = await this.quoteExport.getExportFile(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+      'anh',
+    );
     return new StreamableFile(file.body, {
       type: file.contentType,
       disposition: `attachment; filename="${file.fileName}"`,
@@ -777,10 +797,19 @@ export class OrdersController {
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
-    description: 'Đơn này chưa xuất báo giá lần nào (NOT_FOUND).',
+    description:
+      'Không có đơn với id này, đơn ngoài phạm vi, hoặc đơn chưa xuất báo giá lần nào (NOT_FOUND).',
   })
-  async downloadQuotePdf(@Param('id') id: string): Promise<StreamableFile> {
-    const file = await this.quoteExport.getExportFile(id, 'pdf');
+  async downloadQuotePdf(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id') id: string,
+  ): Promise<StreamableFile> {
+    const file = await this.quoteExport.getExportFile(
+      account.id,
+      await this.quyenCuaNguoiGoi(account.id),
+      id,
+      'pdf',
+    );
     return new StreamableFile(file.body, {
       type: file.contentType,
       disposition: `attachment; filename="${file.fileName}"`,

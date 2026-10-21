@@ -20,6 +20,9 @@ import { fakeStorage } from './util/fake-storage';
 const coDb = Boolean(process.env.DATABASE_URL);
 const moTa = coDb ? describe : describe.skip;
 
+/** Bộ quyền xem-hết — các ca ở đây không về phạm vi, chỉ cần qua cửa `findScopedOrThrow`. */
+const XEM_TAT_CA: ReadonlySet<string> = new Set([PERM.ordersViewAll]);
+
 if (!coDb) {
   console.log(
     'Bỏ qua lane tích hợp DB: vắng DATABASE_URL (npm test vẫn hermetic). Chạy: npm run test:db',
@@ -199,7 +202,13 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
   describe('AC-5 — FK order_line_items.product_id ON DELETE RESTRICT', () => {
     it('xoá cứng Product đang có dòng đơn trỏ vào ⇒ Postgres CHẶN', async () => {
       const view = await service.create(accountId, { customerSdt: SDT });
-      await service.addLine(accountId, view.id, { productId, qty: 2 }, false);
+      await service.addLine(
+        accountId,
+        view.id,
+        { productId, qty: 2 },
+        false,
+        XEM_TAT_CA,
+      );
 
       // P2003 chỉ có ở INSERT; delete-restrict ném DriverAdapterError KHÔNG mã —
       // assert theo hành vi (reject + bản ghi còn nguyên), không theo code.
@@ -220,6 +229,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
         view.id,
         { productId, qty: 3 },
         false,
+        XEM_TAT_CA,
       );
 
       expect(line.unitPrice).toBe(100_000);
@@ -253,12 +263,24 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
     it('đơn đã chốt ⇒ MỌI dòng đều có snapshot giá (không dòng nào lọt qua cửa sổ)', async () => {
       for (let vong = 0; vong < SO_VONG; vong++) {
         const don = await service.create(accountId, { customerSdt: SDT });
-        await service.addLine(accountId, don.id, { productId, qty: 1 }, false);
+        await service.addLine(
+          accountId,
+          don.id,
+          { productId, qty: 1 },
+          false,
+          XEM_TAT_CA,
+        );
 
         // Hai request xuất phát CÙNG LÚC trên cùng một đơn — thứ tự do DB quyết.
         const ketQua = await Promise.allSettled([
           service.confirm(accountId, don.id, 8, false, TOAN_QUYEN),
-          service.addLine(accountId, don.id, { productId, qty: 7 }, false),
+          service.addLine(
+            accountId,
+            don.id,
+            { productId, qty: 7 },
+            false,
+            XEM_TAT_CA,
+          ),
         ]);
 
         const sauCung = await prisma.order.findUniqueOrThrow({
@@ -324,6 +346,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
             unitPrice: GIA_DAU,
           },
           false,
+          XEM_TAT_CA,
         );
 
         const ketQua = await Promise.allSettled([
@@ -334,6 +357,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
             dongTuDo.id,
             { unitPrice: GIA_SUA },
             false,
+            XEM_TAT_CA,
           ),
         ]);
 
@@ -405,6 +429,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
           don.id,
           { productId, qty: 1 },
           false,
+          XEM_TAT_CA,
         );
         await serviceCoBus.confirm(accountId, don.id, 8, false, TOAN_QUYEN);
         // Chỉ đếm event của cuộc đua, không tính event của bước dựng đơn.
@@ -443,6 +468,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
         don.id,
         { productId, qty: 1 },
         false,
+        XEM_TAT_CA,
       );
       await serviceCoBus.confirm(accountId, don.id, 8, false, TOAN_QUYEN);
       await serviceCoBus.chuyenTrangThaiTuDong({
@@ -494,6 +520,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
           don.id,
           { productId, qty: 1 },
           false,
+          XEM_TAT_CA,
         );
 
         const ketQua = await Promise.allSettled([
@@ -507,6 +534,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
             dong.id,
             { qty: QTY_MOI },
             false,
+            XEM_TAT_CA,
           ),
         ]);
 
