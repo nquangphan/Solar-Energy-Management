@@ -207,6 +207,20 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
     });
   }
 
+  async function statusOf(orderId: string): Promise<string> {
+    return (await prisma.order.findUniqueOrThrow({ where: { id: orderId } }))
+      .status;
+  }
+
+  async function rejection(p: Promise<unknown>): Promise<AppException> {
+    try {
+      await p;
+    } catch (e) {
+      return e as AppException;
+    }
+    throw new Error('Expected an AppException, got none.');
+  }
+
   beforeAll(async () => {
     prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
@@ -662,20 +676,6 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
       });
     }
 
-    async function statusOf(orderId: string): Promise<string> {
-      return (await prisma.order.findUniqueOrThrow({ where: { id: orderId } }))
-        .status;
-    }
-
-    async function rejection(p: Promise<unknown>): Promise<AppException> {
-      try {
-        await p;
-      } catch (e) {
-        return e as AppException;
-      }
-      throw new Error('Expected an AppException, got none.');
-    }
-
     it('stock-tracked lines not issued ⇒ 409; order stays dachot, 0 vouchers, onHand untouched', async () => {
       const panel = await createProduct({ costPrice: 100, onHand: 10 });
       const o = await createOrder(
@@ -849,6 +849,153 @@ describeDb('Order-bound stock issue on REAL Postgres', () => {
       ).toBe(1);
       expect(await voucherCount(o.id)).toBe(1);
       expect(await statusOf(o.id)).toBe('dachot');
+    });
+  });
+  describe('construction close nghiemthu → hoan_thanh (installation order)', () => {
+    const NOT_ISSUED =
+      'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.';
+    const SUPERVISOR = new Set<string>([
+      PERM.ordersViewAll,
+      PERM.constructionTransition,
+    ]);
+    const INSTALLATION = { vanChuyen: false, thiCong: true };
+
+    function close(orderId: string) {
+      return orders.chuyenTrangThaiThuCong({
+        callerAccountId: ACTOR,
+        quyen: SUPERVISOR,
+        orderId,
+        event: SU_KIEN.hoanThanh,
+        anh: [],
+      });
+    }
+
+    function autoClose(orderId: string) {
+      return orders.chuyenTrangThaiTuDong({
+        orderId,
+        event: SU_KIEN.hoanThanh,
+        actorAccountId: ACTOR,
+        actorPermissions: SUPERVISOR,
+      });
+    }
+
+    it('stock-tracked lines not issued ⇒ 409 on both lanes; order stays nghiemthu, 0 vouchers, onHand untouched', async () => {
+      const panel = await createProduct({ costPrice: 100, onHand: 10 });
+      const o = await createOrder(
+        'nghiemthu',
+        [{ productId: panel, qty: 4, unitPriceSnapshot: 500 }],
+        INSTALLATION,
+      );
+
+      const manual = await rejection(close(o.id));
+      const auto = await rejection(autoClose(o.id));
+
+      expect(manual.getStatus()).toBe(409);
+      expect(manual.message).toBe(NOT_ISSUED);
+      expect(auto.getStatus()).toBe(409);
+      expect(auto.message).toBe(NOT_ISSUED);
+      expect(await statusOf(o.id)).toBe('nghiemthu');
+      expect(await voucherCount(o.id)).toBe(0);
+      expect(await onHand(panel)).toBe(10);
+    });
+
+    it('standalone issue AT nghiemthu (status unchanged, cost frozen), then the close goes through', async () => {
+      const panel = await createProduct({ costPrice: 100, onHand: 10 });
+      const o = await createOrder(
+        'nghiemthu',
+        [
+          { productId: panel, qty: 4, unitPriceSnapshot: 500 },
+          { productId: null, qty: 1, unitPriceSnapshot: 70 },
+        ],
+        INSTALLATION,
+      );
+
+      const issued = await orders.issueStock(ACTOR, PERMISSIONS, o.id);
+
+      expect(issued.created).toBe(true);
+      expect(await statusOf(o.id)).toBe('nghiemthu');
+      expect(await onHand(panel)).toBe(6);
+      expect(await lineCosts(o.lineIds)).toEqual([100, 70]);
+
+      const closed = await close(o.id);
+
+      expect(closed.status).toBe('hoanthanh');
+      expect(await statusOf(o.id)).toBe('hoanthanh');
+      expect(await voucherCount(o.id)).toBe(1);
+      expect(await onHand(panel)).toBe(6);
+    });
+
+    it('🔴 FORCED: another tx holds the order row lock while inserting the stock-out ⇒ the close waits, sees that voucher, closes', async () => {
+      // Run the check BEFORE the order lock ⇒ it reads "not issued" while the voucher is
+      // uncommitted ⇒ 409 ⇒ RED.
+      const panel = await createProduct({ costPrice: 100, onHand: 10 });
+      const o = await createOrder(
+        'nghiemthu',
+        [{ productId: panel, qty: 2, unitPriceSnapshot: 500 }],
+        INSTALLATION,
+      );
+
+      let release!: () => void;
+      const holding = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const otherTx = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM orders WHERE id = ${o.id} FOR UPDATE`;
+          await tx.$executeRaw`INSERT INTO stock_vouchers (id, type, created_by_account_id, order_id, order_version_id)
+            VALUES (gen_random_uuid()::text, 'xuat', ${ACTOR}, ${o.id}, ${o.versionId})`;
+          await holding;
+        },
+        { timeout: 10_000 },
+      );
+      await wait(150);
+
+      const closing = autoClose(o.id);
+      await wait(300);
+
+      release();
+      await otherTx;
+      await closing;
+
+      expect(await statusOf(o.id)).toBe('hoanthanh');
+    });
+
+    it('🔴 FORCED: another tx holds the products lock while turning tracksStock ON ⇒ the close (pre-check passed) waits, reads it under the lock, 409', async () => {
+      const panel = await createProduct({
+        costPrice: 100,
+        onHand: 10,
+        tracksStock: false,
+      });
+      const o = await createOrder(
+        'nghiemthu',
+        [{ productId: panel, qty: 2, unitPriceSnapshot: 500 }],
+        INSTALLATION,
+      );
+
+      let release!: () => void;
+      const holding = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const otherTx = prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM products WHERE id = ${panel} FOR UPDATE`;
+          await tx.$executeRaw`UPDATE products SET tracks_stock = true WHERE id = ${panel}`;
+          await holding;
+        },
+        { timeout: 10_000 },
+      );
+      await wait(150);
+
+      const closing = rejection(close(o.id));
+      await wait(300);
+
+      release();
+      await otherTx;
+      const err = await closing;
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(NOT_ISSUED);
+      expect(await statusOf(o.id)).toBe('nghiemthu');
     });
   });
 });

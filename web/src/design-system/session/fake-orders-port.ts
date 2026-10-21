@@ -155,9 +155,18 @@ const DEMO_SHORT_LINE: OrderStockIssueLine = {
 const DEMO_UNTRACKED_ITEMS = ['Công lắp đặt'];
 
 /** The statuses the backend accepts for a standalone stock issue. */
-const DEMO_ISSUABLE_STATUSES = ['dachot', 'dacoc', 'danggiao', 'thicong'];
+const DEMO_ISSUABLE_STATUSES = [
+  'dachot',
+  'dacoc',
+  'danggiao',
+  'thicong',
+  'nghiemthu',
+];
 
-/** The backend's refusal of a direct close `dachot → hoan_thanh` before the stock-out. */
+/** The statuses whose close into `hoanthanh` the backend refuses before the stock-out. */
+const DEMO_CLOSE_REQUIRES_ISSUE_FROM = ['dachot', 'nghiemthu'];
+
+/** The backend's refusal of a close `dachot`/`nghiemthu` → `hoan_thanh` before the stock-out. */
 export const FAKE_CLOSE_BEFORE_ISSUE_ERROR: OrderPortError = {
   code: 'CONFLICT',
   message: 'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
@@ -779,10 +788,10 @@ export class FakeOrdersPort implements OrdersPort {
         ),
       );
     }
-    // Every demo order carries stock-tracked lines ⇒ the direct close is refused
-    // until it is issued, exactly as the backend does.
+    // Every demo order carries stock-tracked lines ⇒ the direct and construction closes
+    // are refused until the stock is issued, exactly as the backend does.
     if (
-      order.status === 'dachot' &&
+      DEMO_CLOSE_REQUIRES_ISSUE_FROM.includes(order.status) &&
       event === 'hoan_thanh' &&
       !this.issuedVouchers.has(orderId)
     ) {

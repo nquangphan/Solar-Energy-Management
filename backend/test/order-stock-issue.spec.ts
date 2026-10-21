@@ -28,8 +28,10 @@ import { fakeStorage, type FakeStorage } from './util/fake-storage';
  *  3. "Đã giao": a missing `inventory.manage` is refused BEFORE paying for R2, and re-checked
  *     under the lock.
  *  4. Other manual steps never touch stock.
- *  5. The direct close `dachot → hoan_thanh` is refused while tracked stock is not issued —
- *     before R2 in the manual lane, and under the order lock in the engine (both lanes).
+ *  5. The direct close `dachot → hoan_thanh` and the construction close
+ *     `nghiemthu → hoan_thanh` are refused while tracked stock is not issued — before R2 in
+ *     the manual lane, and under the order lock in the engine (both lanes). `dagiao` is not
+ *     gated ("Đã giao" issues by itself).
  *  6. Re-opening an issued order is refused under the lock.
  */
 describe('OrdersService — order-bound stock issue', () => {
@@ -347,7 +349,7 @@ describe('OrdersService — order-bound stock issue', () => {
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
-    it.each(['baogia', 'choduyet', 'dagiao', 'hoanthanh', 'huy', 'nghiemthu'])(
+    it.each(['baogia', 'choduyet', 'dagiao', 'hoanthanh', 'huy'])(
       'status %s ⇒ 409, no tx opened',
       async (status) => {
         givenOrder(order(status));
@@ -362,7 +364,7 @@ describe('OrdersService — order-bound stock issue', () => {
       },
     );
 
-    it.each(['dachot', 'dacoc', 'danggiao', 'thicong'])(
+    it.each(['dachot', 'dacoc', 'danggiao', 'thicong', 'nghiemthu'])(
       'status %s ⇒ issuable',
       async (status) => {
         givenOrder(order(status));
@@ -729,10 +731,10 @@ describe('OrdersService — order-bound stock issue', () => {
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
-    it('other edges into hoan_thanh never run the check', async () => {
-      givenOrder(order('nghiemthu'));
+    it('the delivery close dagiao → hoan_thanh is the only edge into hoan_thanh that never runs the check', async () => {
+      givenOrder(order('dagiao'));
 
-      await service.chuyenTrangThaiThuCong({
+      const result = await service.chuyenTrangThaiThuCong({
         callerAccountId: ACTOR,
         quyen: WAREHOUSE,
         orderId: ORDER_ID,
@@ -740,8 +742,124 @@ describe('OrdersService — order-bound stock issue', () => {
         anh: [],
       });
 
+      expect(result.status).toBe('hoanthanh');
       expect(stockVouchers.lockTrackedProductsInTx).not.toHaveBeenCalled();
       expect(stockVouchers.findOrderIssueVoucher).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('construction close nghiemthu → hoan_thanh (installation order)', () => {
+    const SUPERVISOR: ReadonlySet<string> = new Set([
+      PERM.ordersViewAll,
+      PERM.constructionTransition,
+    ]);
+    const NOT_ISSUED =
+      'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.';
+
+    beforeEach(() => givenOrder(order('nghiemthu')));
+
+    function close(withPhoto = false) {
+      return service.chuyenTrangThaiThuCong({
+        callerAccountId: ACTOR,
+        quyen: SUPERVISOR,
+        orderId: ORDER_ID,
+        event: SU_KIEN.hoanThanh,
+        anh: withPhoto
+          ? [
+              {
+                originalname: 'accepted.jpg',
+                mimetype: 'image/jpeg',
+                size: 2048,
+                buffer: Buffer.from('x'),
+              },
+            ]
+          : [],
+      });
+    }
+
+    it('tracked lines not issued ⇒ 409 BEFORE R2: no upload, no tx', async () => {
+      const err = await caught(close(true));
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(NOT_ISSUED);
+      expect(storage.objects.size).toBe(0);
+      expect(calls).not.toContain('tx.begin');
+    });
+
+    it('re-checked UNDER THE ORDER LOCK: pre-check saw nothing tracked, the tx does ⇒ 409, status not written, 0 events', async () => {
+      stockVouchers.previewOrderIssue = recorded('previewOrderIssue', {
+        lines: [],
+        tracked: new Set(),
+      });
+      stockVouchers.lockTrackedProductsInTx = recorded(
+        'lockTrackedProducts',
+        new Set([P1]),
+      );
+
+      const err = await caught(close());
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(NOT_ISSUED);
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
+      const inTx = calls.slice(calls.indexOf('tx.begin') + 1);
+      expect(inTx[0]).toBe('lockOrderRow');
+      expect(inTx.indexOf('order.findUnique')).toBeGreaterThan(0);
+      expect(inTx.indexOf('order.findUnique')).toBeLessThan(
+        inTx.indexOf('lockTrackedProducts'),
+      );
+    });
+
+    it('already issued (standalone issue at nghiemthu) ⇒ closes: status written, no product lock, StatusChanged once', async () => {
+      stockVouchers.findOrderIssueVoucher = recorded(
+        'findOrderIssueVoucher',
+        VOUCHER,
+      );
+
+      const result = await close();
+
+      expect(result.status).toBe('hoanthanh');
+      expect(orderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: ORDER_ID, status: 'nghiemthu' },
+        data: { status: 'hoanthanh' },
+      });
+      expect(stockVouchers.lockTrackedProductsInTx).not.toHaveBeenCalled();
+      expect(stockVouchers.issueForOrderInTx).not.toHaveBeenCalled();
+      expect(published('StatusChanged')).toBe(1);
+      expect(eventBus.publish).toHaveBeenCalledTimes(1);
+    });
+
+    it('no tracked line ⇒ closes directly, never issues', async () => {
+      stockVouchers.previewOrderIssue = recorded('previewOrderIssue', {
+        lines: [],
+        tracked: new Set(),
+      });
+
+      const result = await close();
+
+      expect(result.status).toBe('hoanthanh');
+      expect(stockVouchers.issueForOrderInTx).not.toHaveBeenCalled();
+    });
+
+    it('auto lane (full payment) is gated by the SAME engine check ⇒ 409, status not written', async () => {
+      stockVouchers.lockTrackedProductsInTx = recorded(
+        'lockTrackedProducts',
+        new Set([P1]),
+      );
+
+      const err = await caught(
+        service.chuyenTrangThaiTuDong({
+          orderId: ORDER_ID,
+          event: SU_KIEN.hoanThanh,
+          actorAccountId: ACTOR,
+          actorPermissions: SUPERVISOR,
+        }),
+      );
+
+      expect(err.getStatus()).toBe(409);
+      expect(err.message).toBe(NOT_ISSUED);
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+      expect(eventBus.publish).not.toHaveBeenCalled();
     });
   });
 
@@ -819,6 +937,12 @@ describe('OrdersService — order-bound stock issue', () => {
 
     it('dachot (equipment-only direct close) ⇒ canIssue true', async () => {
       givenOrder(order('dachot'));
+      const view = await service.getStockIssue(ACTOR, WAREHOUSE, ORDER_ID);
+      expect(view.canIssue).toBe(true);
+    });
+
+    it('nghiemthu (acceptance reached without issuing) ⇒ canIssue true', async () => {
+      givenOrder(order('nghiemthu'));
       const view = await service.getStockIssue(ACTOR, WAREHOUSE, ORDER_ID);
       expect(view.canIssue).toBe(true);
     });

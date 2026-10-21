@@ -78,6 +78,7 @@ import {
   TRANG_THAI_DA_COC,
   TRANG_THAI_DANG_GIAO,
   TRANG_THAI_HOAN_THANH,
+  TRANG_THAI_NGHIEM_THU,
   TRANG_THAI_THI_CONG,
   type OrderStatusKey,
 } from './domain/order-status';
@@ -366,16 +367,35 @@ const HUY_GATE_THUA = new Error('huy-gate-thua');
  * Statuses the STANDALONE stock-issue path accepts: confirmed (equipment-only orders that
  * close straight `dachot → hoan_thanh` and never pass a delivery step), deposit paid
  * (materials before installation / customer pick-up), in delivery (deduct when goods are
- * loaded), installing. The "Đã giao" step issues by itself if not yet issued.
+ * loaded), installing, acceptance (an installation order that reached `nghiemthu` without
+ * issuing can still issue, then close). The "Đã giao" step issues by itself if not yet issued.
  */
 const STOCK_ISSUE_STATUSES: readonly string[] = [
   TRANG_THAI_DA_CHOT,
   TRANG_THAI_DA_COC,
   TRANG_THAI_DANG_GIAO,
   TRANG_THAI_THI_CONG,
+  TRANG_THAI_NGHIEM_THU,
 ];
 
-/** Refusal of the direct close `dachot → hoan_thanh` while tracked stock is not issued. */
+/**
+ * Statuses whose close edge into `hoanthanh` requires the tracked stock to be issued first:
+ * the direct equipment close (`dachot`) and the construction close (`nghiemthu`) — neither
+ * path guarantees a stock-out on its own. `dagiao` is not listed: "Đã giao" issues by itself.
+ */
+const CLOSE_REQUIRES_ISSUE_FROM: readonly string[] = [
+  TRANG_THAI_DA_CHOT,
+  TRANG_THAI_NGHIEM_THU,
+];
+
+/** The edge `from → to` is a close that must be refused while tracked stock is not issued. */
+function closeRequiresIssuedStock(from: string, to: string): boolean {
+  return (
+    to === TRANG_THAI_HOAN_THANH && CLOSE_REQUIRES_ISSUE_FROM.includes(from)
+  );
+}
+
+/** Refusal of a close into `hoan_thanh` while tracked stock is not issued. */
 const STOCK_NOT_ISSUED_MESSAGE =
   'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.';
 
@@ -588,15 +608,11 @@ export class OrdersService {
     }
 
     await this.lockOrderRow(tx, order.id);
-    // The direct close `dachot → hoanthanh` skips every delivery/installation step, so
-    // nothing else guarantees the stock-out ⇒ it is gated here, under the order lock, for
-    // every lane (manual and auto). Other edges into `hoanthanh` are deliberately NOT
-    // gated: delivery orders issue at "Đã giao"; installation materials go through the
-    // standalone issue (an ungated `nghiemthu → hoanthanh` is a known, accepted gap).
-    if (
-      order.status === TRANG_THAI_DA_CHOT &&
-      ketQua.to === TRANG_THAI_HOAN_THANH
-    ) {
+    // The direct close `dachot → hoanthanh` and the construction close
+    // `nghiemthu → hoanthanh` have no step that guarantees the stock-out ⇒ they are gated
+    // here, under the order lock, for every lane (manual and auto). `dagiao → hoanthanh` is
+    // not gated: delivery orders issue at "Đã giao".
+    if (closeRequiresIssuedStock(order.status, ketQua.to)) {
       await this.assertNoUnissuedStockInTx(tx, order.id);
     }
     const { count } = await tx.order.updateMany({
@@ -775,11 +791,10 @@ export class OrdersService {
     ) {
       throw this.missingInventoryPermissionError();
     }
-    // Direct close with stock still in the warehouse ⇒ refused BEFORE the R2 upload; the
-    // engine re-checks under the order lock (`assertNoUnissuedStockInTx`).
+    // Close with stock still in the warehouse ⇒ refused BEFORE the R2 upload; the engine
+    // re-checks under the order lock (`assertNoUnissuedStockInTx`).
     if (
-      before.status === TRANG_THAI_DA_CHOT &&
-      preCheck.to === TRANG_THAI_HOAN_THANH &&
+      closeRequiresIssuedStock(before.status, preCheck.to) &&
       (await this.hasUnissuedTrackedLines(before))
     ) {
       throw this.stockNotIssuedError();

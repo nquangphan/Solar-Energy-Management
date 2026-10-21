@@ -54,7 +54,7 @@ export class OrderStockIssueViewDto {
 
   @ApiProperty({
     description:
-      'Backend-computed: not issued ∧ status allows a standalone issue (confirmed / deposit paid / in delivery / installing) ∧ has stock-tracked lines ∧ caller holds inventory.manage.',
+      'Backend-computed: not issued ∧ status allows a standalone issue (confirmed / deposit paid / in delivery / installing / acceptance) ∧ has stock-tracked lines ∧ caller holds inventory.manage.',
   })
   canIssue!: boolean;
 

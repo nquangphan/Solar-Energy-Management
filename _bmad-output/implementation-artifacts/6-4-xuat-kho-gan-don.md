@@ -84,6 +84,12 @@ Tách bộ kiểm tồn của `taoPhieu` thành hàm private dùng chung trong `
 - **Hệ quả phải chặn kèm:** xuất ở `dachot` rồi `mo_lai` sẽ sinh version mới ⇒ phiếu cũ mồ côi theo `(orderId, orderVersionId)` và mở đường xuất lần hai. ⇒ `revise()` từ chối 409 `'Đơn đã xuất kho — không mở lại để sửa được.'` khi đơn đã có phiếu xuất, kiểm trong tx sau khoá đơn của engine. Giữ đúng bất biến "một đơn một phiếu" (D4/AC gốc).
 - Huỷ đơn `dachot` đã xuất: như huỷ `dacoc` đã xuất từ trước — trả hàng là 6.7 (`OrderCancelled`).
 
+**D13 — Đơn thi công đóng `nghiemthu → hoan_thanh` (QUYẾT ĐỊNH ĐẠI CA 2026-10-21 — thay Q2 của review).**
+Cùng luật D12b mở rộng sang nhánh thi công: không đơn nào Hoàn thành khi còn vật tư theo dõi tồn chưa xuất.
+- **(a)** Cửa xuất kho riêng nhận THÊM `nghiemthu` ⇒ đơn tới nghiệm thu mà chưa xuất vẫn xuất được rồi đóng (`STOCK_ISSUE_STATUSES`; `canIssue` theo cùng tập).
+- **(b)** Cạnh `nghiemthu → hoan_thanh` bị CHẶN 409 cùng message, cùng hàm `assertNoUnissuedStockInTx`, cùng chỗ (engine, SAU `lockOrderRow`, khoá `orders → products`), mọi lane; lane thủ công có cùng pre-check trước R2. Kiểm tổng quát hoá: `closeRequiresIssuedStock(from, to)` trên tập `CLOSE_REQUIRES_ISSUE_FROM = [dachot, nghiemthu]` — engine và pre-check dùng chung, không bản sao thứ hai.
+- `dagiao → hoan_thanh` KHÔNG kiểm: bước "Đã giao" tự xuất. Các cạnh khác không đổi.
+
 ### 3. Phạm vi — cái gì CỦA 6.4, cái gì KHÔNG
 
 | Việc | Story |
@@ -177,7 +183,7 @@ Tách bộ kiểm tồn của `taoPhieu` thành hàm private dùng chung trong `
 17. **Đơn chỉ-thiết-bị — xuất ở `dachot` (D12a):** `POST /orders/:id/stock-issue` trên đơn `dachot` ⇒ 201, phiếu gắn đơn, snapshot giá vốn, trạng thái KHÔNG đổi; `GET` ⇒ `canIssue: true` (có `inventory.manage`). Unit + e2e + lane DB. Web/mobile: màn Chi tiết đơn `dachot` hiện nút "Xuất kho" (theo `canIssue` backend — client không lọc trạng thái).
 18. **Chặn đóng thẳng khi chưa xuất (D12b):**
     - `dachot --hoan_thanh-->` với dòng theo dõi tồn chưa xuất ⇒ **409** `CONFLICT` message nguyên văn; `Order.status` không ghi, 0 event. Lane thủ công: pre-check TRƯỚC R2 (0 upload, không mở tx). Engine: kiểm lại SAU `lockOrderRow`, đọc lại `currentVersionId` trong tx, khoá `products` rồi mới đọc `tracksStock`. Lane auto (`chuyenTrangThaiTuDong`) cũng bị chặn.
-    - Đã xuất ⇒ đóng được (200 `hoanthanh`); không dòng theo dõi tồn ⇒ đóng thẳng; các cạnh khác vào `hoanthanh` (`nghiemthu`, `dagiao`) không chạy kiểm này.
+    - Đã xuất ⇒ đóng được (200 `hoanthanh`); không dòng theo dõi tồn ⇒ đóng thẳng; các cạnh khác vào `hoanthanh` (`nghiemthu`, `dagiao`) không chạy kiểm này. *(Đổi bởi D13: `nghiemthu → hoanthanh` nay cũng kiểm; chỉ `dagiao` không.)*
     - `mo_lai` đơn đã xuất ⇒ 409 `'Đơn đã xuất kho — không mở lại để sửa được.'`, không version mới.
     - Lane DB: chặn + đóng sau khi xuất + đóng thẳng không dòng tồn + auto lane + **xen kẽ ÉP BUỘC** (i) tx khác giữ khoá đơn và chèn phiếu chưa commit ⇒ lệnh đóng chờ, thấy phiếu, đóng được (đột biến kiểm trước khoá đơn ⇒ ĐỎ); (ii) tx khác giữ khoá `products` và bật `tracks_stock` chưa commit ⇒ lệnh đóng (pre-check đã qua) chờ, đọc dưới khoá ⇒ 409 (đột biến bỏ khoá `products`/bỏ kiểm trong tx ⇒ ĐỎ) + `mo_lai` đơn đã xuất.
     - Web/mobile: màn Chuyển trạng thái đơn `dachot` chưa xuất ⇒ `Banner`/`AppBanner` danger hiện đúng message backend, không `onDone`; sau khi xuất ⇒ đóng được. Fake port đóng vai backend (bước `hoan_thanh` ở `dachot`, 409 khi chưa xuất, 409 `mo_lai` khi đã xuất).
@@ -459,7 +465,7 @@ Symbol tiếng Việt CÓ SẴN (`taoPhieu`, `soDong`, `nguoiTao`, `ten`/`donVi`
 
 **Cần Đại Ca quyết (không tự đổi — đảo quyết định nghiệp vụ):**
 - **Q1 — `dachot` mở cho MỌI đơn, không riêng chỉ-thiết-bị.** Reviewer đề xuất chỉ cho khi cạnh `dachot → hoanthanh` hợp lệ. Bác có lý do: cạnh đó chỉ gate `scopeThietBi`, và đơn không có Thiết bị thì không có dòng theo dõi tồn ⇒ cửa riêng đã trả 409 "không có vật tư theo dõi tồn kho". Hệ quả còn lại: đơn thi công có Thiết bị xuất ở `dachot` (trước cọc) thì không `mo_lai` được nữa — đúng theo "một đơn một phiếu".
-- **Q2 — Đơn thi công `nghiemthu → hoanthanh` vẫn đóng được khi chưa xuất** (khe có từ trước — câu hỏi mở 5 mặc định "cấp vật tư qua cửa riêng"). Muốn chặn như D12b thì thêm cạnh này vào cùng kiểm trong engine (một dòng điều kiện + test) — chờ Đại Ca.
+- ~~**Q2 — Đơn thi công `nghiemthu → hoanthanh` vẫn đóng được khi chưa xuất**~~ — **ĐÃ CHỐT (Đại Ca 2026-10-21): chặn như D12b + cửa riêng nhận `nghiemthu`** — xem D13. Nội dung gốc: (khe có từ trước — câu hỏi mở 5 mặc định "cấp vật tư qua cửa riêng"). Muốn chặn như D12b thì thêm cạnh này vào cùng kiểm trong engine (một dòng điều kiện + test) — chờ Đại Ca.
 - **Ghi nhận cho story sau:** huỷ đơn đã xuất (`dachot`/`dacoc`) chưa trả tồn ⇒ 6.7; lane auto tất toán (7.2) sẽ nhận 409 trên đơn chưa xuất SAU khi Payment commit ⇒ caller 7.2 phải xử lý.
 
 **Bảng đột biến (cp backup → mutant → chạy → khôi phục, `filecmp` khớp; KHÔNG `git checkout/stash`; mọi mutant backend `tsc` sạch) — 19/19 ĐỎ:**
@@ -490,5 +496,6 @@ Mutant đầu của B6 (`=== 'never'`) KHÔNG compile ⇒ loại, làm lại b�
 
 ### Change Log
 
+- 2026-10-21 — Quyết định Đại Ca D13: chặn 409 `nghiemthu → hoanthanh` khi còn vật tư theo dõi tồn chưa xuất (cùng hàm, cùng khoá `orders → products`, mọi lane); cửa xuất kho riêng + `canIssue` nhận thêm `nghiemthu`. Kiểm tổng quát hoá thành `closeRequiresIssuedStock` (tập `dachot`, `nghiemthu`); ca test "chỉ cạnh `dachot` được kiểm" đổi có chủ đích thành "chỉ `dagiao → hoanthanh` không kiểm". Fake port web/mobile khớp backend. 3 đột biến ĐỎ (bỏ `nghiemthu` khỏi cửa xuất; bỏ cạnh `nghiemthu` khỏi kiểm đóng; dời kiểm lên trước khoá đơn).
 - 2026-10-21 — Hoàn tất: quyết định Đại Ca D12 (xuất ở `dachot`; chặn 409 `dachot → hoanthanh` khi còn vật tư chưa xuất, kiểm trong engine dưới khoá `orders → products`; chặn `mo_lai` đơn đã xuất), QA automate (test-summary-story-6-4.md), code review 15 finding đã vá + 2 câu hỏi nghiệp vụ, 19 đột biến ĐỎ. Status → done.
 - 2026-10-21 — Story 6.4 dev: xuất kho gắn Đơn (một Đơn một phiếu), snapshot giá vốn lúc xuất, giải phóng chỗ giữ, `StockIssued`, cửa riêng + bước Đã giao, đọc xé `RepeatableRead`, UI web/mobile, guard + lane DB. Áp luật tiếng Anh (quyết định B) cho toàn bộ code mới kể cả contract (`/orders/:id/stock-issue`).

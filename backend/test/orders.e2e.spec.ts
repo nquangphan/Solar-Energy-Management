@@ -3815,13 +3815,35 @@ describe('/orders (e2e)', () => {
         ]);
       });
 
-      it('LỐI RA: `nghiemthu` --hoan_thanh--> 200 `hoanthanh`', async () => {
+      it('LỐI RA: `nghiemthu` --hoan_thanh--> 200 `hoanthanh` once the stock is issued', async () => {
         donDangO('nghiemthu');
+        stockVoucherRepo.findUnique.mockResolvedValue({
+          id: 'stock-out-1',
+          seq: 96,
+          type: 'xuat',
+          note: null,
+          orderId: ORDER_ID,
+          createdAt: new Date('2026-10-21T04:00:00Z'),
+          createdBy: { id: ACCOUNT_ID, displayName: 'Kho' },
+          lines: [],
+        });
 
         const res = await post(SU_KIEN.hoanThanh);
 
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('hoanthanh');
+      });
+
+      it('`nghiemthu` --hoan_thanh--> with stock-tracked lines not issued ⇒ 409, status not written', async () => {
+        donDangO('nghiemthu');
+
+        const res = await post(SU_KIEN.hoanThanh);
+
+        expect(res.status).toBe(409);
+        expect(res.body.message).toBe(
+          'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
+        );
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
       });
     });
 

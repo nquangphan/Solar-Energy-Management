@@ -875,7 +875,7 @@ export class OrdersController {
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT). Also: the direct close `dachot → hoanthanh` while the order still has stock-tracked lines without a stock-out voucher (issue stock first).',
+      'Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT). Also: a close into `hoanthanh` from `dachot` (direct equipment close) or `nghiemthu` (construction close) while the order still has stock-tracked lines without a stock-out voucher (issue stock first).',
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
@@ -1029,7 +1029,7 @@ export class OrdersController {
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
     description:
-      'CONFLICT: status cannot issue standalone (accepted: dachot, dacoc, danggiao, thicong); no stock-tracked lines; or short stock (`fieldErrors[].code = INSUFFICIENT_STOCK`, `field = lines.{i}.qty` in the order of the preview `lines`). Nothing written.',
+      'CONFLICT: status cannot issue standalone (accepted: dachot, dacoc, danggiao, thicong, nghiemthu); no stock-tracked lines; or short stock (`fieldErrors[].code = INSUFFICIENT_STOCK`, `field = lines.{i}.qty` in the order of the preview `lines`). Nothing written.',
   })
   async issueStock(
     @CurrentAccount() account: AuthenticatedAccount,

@@ -94,10 +94,18 @@ const List<String> _kDemoIssuableStatuses = <String>[
   'dacoc',
   'danggiao',
   'thicong',
+  'nghiemthu',
 ];
 
-/// The backend's refusal of a direct close `dachot → hoan_thanh` before the
+/// The statuses whose close into `hoanthanh` the backend refuses before the
 /// stock-out.
+const List<String> _kDemoCloseRequiresIssueFrom = <String>[
+  'dachot',
+  'nghiemthu',
+];
+
+/// The backend's refusal of a close `dachot`/`nghiemthu` → `hoan_thanh` before
+/// the stock-out.
 const OrderPortException kFakeCloseBeforeIssueError = OrderPortException(
   'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
   code: 'CONFLICT',
@@ -583,9 +591,10 @@ class FakeOrdersPort implements OrdersPort {
         code: 'CONFLICT',
       );
     }
-    // Every demo order carries stock-tracked lines ⇒ the direct close is
-    // refused until it is issued, exactly as the backend does.
-    if (order.status == 'dachot' &&
+    // Every demo order carries stock-tracked lines ⇒ the direct and
+    // construction closes are refused until the stock is issued, exactly as
+    // the backend does.
+    if (_kDemoCloseRequiresIssueFrom.contains(order.status) &&
         event == 'hoan_thanh' &&
         !_issuedVouchers.containsKey(orderId)) {
       throw kFakeCloseBeforeIssueError;

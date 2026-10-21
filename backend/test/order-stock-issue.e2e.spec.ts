@@ -420,6 +420,16 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(stockIssuedAuditRows()).toBe(1);
     });
 
+    it('status `nghiemthu` (acceptance reached without issuing) ⇒ 201', async () => {
+      currentOrder = order('nghiemthu');
+
+      const res = await post();
+
+      expect(res.status).toBe(201);
+      expect(res.body.voucher.orderId).toBe(ORDER_ID);
+      expect(stockIssuedAuditRows()).toBe(1);
+    });
+
     it('status `dagiao` ⇒ 409, no tx opened', async () => {
       currentOrder = order('dagiao');
 
@@ -525,6 +535,56 @@ describe('/orders/:id/stock-issue (e2e)', () => {
     });
   });
 
+  describe('construction close nghiemthu → hoan_thanh', () => {
+    const NOT_ISSUED =
+      'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.';
+
+    function close() {
+      return request(server())
+        .post(`/orders/${ORDER_ID}/chuyen-trang-thai`)
+        .set('Authorization', `Bearer ${token()}`)
+        .field('event', 'hoan_thanh');
+    }
+
+    beforeEach(() => {
+      currentOrder = { ...order('nghiemthu'), scopeThiCong: true };
+      givenPermissions(...ROLE_PRESETS.THI_CONG);
+    });
+
+    it('stock-tracked lines not issued ⇒ 409 CONFLICT with the user message, status not written', async () => {
+      const res = await close();
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe(ErrorCode.CONFLICT);
+      expect(res.body.message).toBe(NOT_ISSUED);
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('after the standalone stock issue at nghiemthu ⇒ 200 hoanthanh', async () => {
+      givenPermissions(...ROLE_PRESETS.KHO_GIAO);
+      expect((await post()).status).toBe(201);
+
+      givenPermissions(...ROLE_PRESETS.THI_CONG);
+      const res = await close();
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('hoanthanh');
+      expect(orderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: ORDER_ID, status: 'nghiemthu' },
+        data: { status: 'hoanthanh' },
+      });
+    });
+
+    it('no stock-tracked line ⇒ closes directly (200)', async () => {
+      lineRepo.findMany.mockResolvedValue([ORDER_LINES[1]]);
+
+      const res = await close();
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('hoanthanh');
+    });
+  });
+
   describe('GET (preview)', () => {
     it('delivery.confirm without inventory.manage ⇒ 200, canIssue false, lines + untracked items', async () => {
       givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
@@ -551,6 +611,13 @@ describe('/orders/:id/stock-issue (e2e)', () => {
 
     it('dachot order ⇒ canIssue true (equipment-only orders issue before the direct close)', async () => {
       currentOrder = order('dachot');
+      const res = await get();
+      expect(res.status).toBe(200);
+      expect(res.body.canIssue).toBe(true);
+    });
+
+    it('nghiemthu order ⇒ canIssue true (acceptance reached without issuing)', async () => {
+      currentOrder = order('nghiemthu');
       const res = await get();
       expect(res.status).toBe(200);
       expect(res.body.canIssue).toBe(true);
