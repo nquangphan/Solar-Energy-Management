@@ -88,6 +88,7 @@ class OrderDetailScreen extends StatefulWidget {
     this.onChangeStatus,
     this.onOpenPaymentSchedule,
     this.onOpenContracts,
+    this.onOpenInvoices,
     this.pick,
     this.perms = const <PermissionKey>{},
   });
@@ -105,6 +106,9 @@ class OrderDetailScreen extends StatefulWidget {
   /// Opens the contract screen (Story 7.3). Null = the button never renders; the
   /// caller passes it only to a user holding `contracts.generate`.
   final VoidCallback? onOpenContracts;
+
+  /// Opens the internal-invoice screen (Story 7.4). Null = the button never renders.
+  final VoidCallback? onOpenInvoices;
 
   /// Injectable picker for the Ảnh tab (Story 5.6) — widget tests run without a
   /// platform channel, so the seam has to reach the shipped picker.
@@ -393,7 +397,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             if ((_buocKeTiep.isNotEmpty && widget.onChangeStatus != null) ||
                 _coTheHuy ||
                 widget.onOpenPaymentSchedule != null ||
-                widget.onOpenContracts != null) ...<Widget>[
+                widget.onOpenContracts != null ||
+                widget.onOpenInvoices != null) ...<Widget>[
               const SizedBox(height: AppTokens.space12),
               // `Wrap`, not `Row`: the two labels together overflow the phone
               // frame at large text scales, and a RenderFlex overflow is the
@@ -417,6 +422,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     AppButton(
                       label: 'Hợp đồng',
                       onPressed: widget.onOpenContracts,
+                    ),
+                  if (widget.onOpenInvoices != null)
+                    AppButton(
+                      label: 'Hoá đơn',
+                      onPressed: widget.onOpenInvoices,
                     ),
                   if (_coTheHuy)
                     AppButton(

@@ -49,6 +49,7 @@ model Account {
   stockVouchersCreated StockVoucher[]    @relation("StockVoucherCreatedBy")
   paymentsRecorded     Payment[]         @relation("PaymentRecordedBy")
   contractsCreated     Contract[]        @relation("ContractCreatedBy")
+  invoicesCreated      Invoice[]         @relation("InvoiceCreatedBy")
 
   @@map("accounts")
 }
@@ -503,6 +504,7 @@ model Order {
   paymentSchedule   PaymentSchedule?
   payments          Payment[]
   contracts         Contract[]
+  invoices          Invoice[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -544,6 +546,7 @@ model OrderVersion {
   stockMovements StockMovement[]
   stockVouchers  StockVoucher[]
   contracts      Contract[]
+  invoice        Invoice?
 
   @@unique([orderId, versionNo])
   @@map("order_versions")
@@ -736,6 +739,67 @@ model Contract {
   @@index([orderId])
   @@index([orderVersionId])
   @@map("contracts")
+}
+
+/// An internal sales invoice of one order version (FR-27). An immutable snapshot: customer,
+/// seller (the company legal entity from settings), lines, VAT and totals are copied at creation
+/// and never re-read from the order or the settings. At most one invoice per order version (a
+/// retry returns the stored one). Phase 1 has no e-invoice provider.
+///
+/// Money columns are `BigInt`: the server computes and STORES the order total, and an order of a
+/// few billion dong overflows INT4. Reads come back as JS `bigint` — convert with `Number()` in
+/// the service before anything reaches a response or an event (`JSON.stringify` throws on it).
+model Invoice {
+  id                        String        @id @default(uuid())
+  /// Global serial reserved under the order row lock (the number is part of the document).
+  seq                       Int           @unique @default(autoincrement())
+  invoiceNo                 String        @unique @map("invoice_no")
+  orderId                   String        @map("order_id")
+  order                     Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderVersionId            String        @unique @map("order_version_id")
+  orderVersion              OrderVersion  @relation(fields: [orderVersionId], references: [id], onDelete: Restrict)
+  customerSdt               String        @map("customer_sdt")
+  customerName              String        @map("customer_name")
+  customerTaxCode           String?       @map("customer_tax_code")
+  customerAddress           String?       @map("customer_address")
+  /// Seller snapshot; `''` = not configured at issue time (printed "Chưa cấu hình", never blocks).
+  sellerLegalName           String        @map("seller_legal_name")
+  sellerTaxCode             String        @map("seller_tax_code")
+  sellerAddress             String        @map("seller_address")
+  sellerRepresentative      String        @map("seller_representative")
+  sellerRepresentativeTitle String        @map("seller_representative_title")
+  sellerPhone               String        @map("seller_phone")
+  sellerBankAccount         String        @map("seller_bank_account")
+  vatRate                   Int           @map("vat_rate")
+  applyVat                  Boolean       @map("apply_vat")
+  subtotal                  BigInt
+  discountAmount            BigInt        @map("discount_amount")
+  vatAmount                 BigInt        @map("vat_amount")
+  total                     BigInt
+  issuedAt                  DateTime      @map("issued_at")
+  createdByAccountId        String        @map("created_by_account_id")
+  createdBy                 Account       @relation("InvoiceCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt                 DateTime      @default(now()) @map("created_at")
+  lines                     InvoiceLine[]
+
+  @@index([orderId])
+  @@map("invoices")
+}
+
+/// One line of an invoice, copied from the order version's line at creation.
+model InvoiceLine {
+  id           String  @id @default(uuid())
+  invoiceId    String  @map("invoice_id")
+  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  displayOrder Int     @map("display_order")
+  name         String
+  unit         String
+  qty          Int
+  unitPrice    Int     @map("unit_price")
+  amount       BigInt
+
+  @@unique([invoiceId, displayOrder])
+  @@map("invoice_lines")
 }
 
 /// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2

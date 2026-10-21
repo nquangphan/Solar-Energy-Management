@@ -517,4 +517,44 @@ void main() {
 
     expect(find.text('Hợp đồng'), findsNothing);
   });
+
+  testWidgets('onOpenInvoices alone ⇒ "Hoá đơn" renders and taps through once',
+      (WidgetTester tester) async {
+    int opened = 0;
+    // Every other callback that could open the action block is OFF, so only
+    // onOpenInvoices can be what shows the button.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onOpenInvoices: () => opened += 1,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hợp đồng'), findsNothing);
+    expect(find.text('Hoá đơn'), findsOneWidget);
+    await tester.tap(find.text('Hoá đơn'));
+    await tester.pumpAndSettle();
+    expect(opened, 1);
+  });
+
+  testWidgets('onOpenContracts without onOpenInvoices ⇒ no "Hoá đơn" button',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onOpenContracts: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Hợp đồng'), findsOneWidget);
+    expect(find.text('Hoá đơn'), findsNothing);
+  });
 }

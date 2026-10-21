@@ -1,0 +1,68 @@
+/* hand-authored — screen-local layout for Hoá đơn bán hàng (Story 7.4).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class — this file invents no palette (AD-13). */
+
+.iv-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.iv-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.iv-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.iv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  align-items: baseline;
+}
+
+.iv-row dt {
+  min-width: 96px;
+}
+
+.iv-row dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.iv-actions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.iv-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iv-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.iv-item-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

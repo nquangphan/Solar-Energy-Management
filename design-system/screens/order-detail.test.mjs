@@ -261,6 +261,8 @@ test('the not-found state is distinct from the load-error state (AC-13, UX-DR-19
 // is checked for it. The rule did not weaken — the set of shipped surfaces grew.
 // "Hợp đồng" left the RAW-TEXT list the same way in Story 7.3: contracts shipped as
 // their own screen reached by an action button; a Hợp đồng TAB is still forbidden.
+// "Hoá đơn" left it the same way in Story 7.4: invoices shipped as their own screen
+// reached by an action button; a Hoá đơn TAB is still forbidden.
 test('exactly the three owned tabs render — no placeholder tabs for future stories', () => {
   // Stripped code, not raw text: both screens explain in a comment WHICH tabs
   // they deliberately do not render, and that explanation is worth keeping.
@@ -273,10 +275,11 @@ test('exactly the three owned tabs render — no placeholder tabs for future sto
     assert.ok(m !== null && m[1].includes('Ảnh'), `${name}: the tab list must be found (guard not blind)`);
     assert.ok(!m[1].includes('Thanh toán'), `${name} must not render a "Thanh toán" tab — payment recording owns it`);
     assert.ok(!m[1].includes('Hợp đồng'), `${name} must not render a "Hợp đồng" tab — contracts are a screen behind a button`);
+    assert.ok(!m[1].includes('Hoá đơn'), `${name} must not render a "Hoá đơn" tab — invoices are a screen behind a button`);
     assert.equal((m[1].match(/label:/g) ?? []).length, 3, `${name} must render exactly three tabs`);
   }
   for (const [name, src] of allCode) {
-    for (const notYet of ['Hoá đơn', 'HĐ & HĐơn']) {
+    for (const notYet of ['HĐ & HĐơn']) {
       assert.ok(!src.includes(notYet), `${name} must not render a "${notYet}" tab — that story owns it`);
     }
     // Positive assertion: the Ảnh tab must ACTUALLY be there on both platforms.
@@ -388,8 +391,38 @@ test('the "Hợp đồng" button is gated on the onOpenContracts callback', () =
   );
   // The action container itself must open on the callback, or the button is unreachable
   // whenever no other action applies.
-  assert.match(webCode, /\|\|\s*onOpenContracts\s*\)\s*&&\s*\(/, 'web: .od-actions opens on onOpenContracts');
-  assert.match(mobileCode, /widget\.onOpenContracts != null\)\s*\.\.\.<Widget>\[/, 'mobile: the action block opens on onOpenContracts');
+  assert.match(webCode, /\|\|\s*onOpenContracts\s*(?:\|\|\s*\w+\s*)*\)\s*&&\s*\(/, 'web: .od-actions opens on onOpenContracts');
+  assert.match(
+    mobileCode,
+    /widget\.onOpenContracts != null(?:\s*\|\|\s*widget\.\w+ != null)*\)\s*\.\.\.<Widget>\[/,
+    'mobile: the action block opens on onOpenContracts',
+  );
+});
+
+// (e.8) THE "Hoá đơn" BUTTON (Story 7.4) renders ONLY when the caller passes the
+// callback (the caller passes it only with invoices.manage) — no button to nowhere.
+test('the "Hoá đơn" button is gated on the onOpenInvoices callback', () => {
+  assert.ok(webCode.includes('>Hoá đơn<'), 'the web detail must render the "Hoá đơn" button');
+  const webBtn = webCode.slice(0, webCode.indexOf('>Hoá đơn<'));
+  assert.match(webBtn.slice(-200), /onOpenInvoices\s*&&/, 'web: directly under `onOpenInvoices &&`');
+  assert.ok(mobileCode.includes("'Hoá đơn'"), 'the mobile detail must render the "Hoá đơn" button');
+  const mobBtn = mobileCode.slice(0, mobileCode.indexOf("'Hoá đơn'"));
+  assert.match(
+    mobBtn.slice(-250),
+    /if\s*\(widget\.onOpenInvoices != null\)/,
+    'mobile: directly under `if (widget.onOpenInvoices != null)`',
+  );
+  // The action container itself must open on the callback, or the button is unreachable
+  // whenever no other action applies.
+  assert.match(webCode, /\|\|\s*onOpenInvoices\s*(?:\|\|\s*\w+\s*)*\)\s*&&\s*\(/, 'web: .od-actions opens on onOpenInvoices');
+  assert.match(
+    mobileCode,
+    /widget\.onOpenInvoices != null(?:\s*\|\|\s*widget\.\w+ != null)*\)\s*\.\.\.<Widget>\[/,
+    'mobile: the action block opens on onOpenInvoices',
+  );
+  // The button follows "Hợp đồng" on both platforms (existing order kept).
+  assert.ok(webCode.indexOf('>Hợp đồng<') < webCode.indexOf('>Hoá đơn<'), 'web: "Hoá đơn" comes after "Hợp đồng"');
+  assert.ok(mobileCode.indexOf("'Hợp đồng'") < mobileCode.indexOf("'Hoá đơn'"), 'mobile: "Hoá đơn" comes after "Hợp đồng"');
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).

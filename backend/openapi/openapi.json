@@ -4836,6 +4836,144 @@
           "contracts"
         ]
       }
+    },
+    "/orders/{id}/invoices": {
+      "get": {
+        "operationId": "InvoicesController_overview",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nguồn hoá đơn sẽ chụp lại (bản đơn, khách, MST, tổng), server có tạo được không (creatable/blockedReason — cùng luật với POST), và các hoá đơn đã tạo (mới nhất trước).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicesOverviewResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu invoices.manage, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invoices"
+        ]
+      },
+      "post": {
+        "operationId": "InvoicesController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã tạo hoá đơn cho bản đơn hiện hành (lần đầu) hoặc bản đó đã có hoá đơn (gửi lại — trả đúng hoá đơn đã lập, không ghi thêm) — cùng mã 200, cùng thân. Body rỗng. Hoá đơn chụp lại khách, dòng, VAT, tổng và pháp nhân công ty lúc lập; không đổi theo đơn về sau.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID, hoặc đơn chưa có dòng vật tư (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu invoices.manage, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn chưa chốt hoặc đã huỷ, hoặc đơn vừa thay đổi bản trong lúc tạo (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invoices"
+        ]
+      }
     }
   },
   "info": {
@@ -8275,6 +8413,149 @@
           "scheduleLabel",
           "missingPartyFields",
           "contracts"
+        ]
+      },
+      "InvoiceResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "invoiceNo": {
+            "type": "string",
+            "description": "Số hoá đơn nội bộ — `HD-{năm}-{số thứ tự ≥ 4 chữ số}`.",
+            "example": "HD-2026-0731"
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản đơn (version) được chụp lại.",
+            "example": 1
+          },
+          "issuedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Ngày lập (ISO-8601 UTC)."
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Tên khách chụp lúc lập."
+          },
+          "customerTaxCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "MST khách chụp lúc lập; null khi khách không có MST.",
+            "example": "0316552018"
+          },
+          "vatRate": {
+            "type": "number",
+            "description": "Thuế suất VAT (%) chụp lúc lập.",
+            "example": 8
+          },
+          "applyVat": {
+            "type": "boolean",
+            "description": "Có áp VAT hay không, chụp lúc lập."
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Tổng trước chiết khấu và VAT — số nguyên đồng.",
+            "example": 76862000
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "Chiết khấu đã duyệt — số nguyên đồng (0 khi không có).",
+            "example": 0
+          },
+          "vatAmount": {
+            "type": "number",
+            "description": "Tiền VAT — số nguyên đồng (0 khi không áp VAT).",
+            "example": 6148960
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng thanh toán sau VAT — số nguyên đồng.",
+            "example": 83010960
+          },
+          "lineCount": {
+            "type": "number",
+            "description": "Số dòng vật tư trên hoá đơn.",
+            "example": 4
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNo",
+          "versionNo",
+          "issuedAt",
+          "customerName",
+          "customerTaxCode",
+          "vatRate",
+          "applyVat",
+          "subtotal",
+          "discountAmount",
+          "vatAmount",
+          "total",
+          "lineCount"
+        ]
+      },
+      "InvoicesOverviewResponseDto": {
+        "type": "object",
+        "properties": {
+          "creatable": {
+            "type": "boolean",
+            "description": "true ⇒ POST sẽ tạo hoá đơn mới; false ⇒ blockedReason nói vì sao, hoặc bản hiện hành đã có hoá đơn (currentInvoiceId)."
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do không tạo được (tiếng Việt, cùng message POST trả); null khi tạo được hoặc khi lý do duy nhất là bản hiện hành đã có hoá đơn."
+          },
+          "currentInvoiceId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Hoá đơn của bản đơn hiện hành, nếu đã lập."
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản đơn hiện hành (0 khi chưa có bản).",
+            "example": 1
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "customerTaxCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "MST khách hiện tại; null khi khách không có MST.",
+            "example": "0316552018"
+          },
+          "lineCount": {
+            "type": "number",
+            "description": "Số dòng vật tư của bản hiện hành.",
+            "example": 4
+          },
+          "orderTotal": {
+            "type": "number",
+            "description": "Tổng đơn sau VAT sẽ ghi vào hoá đơn — số nguyên đồng.",
+            "example": 83010960
+          },
+          "invoices": {
+            "description": "Hoá đơn đã tạo của đơn, mới nhất trước.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceResponseDto"
+            }
+          }
+        },
+        "required": [
+          "creatable",
+          "blockedReason",
+          "currentInvoiceId",
+          "versionNo",
+          "customerName",
+          "customerTaxCode",
+          "lineCount",
+          "orderTotal",
+          "invoices"
         ]
       }
     }

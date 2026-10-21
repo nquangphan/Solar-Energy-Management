@@ -48,6 +48,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       file: 'contracts/contracts.service.ts',
       goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
     },
+    {
+      file: 'invoices/invoices.service.ts',
+      goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
+    },
   ];
 
   /**
@@ -86,6 +90,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     /\.contract\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
     /this\.renderer\.\w+\s*\(/,
     /this\.loadInputs\s*\(/,
+    // An invoice belongs to one order: reading or writing invoice rows (the replay lookup
+    // included) touches that order.
+    /\.invoice\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
+    /\.invoiceLine\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
   ];
 
   /**
@@ -284,6 +292,36 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       for (const m of [generate, overview, getPdf]) {
         expect(viTriChamDau(m?.than ?? '')).toBeGreaterThan(-1);
       }
+    });
+
+    it('extracts the public methods of InvoicesService with full bodies, all touching the order', () => {
+      const methods = trichMethod(docFile('invoices/invoices.service.ts'));
+      const create = methods.find((m) => m.congKhai && m.ten === 'create');
+      const overview = methods.find((m) => m.congKhai && m.ten === 'overview');
+      expect(create?.than.length).toBeGreaterThan(0);
+      expect(create?.than).toMatch(/this\.orders\.getScoped\s*\(/);
+      expect(create?.than).toMatch(/\.invoice\.findUnique\s*\(/);
+      expect(create?.than).toMatch(/\.invoice\.create\s*\(/);
+      expect(create?.than).toMatch(/this\.loadInputs\s*\(/);
+      expect(overview?.than).toMatch(/\.invoice\.findMany\s*\(/);
+      for (const m of [create, overview]) {
+        expect(viTriChamDau(m?.than ?? '')).toBeGreaterThan(-1);
+      }
+    });
+
+    it('BẮT an invoice read placed before the scoped read', () => {
+      const mau = [
+        'class X {',
+        '  async create(actor: string, q: Set<string>, id: string) {',
+        '    await this.prisma.invoice.count({ where: {} });',
+        '    await this.orders.getScoped(actor, q, id, false);',
+        '  }',
+        '}',
+        '',
+      ].join('\n');
+      expect(
+        viPham(mau, /this\.orders\.(?:getScoped|assertScoped)\s*\(/),
+      ).toEqual(['create']);
     });
 
     it('BẮT a contract read placed before the scoped read', () => {

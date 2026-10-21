@@ -14,6 +14,7 @@ import { SettingsModule } from './settings/settings.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { InvoicesModule } from './invoices/invoices.module';
 
 /**
  * Root module.
@@ -54,6 +55,9 @@ import { ContractsModule } from './contracts/contracts.module';
  * Story 7.3 — `ContractsModule`: contract PDF of an order (FR-13), served as
  * `/orders/{id}/contracts`; it imports `OrdersModule` (scope + shared renderer), never the other
  * way round.
+ *
+ * Story 7.4 — `InvoicesModule`: internal sales invoice of an order (FR-27), stored as a snapshot
+ * and served as `/orders/{id}/invoices`; it imports `OrdersModule`, never the other way round.
  */
 @Module({
   imports: [
@@ -72,6 +76,7 @@ import { ContractsModule } from './contracts/contracts.module';
     InventoryModule,
     PaymentsModule,
     ContractsModule,
+    InvoicesModule,
   ],
 })
 export class AppModule {}

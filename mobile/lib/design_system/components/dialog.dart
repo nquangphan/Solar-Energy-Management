@@ -133,14 +133,9 @@ class AppDialog extends StatelessWidget {
           top: BorderSide(color: AppTokens.line, width: AppTokens.borderWidth),
         ),
       ),
-      child: Row(
-        children: [
-          for (var i = 0; i < footer!.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8.0),
-            footer![i],
-          ],
-        ],
-      ),
+      // `Wrap`, not `Row`: two buttons with long labels overflow a 320px phone; the
+      // second one moves to a new line instead.
+      child: Wrap(spacing: 8.0, runSpacing: 8.0, children: footer!),
     );
   }
 }

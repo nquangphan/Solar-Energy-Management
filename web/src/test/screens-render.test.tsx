@@ -26,6 +26,7 @@ import {
   FakePasswordPort,
   FakePaymentsPort,
   FakeContractsPort,
+  FakeInvoicesPort,
   DEMO_PAYMENT_SCHEDULE,
   FakeSettingsPort,
   FakeStockVouchersPort,
@@ -41,6 +42,7 @@ import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { ContractsScreen } from '../screens/contracts/ContractsScreen';
+import { InvoicesScreen } from '../screens/invoices/InvoicesScreen';
 import { CreateQuoteScreen } from '../screens/orders/CreateQuoteScreen';
 import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
@@ -237,7 +239,13 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(await screen.findByText('Trường động đưa vào HĐ')).toBeTruthy();
     expect(screen.getByText('Xuất PDF hợp đồng')).toBeTruthy();
   });
+
+  it('InvoicesScreen — create-invoice source loaded from the port', async () => {
+    renderScreen(<InvoicesScreen port={new FakeInvoicesPort()} orderId="DH-2048" />);
+    expect(await screen.findByText('Tạo hoá đơn từ đơn')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Tạo hoá đơn' })).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 17;
+const SCREEN_COUNT = 18;

@@ -58,3 +58,15 @@ describe('ContractsModule wiring — shares the orders renderer', () => {
     );
   });
 });
+
+describe('InvoicesModule wiring — no renderer, no storage', () => {
+  it('provides only InvoicesService and imports OrdersModule for the scope', async () => {
+    const { InvoicesModule } = await import('../src/invoices/invoices.module');
+    expect(Reflect.getMetadata('providers', InvoicesModule)).toEqual([
+      (await import('../src/invoices/invoices.service')).InvoicesService,
+    ]);
+    expect(Reflect.getMetadata('imports', InvoicesModule)).toContain(
+      OrdersModule,
+    );
+  });
+});
