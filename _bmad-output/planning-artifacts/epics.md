@@ -623,12 +623,15 @@ As a người có quyền ghi nhận thanh toán, I want ghi tiền theo từng 
 - **Given** một đợt thanh toán, **When** ghi nhận (qua Dialog xác nhận), **Then** tạo `Payment`, cập nhật trạng thái thanh toán của Đơn, ghi Audit (FR-12, UX-DR-20).
 - **Given** ghi đủ đợt cọc đầu, **When** xử lý, **Then** gọi `applyTransition()` để Đơn tự sang "Đã cọc" (không ghi status trực tiếp) (FR-8, FR-12, AD-11).
 - **Given** thao tác tiền, **When** retry, **Then** idempotent, không ghi trùng; publish event `DepositRecorded`/`PaymentRecorded` qua EventBus (NFR-1, AD-18).
+- **Given** `Payment` được ghi và transition tự động bị chặn 409 (vd đóng đơn khi chưa xuất đủ kho), **When** xử lý, **Then** `Payment` insert + `chuyenTrangThaiTuDong()`/`applyTransition()` chạy trong MỘT transaction dưới khoá dòng đơn (`SELECT ... FOR UPDATE` trên `orders` trước); `Payment` VẪN commit, transition bị bỏ qua + log + publish event nghiệp vụ, không rollback tiền (F-3, TD-40; [Source: ARCHITECTURE-SPINE AD-11]). Test khoá theo luật F-5 trong `backend/CONVENTIONS.md`.
 
 ### Story 7.3: Sinh Hợp đồng Thi công / Mua bán (PDF)
 As a người có quyền sinh hợp đồng, I want sinh HĐ từ Đơn theo loại phù hợp, So that có văn bản ký kết điền sẵn dữ liệu đơn.
 **Acceptance Criteria:**
 - **Given** cờ phạm vi của Đơn, **When** sinh hợp đồng, **Then** Đơn có cờ Thi công → HĐ Thi công; Đơn chỉ Thiết bị → HĐ Mua bán (FR-13).
 - **Given** template tĩnh, **When** sinh, **Then** chỉ điền dữ liệu động (hai bên, danh mục/giá, tổng, lịch thanh toán, tham chiếu số báo giá); điều khoản cố định không sửa theo đơn (FR-13).
+- **Given** thông tin pháp nhân bên A (tên công ty, MST, địa chỉ, người đại diện, chức danh), **When** sinh hợp đồng, **Then** đọc từ `system_settings` (cùng khuôn VAT ở story 4.4), seed rỗng; hợp đồng vẫn xuất được, ô chưa cấu hình hiện "Chưa cấu hình", không bao giờ chặn (F-4).
+- **Given** điều khoản tĩnh, **When** dựng template, **Then** trích từ hai mẫu có sẵn: HĐ Thi công [Source: `docs/1. Khảo sát lắp đặt/HĐ THI CÔNG CT .docx`], HĐ Mua bán [Source: `docs/2. Thương mại/HDMB CT QTS l2.pdf`].
 - **Given** file PDF, **When** lưu, **Then** binary ở R2, DB lưu metadata + object key; entity `Contract` gắn `orderId`; sinh hợp đồng ghi Audit (FR-13, AD-3).
 
 ### Story 7.4: Tạo Hoá đơn từ Đơn (lưu DB)

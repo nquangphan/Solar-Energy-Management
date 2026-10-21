@@ -274,8 +274,8 @@ action_items:
   - epic: 6
     action: "F-1: Push 11 commit Epic 6 + gắn chủ cho bước push vào chu trình story"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "E-1 bỏ CI, lấy 5 lane cục bộ làm cổng; cổng lane được giữ nhưng main lại ahead 11. Tiêu chí: git status -sb không ahead; bước 'push sau khi 5 lane xanh' nằm trong story-automator hoặc checklist review."
+    status: done
+    resolution: "E-1 bỏ CI, lấy 5 lane cục bộ làm cổng; cổng lane được giữ nhưng main lại ahead 11. Tiêu chí: git status -sb không ahead; bước 'push sau khi 5 lane xanh' nằm trong story-automator hoặc checklist review. || 2026-10-21: pushed 04ed832..a66c649. Push stays a manual step by Đại Ca after 5 local lanes are green (CI disabled by choice)."
   - epic: 6
     action: "F-2: Correct-course chèn epic 'Nối dây client' (TD-38: 0 adapter HTTP, 0 client sinh từ OpenAPI, web không router, mobile không app shell) + thống nhất contract tiếng Anh (TD-39)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -284,13 +284,13 @@ action_items:
   - epic: 6
     action: "F-3: Quyết thứ tự Payment ↔ transition cho 7.2 (TD-40: D12 chặn →hoanthanh ở mọi lane kể cả auto tất toán)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Mặc định tuyên bố trước: Payment + chuyenTrangThaiTuDong() cùng một tx dưới khoá dòng đơn; transition bị chặn 409 thì Payment VẪN ghi, transition bỏ qua + log + event, không rollback tiền. Ghi vào spine trước khi viết story 7.2."
+    status: decided
+    resolution: "Mặc định tuyên bố trước: Payment + chuyenTrangThaiTuDong() cùng một tx dưới khoá dòng đơn; transition bị chặn 409 thì Payment VẪN ghi, transition bỏ qua + log + event, không rollback tiền. Ghi vào spine trước khi viết story 7.2. || 2026-10-21: default became decision; written to spine AD-11 + epics.md 7.2"
   - epic: 6
     action: "F-4: Đầu vào hợp đồng 7.3 — trích điều khoản tĩnh từ docs/1. Khảo sát lắp đặt/HĐ THI CÔNG CT .docx và docs/2. Thương mại/HDMB CT QTS l2.pdf + nguồn thông tin pháp nhân bên A"
     owner: "Đại Ca (dữ liệu) + Amelia (Dev)"
-    status: open
-    resolution: "Mặc định tuyên bố trước: thông tin pháp nhân đọc từ system_settings (khuôn VAT 4.4), seed rỗng; HĐ xuất được, ô trống hiện 'Chưa cấu hình', không chặn."
+    status: decided
+    resolution: "Mặc định tuyên bố trước: thông tin pháp nhân đọc từ system_settings (khuôn VAT 4.4), seed rỗng; HĐ xuất được, ô trống hiện 'Chưa cấu hình', không chặn. || 2026-10-21: default became decision; written to epics.md 7.3 (legal-entity from system_settings, static clauses sourced from the 2 templates in docs/). Spine has no contracts/system_settings section, so not mirrored there"
   - epic: 6
     action: "F-5: Luật test khoá — tx giữ khoá GHI đúng thứ primitive đọc; mỗi nguồn của tập khoá có một ca interleaving DB; ghi vào backend/CONVENTIONS.md"
     owner: "Amelia (Dev)"
@@ -309,5 +309,5 @@ action_items:
   - epic: 6
     action: "F-8: 7 câu hỏi sản phẩm Epic 6 (dachot→hoanthanh, hai nhánh song song ở dacoc, mốc trừ kho, nút xuất khoá khi thiếu tồn, mo_lai không release, một phiếu trả/phiếu xuất, lối vào phiếu trả từ màn Đơn)"
     owner: "Đại Ca (Project Lead)"
-    status: open
-    resolution: "Mặc định tuyên bố trước = hành vi code hiện tại: giữ dachot→hoanthanh; cho hai nhánh song song; trừ kho ở xong_giao; giữ nút khoá (Epic 9 de-dupe); mo_lai không release; một phiếu trả mỗi phiếu xuất; chưa có lối vào từ màn Đơn. Im lặng ⇒ mặc định thành quyết định."
+    status: decided
+    resolution: "Mặc định tuyên bố trước = hành vi code hiện tại: giữ dachot→hoanthanh; cho hai nhánh song song; trừ kho ở xong_giao; giữ nút khoá (Epic 9 de-dupe); mo_lai không release; một phiếu trả mỗi phiếu xuất; chưa có lối vào từ màn Đơn. Im lặng ⇒ mặc định thành quyết định. || 2026-10-21: default became decision (= current code behaviour); no code change"
