@@ -2577,7 +2577,7 @@
             }
           },
           "409": {
-            "description": "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT).",
+            "description": "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT). Also: the order already has a stock-out voucher.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3251,7 +3251,7 @@
             }
           },
           "409": {
-            "description": "Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT).",
+            "description": "Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT). Also: the direct close `dachot → hoanthanh` while the order still has stock-tracked lines without a stock-out voucher (issue stock first).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3337,6 +3337,154 @@
           },
           "409": {
             "description": "Trạng thái hiện tại không có cạnh huỷ, kể cả đơn ĐÃ huỷ (CONFLICT) — huỷ lần hai không phải no-op.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/orders/{id}/stock-issue": {
+      "get": {
+        "operationId": "OrdersController_getStockIssue",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Issued ⇒ `voucher` (line cost only with costs.view); not issued ⇒ the lines to issue + real on-hand now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStockIssueViewDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`id` is not a UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Neither inventory.manage nor delivery.confirm (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No order with this id, or out of scope (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "orders"
+        ]
+      },
+      "post": {
+        "operationId": "OrdersController_issueStock",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order already issued — returns the existing voucher, writes nothing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStockIssueResultDto"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Voucher just created: stock deducted, every order line cost frozen. `voucher.lines[].unitCost` only with costs.view.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStockIssueResultDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`id` is not a UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Missing inventory.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No order with this id, or out of scope (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT: status cannot issue standalone (accepted: dachot, dacoc, danggiao, thicong); no stock-tracked lines; or short stock (`fieldErrors[].code = INSUFFICIENT_STOCK`, `field = lines.{i}.qty` in the order of the preview `lines`). Nothing written.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6163,6 +6311,215 @@
           "occurredAt"
         ]
       },
+      "StockVoucherCreatorDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "displayName"
+        ]
+      },
+      "StockVoucherLineResponseDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "ten": {
+            "type": "string",
+            "description": "Tên sản phẩm."
+          },
+          "sku": {
+            "type": "string"
+          },
+          "donVi": {
+            "type": "string",
+            "description": "Đơn vị tính.",
+            "example": "tấm"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng (luôn dương; chiều theo `type`).",
+            "example": 40
+          },
+          "unitCost": {
+            "type": "number",
+            "description": "Giá vốn / đv — số nguyên ĐỒNG. CHỈ có mặt khi caller mang quyền costs.view; thiếu quyền ⇒ field vắng mặt hẳn (không phải 0, không phải null)."
+          }
+        },
+        "required": [
+          "productId",
+          "ten",
+          "sku",
+          "donVi",
+          "qty"
+        ]
+      },
+      "StockVoucherDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ma": {
+            "type": "string",
+            "description": "Mã phiếu hiển thị.",
+            "example": "PK-N-0119"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "nhap",
+              "xuat"
+            ]
+          },
+          "orderId": {
+            "type": "string",
+            "description": "Đơn mà phiếu xuất này gắn vào (một Đơn — một phiếu xuất). CHỈ có mặt ở phiếu xuất gắn đơn; phiếu tự do ⇒ field vắng mặt hẳn (không phải null)."
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm lưu phiếu (ISO-8601 UTC)."
+          },
+          "nguoiTao": {
+            "$ref": "#/components/schemas/StockVoucherCreatorDto"
+          },
+          "soDong": {
+            "type": "number",
+            "description": "Số dòng sản phẩm.",
+            "example": 2
+          },
+          "tongSoLuong": {
+            "type": "number",
+            "description": "Tổng số lượng các dòng (luôn dương).",
+            "example": 45
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockVoucherLineResponseDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "ma",
+          "type",
+          "createdAt",
+          "nguoiTao",
+          "soDong",
+          "tongSoLuong",
+          "note",
+          "lines"
+        ]
+      },
+      "OrderStockIssueLineDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "Product name."
+          },
+          "sku": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measure.",
+            "example": "tấm"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Quantity the order needs — sum of the current-version lines of this product.",
+            "example": 16
+          },
+          "onHand": {
+            "type": "number",
+            "description": "Real on-hand right now (unlocked read — for counting against only). No stock record ⇒ 0.",
+            "example": 40
+          }
+        },
+        "required": [
+          "productId",
+          "name",
+          "sku",
+          "unit",
+          "qty",
+          "onHand"
+        ]
+      },
+      "OrderStockIssueViewDto": {
+        "type": "object",
+        "properties": {
+          "issued": {
+            "type": "boolean",
+            "description": "The order already has its stock-out (one order, one voucher)."
+          },
+          "voucher": {
+            "description": "The order stock-out — present ONLY when `issued`; not issued ⇒ the field is absent.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockVoucherDetailDto"
+              }
+            ]
+          },
+          "canIssue": {
+            "type": "boolean",
+            "description": "Backend-computed: not issued ∧ status allows a standalone issue (confirmed / deposit paid / in delivery / installing) ∧ has stock-tracked lines ∧ caller holds inventory.manage."
+          },
+          "lines": {
+            "description": "Lines that will be on the voucher, in canonical order (`fieldErrors` index `lines.{i}.qty` follows it). Empty once issued.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderStockIssueLineDto"
+            }
+          },
+          "untrackedItems": {
+            "description": "Names of lines that are not stock-tracked (installation, fees, free-text…) — not on the voucher. Empty once issued.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "issued",
+          "canIssue",
+          "lines",
+          "untrackedItems"
+        ]
+      },
+      "OrderStockIssueResultDto": {
+        "type": "object",
+        "properties": {
+          "voucher": {
+            "description": "The order stock-out — just created (201) or already existing (200). `lines[].unitCost` only with costs.view.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StockVoucherDetailDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "voucher"
+        ]
+      },
       "AttachmentItemDto": {
         "type": "object",
         "properties": {
@@ -6432,116 +6789,6 @@
           "lines"
         ]
       },
-      "StockVoucherCreatorDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "displayName": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "displayName"
-        ]
-      },
-      "StockVoucherLineResponseDto": {
-        "type": "object",
-        "properties": {
-          "productId": {
-            "type": "string"
-          },
-          "ten": {
-            "type": "string",
-            "description": "Tên sản phẩm."
-          },
-          "sku": {
-            "type": "string"
-          },
-          "donVi": {
-            "type": "string",
-            "description": "Đơn vị tính.",
-            "example": "tấm"
-          },
-          "qty": {
-            "type": "number",
-            "description": "Số lượng (luôn dương; chiều theo `type`).",
-            "example": 40
-          },
-          "unitCost": {
-            "type": "number",
-            "description": "Giá vốn / đv — số nguyên ĐỒNG. CHỈ có mặt khi caller mang quyền costs.view; thiếu quyền ⇒ field vắng mặt hẳn (không phải 0, không phải null)."
-          }
-        },
-        "required": [
-          "productId",
-          "ten",
-          "sku",
-          "donVi",
-          "qty"
-        ]
-      },
-      "StockVoucherDetailDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "ma": {
-            "type": "string",
-            "description": "Mã phiếu hiển thị.",
-            "example": "PK-N-0119"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "nhap",
-              "xuat"
-            ]
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string",
-            "description": "Thời điểm lưu phiếu (ISO-8601 UTC)."
-          },
-          "nguoiTao": {
-            "$ref": "#/components/schemas/StockVoucherCreatorDto"
-          },
-          "soDong": {
-            "type": "number",
-            "description": "Số dòng sản phẩm.",
-            "example": 2
-          },
-          "tongSoLuong": {
-            "type": "number",
-            "description": "Tổng số lượng các dòng (luôn dương).",
-            "example": 45
-          },
-          "note": {
-            "type": "string",
-            "nullable": true
-          },
-          "lines": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StockVoucherLineResponseDto"
-            }
-          }
-        },
-        "required": [
-          "id",
-          "ma",
-          "type",
-          "createdAt",
-          "nguoiTao",
-          "soDong",
-          "tongSoLuong",
-          "note",
-          "lines"
-        ]
-      },
       "StockVoucherSummaryDto": {
         "type": "object",
         "properties": {
@@ -6559,6 +6806,10 @@
               "nhap",
               "xuat"
             ]
+          },
+          "orderId": {
+            "type": "string",
+            "description": "Đơn mà phiếu xuất này gắn vào (một Đơn — một phiếu xuất). CHỈ có mặt ở phiếu xuất gắn đơn; phiếu tự do ⇒ field vắng mặt hẳn (không phải null)."
           },
           "createdAt": {
             "format": "date-time",

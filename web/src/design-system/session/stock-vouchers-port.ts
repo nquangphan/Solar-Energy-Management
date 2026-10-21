@@ -11,7 +11,7 @@
 // all the backend's. `unitCost` is ABSENT (not 0, not null) when the caller lacks
 // `costs.view` — the screen renders a cost column only when the field is there.
 
-/** `nhap` = stock in · `xuat` = stock out with no order attached. */
+/** `nhap` = stock in · `xuat` = stock out (free-standing, or bound to an order via `orderId`). */
 export type LoaiPhieu = 'nhap' | 'xuat';
 
 /** Mirrors `StockVoucherCreatorDto`. */
@@ -26,6 +26,11 @@ export interface StockVoucherSummary {
   /** Display code, e.g. `PK-N-0119` — built by the backend. */
   ma: string;
   type: LoaiPhieu;
+  /**
+   * The order this stock-out belongs to (one order, one stock-out).
+   * ABSENT on a free-standing voucher, not null.
+   */
+  orderId?: string;
   /** ISO-8601 UTC. */
   createdAt: string;
   nguoiTao: StockVoucherCreator;

@@ -10,6 +10,7 @@ import {
 } from '../src/orders/domain/order-status';
 import { ListOrdersQueryDto } from '../src/orders/dto/list-orders-query.dto';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import { fakeStorage } from './util/fake-storage';
 
 /**
@@ -50,6 +51,7 @@ describe('OrdersService.list — phạm vi theo quyền nằm trong where.AND', 
       prisma,
       {} as unknown as EventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
     return { service, batDuoc };
   }

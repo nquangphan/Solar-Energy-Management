@@ -159,7 +159,7 @@ flowchart TD
 
 - **Binds:** FR-25, FR-26
 - **Prevents:** một cột `reserved` cộng-trừ bị sai khi retry chốt/xuất (không idempotent); khả dụng hiển thị sai thực tế.
-- **Rule:** `StockItem` có **hai con số độc lập**: `onHand` (hàng thật trong kho, chỉ phiếu nhập/xuất kho đụng vào) và `reserved` (hàng đã hứa cho đơn đã chốt). Khả dụng = `onHand − reserved`. `StockMovement` là ledger append-only với unique constraint trên `(orderId, orderVersionId)` → chốt/xuất idempotent khi retry; `reserved` là **tổng của `StockMovement.qty`**, không phải một cột cộng-trừ. Chốt đơn khi thiếu tồn: **CHO CHỐT, không chặn**; cảnh báo sớm ở màn báo giá. Chặn nằm ở khâu **xuất kho** (FR-26). Một Đơn, một phiếu xuất.
+- **Rule:** `StockItem` có **hai con số độc lập**: `onHand` (hàng thật trong kho, chỉ phiếu nhập/xuất kho đụng vào) và `reserved` (hàng đã hứa cho đơn đã chốt). Khả dụng = `onHand − reserved`. `StockMovement` là ledger append-only với unique constraint trên `(orderId, orderVersionId)` → chốt/xuất idempotent khi retry; `reserved` là **tổng của `StockMovement.qty`**, không phải một cột cộng-trừ. Chốt đơn khi thiếu tồn: **CHO CHỐT, không chặn**; cảnh báo sớm ở màn báo giá. Chặn nằm ở khâu **xuất kho** (FR-26). Một Đơn, một phiếu xuất. **Không đơn nào Hoàn thành khi còn vật tư theo dõi tồn chưa xuất** (Đại Ca chốt 2026-10-21): đường tắt `dachot → hoanthanh` của đơn chỉ-thiết-bị bị engine chặn 409 dưới khoá dòng đơn (mọi lane, kể cả auto tất toán) tới khi đơn có phiếu xuất; cửa xuất kho riêng nhận cả `dachot`; đơn đã xuất không mở lại (`mo_lai`) được — version mới sẽ mồ côi phiếu xuất và mở đường xuất lần hai.
 
 ### AD-20 — Hai mốc đóng băng khác nhau: giá bán lúc chốt, giá vốn lúc xuất kho `[ADOPTED]`
 
@@ -321,10 +321,10 @@ erDiagram
     STOCK_VOUCHER {
         uuid id PK
         int seq "UNIQUE SERIAL - ghép mã phiếu PK-N/PK-X"
-        uuid orderId FK "thêm ở luồng xuất gắn đơn"
-        string type "nhap | xuat"
-        string status "thêm ở luồng xuất gắn đơn"
-        string note
+        uuid orderId FK "nullable - phiếu xuất gắn đơn; unique cặp (orderId, orderVersionId) — một đơn một phiếu"
+        uuid orderVersionId FK "nullable - cùng null/cùng có với orderId (CHECK)"
+        string type "nhap | xuat (gắn đơn ⇒ chỉ xuat, CHECK)"
+        string note "không có status/phiếu nháp: tạo = xác nhận"
         uuid createdByAccountId FK
         datetime createdAt
     }

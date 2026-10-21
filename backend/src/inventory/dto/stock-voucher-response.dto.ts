@@ -25,6 +25,12 @@ export class StockVoucherSummaryDto {
   @ApiProperty({ enum: LOAI_PHIEU })
   type!: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Đơn mà phiếu xuất này gắn vào (một Đơn — một phiếu xuất). CHỈ có mặt ở phiếu xuất gắn đơn; phiếu tự do ⇒ field vắng mặt hẳn (không phải null).',
+  })
+  orderId?: string;
+
   @ApiProperty({ description: 'Thời điểm lưu phiếu (ISO-8601 UTC).' })
   createdAt!: Date;
 

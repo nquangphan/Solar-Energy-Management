@@ -10,8 +10,10 @@
 //
 // `unitCost` is absent when the caller lacks `costs.view`: no column, no "0".
 //
-// Deliberately absent (later stories): the "Nhập trả" tab and chip, and the
-// "gắn đơn" details of an order-bound stock-out.
+// An order-bound stock-out (`orderId` present) is read-only here: it
+// is created from the order, and its author is the person who CONFIRMED it.
+//
+// Deliberately absent (later stories): the "Nhập trả" tab and chip.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -79,8 +81,9 @@ function soLuongCoDau(type: LoaiPhieu, qty: number): string {
   return `${type === 'nhap' ? '+' : '−'}${qty}`;
 }
 
-function moTaLoai(type: LoaiPhieu): string {
-  return type === 'nhap' ? 'Nhập kho' : 'Xuất kho · không gắn đơn';
+function moTaLoai(type: LoaiPhieu, orderBound: boolean): string {
+  if (type === 'nhap') return 'Nhập kho';
+  return orderBound ? 'Xuất kho · gắn đơn' : 'Xuất kho · không gắn đơn';
 }
 
 /** Keep digits only — quantities and costs are whole numbers; the backend validates ranges. */
@@ -347,10 +350,16 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                   <div className="pk-detail-body">
                     <dl className="pk-kv">
                       <dt>Loại</dt>
-                      <dd>{moTaLoai(detail.type)}</dd>
+                      <dd>{moTaLoai(detail.type, detail.orderId !== undefined)}</dd>
+                      {detail.orderId !== undefined && (
+                        <>
+                          <dt>Gắn đơn</dt>
+                          <dd className="mono">{detail.orderId}</dd>
+                        </>
+                      )}
                       <dt>Ngày</dt>
                       <dd className="mono">{ngayGio(detail.createdAt)}</dd>
-                      <dt>Người tạo</dt>
+                      <dt>{detail.orderId !== undefined ? 'Người xác nhận' : 'Người tạo'}</dt>
                       <dd>{detail.nguoiTao.displayName}</dd>
                       <dt>Ghi chú</dt>
                       <dd>{detail.note ?? '—'}</dd>
@@ -377,7 +386,14 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                         ))}
                       </tbody>
                     </Table>
-                    <Banner tone="info">{detail.type === 'nhap' ? NOTE_NHAP : NOTE_XUAT}</Banner>
+                    {detail.orderId !== undefined ? (
+                      <Banner tone="info">
+                        <strong>Một Đơn — một phiếu xuất.</strong> Lúc xác nhận, giá vốn được đóng
+                        băng vào từng dòng đơn. Audit ghi người xác nhận. Không sửa/xoá sau khi lưu.
+                      </Banner>
+                    ) : (
+                      <Banner tone="info">{detail.type === 'nhap' ? NOTE_NHAP : NOTE_XUAT}</Banner>
+                    )}
                   </div>
                 </Card>
               )}

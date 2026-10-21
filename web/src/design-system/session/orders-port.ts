@@ -12,12 +12,22 @@
 // `'baogia'`-only mutation window, the `priceEditable` gate on unit prices, the
 // `Order.sourceId` snapshot. Nothing here is a security boundary.
 
+import type { StockVoucherDetail } from './stock-vouchers-port';
+
 /**
  * The confirmed order status — the ONE status literal screens compare against
  * (Story 4.6). Screens import this constant; the guard forbids the raw literal
  * inside screen files, so the string lives here in the port file only.
  */
 export const ORDER_STATUS_DACHOT = 'dachot';
+
+/**
+ * The "Đã giao" (delivered) transition event. Confirming it ALSO
+ * issues the order's stock (if not issued yet), so the status-change screen
+ * previews the stock-out when this step is picked. Lives here for the same
+ * reason as `ORDER_STATUS_DACHOT`: screens must not carry the raw event literal.
+ */
+export const EVENT_DELIVERED = 'xong_giao';
 
 /**
  * The awaiting-discount-approval order status (Story 4.7, FR-18) — same rule as
@@ -180,6 +190,41 @@ export interface OrderLifecycle {
    * ABSENT, not greyed (UX-DR-22).
    */
   coTheHuy: boolean;
+}
+
+/** One row of the stock-out preview — mirrors `OrderStockIssueLineDto` field for field. */
+export interface OrderStockIssueLine {
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string;
+  /** What the order needs — the backend already summed same-product lines. */
+  qty: number;
+  /** Real on-hand right now, for counting against. NOT a go/no-go signal. */
+  onHand: number;
+}
+
+/**
+ * `GET /orders/:id/stock-issue` — mirrors `OrderStockIssueViewDto`.
+ *
+ * ONE ORDER, ONE STOCK-OUT. `issued` + `voucher` once issued; before that,
+ * `lines` (in the backend's canonical order — a 409's `lines.{i}.qty` indexes
+ * into it) and `untrackedItems` (line names that never go on the voucher).
+ * `canIssue` is computed by the BACKEND (status, stock lines, permission) — the
+ * screen does not re-derive it, and never compares `qty` with `onHand` (AD-2).
+ */
+export interface OrderStockIssueView {
+  issued: boolean;
+  /** ABSENT until issued. Its `unitCost` is absent without `costs.view`. */
+  voucher?: StockVoucherDetail;
+  canIssue: boolean;
+  lines: OrderStockIssueLine[];
+  untrackedItems: string[];
+}
+
+/** `POST /orders/:id/stock-issue` — mirrors `OrderStockIssueResultDto`. */
+export interface OrderStockIssueResult {
+  voucher: StockVoucherDetail;
 }
 
 /** What one manual transition did — mirrors the backend `StatusChangeResponseDto`. */
@@ -642,4 +687,22 @@ export interface OrdersPort {
    * gallery itself never touches the network. Rejects 403, 404.
    */
   anhBytes(orderId: string, attachmentId: string): Promise<Blob>;
+
+  /**
+   * Stock-out preview of the order (FR-26) — `GET /orders/:id/stock-issue`.
+   * Read-only. Rejects 403 (neither `inventory.manage` nor `delivery.confirm`),
+   * 404.
+   */
+  getStockIssue(orderId: string): Promise<OrderStockIssueView>;
+
+  /**
+   * Issue the order's ONE stock-out WITHOUT moving its status —
+   * `POST /orders/:id/stock-issue`, no body. Calling it again on an issued
+   * order returns the same voucher (200) and writes nothing.
+   *
+   * Rejects 403 (no `inventory.manage`), 404, 409 (status cannot issue; no
+   * stock-tracked lines; not enough stock — `fieldErrors[].field` is
+   * `lines.{i}.qty`, indexing `getStockIssue().lines`).
+   */
+  issueStock(orderId: string): Promise<OrderStockIssueResult>;
 }

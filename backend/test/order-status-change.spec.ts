@@ -13,6 +13,7 @@ import {
 } from '../src/orders/domain/attachment-limits';
 import { StatusChanged } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage, type FakeStorage } from './util/fake-storage';
 
@@ -67,16 +68,26 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
     updateMany: jest.fn(),
   };
   const attachmentRepo = { createMany: jest.fn(), findFirst: jest.fn() };
+  // The order has no stock-tracked line ⇒ "Đã giao" issues nothing (stock issue is guarded
+  // in `order-stock-issue.spec.ts`).
+  const lineRepo = { findMany: jest.fn(), update: jest.fn() };
+  const stockVouchers = {
+    findOrderIssueVoucher: jest.fn(),
+    previewOrderIssue: jest.fn(),
+    issueForOrderInTx: jest.fn(),
+  };
   const queryRaw = jest.fn();
   const transaction = jest.fn();
   const txMock = {
     order: orderRepo,
     attachment: attachmentRepo,
+    orderLineItem: lineRepo,
     $queryRaw: queryRaw,
   };
   const prisma = {
     order: orderRepo,
     attachment: attachmentRepo,
+    orderLineItem: lineRepo,
     $transaction: transaction,
     $queryRaw: queryRaw,
   } as unknown as PrismaService;
@@ -123,7 +134,19 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
       prisma,
       eventBus as unknown as EventBus,
       storage,
+      stockVouchers as unknown as StockVouchersService,
     );
+    lineRepo.findMany.mockResolvedValue([]);
+    stockVouchers.findOrderIssueVoucher.mockResolvedValue(null);
+    stockVouchers.previewOrderIssue.mockResolvedValue({
+      lines: [],
+      tracked: new Set(),
+    });
+    stockVouchers.issueForOrderInTx.mockResolvedValue({
+      voucher: null,
+      costByProduct: new Map(),
+      event: null,
+    });
     orderRepo.findFirst.mockResolvedValue(DON_DACOC);
     orderRepo.updateMany.mockResolvedValue({ count: 1 });
     attachmentRepo.createMany.mockResolvedValue({ count: 0 });
@@ -297,11 +320,14 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
     describe('cạnh `dacoc` → `dagiao` (khách tự lấy)', () => {
       /** Đơn Thương mại: có Thiết bị, không Thi công, không Vận chuyển. */
       function goiTuLay(anhKem: ReturnType<typeof anh>[] = []) {
-        orderRepo.findFirst.mockResolvedValue({
+        const order = {
           ...DON_DACOC,
           scopeThiCong: false,
           scopeVanChuyen: false,
-        });
+        };
+        orderRepo.findFirst.mockResolvedValue(order);
+        // "Đã giao" re-reads the order under the engine's lock before issuing stock.
+        orderRepo.findUnique.mockResolvedValue(order);
         return goi({
           event: SU_KIEN.xongGiao,
           quyen: new Set([PERM.ordersViewAll, PERM.deliveryConfirm]),

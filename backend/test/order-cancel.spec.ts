@@ -8,6 +8,7 @@ import {
   StatusChanged,
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -98,6 +99,7 @@ describe('OrdersService.huyDon (Story 5.7)', () => {
       prisma,
       eventBus as unknown as EventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
     orderRepo.findFirst.mockResolvedValue(don('baogia'));
     orderRepo.updateMany.mockResolvedValue({ count: 1 });

@@ -40,6 +40,8 @@ describe('GET /stock-items (e2e)', () => {
   const prismaMock = {
     product: productRepo,
     stockMovement: stockMovementRepo,
+    // The read path runs both queries in one array-form `$transaction`.
+    $transaction: (ops: Promise<unknown>[]) => Promise.all(ops),
   };
   const accountsMock = {
     findById: jest.fn((id: string) => (id === ACCOUNT_ID ? account : null)),

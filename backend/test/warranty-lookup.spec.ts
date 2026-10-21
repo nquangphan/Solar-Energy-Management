@@ -5,6 +5,7 @@ import { ErrorCode } from '../src/common/errors/error-code';
 import { EventBus } from '../src/events/event-bus';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import { fakeStorage } from './util/fake-storage';
 
 /**
@@ -88,6 +89,7 @@ describe('OrdersService.traCuuBaoHanh', () => {
       prisma,
       {} as unknown as EventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
     return { service, batDuoc };
   }

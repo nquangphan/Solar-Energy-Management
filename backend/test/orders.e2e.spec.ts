@@ -178,6 +178,11 @@ describe('/orders (e2e)', () => {
     findMany: jest.fn(),
     delete: jest.fn(),
   };
+  // Order-bound stock issue ("Đã giao" step): the order stock-out + stock + reservation ledger —
+  // run INSIDE the transition tx. Default: order not issued yet, empty ledger.
+  const stockVoucherRepo = { findUnique: jest.fn(), create: jest.fn() };
+  const stockItemRepo = { upsert: jest.fn() };
+  const stockMovementRepo = { aggregate: jest.fn(), create: jest.fn() };
   // Storage in-memory + renderer stub (override provider) — e2e KHÔNG đụng Chromium/R2.
   const storageMap = new Map<string, { body: Buffer; contentType: string }>();
   // `deleteObject` là jest.fn để lane này đo được HAI thứ mà stub im lặng che mất:
@@ -227,6 +232,9 @@ describe('/orders (e2e)', () => {
     product: productRepo,
     // Ảnh ghi cùng tx với transition — một `$transaction`, không hai lượt ghi.
     attachment: attachmentRepo,
+    stockVoucher: stockVoucherRepo,
+    stockItem: stockItemRepo,
+    stockMovement: stockMovementRepo,
     $queryRaw: queryRaw,
   };
   const transaction = jest.fn(async (arg: unknown) =>
@@ -246,6 +254,7 @@ describe('/orders (e2e)', () => {
     discountApproval: discountApprovalRepo,
     quoteExport: quoteExportRepo,
     attachment: attachmentRepo,
+    stockVoucher: stockVoucherRepo,
     $transaction: transaction,
     $queryRaw: queryRaw,
   };
@@ -343,6 +352,33 @@ describe('/orders (e2e)', () => {
     lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
     productRepo.findUnique.mockResolvedValue(PIN_580W);
     productRepo.findMany.mockResolvedValue([PIN_580W]);
+    stockVoucherRepo.findUnique.mockResolvedValue(null);
+    stockVoucherRepo.create.mockImplementation(
+      (args: {
+        data: {
+          orderId: string;
+          createdByAccountId: string;
+          lines: {
+            create: { productId: string; qty: number; unitCost: number }[];
+          };
+        };
+      }) =>
+        Promise.resolve({
+          id: 'stock-out-1',
+          seq: 96,
+          type: 'xuat',
+          note: null,
+          orderId: args.data.orderId,
+          createdAt: new Date('2026-10-21T04:00:00Z'),
+          createdBy: { id: args.data.createdByAccountId, displayName: 'Kho' },
+          lines: args.data.lines.create.map((l) => ({
+            ...l,
+            product: { name: PIN_580W.name, sku: 'PIN-580', unit: 'tấm' },
+          })),
+        }),
+    );
+    stockItemRepo.upsert.mockResolvedValue({ id: 'si-pin' });
+    stockMovementRepo.aggregate.mockResolvedValue({ _sum: { qty: null } });
     auditRepo.create.mockResolvedValue({});
     featureFlagRepo.findUnique.mockResolvedValue(null);
     systemSettingRepo.findUnique.mockResolvedValue(null);
@@ -3807,6 +3843,33 @@ describe('/orders (e2e)', () => {
         orderRepo.findUnique.mockResolvedValue({ ...DON_TU_LAY, status });
       }
 
+      /** Stock-tracked panel, 50 on hand. */
+      const PIN_THEO_KHO = {
+        ...PIN_580W,
+        sku: 'PIN-580',
+        costPrice: 1_900_000,
+        tracksStock: true,
+        isActive: true,
+        stockItem: { id: 'si-pin', productId: PIN_580W.id, onHand: 50 },
+      };
+
+      // "Đã giao" is now the order's stock deduction: the confirmed order has a stock-tracked
+      // panel line, and the confirmer also holds `inventory.manage` (real presets always pair
+      // it with delivery.confirm).
+      beforeEach(() => {
+        lineRepo.findMany.mockResolvedValue([
+          { ...DONG_CATALOG, unitPriceSnapshot: 2_450_000 },
+        ]);
+        productRepo.findMany.mockResolvedValue([PIN_THEO_KHO]);
+        givenPermissions(
+          PERM.ordersViewAll,
+          PERM.constructionTransition,
+          PERM.deliveryConfirm,
+          PERM.paymentsRecord,
+          PERM.inventoryManage,
+        );
+      });
+
       function vongDoi(): request.Test {
         return request(server())
           .get(`/orders/${ORDER_ID}/vong-doi`)
@@ -3959,6 +4022,87 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('dagiao');
+      });
+
+      it('`danggiao` --xong_giao--> issues stock in the same call: 1 order-bound voucher, EXACTLY one audit row each for StatusChanged and StockIssued', async () => {
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'danggiao',
+        });
+
+        const res = await post(SU_KIEN.xongGiao);
+
+        expect(res.status).toBe(200);
+        expect(Object.keys(res.body as object).sort()).toEqual([
+          'occurredAt',
+          'soAnhDaLuu',
+          'status',
+        ]);
+        expect(stockVoucherRepo.create).toHaveBeenCalledTimes(1);
+        expect(stockVoucherRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              type: 'xuat',
+              orderId: ORDER_ID,
+              orderVersionId: VERSION_ID,
+            }) as unknown,
+          }),
+        );
+        const loai = auditRepo.create.mock.calls.map(
+          ([a]) => (a as { data: { eventType: string } }).data.eventType,
+        );
+        expect(loai.filter((t) => t === 'StatusChanged')).toHaveLength(1);
+        expect(loai.filter((t) => t === 'StockIssued')).toHaveLength(1);
+      });
+
+      it('tracked lines NOT yet issued and no `inventory.manage` ⇒ 403, no byte uploaded, nothing written', async () => {
+        givenPermissions(PERM.ordersViewAll, PERM.deliveryConfirm);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'danggiao',
+        });
+
+        const res = await post(SU_KIEN.xongGiao, [anh()]);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        expect(res.body.message).toBe(
+          'Xác nhận Đã giao sẽ xuất kho — cần quyền nhập/xuất kho.',
+        );
+        expect(storageMap.size).toBe(0);
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        expect(stockVoucherRepo.create).not.toHaveBeenCalled();
+      });
+
+      it('short stock ⇒ 409 INSUFFICIENT_STOCK `lines.0.qty`, no voucher, no photo, no audit row', async () => {
+        productRepo.findMany.mockResolvedValue([
+          {
+            ...PIN_THEO_KHO,
+            stockItem: { ...PIN_THEO_KHO.stockItem, onHand: 3 },
+          },
+        ]);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'danggiao',
+        });
+
+        const res = await post(SU_KIEN.xongGiao, [anh()]);
+
+        expect(res.status).toBe(409);
+        expect(res.body.code).toBe(ErrorCode.CONFLICT);
+        expect(res.body.message).toBe(
+          'Không đủ tồn — không thể xuất quá số tồn hiện có.',
+        );
+        expect(res.body.fieldErrors).toEqual([
+          {
+            field: 'lines.0.qty',
+            code: 'INSUFFICIENT_STOCK',
+            message: 'Còn 3 tấm, không xuất được 8.',
+          },
+        ]);
+        expect(stockVoucherRepo.create).not.toHaveBeenCalled();
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        expect(auditRepo.create).not.toHaveBeenCalled();
       });
 
       it('có Vận chuyển ở `dacoc` gửi `xong_giao` ⇒ 409 PHẠM VI — không nhảy cóc qua `danggiao`', async () => {

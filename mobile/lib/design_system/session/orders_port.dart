@@ -16,6 +16,8 @@ import 'dart:typed_data';
 
 import 'package:image_picker/image_picker.dart';
 
+import 'stock_vouchers_port.dart';
+
 /// The confirmed order status — the ONE status literal screens compare against
 /// (Story 4.6). Screens import this constant; the guard forbids the raw literal
 /// inside screen files, so the string lives here in the port file only.
@@ -25,6 +27,12 @@ const String kOrderStatusDachot = 'dachot';
 /// as [kOrderStatusDachot]: screens import the constant, the guard forbids the
 /// raw literal inside screen files.
 const String kOrderStatusChoduyet = 'choduyet';
+
+/// The "Đã giao" (delivered) transition event. Confirming it ALSO
+/// issues the order's stock (if not issued yet), so the status-change screen
+/// previews the stock-out when this step is picked. Same rule as
+/// [kOrderStatusDachot]: screens must not carry the raw event literal.
+const String kEventDelivered = 'xong_giao';
 
 /// Discount-approval statuses (Story 4.7) — the `Order.discount.status` values.
 /// Distinct from the ORDER status `'choduyet'`: these describe the approval
@@ -247,6 +255,61 @@ class OrderLifecycle {
   /// it from `status` either — that is business logic (AD-2). `false` ⇒ the
   /// button is ABSENT, not greyed (UX-DR-22).
   final bool coTheHuy;
+}
+
+/// One row of the stock-out preview — mirrors `OrderStockIssueLineDto` field for field.
+class OrderStockIssueLine {
+  const OrderStockIssueLine({
+    required this.productId,
+    required this.name,
+    required this.sku,
+    required this.unit,
+    required this.qty,
+    required this.onHand,
+  });
+
+  final String productId;
+  final String name;
+  final String sku;
+  final String unit;
+
+  /// What the order needs — the backend already summed same-product lines.
+  final int qty;
+
+  /// Real on-hand right now, for counting against. NOT a go/no-go signal.
+  final int onHand;
+}
+
+/// `GET /orders/:id/stock-issue` — mirrors `OrderStockIssueViewDto`.
+///
+/// ONE ORDER, ONE STOCK-OUT. [issued] + [voucher] once issued; before that,
+/// [lines] (in the backend's canonical order — a 409's `lines.{i}.qty` indexes
+/// into it) and [untrackedItems] (line names that never go on the voucher).
+/// [canIssue] is computed by the BACKEND — the screen does not re-derive it,
+/// and never compares `qty` with `onHand` (AD-2).
+class OrderStockIssueView {
+  const OrderStockIssueView({
+    required this.issued,
+    this.voucher,
+    required this.canIssue,
+    required this.lines,
+    required this.untrackedItems,
+  });
+
+  final bool issued;
+
+  /// NULL until issued (field absent). Its `unitCost` is null without `costs.view`.
+  final StockVoucherDetail? voucher;
+  final bool canIssue;
+  final List<OrderStockIssueLine> lines;
+  final List<String> untrackedItems;
+}
+
+/// `POST /orders/:id/stock-issue` — mirrors `OrderStockIssueResultDto`.
+class OrderStockIssueResult {
+  const OrderStockIssueResult({required this.voucher});
+
+  final StockVoucherDetail voucher;
 }
 
 /// What one manual transition did — mirrors the backend `StatusChangeResponseDto`.
@@ -830,4 +893,18 @@ abstract class OrdersPort {
   /// The SCREEN calls this and hands the result to the gallery widget; the
   /// gallery itself never touches the network. Throws 403, 404.
   Future<Uint8List> anhBytes(String orderId, String attachmentId);
+
+  /// Stock-out preview of the order (FR-26) — `GET /orders/:id/stock-issue`.
+  /// Read-only. Throws 403 (neither `inventory.manage` nor `delivery.confirm`),
+  /// 404.
+  Future<OrderStockIssueView> getStockIssue(String orderId);
+
+  /// Issue the order's ONE stock-out WITHOUT moving its status —
+  /// `POST /orders/:id/stock-issue`, no body. Calling it again on an issued
+  /// order returns the same voucher (200) and writes nothing.
+  ///
+  /// Throws 403 (no `inventory.manage`), 404, 409 (status cannot issue; no
+  /// stock-tracked lines; not enough stock — `fieldErrors` key is
+  /// `lines.{i}.qty`, indexing [getStockIssue]'s `lines`).
+  Future<OrderStockIssueResult> issueStock(String orderId);
 }

@@ -568,3 +568,71 @@ test('the stock-vouchers port is the SAME three-method contract on both platform
     assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} stock-vouchers port must not carry costPrice`);
   }
 });
+
+test('the orders port carries the stock-issue surface on BOTH platforms, field for field with openapi.json', () => {
+  const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
+  assert.match(webPort, /getStockIssue\(orderId: string\): Promise<OrderStockIssueView>/, 'web getStockIssue(orderId) => OrderStockIssueView');
+  assert.match(mobPort, /Future<OrderStockIssueView> getStockIssue\(String orderId\)/, 'mobile getStockIssue(orderId) => OrderStockIssueView');
+  assert.match(webPort, /issueStock\(orderId: string\): Promise<OrderStockIssueResult>/, 'web issueStock(orderId) => OrderStockIssueResult');
+  assert.match(mobPort, /Future<OrderStockIssueResult> issueStock\(String orderId\)/, 'mobile issueStock(orderId) => OrderStockIssueResult');
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    // POST :id/stock-issue carries no body — a client that sends lines or quantities
+    // has an opinion about what leaves the warehouse, and that is the backend's.
+    assert.ok(!/issueStock\(\s*(?:orderId: string|String orderId)\s*,/.test(src), `${name} issueStock must take the order id only`);
+  }
+  // The "Đã giao" event lives in the port, never as a literal in a screen.
+  assert.match(webPort, /export const EVENT_DELIVERED = 'xong_giao';/, 'web port must export EVENT_DELIVERED');
+  assert.match(mobPort, /const String kEventDelivered = 'xong_giao';/, 'mobile port must export kEventDelivered');
+
+  // Field for field INSIDE each type's own body (comments stripped), with the
+  // optionality the spec declares — a name that merely appears somewhere else in
+  // the port (`qty`, `unit`, `lines` appear many times) proves nothing.
+  const spec = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'));
+  const webCode = webPort.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const mobCode = mobPort.replace(/\/\/.*$/gm, '');
+  let checked = 0;
+  for (const [dto, type] of [
+    ['OrderStockIssueLineDto', 'OrderStockIssueLine'],
+    ['OrderStockIssueViewDto', 'OrderStockIssueView'],
+    ['OrderStockIssueResultDto', 'OrderStockIssueResult'],
+  ]) {
+    const schema = spec.components.schemas[dto];
+    assert.ok(schema, `openapi.json missing ${dto}`);
+    const required = new Set(schema.required ?? []);
+    const expected = Object.fromEntries(Object.keys(schema.properties ?? {}).map((k) => [k, !required.has(k)]));
+    const webBody = typeBody(webCode, `export interface ${type}`);
+    const mobBody = typeBody(mobCode, `class ${type}`);
+    assert.deepEqual(webFields(webBody), expected, `web ${type} must declare exactly the ${dto} fields with the same optionality`);
+    assert.deepEqual(dartFields(mobBody), expected, `mobile ${type} must declare exactly the ${dto} fields with the same nullability`);
+    checked += Object.keys(expected).length;
+  }
+  assert.ok(checked >= 11, `checked only ${checked} DTO fields — the spec reader went blind`);
+});
+
+/** The `{ … }` body of a declaration, up to the first `}` at column 0. */
+function typeBody(code, head) {
+  const match = new RegExp(`${head} \\{[\\s\\S]*?\\n\\}`).exec(code);
+  assert.ok(match, `declaration not found: ${head}`);
+  return match[0];
+}
+
+/** `name: T` / `name?: T` members of a TS interface body ⇒ { name: optional }. */
+function webFields(body) {
+  return Object.fromEntries([...body.matchAll(/^\s+(\w+)(\??):/gm)].map((m) => [m[1], m[2] === '?']));
+}
+
+/** `final T name;` fields of a Dart class body ⇒ { name: nullable }. */
+function dartFields(body) {
+  return Object.fromEntries(
+    [...body.matchAll(/^\s+final ([\w<>, ]+?)(\??) (\w+);/gm)].map((m) => [m[3], m[2] === '?']),
+  );
+}
+
+test('the type-body field readers see a missing or wrongly-optional field (guard is not toothless)', () => {
+  const web = 'export interface X {\n  a: string;\n  b?: number;\n}\n';
+  assert.deepEqual(webFields(typeBody(web, 'export interface X')), { a: false, b: true });
+  const dart = 'class X {\n  const X();\n  final String a;\n  final List<int>? b;\n}\n';
+  assert.deepEqual(dartFields(typeBody(dart, 'class X')), { a: false, b: true });
+  assert.notDeepEqual(webFields('export interface X {\n  a: string;\n}'), { a: false, b: true });
+});

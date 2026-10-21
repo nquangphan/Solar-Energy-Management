@@ -77,6 +77,27 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
     ],
   },
   {
+    // Order-bound stock-out — `createdBy` is the person who CONFIRMED it.
+    id: 'pk-x-0095',
+    ma: 'PK-X-0095',
+    type: 'xuat',
+    orderId: 'ord-demo-4',
+    createdAt: '2026-07-04T02:30:00.000Z',
+    nguoiTao: KHO,
+    soDong: 1,
+    tongSoLuong: 1,
+    note: null,
+    lines: [
+      {
+        productId: 'prod-inverter-hybrid-10k',
+        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        sku: 'INV-ASW10K-H',
+        donVi: 'bộ',
+        qty: 1,
+      },
+    ],
+  },
+  {
     id: 'pk-n-0118',
     ma: 'PK-N-0118',
     type: 'nhap',
@@ -113,8 +134,17 @@ export const FAKE_INSUFFICIENT_STOCK_ERROR: StockVoucherPortError = {
 };
 
 function tomTat(d: StockVoucherDetail): StockVoucherSummary {
-  const { id, ma, type, createdAt, nguoiTao, soDong, tongSoLuong } = d;
-  return { id, ma, type, createdAt, nguoiTao, soDong, tongSoLuong };
+  const { id, ma, type, orderId, createdAt, nguoiTao, soDong, tongSoLuong } = d;
+  return {
+    id,
+    ma,
+    type,
+    ...(orderId === undefined ? {} : { orderId }),
+    createdAt,
+    nguoiTao,
+    soDong,
+    tongSoLuong,
+  };
 }
 
 export class FakeStockVouchersPort implements StockVouchersPort {

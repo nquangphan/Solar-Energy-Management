@@ -8,6 +8,7 @@ import type { DomainEvent } from '../src/events/domain-event';
 import type { EventBus } from '../src/events/event-bus';
 import { SU_KIEN } from '../src/orders/domain/allowed-transition';
 import { OrdersService } from '../src/orders/orders.service';
+import { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage, type FakeStorage } from './util/fake-storage';
 
@@ -150,6 +151,7 @@ moTa('Chuyển trạng thái thủ công + ảnh trên Postgres THẬT', () => {
       prisma as unknown as PrismaService,
       eventBus,
       storage,
+      new StockVouchersService(prisma as unknown as PrismaService, eventBus),
     );
 
     const facebook = await prisma.customerSource.findUnique({
@@ -318,6 +320,28 @@ moTa('Chuyển trạng thái thủ công + ảnh trên Postgres THẬT', () => {
       await prisma.order.update({
         where: { id: donId },
         data: { scopeThiCong: false, scopeVanChuyen: false },
+      });
+      // A deposit-paid order always has a confirmed current version; a free-text line ⇒
+      // nothing to issue.
+      const ban = await prisma.orderVersion.create({
+        data: {
+          orderId: donId,
+          versionNo: 1,
+          lineItems: {
+            create: {
+              name: 'Công lắp đặt',
+              unit: 'gói',
+              qty: 1,
+              unitPrice: 1_000_000,
+              unitPriceSnapshot: 1_000_000,
+              displayOrder: 0,
+            },
+          },
+        },
+      });
+      await prisma.order.update({
+        where: { id: donId },
+        data: { currentVersionId: ban.id },
       });
 
       const giao = await service.chuyenTrangThaiThuCong({

@@ -5,6 +5,8 @@ import type { PrismaService } from '../src/prisma/prisma.service';
  * Unit test `StockItemsService` — Prisma mock. Canh ba thứ mock canh được: số truy vấn (không
  * N+1), không lệnh ghi nào, và luật tập sản phẩm/sắp xếp. Phép SUM + LEFT JOIN thật đo ở lane
  * DB (`stock-items.db.integration.spec.ts`).
+ *
+ * Also: both reads share ONE snapshot (array-form `RepeatableRead` transaction).
  */
 describe('StockItemsService', () => {
   const productRepo = {
@@ -58,6 +60,9 @@ describe('StockItemsService', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     stockMovementRepo.groupBy.mockResolvedValue([]);
+    transaction.mockImplementation((ops: Promise<unknown>[]) =>
+      Promise.all(ops),
+    );
   });
 
   it('gom reserved bằng ĐÚNG một groupBy cho cả tập và một findMany sản phẩm', async () => {
@@ -74,14 +79,32 @@ describe('StockItemsService', () => {
 
     expect(productRepo.findMany).toHaveBeenCalledTimes(1);
     expect(stockMovementRepo.groupBy).toHaveBeenCalledTimes(1);
+    // Same product condition as `findMany`, through the relation — the array form cannot read
+    // the first query's ids.
+    const dieuKien = (
+      productRepo.findMany.mock.calls[0][0] as { where: { AND: unknown } }
+    ).where.AND;
     expect(stockMovementRepo.groupBy).toHaveBeenCalledWith({
       by: ['stockItemId'],
-      where: { stockItemId: { in: ['s1', 's2'] } },
+      where: { stockItem: { product: { AND: dieuKien } } },
+      orderBy: { stockItemId: 'asc' },
       _sum: { qty: true },
     });
   });
 
-  it('không gọi lệnh ghi nào, không mở transaction', async () => {
+  it('reads onHand and reserved in ONE array-form RepeatableRead transaction', async () => {
+    productRepo.findMany.mockResolvedValue([]);
+
+    await service.lietKeTonKho({});
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    const [ops, opts] = transaction.mock.calls[0] as [unknown[], unknown];
+    expect(Array.isArray(ops)).toBe(true);
+    expect(ops).toHaveLength(2);
+    expect(opts).toEqual({ isolationLevel: 'RepeatableRead' });
+  });
+
+  it('issues no write', async () => {
     productRepo.findMany.mockResolvedValue([
       sanPham('p1', 'A', { stockItem: { id: 's1', onHand: 5 } }),
     ]);
@@ -94,7 +117,6 @@ describe('StockItemsService', () => {
         expect(fn).not.toHaveBeenCalled();
       }
     }
-    expect(transaction).not.toHaveBeenCalled();
   });
 
   it('ghép số qua tinhTonKho: vắng stock_items ⇒ 0/0, vắng movement ⇒ reserved 0', async () => {

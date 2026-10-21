@@ -6,14 +6,17 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  Res,
   StreamableFile,
   UploadedFiles,
   UseInterceptors,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -38,6 +41,7 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { anGiaVonDongPhieu } from '../inventory/domain/stock-voucher-visibility';
 import { SettingsService } from '../settings/settings.service';
 import { type TransitionEvent } from './domain/allowed-transition';
 import {
@@ -58,6 +62,10 @@ import { OrderLifecycleResponseDto } from './dto/order-lifecycle-response.dto';
 import { OrderListResponseDto } from './dto/order-list-response.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
 import { OrderResponseDto } from './dto/order-response.dto';
+import {
+  OrderStockIssueResultDto,
+  OrderStockIssueViewDto,
+} from './dto/order-stock-issue-response.dto';
 import { OrderVersionsResponseDto } from './dto/order-versions-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
@@ -496,7 +504,7 @@ export class OrdersController {
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
     description:
-      "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT).",
+      "Đơn ở trạng thái khác 'dachot'/'baogia' — không mở lại được từ đó (CONFLICT). Also: the order already has a stock-out voucher.",
   })
   async revise(
     @CurrentAccount() account: AuthenticatedAccount,
@@ -867,7 +875,7 @@ export class OrdersController {
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT).',
+      'Bước ngoài lane thủ công, ngoài phạm vi đơn, hoặc không đi được từ trạng thái hiện tại — kể cả ca bấm hai lần (CONFLICT). Also: the direct close `dachot → hoanthanh` while the order still has stock-tracked lines without a stock-out voucher (issue stock first).',
   })
   @ApiNotFoundResponse({
     type: ErrorEnvelopeDto,
@@ -944,6 +952,99 @@ export class OrdersController {
       status: ketQua.status,
       occurredAt: ketQua.occurredAt.toISOString(),
     };
+  }
+
+  /**
+   * Stock-out preview of an order (FR-26). OR gate: the delivery person (`delivery.confirm`)
+   * must see what "Đã giao" will issue, even without issuing rights (`canIssue` says so).
+   * Order scope is closed by the service (`findScopedOrThrow`).
+   */
+  @Get(':id/stock-issue')
+  @RequireAnyPermissions(PERM.inventoryManage, PERM.deliveryConfirm)
+  @ApiOkResponse({
+    type: OrderStockIssueViewDto,
+    description:
+      'Issued ⇒ `voucher` (line cost only with costs.view); not issued ⇒ the lines to issue + real on-hand now.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description: '`id` is not a UUID (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Neither inventory.manage nor delivery.confirm (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'No order with this id, or out of scope (NOT_FOUND).',
+  })
+  async getStockIssue(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<OrderStockIssueViewDto> {
+    const permissions = await this.quyenCuaNguoiGoi(account.id);
+    const view = await this.orders.getStockIssue(account.id, permissions, id);
+    return {
+      ...view,
+      ...(view.voucher && {
+        voucher: anGiaVonDongPhieu(
+          view.voucher,
+          permissions.has(PERM.costsView),
+        ),
+      }),
+    } as OrderStockIssueViewDto;
+  }
+
+  /**
+   * Standalone stock issue of an order (FR-26) — no status change. One order, one stock-out.
+   *
+   * HTTP status by outcome: voucher created ⇒ 201; order ALREADY issued (retry / double tap)
+   * ⇒ 200 + the existing voucher, nothing written (NFR-1). The controller only sets the
+   * status — the error envelope is still built by the filter (AD-5).
+   */
+  @Post(':id/stock-issue')
+  @RequirePermissions(PERM.inventoryManage)
+  @ApiCreatedResponse({
+    type: OrderStockIssueResultDto,
+    description:
+      'Voucher just created: stock deducted, every order line cost frozen. `voucher.lines[].unitCost` only with costs.view.',
+  })
+  @ApiOkResponse({
+    type: OrderStockIssueResultDto,
+    description:
+      'Order already issued — returns the existing voucher, writes nothing.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description: '`id` is not a UUID (VALIDATION_ERROR).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Missing inventory.manage (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'No order with this id, or out of scope (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'CONFLICT: status cannot issue standalone (accepted: dachot, dacoc, danggiao, thicong); no stock-tracked lines; or short stock (`fieldErrors[].code = INSUFFICIENT_STOCK`, `field = lines.{i}.qty` in the order of the preview `lines`). Nothing written.',
+  })
+  async issueStock(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<OrderStockIssueResultDto> {
+    const permissions = await this.quyenCuaNguoiGoi(account.id);
+    const result = await this.orders.issueStock(account.id, permissions, id);
+    res.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
+    return {
+      voucher: anGiaVonDongPhieu(
+        result.voucher,
+        permissions.has(PERM.costsView),
+      ),
+    } as OrderStockIssueResultDto;
   }
 
   /**

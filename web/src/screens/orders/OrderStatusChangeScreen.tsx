@@ -14,9 +14,17 @@
 //
 // The screen NEVER touches R2. It collects File[] and hands them to the port;
 // upload, object keys and the transaction all belong to the backend (AD-3).
+//
+// "Đã giao" ISSUES THE ORDER'S STOCK when it was not issued yet, in
+// the same commit as the status change. Picking that step loads the backend's
+// stock-out preview; the button says what will happen, so it stays disabled
+// until that preview is on screen (a failed read offers a retry, never a silent
+// fallback label). Whether the stock is enough is the backend's 409, placed
+// under the row it names, next to a re-read preview.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  Banner,
   Button,
   ErrorState,
   Frame,
@@ -27,10 +35,16 @@ import {
 import type { ImageUploadItem } from '../../design-system/components/ImageUpload';
 import { STATUS_LABELS, type StatusKey } from '../../design-system/components/StatusChip';
 import { filterNav } from '../../design-system/gating/permissions';
-import type { OrderNextStep, OrdersPort } from '../../design-system/session/orders-port';
+import {
+  EVENT_DELIVERED,
+  type OrderNextStep,
+  type OrdersPort,
+  type OrderStockIssueView,
+} from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Sidebar, SIDEBAR_NAV, Topbar, WebShell } from '../../design-system/shell';
 
+import { rowErrors, StockIssuePreview, type RowErrors } from './stock-issue-preview';
 import './order-status-change.css';
 
 export interface OrderStatusChangeScreenProps {
@@ -42,6 +56,7 @@ export interface OrderStatusChangeScreenProps {
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
+type PreviewState = 'idle' | LoadState;
 
 /**
  * The photo ceiling the backend enforces. Mirrored here only to stop the picker
@@ -87,9 +102,45 @@ export function OrderStatusChangeScreen({
   const [state, setState] = useState<LoadState>('loading');
   const [dangGui, setDangGui] = useState(false);
   const [loiGui, setLoiGui] = useState<string | null>(null);
+  const [lineErrors, setLineErrors] = useState<RowErrors>({});
+  const [stockIssue, setStockIssue] = useState<OrderStockIssueView | null>(null);
+  const [previewState, setPreviewState] = useState<PreviewState>('idle');
 
   const latest = useRef(0);
   const seq = useRef(0);
+  const stockIssueTicket = useRef(0);
+
+  // The stock-out preview belongs to the "Đã giao" step only. A late answer for
+  // a step the user already left is dropped (ticket).
+  const loadPreview = useCallback(() => {
+    const ticket = ++stockIssueTicket.current;
+    setPreviewState('loading');
+    port.getStockIssue(orderId).then(
+      (view) => {
+        if (ticket !== stockIssueTicket.current) return;
+        setStockIssue(view);
+        setPreviewState('ready');
+      },
+      () => {
+        if (ticket === stockIssueTicket.current) setPreviewState('error');
+      },
+    );
+  }, [port, orderId]);
+
+  useEffect(() => {
+    // A new step drops everything that belonged to the previous one.
+    setStockIssue(null);
+    setLineErrors({});
+    setLoiGui(null);
+    if (chon !== EVENT_DELIVERED) {
+      ++stockIssueTicket.current;
+      setPreviewState('idle');
+      return;
+    }
+    loadPreview();
+  }, [chon, loadPreview]);
+
+  const willIssue = stockIssue !== null && !stockIssue.issued && stockIssue.lines.length > 0;
 
   const load = useCallback(async () => {
     const ticket = ++latest.current;
@@ -141,6 +192,7 @@ export function OrderStatusChangeScreen({
     if (chon === null) return;
     setDangGui(true);
     setLoiGui(null);
+    setLineErrors({});
     try {
       const ketQua = await port.chuyenTrangThai(
         orderId,
@@ -157,10 +209,14 @@ export function OrderStatusChangeScreen({
       // transport failures the backend never saw.
       const message = (err as { message?: string } | null)?.message;
       setLoiGui(message ?? 'Không chuyển được trạng thái.');
+      setLineErrors(rowErrors(err));
+      // The refusal may be about stock that moved since the preview was read —
+      // show the current numbers next to the backend's row messages.
+      if (chon === EVENT_DELIVERED) loadPreview();
     } finally {
       setDangGui(false);
     }
-  }, [port, orderId, chon, anh, onDone]);
+  }, [port, orderId, chon, anh, onDone, loadPreview]);
 
   return (
     <WebShell
@@ -203,6 +259,7 @@ export function OrderStatusChangeScreen({
                         name="buoc-ke-tiep"
                         value={step.event}
                         checked={chon === step.event}
+                        disabled={dangGui}
                         onChange={() => setChon(step.event)}
                       />
                       {isStatusKey(step.to) ? (
@@ -225,11 +282,43 @@ export function OrderStatusChangeScreen({
               />
             </Frame>
 
-            {loiGui !== null && <p className="sc-err">{loiGui}</p>}
+            {stockIssue !== null && stockIssue.issued && stockIssue.voucher !== undefined && (
+              <p className="si-status">Đã xuất kho · {stockIssue.voucher.ma}</p>
+            )}
+
+            {previewState === 'loading' && stockIssue === null && <Skeleton />}
+
+            {previewState === 'error' && (
+              <ErrorState
+                message="Không tải được phiếu xuất kho."
+                retryLabel="Thử lại"
+                onRetry={loadPreview}
+              />
+            )}
+
+            {willIssue && stockIssue !== null && (
+              <Frame label="Phiếu xuất kho" onBg>
+                <StockIssuePreview view={stockIssue} errors={lineErrors} />
+              </Frame>
+            )}
+
+            {loiGui !== null && (
+              <Banner tone="danger" role="alert">
+                {loiGui}
+              </Banner>
+            )}
 
             <div className="sc-actions">
-              <Button variant="primary" disabled={chon === null || dangGui} onClick={gui}>
-                Xác nhận chuyển
+              <Button
+                variant="primary"
+                disabled={
+                  chon === null ||
+                  dangGui ||
+                  (chon === EVENT_DELIVERED && previewState !== 'ready')
+                }
+                onClick={gui}
+              >
+                {willIssue ? 'Xác nhận xuất kho & chuyển Đã giao' : 'Xác nhận chuyển'}
               </Button>
               <Button variant="ghost" disabled={dangGui} onClick={onBack}>
                 Huỷ

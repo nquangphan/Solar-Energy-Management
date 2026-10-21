@@ -52,14 +52,6 @@
   color: var(--muted);
 }
 
-/* The backend's refusal message, rendered verbatim above the actions so it sits
-   next to the button that produced it. */
-.sc-err {
-  margin: 0;
-  font-size: 13px;
-  color: var(--danger);
-}
-
 .sc-actions {
   display: flex;
   gap: var(--space-8);

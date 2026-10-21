@@ -232,6 +232,24 @@ describe('/stock-vouchers (e2e)', () => {
     expect(res.body.lines[0].unitCost).toBe(2_000_000);
   });
 
+  it('a free-standing voucher cannot bind an order: body with orderId ⇒ 201, field stripped, voucher has no orderId', async () => {
+    const res = await post({
+      type: 'xuat',
+      orderId: '44444444-4444-4444-8444-444444444444',
+      lines: [{ productId: P1, qty: 2 }],
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).not.toHaveProperty('orderId');
+    const data = (
+      tx.stockVoucher.create.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      }
+    ).data;
+    expect(data).not.toHaveProperty('orderId');
+    expect(data).not.toHaveProperty('orderVersionId');
+  });
+
   it('THO_KS (quotes.create_edit, không inventory.manage) ⇒ 403 ở POST lẫn GET', async () => {
     givenPermissions(...ROLE_PRESETS.THO_KS);
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { tinhTonKho, type TonKho } from './domain/ton-kho';
 
@@ -32,10 +32,17 @@ function thoatLike(chuoi: string): string {
 }
 
 /**
- * Đường ĐỌC tồn kho (FR-25, AD-19) — thuần đọc: không ghi, không transaction, không event.
+ * Đường ĐỌC tồn kho (FR-25, AD-19) — thuần đọc: không ghi, không event.
  *
  * `reserved` là `SUM(StockMovement.qty)` theo `stockItemId`, gom bằng MỘT `groupBy` cho cả tập
  * — không N+1, không kéo cả ledger về JS để cộng.
+ *
+ * The two reads (`onHand` and `reserved`) run in ONE array-form `REPEATABLE READ`
+ * transaction ⇒ the same snapshot. Under READ COMMITTED each statement sees its own snapshot:
+ * an order-bound stock issue committing between them (deducting `onHand` and releasing
+ * `reserved` in one tx) would yield an available figure that never existed. Array form ⇒ the
+ * `groupBy` cannot use the first query's result: it filters the ledger by the SAME product
+ * condition through the `stockItem.product` relation.
  *
  * Tập sản phẩm = (theo dõi tồn VÀ đang bán) HOẶC còn số khác 0. Sản phẩm bị ẩn/đổi cờ mà vẫn
  * còn hàng thật hoặc còn bị hứa KHÔNG được biến khỏi màn — đó là hàng có thật phải xử lý.
@@ -69,22 +76,25 @@ export class StockItemsService {
       dieuKien.push({ id: { in: query.productIds } });
     }
 
-    const products = await this.prisma.product.findMany({
-      where: { AND: dieuKien },
-      include: { stockItem: true },
-      orderBy: [{ name: 'asc' }, { id: 'asc' }],
-    });
-
-    const stockItemIds = products.flatMap((p) =>
-      p.stockItem ? [p.stockItem.id] : [],
+    const [products, tong] = await this.prisma.$transaction(
+      [
+        this.prisma.product.findMany({
+          where: { AND: dieuKien },
+          include: { stockItem: true },
+          orderBy: [{ name: 'asc' }, { id: 'asc' }],
+        }),
+        this.prisma.stockMovement.groupBy({
+          by: ['stockItemId'],
+          where: { stockItem: { product: { AND: dieuKien } } },
+          // Prisma's `groupBy` typing demands `orderBy` when not awaited directly.
+          orderBy: { stockItemId: 'asc' },
+          _sum: { qty: true },
+        }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
-    const tong = await this.prisma.stockMovement.groupBy({
-      by: ['stockItemId'],
-      where: { stockItemId: { in: stockItemIds } },
-      _sum: { qty: true },
-    });
     const reservedTheoStockItem = new Map(
-      tong.map((t) => [t.stockItemId, t._sum.qty ?? 0]),
+      tong.map((t) => [t.stockItemId, t._sum?.qty ?? 0]),
     );
 
     const items: StockItemView[] = [];

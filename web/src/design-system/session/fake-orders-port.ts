@@ -14,6 +14,8 @@ import {
 import type { CatalogProduct } from './catalog-port';
 import { DEMO_CUSTOMERS } from './fake-customers-port';
 import type { Customer } from './customers-port';
+import { DEMO_STOCK_VOUCHERS } from './fake-stock-vouchers-port';
+import type { StockVoucherDetail } from './stock-vouchers-port';
 import type {
   AddOrderLineInput,
   AttachmentItem,
@@ -28,6 +30,9 @@ import type {
   OrderLine,
   OrderNextStep,
   OrderPortError,
+  OrderStockIssueLine,
+  OrderStockIssueResult,
+  OrderStockIssueView,
   OrderTotals,
   OrderVersionItem,
   OrdersPort,
@@ -39,6 +44,7 @@ import type {
   UpdateOrderMetaInput,
   UpdateScopeFlagsInput,
 } from './orders-port';
+import { EVENT_DELIVERED } from './orders-port';
 
 const NOW = '2026-07-16T00:00:00.000Z';
 
@@ -108,6 +114,67 @@ const DEMO_QUOTE_PNG = new Uint8Array([
 ]);
 const DEMO_QUOTE_PDF = new TextEncoder().encode('%PDF-1.4\n%%EOF\n');
 
+/** Demo order whose stock is ALREADY issued — its voucher carries no `unitCost`. */
+export const FAKE_ORDER_ISSUED = 'ord-demo-4';
+
+/** Demo order whose stock-out the fake refuses (409 INSUFFICIENT_STOCK on `lines.0.qty`). */
+export const FAKE_ORDER_SHORT_STOCK = 'ord-demo-3';
+
+/**
+ * Stock-out preview rows, typed as the backend returns them: already summed per
+ * product and in its canonical order (name, then id). Includes the LONGEST
+ * product name. The fake owns no stock rule — "not enough" is a fixed branch on a
+ * fixed order, never a `qty`/`onHand` comparison.
+ */
+const DEMO_ISSUE_LINES: OrderStockIssueLine[] = [
+  {
+    productId: 'prod-inverter-hybrid-10k',
+    name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+    sku: 'INV-ASW10K-H',
+    unit: 'bộ',
+    qty: 1,
+    onHand: 5,
+  },
+  {
+    productId: 'prod-pin-ae-630',
+    name: 'Tấm pin AE 630W',
+    sku: 'PIN-AE-630',
+    unit: 'tấm',
+    qty: 14,
+    onHand: 40,
+  },
+];
+const DEMO_SHORT_LINE: OrderStockIssueLine = {
+  productId: 'prod-battery-10kwh',
+  name: 'Battery LiFePO4 10kWh',
+  sku: 'BAT-10K',
+  unit: 'bình',
+  qty: 2,
+  onHand: 0,
+};
+const DEMO_UNTRACKED_ITEMS = ['Công lắp đặt'];
+
+/** The statuses the backend accepts for a standalone stock issue. */
+const DEMO_ISSUABLE_STATUSES = ['dachot', 'dacoc', 'danggiao', 'thicong'];
+
+/** The backend's refusal of a direct close `dachot → hoan_thanh` before the stock-out. */
+export const FAKE_CLOSE_BEFORE_ISSUE_ERROR: OrderPortError = {
+  code: 'CONFLICT',
+  message: 'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
+};
+
+/** The backend's refusal of re-opening an order whose stock already left. */
+export const FAKE_REVISE_AFTER_ISSUE_ERROR: OrderPortError = {
+  code: 'CONFLICT',
+  message: 'Đơn đã xuất kho — không mở lại để sửa được.',
+};
+
+export const FAKE_STOCK_ISSUE_SHORT_ERROR: OrderPortError = {
+  code: 'CONFLICT',
+  message: 'Không đủ tồn — không thể xuất quá số tồn hiện có.',
+  fieldErrors: [{ field: 'lines.0.qty', message: 'Còn 0 bình, không xuất được 2.' }],
+};
+
 /** Digits of a string, minus leading zeros — mirrors the backend's phone matching. */
 function digits(raw: string): string {
   return raw.replace(/\D/g, '').replace(/^0+/, '');
@@ -131,6 +198,10 @@ function presetFor(custType: string): {
 export class FakeOrdersPort implements OrdersPort {
   private readonly orders = new Map<string, Order>();
   private seq = 0;
+  /** One order, one stock-out — the fake's record of what is issued. */
+  private readonly issuedVouchers = new Map<string, StockVoucherDetail>(
+    DEMO_STOCK_VOUCHERS.filter((p) => p.orderId !== undefined).map((p) => [p.orderId!, p]),
+  );
 
   constructor(
     private readonly products: CatalogProduct[] = DEMO_CATALOG_PRODUCTS,
@@ -460,6 +531,10 @@ export class FakeOrdersPort implements OrdersPort {
     if (order === undefined) {
       return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
     }
+    // An issued order cannot be re-opened — the backend's 409, mirrored.
+    if (order.status === 'dachot' && this.issuedVouchers.has(orderId)) {
+      return Promise.reject(FAKE_REVISE_AFTER_ISSUE_ERROR);
+    }
     // Already open = idempotent no-op, mirroring the backend retry path. The
     // fake does NOT simulate the new version / line copy — the client never
     // sees the version concept (4.1); the lines just come back as-is.
@@ -626,6 +701,10 @@ export class FakeOrdersPort implements OrdersPort {
     vanChuyen: boolean,
   ): OrderNextStep[] {
     const buoc: OrderNextStep[] = [];
+    // Thiết bị is always on in the demo ⇒ a confirmed order may close directly.
+    if (status === 'dachot') {
+      buoc.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'payments.record' });
+    }
     if (status === 'dacoc' && thiCong) {
       buoc.push({
         event: 'bat_dau_thi_cong',
@@ -700,6 +779,15 @@ export class FakeOrdersPort implements OrdersPort {
         ),
       );
     }
+    // Every demo order carries stock-tracked lines ⇒ the direct close is refused
+    // until it is issued, exactly as the backend does.
+    if (
+      order.status === 'dachot' &&
+      event === 'hoan_thanh' &&
+      !this.issuedVouchers.has(orderId)
+    ) {
+      return Promise.reject(FAKE_CLOSE_BEFORE_ISSUE_ERROR);
+    }
     if (anh.length > DEMO_SO_ANH_TOI_DA) {
       return Promise.reject(
         this.loi('VALIDATION_ERROR', 'Ảnh đính kèm không hợp lệ.', [
@@ -709,6 +797,13 @@ export class FakeOrdersPort implements OrdersPort {
           },
         ]),
       );
+    }
+    // "Đã giao" issues the stock in the same commit when it was not issued yet.
+    if (event === EVENT_DELIVERED && !this.issuedVouchers.has(orderId)) {
+      if (orderId === FAKE_ORDER_SHORT_STOCK) {
+        return Promise.reject(FAKE_STOCK_ISSUE_SHORT_ERROR);
+      }
+      this.recordIssue(orderId);
     }
     this.orders.set(orderId, { ...order, status: buoc.to });
     return Promise.resolve({
@@ -854,6 +949,69 @@ export class FakeOrdersPort implements OrdersPort {
     return fieldErrors === undefined
       ? { code, message }
       : { code, message, fieldErrors };
+  }
+
+  /** Demo twin of `GET /orders/:id/stock-issue`. */
+  getStockIssue(orderId: string): Promise<OrderStockIssueView> {
+    const voucher = this.issuedVouchers.get(orderId);
+    if (voucher !== undefined) {
+      return Promise.resolve({
+        issued: true,
+        voucher,
+        canIssue: false,
+        lines: [],
+        untrackedItems: [],
+      });
+    }
+    // The demo "server" answers `canIssue` from the status it knows; ids it never
+    // created (test fixtures) keep the issuable demo.
+    const status = this.orders.get(orderId)?.status;
+    return Promise.resolve({
+      issued: false,
+      canIssue: status === undefined || DEMO_ISSUABLE_STATUSES.includes(status),
+      lines:
+        orderId === FAKE_ORDER_SHORT_STOCK
+          ? [DEMO_SHORT_LINE, ...DEMO_ISSUE_LINES]
+          : [...DEMO_ISSUE_LINES],
+      untrackedItems: [...DEMO_UNTRACKED_ITEMS],
+    });
+  }
+
+  /**
+   * Demo twin of `POST /orders/:id/stock-issue`: issued once, the same
+   * voucher on every later call; a fixed 409 on `FAKE_ORDER_SHORT_STOCK`.
+   */
+  issueStock(orderId: string): Promise<OrderStockIssueResult> {
+    const existing = this.issuedVouchers.get(orderId);
+    if (existing !== undefined) return Promise.resolve({ voucher: existing });
+    if (orderId === FAKE_ORDER_SHORT_STOCK) {
+      return Promise.reject(FAKE_STOCK_ISSUE_SHORT_ERROR);
+    }
+    return Promise.resolve({ voucher: this.recordIssue(orderId) });
+  }
+
+  /** The order's one stock-out, as the backend writes it (standalone or "Đã giao"). */
+  private recordIssue(orderId: string): StockVoucherDetail {
+    const voucher: StockVoucherDetail = {
+      id: `pk-xuat-${orderId}`,
+      ma: 'PK-X-0097',
+      type: 'xuat',
+      orderId,
+      createdAt: NOW,
+      nguoiTao: { id: 'acc-kho-binh', displayName: 'Kho/Giao hàng (Bình)' },
+      soDong: DEMO_ISSUE_LINES.length,
+      tongSoLuong: 15,
+      note: null,
+      lines: DEMO_ISSUE_LINES.map(({ productId, name, sku, unit, qty }) => ({
+        productId,
+        ten: name,
+        sku,
+        donVi: unit,
+        qty,
+      })),
+    };
+    this.issuedVouchers.set(orderId, voucher);
+    return voucher;
   }
 
   /**

@@ -181,6 +181,11 @@ model StockItem {
 ///
 /// CHƯA có unique idempotency: một version có nhiều sản phẩm nên unique `(orderId,
 /// orderVersionId)` không đặt được trên movement-per-product — đường giữ chỗ sẽ quyết khoá.
+///
+/// An order-bound stock issue writes a `type = 'xuat'` row with `qty = −(amount currently held
+/// for that order)` to release the reservation — the reservation path's unique design MUST
+/// leave room for this `xuat` row (same `orderId`/`orderVersionId`/`stockItemId` as the
+/// reservation row).
 model StockMovement {
   id             String       @id @default(uuid())
   stockItemId    String       @map("stock_item_id")
@@ -201,8 +206,15 @@ model StockMovement {
 /// gõ phiếu ngược chiều.
 ///
 /// `seq` (SERIAL) chỉ để ghép mã phiếu hiển thị (`inventory/domain/gia-von.ts#maPhieu`).
-/// Chưa có `orderId`/`status`: luồng xuất gắn đơn (nháp → xác nhận) thêm chúng; liên kết phiếu
-/// gốc của phiếu nhập trả cũng thêm sau.
+///
+/// ORDER-BOUND voucher (`orderId` + `orderVersionId` non-null) = the stock-out created by the
+/// order's stock-issue path; `createdBy` = the person who CONFIRMED it. No `status` column, no
+/// draft: created = confirmed (the preview is a read-only GET).
+/// `@@unique([orderId, orderVersionId])` = ONE order, ONE stock-out; Postgres treats NULLs as
+/// distinct ⇒ free-standing vouchers never hit it.
+/// CHECK `stock_vouchers_order_pair` (both columns null or both set) and
+/// `stock_vouchers_order_only_xuat` (order-bound ⇒ `type = 'xuat'`) live only in
+/// `migration.sql`. The link from a return voucher to its origin comes later.
 ///
 /// HỢP ĐỒNG KHOÁ cho MỌI đường ghi tồn (phiếu, xuất gắn đơn, giữ chỗ, nhập trả): khoá dòng
 /// `products` bằng `SELECT … WHERE id = ANY(…) ORDER BY id FOR UPDATE` là lệnh ĐẦU TIÊN của
@@ -215,8 +227,13 @@ model StockVoucher {
   createdByAccountId String             @map("created_by_account_id")
   createdBy          Account            @relation("StockVoucherCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
   createdAt          DateTime           @default(now()) @map("created_at")
+  orderId            String?            @map("order_id")
+  order              Order?             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderVersionId     String?            @map("order_version_id")
+  orderVersion       OrderVersion?      @relation(fields: [orderVersionId], references: [id], onDelete: Restrict)
   lines              StockVoucherLine[]
 
+  @@unique([orderId, orderVersionId])
   @@index([createdAt])
   @@map("stock_vouchers")
 }
@@ -459,6 +476,7 @@ model Order {
   quoteExport       QuoteExport?
   attachments       Attachment[]
   stockMovements    StockMovement[]
+  stockVouchers     StockVoucher[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -498,6 +516,7 @@ model OrderVersion {
   discountApprovals DiscountApproval[]
   quoteExports   QuoteExport[]
   stockMovements StockMovement[]
+  stockVouchers  StockVoucher[]
 
   @@unique([orderId, versionNo])
   @@map("order_versions")

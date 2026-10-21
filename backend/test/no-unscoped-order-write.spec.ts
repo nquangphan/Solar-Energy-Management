@@ -47,6 +47,9 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     // rò y như sửa ngoài phạm vi.
     /this\.storage\.getObject\s*\(/,
     /\.quoteExport\.find(?:Unique|First)\s*\(/,
+    // Order-bound stock (read or write) also touches the order: previewing the stock-out of an
+    // out-of-scope order leaks just like issuing it.
+    /this\.stockVouchers\.\w+\s*\(/,
     /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
   ];
 
@@ -165,7 +168,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       const chamDon = trichMethod(docFile('orders.service.ts'))
         .filter((m) => m.congKhai && viTriChamDau(m.than) !== -1)
         .map((m) => m.ten);
-      expect(chamDon.length).toBeGreaterThanOrEqual(14);
+      expect(chamDon.length).toBeGreaterThanOrEqual(16);
       expect(chamDon).toEqual(
         expect.arrayContaining([
           'update',
@@ -182,6 +185,8 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
           'xoaAnh',
           'create',
           'chuyenTrangThaiTuDong',
+          'issueStock',
+          'getStockIssue',
         ]),
       );
       const xuat = trichMethod(docFile('quote-export.service.ts'))

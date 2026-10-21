@@ -30,10 +30,15 @@
 // (AD-2/AD-4).
 //
 // No money math (AD-10/16): every number shown is one the backend computed.
+//
+// "Phiếu xuất": the order's ONE stock-out. Whether it can be issued
+// now (`canIssue`) is the backend's answer; the frame only shows for callers who
+// hold a key that reads it (UX only — the backend gates the read too).
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   AttachmentGallery,
+  Banner,
   Button,
   ConfirmDialog,
   Dialog,
@@ -43,6 +48,7 @@ import {
   Frame,
   ImageUpload,
   ScopeFlag,
+  Sheet,
   Skeleton,
   StatusChip,
   Stepper,
@@ -52,18 +58,22 @@ import type { AttachmentGalleryItem } from '../../design-system/components/Attac
 import type { ImageUploadItem } from '../../design-system/components/ImageUpload';
 import type { StepItem } from '../../design-system/components/Stepper';
 import { STATUS_LABELS, type StatusKey } from '../../design-system/components/StatusChip';
-import { filterNav } from '../../design-system/gating/permissions';
+import { PERMISSION_KEYS } from '../../design-system/gating/permission-keys.generated';
+import { can, filterNav } from '../../design-system/gating/permissions';
 import type {
   AttachmentItem,
   Order,
   OrderLifecycleStep,
   OrderNextStep,
   OrdersPort,
+  OrderStockIssueView,
   OrderVersionItem,
 } from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Sidebar, SIDEBAR_NAV, Tabs, Topbar, WebShell } from '../../design-system/shell';
 
+import { ngayGio } from '../inventory/format-gio';
+import { rowErrors, StockIssuePreview, type RowErrors } from './stock-issue-preview';
 import './order-detail.css';
 
 export interface OrderDetailScreenProps {
@@ -321,6 +331,59 @@ export function OrderDetailScreen({
     }
   }, [port, orderId, xoaId, loadAnh]);
 
+  // ---- Phiếu xuất ---------------------------------------------
+  const canSeeStockIssue =
+    can(perms, PERMISSION_KEYS.inventoryManage) || can(perms, PERMISSION_KEYS.deliveryConfirm);
+  const [stockIssue, setStockIssue] = useState<OrderStockIssueView | null>(null);
+  const [issueSheetOpen, setIssueSheetOpen] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [issueError, setIssueError] = useState<string | null>(null);
+  const [issueLineErrors, setIssueLineErrors] = useState<RowErrors>({});
+  const stockIssueLatest = useRef(0);
+
+  // A failed read leaves the frame without content rather than blanking the
+  // screen: the stock-out is one panel of the order, not the order.
+  const loadStockIssue = useCallback(async () => {
+    const ticket = ++stockIssueLatest.current;
+    try {
+      const view = await port.getStockIssue(orderId);
+      if (ticket === stockIssueLatest.current) setStockIssue(view);
+    } catch {
+      if (ticket === stockIssueLatest.current) setStockIssue(null);
+    }
+  }, [port, orderId]);
+
+  useEffect(() => {
+    if (canSeeStockIssue) void loadStockIssue();
+  }, [canSeeStockIssue, loadStockIssue]);
+
+  const confirmIssue = useCallback(async () => {
+    if (issuing) return;
+    setIssuing(true);
+    setIssueError(null);
+    setIssueLineErrors({});
+    try {
+      await port.issueStock(orderId);
+      setIssueSheetOpen(false);
+      await loadStockIssue();
+    } catch (err) {
+      const message = (err as { message?: string } | null)?.message;
+      setIssueError(message ?? 'Không xuất kho được.');
+      setIssueLineErrors(rowErrors(err));
+      // Show the current numbers next to the backend's row messages; a failed
+      // re-read keeps the preview the user was looking at.
+      const ticket = ++stockIssueLatest.current;
+      try {
+        const view = await port.getStockIssue(orderId);
+        if (ticket === stockIssueLatest.current) setStockIssue(view);
+      } catch {
+        // keep the previous preview
+      }
+    } finally {
+      setIssuing(false);
+    }
+  }, [port, orderId, issuing, loadStockIssue]);
+
   // ---- Huỷ đơn (Story 5.7) -------------------------------------------------
   const [moHuy, setMoHuy] = useState(false);
   const [lyDoHuy, setLyDoHuy] = useState('');
@@ -422,6 +485,57 @@ export function OrderDetailScreen({
                 </div>
               )}
             </Frame>
+
+            {canSeeStockIssue && stockIssue !== null && (
+              <Frame label="Phiếu xuất" onBg>
+                {stockIssue.issued && stockIssue.voucher !== undefined && (
+                  <div className="si-preview">
+                    <p className="si-status">
+                      <span className="mono strong">{stockIssue.voucher.ma}</span> ·{' '}
+                      <span className="mono">{ngayGio(stockIssue.voucher.createdAt)}</span> ·{' '}
+                      {stockIssue.voucher.nguoiTao.displayName}
+                    </p>
+                    <Table>
+                      <thead>
+                        <tr>
+                          <th>Sản phẩm</th>
+                          <th className="num">SL</th>
+                          {stockIssue.voucher.lines.some((l) => l.unitCost !== undefined) && (
+                            <th className="num">Giá vốn / đv</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {stockIssue.voucher.lines.map((l) => (
+                          <tr key={l.productId}>
+                            <td>{l.ten}</td>
+                            <td className="num mono">{l.qty}</td>
+                            {stockIssue.voucher!.lines.some((x) => x.unitCost !== undefined) && (
+                              <td className="num mono">{l.unitCost ?? ''}</td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+                {!stockIssue.issued && stockIssue.canIssue && (
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setIssueError(null);
+                      setIssueLineErrors({});
+                      setIssueSheetOpen(true);
+                    }}
+                  >
+                    Xuất kho
+                  </Button>
+                )}
+                {!stockIssue.issued && !stockIssue.canIssue && (
+                  <p className="si-status">Chưa xuất kho.</p>
+                )}
+              </Frame>
+            )}
 
             <Tabs tabs={TABS} activeKey={tab} onSelect={moTab} />
 
@@ -597,6 +711,33 @@ export function OrderDetailScreen({
         />
         {loiHuy !== null && <p className="od-huy-loi">{loiHuy}</p>}
       </Dialog>
+
+      <Sheet
+        open={issueSheetOpen}
+        // Not while the request is in flight: the caller must see how it ended.
+        onClose={() => {
+          if (!issuing) setIssueSheetOpen(false);
+        }}
+        title="Phiếu xuất kho"
+      >
+        {stockIssue !== null && (
+          <div className="si-preview">
+            <StockIssuePreview view={stockIssue} errors={issueLineErrors} />
+            {issueError !== null && (
+              <Banner tone="danger" role="alert">
+                {issueError}
+              </Banner>
+            )}
+            <Button
+              variant="primary"
+              disabled={issuing}
+              onClick={() => void confirmIssue()}
+            >
+              Xác nhận xuất kho
+            </Button>
+          </div>
+        )}
+      </Sheet>
 
       <ConfirmDialog
         open={xoaId !== null}

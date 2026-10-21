@@ -17,6 +17,11 @@
 // The screen NEVER touches R2. It collects XFile[] and hands them to the port;
 // upload, object keys and the transaction all belong to the backend (AD-3).
 //
+// "Đã giao" ISSUES THE ORDER'S STOCK when it was not issued yet, in
+// the same commit as the status change. Picking that step loads the backend's
+// stock-out preview; the button says what will happen. Whether the stock is
+// enough is the backend's 409, placed under the row it names.
+//
 // LABELS are byte-identical with the web twin (UX-DR-27).
 
 import 'package:flutter/widgets.dart';
@@ -29,6 +34,7 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import 'discount_approval_screen.dart' show kOrdersTabIndex;
+import 'stock_issue_preview.dart';
 
 enum _LoadState { loading, ready, error }
 
@@ -83,9 +89,55 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
   _LoadState _state = _LoadState.loading;
   bool _dangGui = false;
   String? _loiGui;
+  Map<int, String> _lineErrors = const <int, String>{};
+  OrderStockIssueView? _stockIssue;
+
+  /// The "Đã giao" preview's own load state (null = no preview for this step).
+  _LoadState? _previewState;
 
   int _latest = 0;
   int _seq = 0;
+  int _stockIssueTicket = 0;
+
+  bool get _willIssue {
+    final OrderStockIssueView? v = _stockIssue;
+    return v != null && !v.issued && v.lines.isNotEmpty;
+  }
+
+  /// Picks a step — everything that belonged to the previous step goes. The
+  /// stock-out preview belongs to "Đã giao" only, and the button waits for it:
+  /// the button says what will happen.
+  void _selectStep(String? event) {
+    ++_stockIssueTicket;
+    setState(() {
+      _chon = event;
+      _stockIssue = null;
+      _lineErrors = const <int, String>{};
+      _loiGui = null;
+      _previewState = null;
+    });
+    if (event == kEventDelivered) _loadPreview();
+  }
+
+  /// Loads the "Đã giao" preview; a late answer for a step the user already
+  /// left is dropped (ticket). A failure offers a retry, never a silent label.
+  void _loadPreview() {
+    final int ticket = ++_stockIssueTicket;
+    setState(() => _previewState = _LoadState.loading);
+    widget.port.getStockIssue(widget.orderId).then(
+      (OrderStockIssueView view) {
+        if (!mounted || ticket != _stockIssueTicket) return;
+        setState(() {
+          _stockIssue = view;
+          _previewState = _LoadState.ready;
+        });
+      },
+      onError: (Object _) {
+        if (!mounted || ticket != _stockIssueTicket) return;
+        setState(() => _previewState = _LoadState.error);
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -105,14 +157,14 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       if (!mounted || ticket != _latest) return;
       setState(() {
         _steps = vongDoi.buocKeTiep;
-        // Preselect only when there is exactly one choice: with two open
-        // branches (thi công / giao hàng) a default would make a consequential
-        // decision for the user, and both are one tap from committing.
-        _chon = vongDoi.buocKeTiep.length == 1
-            ? vongDoi.buocKeTiep.first.event
-            : null;
         _state = _LoadState.ready;
       });
+      // Preselect only when there is exactly one choice: with two open
+      // branches (thi công / giao hàng) a default would make a consequential
+      // decision for the user, and both are one tap from committing.
+      _selectStep(
+        vongDoi.buocKeTiep.length == 1 ? vongDoi.buocKeTiep.first.event : null,
+      );
     } catch (_) {
       if (!mounted || ticket != _latest) return;
       setState(() => _state = _LoadState.error);
@@ -146,6 +198,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
     setState(() {
       _dangGui = true;
       _loiGui = null;
+      _lineErrors = const <int, String>{};
     });
     try {
       final StatusChangeResult ketQua = await widget.port.chuyenTrangThai(
@@ -166,7 +219,11 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
         _loiGui = error is OrderPortException
             ? error.message
             : 'Không chuyển được trạng thái.';
+        _lineErrors = rowErrors(error);
       });
+      // The refusal may be about stock that moved since the preview was read —
+      // show the current numbers next to the backend's row messages.
+      if (chon == kEventDelivered) _loadPreview();
     }
   }
 
@@ -237,17 +294,47 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
             _chonBuoc(),
             const SizedBox(height: AppTokens.space16),
             _khoiAnh(),
-            if (_loiGui != null) ...<Widget>[
+            if (_stockIssue != null &&
+                _stockIssue!.issued &&
+                _stockIssue!.voucher != null) ...<Widget>[
               const SizedBox(height: AppTokens.space8),
               Text(
-                _loiGui!,
+                'Đã xuất kho · ${_stockIssue!.voucher!.ma}',
                 style: const TextStyle(
-                  color: AppTokens.danger,
+                  color: AppTokens.muted,
                   fontFamily: AppTokens.fontFamily,
                   fontSize: 13.0,
                   fontWeight: FontWeight.w600,
                 ),
               ),
+            ],
+            if (_previewState == _LoadState.loading &&
+                _stockIssue == null) ...<Widget>[
+              const SizedBox(height: AppTokens.space16),
+              const AppSkeleton(width: 200.0),
+            ],
+            if (_previewState == _LoadState.error) ...<Widget>[
+              const SizedBox(height: AppTokens.space16),
+              AppErrorState(
+                message: 'Không tải được phiếu xuất kho.',
+                retryLabel: 'Thử lại',
+                onRetry: _loadPreview,
+              ),
+            ],
+            if (_willIssue) ...<Widget>[
+              const SizedBox(height: AppTokens.space16),
+              AppFrame(
+                label: 'Phiếu xuất kho',
+                onBg: true,
+                child: StockIssuePreview(
+                  view: _stockIssue!,
+                  errors: _lineErrors,
+                ),
+              ),
+            ],
+            if (_loiGui != null) ...<Widget>[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(tone: AppBannerTone.danger, message: _loiGui),
             ],
             const SizedBox(height: AppTokens.space16),
             _hanhDong(),
@@ -279,7 +366,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       button: true,
       selected: daChon,
       child: GestureDetector(
-        onTap: () => setState(() => _chon = step.event),
+        onTap: _dangGui ? null : () => _selectStep(step.event),
         child: Container(
           margin: const EdgeInsets.only(bottom: AppTokens.space8),
           padding: const EdgeInsets.all(AppTokens.space8),
@@ -333,9 +420,16 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       runSpacing: AppTokens.space8,
       children: <Widget>[
         AppButton(
-          label: 'Xác nhận chuyển',
+          label: _willIssue
+              ? 'Xác nhận xuất kho & chuyển Đã giao'
+              : 'Xác nhận chuyển',
           variant: AppButtonVariant.primary,
-          onPressed: _chon == null || _dangGui ? null : _gui,
+          onPressed: _chon == null ||
+                  _dangGui ||
+                  (_chon == kEventDelivered &&
+                      _previewState != _LoadState.ready)
+              ? null
+              : _gui,
         ),
         AppButton(
           label: 'Huỷ',

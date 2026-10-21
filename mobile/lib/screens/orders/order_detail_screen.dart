@@ -33,20 +33,29 @@
 // frame and navigation, not in wording.
 //
 // No money math (AD-10/16): every number shown is one the backend computed.
+//
+// "Phiếu xuất": the order's ONE stock-out. Whether it can be issued
+// now (`canIssue`) is the backend's answer; the frame only shows for callers who
+// hold a key that reads it (UX only — the backend gates the read too).
 
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 
 import '../../design_system/components/components.dart';
+import '../../design_system/gating/app_permission_keys.g.dart';
+import '../../design_system/gating/app_permissions.dart';
 import '../../design_system/session/orders_port.dart';
+import '../../design_system/session/stock_vouchers_port.dart';
 import '../../design_system/shell/app_bottom_nav.dart';
 import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_tabs.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import '../inventory/stock_vouchers_screen.dart' show ngayGio;
 import 'discount_approval_screen.dart' show kOrdersTabIndex;
+import 'stock_issue_preview.dart';
 
 /// `notFound` is its own state, NOT a flavour of `error`: "this order does not
 /// exist, or is not yours" is an answer, and pressing "Thử lại" on an answer
@@ -77,6 +86,7 @@ class OrderDetailScreen extends StatefulWidget {
     this.onBack,
     this.onChangeStatus,
     this.pick,
+    this.perms = const <PermissionKey>{},
   });
 
   final OrdersPort port;
@@ -89,6 +99,9 @@ class OrderDetailScreen extends StatefulWidget {
   /// Injectable picker for the Ảnh tab (Story 5.6) — widget tests run without a
   /// platform channel, so the seam has to reach the shipped picker.
   final ImagePickFn? pick;
+
+  /// The caller's effective permissions — gates the "Phiếu xuất" frame (UX only).
+  final Set<PermissionKey> perms;
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -226,10 +239,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  // ---- Phiếu xuất ---------------------------------------------
+  OrderStockIssueView? _stockIssue;
+  int _stockIssueLatest = 0;
+
+  bool get _canSeeStockIssue =>
+      widget.perms.contains(AppPermissionKeys.inventoryManage) ||
+      widget.perms.contains(AppPermissionKeys.deliveryConfirm);
+
+  /// A failed read leaves the frame out rather than blanking the screen: the
+  /// stock-out is one panel of the order, not the order.
+  Future<void> _loadStockIssue() async {
+    final int ticket = ++_stockIssueLatest;
+    try {
+      final OrderStockIssueView view =
+          await widget.port.getStockIssue(widget.orderId);
+      if (!mounted || ticket != _stockIssueLatest) return;
+      setState(() => _stockIssue = view);
+    } catch (_) {
+      if (!mounted || ticket != _stockIssueLatest) return;
+      setState(() => _stockIssue = null);
+    }
+  }
+
+  Future<void> _openIssueSheet() async {
+    final OrderStockIssueView? view = _stockIssue;
+    if (view == null) return;
+    final bool? issued = await showAppSheet<bool>(
+      context: context,
+      child: _StockIssueSheet(
+        view: view,
+        onConfirm: () => widget.port.issueStock(widget.orderId),
+        onReload: () async {
+          try {
+            return await widget.port.getStockIssue(widget.orderId);
+          } catch (_) {
+            return null;
+          }
+        },
+      ),
+    );
+    if (issued != true || !mounted) return;
+    await _loadStockIssue();
+  }
+
   @override
   void initState() {
     super.initState();
     _load();
+    if (_canSeeStockIssue) _loadStockIssue();
   }
 
   Future<void> _load() async {
@@ -347,6 +405,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
             ],
+            if (_canSeeStockIssue && _stockIssue != null) ...<Widget>[
+              const SizedBox(height: AppTokens.space16),
+              _stockIssueFrame(_stockIssue!),
+            ],
             const SizedBox(height: AppTokens.space16),
             AppTabs(
               tabs: _kTabs,
@@ -363,6 +425,61 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ],
         );
     }
+  }
+
+  Widget _stockIssueFrame(OrderStockIssueView v) {
+    const TextStyle muted = TextStyle(
+      color: AppTokens.muted,
+      fontFamily: AppTokens.fontFamily,
+      fontSize: 13.0,
+      fontWeight: FontWeight.w600,
+    );
+    final StockVoucherDetail? voucher = v.voucher;
+    final Widget content;
+    if (v.issued && voucher != null) {
+      final bool hasCost =
+          voucher.lines.any((StockVoucherLine l) => l.unitCost != null);
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            '${voucher.ma} · ${ngayGio(voucher.createdAt)} · ${voucher.nguoiTao.displayName}',
+            style: muted,
+          ),
+          const SizedBox(height: AppTokens.space8),
+          AppTable(
+            columns: <AppTableColumn>[
+              const AppTableColumn('Sản phẩm', flex: 3),
+              const AppTableColumn('SL', numeric: true, flex: 1),
+              if (hasCost)
+                const AppTableColumn('Giá vốn / đv', numeric: true, flex: 2),
+            ],
+            rows: <AppTableRow>[
+              for (final StockVoucherLine l in voucher.lines)
+                AppTableRow(<Widget>[
+                  AppTableCellText(l.ten),
+                  AppTableCellText('${l.qty}'),
+                  if (hasCost)
+                    AppTableCellText(l.unitCost != null ? '${l.unitCost}' : ''),
+                ]),
+            ],
+          ),
+        ],
+      );
+    } else if (v.canIssue) {
+      content = Align(
+        alignment: Alignment.centerLeft,
+        child: AppButton(
+          label: 'Xuất kho',
+          variant: AppButtonVariant.primary,
+          onPressed: _openIssueSheet,
+        ),
+      );
+    } else {
+      content = const Text('Chưa xuất kho.', style: muted);
+    }
+    return AppFrame(label: 'Phiếu xuất', onBg: true, child: content);
   }
 
   /// The stepper in its frame.
@@ -698,6 +815,87 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
         ),
       );
+}
+
+/// The stock-out confirmation sheet. Owns its in-flight state so a
+/// second tap cannot reach the port, and refuses to close mid-request — the
+/// caller must learn whether the stock-out happened.
+class _StockIssueSheet extends StatefulWidget {
+  const _StockIssueSheet({
+    required this.view,
+    required this.onConfirm,
+    required this.onReload,
+  });
+
+  final OrderStockIssueView view;
+  final Future<OrderStockIssueResult> Function() onConfirm;
+
+  /// Re-reads the preview after a refusal; null = keep the one on screen.
+  final Future<OrderStockIssueView?> Function() onReload;
+
+  @override
+  State<_StockIssueSheet> createState() => _StockIssueSheetState();
+}
+
+class _StockIssueSheetState extends State<_StockIssueSheet> {
+  late OrderStockIssueView _view = widget.view;
+  bool _sending = false;
+  String? _error;
+  Map<int, String> _lineErrors = const <int, String>{};
+
+  Future<void> _confirm() async {
+    if (_sending) return;
+    setState(() {
+      _sending = true;
+      _error = null;
+      _lineErrors = const <int, String>{};
+    });
+    try {
+      await widget.onConfirm();
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _sending = false;
+        _error = error is OrderPortException
+            ? error.message
+            : 'Không xuất kho được.';
+        _lineErrors = rowErrors(error);
+      });
+      // Show the current numbers next to the backend's row messages.
+      final OrderStockIssueView? fresh = await widget.onReload();
+      if (!mounted || fresh == null) return;
+      setState(() => _view = fresh);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_sending,
+      child: AppSheet(
+        title: 'Phiếu xuất kho',
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            StockIssuePreview(view: _view, errors: _lineErrors),
+            if (_error != null) ...<Widget>[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(tone: AppBannerTone.danger, message: _error),
+            ],
+            const SizedBox(height: AppTokens.space12),
+            AppButton(
+              label: 'Xác nhận xuất kho',
+              variant: AppButtonVariant.primary,
+              onPressed: _sending ? null : _confirm,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 /// The Huỷ đơn dialog (Story 5.7). Holds its own text/error/busy state so the

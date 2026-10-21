@@ -19,6 +19,7 @@ import {
   StatusChanged,
 } from '../src/orders/domain/order-events';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -183,10 +184,17 @@ describe('OrdersService', () => {
     $queryRaw: queryRaw,
   } as unknown as PrismaService;
   const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
+  // Stock reads the engine / `revise` make under the order lock — default: nothing issued,
+  // nothing tracked (this spec is not about stock; `order-stock-issue.spec.ts` is).
+  const stockVouchers = {
+    findOrderIssueVoucher: jest.fn(),
+    lockTrackedProductsInTx: jest.fn(),
+  };
   const service = new OrdersService(
     prisma,
     eventBus as unknown as EventBus,
     fakeStorage(),
+    stockVouchers as unknown as StockVouchersService,
   );
 
   /** Bắt `AppException` để assert `errorCode`/`fieldErrors`/status. */
@@ -201,6 +209,8 @@ describe('OrdersService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    stockVouchers.findOrderIssueVoucher.mockResolvedValue(null);
+    stockVouchers.lockTrackedProductsInTx.mockResolvedValue(new Set());
     customerRepo.findUnique.mockResolvedValue(KHACH);
     orderRepo.findUnique.mockResolvedValue(DON_BAOGIA);
     // Lần đọc đầu của đường đọc/ghi do người gọi kích hoạt đi qua `findScopedOrThrow`

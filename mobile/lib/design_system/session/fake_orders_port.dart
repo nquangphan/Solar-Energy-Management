@@ -16,7 +16,9 @@ import 'catalog_port.dart';
 import 'customers_port.dart';
 import 'fake_catalog_port.dart';
 import 'fake_customers_port.dart';
+import 'fake_stock_vouchers_port.dart';
 import 'orders_port.dart';
+import 'stock_vouchers_port.dart';
 
 const String _now = '2026-07-16T00:00:00.000Z';
 
@@ -39,6 +41,73 @@ final Uint8List _demoQuotePng = Uint8List.fromList(const <int>[
 ]);
 final Uint8List _demoQuotePdf =
     Uint8List.fromList('%PDF-1.4\n%%EOF\n'.codeUnits);
+
+/// Demo order whose stock is ALREADY issued — its voucher carries no `unitCost`.
+const String kFakeOrderIssued = 'ord-demo-4';
+
+/// Demo order whose stock-out the fake refuses (409 INSUFFICIENT_STOCK on `lines.0.qty`).
+const String kFakeOrderShortStock = 'ord-demo-3';
+
+/// Stock-out preview rows, typed as the backend returns them: already summed per
+/// product and in its canonical order (name, then id). Includes the LONGEST
+/// product name. The fake owns no stock rule — "not enough" is a fixed branch on
+/// a fixed order, never a `qty`/`onHand` comparison.
+const List<OrderStockIssueLine> _kDemoIssueLines = <OrderStockIssueLine>[
+  OrderStockIssueLine(
+    productId: 'prod-inverter-hybrid-10k',
+    name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+    sku: 'INV-ASW10K-H',
+    unit: 'bộ',
+    qty: 1,
+    onHand: 5,
+  ),
+  OrderStockIssueLine(
+    productId: 'prod-pin-ae-630',
+    name: 'Tấm pin AE 630W',
+    sku: 'PIN-AE-630',
+    unit: 'tấm',
+    qty: 14,
+    onHand: 40,
+  ),
+];
+const OrderStockIssueLine _kDemoShortLine = OrderStockIssueLine(
+  productId: 'prod-battery-10kwh',
+  name: 'Battery LiFePO4 10kWh',
+  sku: 'BAT-10K',
+  unit: 'bình',
+  qty: 2,
+  onHand: 0,
+);
+const List<String> _kDemoUntrackedItems = <String>['Công lắp đặt'];
+
+const OrderPortException kFakeStockIssueShortError = OrderPortException(
+  'Không đủ tồn — không thể xuất quá số tồn hiện có.',
+  code: 'CONFLICT',
+  fieldErrors: <String, String>{
+    'lines.0.qty': 'Còn 0 bình, không xuất được 2.',
+  },
+);
+
+/// The statuses the backend accepts for a standalone stock issue.
+const List<String> _kDemoIssuableStatuses = <String>[
+  'dachot',
+  'dacoc',
+  'danggiao',
+  'thicong',
+];
+
+/// The backend's refusal of a direct close `dachot → hoan_thanh` before the
+/// stock-out.
+const OrderPortException kFakeCloseBeforeIssueError = OrderPortException(
+  'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
+  code: 'CONFLICT',
+);
+
+/// The backend's refusal of re-opening an order whose stock already left.
+const OrderPortException kFakeReviseAfterIssueError = OrderPortException(
+  'Đơn đã xuất kho — không mở lại để sửa được.',
+  code: 'CONFLICT',
+);
 
 /// Digits of a string, minus leading zeros — mirrors the backend's phone matching.
 String _digits(String raw) =>
@@ -112,6 +181,81 @@ class FakeOrdersPort implements OrdersPort {
   final List<Customer> customers;
   final Map<String, Order> _orders = <String, Order>{};
   int _seq = 0;
+
+  /// One order, one stock-out — the fake's record of what is issued.
+  final Map<String, StockVoucherDetail> _issuedVouchers =
+      <String, StockVoucherDetail>{
+    for (final StockVoucherDetail v in kDemoStockVouchers)
+      if (v.orderId != null) v.orderId!: v,
+  };
+
+  /// Demo twin of `GET /orders/:id/stock-issue`.
+  @override
+  Future<OrderStockIssueView> getStockIssue(String orderId) async {
+    final StockVoucherDetail? voucher = _issuedVouchers[orderId];
+    if (voucher != null) {
+      return OrderStockIssueView(
+        issued: true,
+        voucher: voucher,
+        canIssue: false,
+        lines: const <OrderStockIssueLine>[],
+        untrackedItems: const <String>[],
+      );
+    }
+    // The demo "server" answers `canIssue` from the status it knows; ids it
+    // never created (test fixtures) keep the issuable demo.
+    final String? status = _orders[orderId]?.status;
+    return OrderStockIssueView(
+      issued: false,
+      canIssue: status == null || _kDemoIssuableStatuses.contains(status),
+      lines: <OrderStockIssueLine>[
+        if (orderId == kFakeOrderShortStock) _kDemoShortLine,
+        ..._kDemoIssueLines,
+      ],
+      untrackedItems: List<String>.of(_kDemoUntrackedItems),
+    );
+  }
+
+  /// Demo twin of `POST /orders/:id/stock-issue`: issued once, the
+  /// same voucher on every later call; a fixed 409 on [kFakeOrderShortStock].
+  @override
+  Future<OrderStockIssueResult> issueStock(String orderId) async {
+    final StockVoucherDetail? existing = _issuedVouchers[orderId];
+    if (existing != null) return OrderStockIssueResult(voucher: existing);
+    if (orderId == kFakeOrderShortStock) throw kFakeStockIssueShortError;
+    return OrderStockIssueResult(voucher: _recordIssue(orderId));
+  }
+
+  /// The order's one stock-out, as the backend writes it (standalone or
+  /// "Đã giao").
+  StockVoucherDetail _recordIssue(String orderId) {
+    final StockVoucherDetail voucher = StockVoucherDetail(
+      id: 'pk-xuat-$orderId',
+      ma: 'PK-X-0097',
+      type: 'xuat',
+      orderId: orderId,
+      createdAt: _now,
+      nguoiTao: const StockVoucherCreator(
+        id: 'acc-kho-binh',
+        displayName: 'Kho/Giao hàng (Bình)',
+      ),
+      soDong: _kDemoIssueLines.length,
+      tongSoLuong: 15,
+      note: null,
+      lines: <StockVoucherLine>[
+        for (final OrderStockIssueLine l in _kDemoIssueLines)
+          StockVoucherLine(
+            productId: l.productId,
+            ten: l.name,
+            sku: l.sku,
+            donVi: l.unit,
+            qty: l.qty,
+          ),
+      ],
+    );
+    _issuedVouchers[orderId] = voucher;
+    return voucher;
+  }
 
   /// `GET /orders` stand-in (Story 5.3). Plays the BACKEND's role for the demo:
   /// it filters and pages, and it reports [OrderPage.total] over the whole
@@ -355,6 +499,13 @@ class FakeOrdersPort implements OrdersPort {
     bool vanChuyen,
   ) {
     return <OrderNextStep>[
+      // Thiết bị is always on in the demo ⇒ a confirmed order may close directly.
+      if (status == 'dachot')
+        const OrderNextStep(
+          event: 'hoan_thanh',
+          to: 'hoanthanh',
+          requires: 'payments.record',
+        ),
       if (status == 'dacoc' && thiCong)
         const OrderNextStep(
           event: 'bat_dau_thi_cong',
@@ -432,6 +583,13 @@ class FakeOrdersPort implements OrdersPort {
         code: 'CONFLICT',
       );
     }
+    // Every demo order carries stock-tracked lines ⇒ the direct close is
+    // refused until it is issued, exactly as the backend does.
+    if (order.status == 'dachot' &&
+        event == 'hoan_thanh' &&
+        !_issuedVouchers.containsKey(orderId)) {
+      throw kFakeCloseBeforeIssueError;
+    }
     if (anh.length > _kDemoSoAnhToiDa) {
       throw const OrderPortException(
         'Ảnh đính kèm không hợp lệ.',
@@ -440,6 +598,11 @@ class FakeOrdersPort implements OrdersPort {
           'anh': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần chuyển trạng thái.',
         },
       );
+    }
+    // "Đã giao" issues the stock in the same commit when it was not issued yet.
+    if (event == kEventDelivered && !_issuedVouchers.containsKey(orderId)) {
+      if (orderId == kFakeOrderShortStock) throw kFakeStockIssueShortError;
+      _recordIssue(orderId);
     }
     return StatusChangeResult(
       status: buoc.first.to,
@@ -899,6 +1062,10 @@ class FakeOrdersPort implements OrdersPort {
     final Order? order = _orders[orderId];
     if (order == null) {
       throw OrderPortException('Không tìm thấy đơn hàng: $orderId');
+    }
+    // An issued order cannot be re-opened — the backend's 409, mirrored.
+    if (order.status == 'dachot' && _issuedVouchers.containsKey(orderId)) {
+      throw kFakeReviseAfterIssueError;
     }
     // Already open = idempotent no-op, mirroring the backend retry path. The
     // fake does NOT simulate the new version / line copy — the client never

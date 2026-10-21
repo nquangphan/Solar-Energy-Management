@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -81,6 +82,7 @@ moTa('Ràng buộc tầng DB của hồ sơ xuất báo giá (Postgres THẬT)',
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
 
     const facebook = await prisma.customerSource.findUnique({

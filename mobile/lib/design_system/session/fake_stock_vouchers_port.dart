@@ -72,6 +72,27 @@ const List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
       ),
     ],
   ),
+  // Order-bound stock-out — `nguoiTao` is the person who CONFIRMED it.
+  StockVoucherDetail(
+    id: 'pk-x-0095',
+    ma: 'PK-X-0095',
+    type: 'xuat',
+    orderId: 'ord-demo-4',
+    createdAt: '2026-07-04T02:30:00.000Z',
+    nguoiTao: _kKho,
+    soDong: 1,
+    tongSoLuong: 1,
+    note: null,
+    lines: <StockVoucherLine>[
+      StockVoucherLine(
+        productId: 'prod-inverter-hybrid-10k',
+        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        sku: 'INV-ASW10K-H',
+        donVi: 'bộ',
+        qty: 1,
+      ),
+    ],
+  ),
   StockVoucherDetail(
     id: 'pk-n-0118',
     ma: 'PK-N-0118',
@@ -113,6 +134,7 @@ StockVoucherSummary _tomTat(StockVoucherDetail d) => StockVoucherSummary(
       id: d.id,
       ma: d.ma,
       type: d.type,
+      orderId: d.orderId,
       createdAt: d.createdAt,
       nguoiTao: d.nguoiTao,
       soDong: d.soDong,

@@ -1,0 +1,27 @@
+/* hand-authored — stock-out preview block (shared by the status-change
+   and order-detail screens). Composition-level only: the table and banner are
+   shipped components. Token vars for every colour; flat borders (Viền nét). */
+
+.si-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* The backend's refusal for ONE row, placed right under that row. */
+.si-row-error {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.si-muted {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* "Đã xuất kho · PK-X-0096" / "Chưa xuất kho." — one quiet line. */
+.si-status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}

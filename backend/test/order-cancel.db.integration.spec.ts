@@ -6,6 +6,7 @@ import type { AppException } from '../src/common/errors/app.exception';
 import type { DomainEvent } from '../src/events/domain-event';
 import type { EventBus } from '../src/events/event-bus';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -108,6 +109,7 @@ moTa('Huỷ đơn kèm lý do trên Postgres THẬT', () => {
       prisma as unknown as PrismaService,
       eventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
 
     const facebook = await prisma.customerSource.findUnique({

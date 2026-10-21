@@ -12,6 +12,11 @@ import {
   tinhGiaVonBinhQuan,
   type LoaiPhieu,
 } from './domain/gia-von';
+import { stockIssueLines } from './domain/stock-issue-lines';
+import {
+  StockIssued,
+  type StockIssuedLineSnapshot,
+} from './domain/stock-issued-event';
 import {
   StockVoucherCreated,
   type StockVoucherLineSnapshot,
@@ -21,6 +26,8 @@ export interface StockVoucherSummary {
   id: string;
   ma: string;
   type: LoaiPhieu;
+  /** Present only on an order-bound stock-out — a free-standing voucher omits the key. */
+  orderId?: string;
   createdAt: Date;
   nguoiTao: { id: string; displayName: string };
   soDong: number;
@@ -48,6 +55,52 @@ export interface TaoPhieuInput {
   lines: { productId: string; qty: number; unitCost?: number }[];
 }
 
+export interface IssueForOrderInput {
+  orderId: string;
+  orderVersionId: string;
+  /** EVERY line of the current version that has a `productId` — `tracksStock` is filtered here. */
+  orderLines: readonly { productId: string; qty: number }[];
+  actorAccountId: string;
+  occurredAt: Date;
+}
+
+export interface IssueForOrderResult {
+  /** `null` ⇒ the order has no stock-tracked line: nothing was written. */
+  voucher: StockVoucherDetail | null;
+  /** `productId → costPrice` (read under the lock) of exactly the products issued. */
+  costByProduct: ReadonlyMap<string, number>;
+  /** Not published — the caller publishes AFTER commit. */
+  event: StockIssued | null;
+}
+
+/** One preview row of an order-bound stock-out — carries NO cost. */
+export interface StockIssuePreviewLine {
+  productId: string;
+  name: string;
+  sku: string;
+  unit: string;
+  qty: number;
+  onHand: number;
+}
+
+const INSUFFICIENT_STOCK_MESSAGE =
+  'Không đủ tồn — không thể xuất quá số tồn hiện có.';
+
+/** One line issued beyond on-hand — shared by free-standing and order-bound stock-outs. */
+function insufficientStockError(
+  field: string,
+  qty: number,
+  onHand: number,
+  unit: string,
+): FieldErrorDto | null {
+  if (qty <= onHand) return null;
+  return {
+    field,
+    code: INSUFFICIENT_STOCK,
+    message: `Còn ${onHand} ${unit}, không xuất được ${qty}.`,
+  };
+}
+
 /** Trần danh sách phiếu — Phase 1 không phân trang (~20 user nội bộ, khối lượng thấp). */
 const SO_PHIEU_TOI_DA = 100;
 
@@ -68,6 +121,7 @@ function tomTat(
     id: string;
     seq: number;
     type: string;
+    orderId?: string | null;
     createdAt: Date;
     createdBy: { id: string; displayName: string };
   },
@@ -78,6 +132,7 @@ function tomTat(
     id: phieu.id,
     ma: maPhieu(type, phieu.seq),
     type,
+    ...(phieu.orderId != null && { orderId: phieu.orderId }),
     createdAt: phieu.createdAt,
     nguoiTao: phieu.createdBy,
     soDong: lines.length,
@@ -106,6 +161,10 @@ function chiTiet(phieu: PhieuChiTietRow): StockVoucherDetail {
  * HỢP ĐỒNG KHOÁ (mọi đường ghi tồn sau này — xuất gắn đơn, giữ chỗ, nhập trả — PHẢI lấy CÙNG
  * khoá, CÙNG thứ tự; khoá một phía là vô nghĩa): lệnh ĐẦU TIÊN của transaction là
  * `SELECT id FROM products WHERE id = ANY(…) ORDER BY id FOR UPDATE`.
+ *  - ORDER-BOUND paths (stock issue, later reservations): the `orders` row is locked FIRST
+ *    (first op of the tx `OrdersService` opens), then `products`. Free-standing vouchers lock
+ *    only `products`, order transitions only `orders` ⇒ system-wide order
+ *    `orders → products`, no cycle.
  *  - Khoá `products` chứ không `stock_items`: dòng tồn sinh lười, `FOR UPDATE` trên tập rỗng
  *    không khoá gì ⇒ hai phiếu nhập đầu tiên cùng sản phẩm cùng `upsert`, một bên vỡ unique.
  *  - MỘT câu, `ORDER BY id`: hai phiếu chéo sản phẩm (A,B)/(B,A) khoá cùng thứ tự ⇒ không
@@ -159,20 +218,23 @@ export class StockVouchersService {
               message: `${p.name} không theo dõi tồn hoặc đã ngừng bán — không nhập kho được.`,
             });
           }
-          if (type === 'xuat' && dong.qty > onHand) {
-            loi.push({
-              field: `lines.${i}.qty`,
-              code: INSUFFICIENT_STOCK,
-              message: `Còn ${onHand} ${p.unit}, không xuất được ${dong.qty}.`,
-            });
-          }
+          const shortage =
+            type === 'xuat'
+              ? insufficientStockError(
+                  `lines.${i}.qty`,
+                  dong.qty,
+                  onHand,
+                  p.unit,
+                )
+              : null;
+          if (shortage) loi.push(shortage);
         });
         if (loi.length > 0) {
           throw new AppException(
             ErrorCode.CONFLICT,
             409,
             type === 'xuat'
-              ? 'Không đủ tồn — không thể xuất quá số tồn hiện có.'
+              ? INSUFFICIENT_STOCK_MESSAGE
               : 'Có sản phẩm không nhập kho được.',
             loi,
           );
@@ -253,6 +315,240 @@ export class StockVouchersService {
       ),
     );
     return ketQua;
+  }
+
+  /**
+   * Order-bound stock-out — runs INSIDE the CALLER's transaction (`OrdersService`): never opens
+   * a tx, never publishes, never touches `this.prisma`, never writes order tables.
+   *
+   * Why the tx belongs to `orders/` (unlike the `chuyenTrangThaiTuDong` pattern, where
+   * inventory would commit stock and then ask for a status change): a stock issue writes
+   * THREE aggregates that must be atomic — stock (here), the order lines' cost snapshot (only
+   * `orders/` may write orders) and, at "Đã giao", `Order.status` (only `applyTransition`).
+   * Committing stock first would leave a "stock deducted, order not delivered" gap, and the
+   * cost snapshot would no longer be guaranteed equal to the voucher line's `unitCost`.
+   *
+   * ASSUMES NOT YET ISSUED: the caller checks `findOrderIssueVoucher` after locking the order
+   * row. The `(orderId, orderVersionId)` unique index is the last net — hitting it is a
+   * programming error, not a business branch.
+   *
+   * `reserved` is released by exactly what is CURRENTLY HELD for this order (ledger `SUM` per
+   * order + product), not by the issued `qty`: an order that was never reserved would push
+   * `reserved` negative.
+   */
+  async issueForOrderInTx(
+    tx: Prisma.TransactionClient,
+    input: IssueForOrderInput,
+  ): Promise<IssueForOrderResult> {
+    const nothing: IssueForOrderResult = {
+      voucher: null,
+      costByProduct: new Map(),
+      event: null,
+    };
+    const ids = [...new Set(input.orderLines.map((l) => l.productId))];
+    if (ids.length === 0) return nothing;
+
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM products WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
+    if (locked.length !== ids.length) {
+      const found = new Set(locked.map((r) => r.id));
+      throw new AppException(
+        ErrorCode.NOT_FOUND,
+        404,
+        `Không tìm thấy sản phẩm: ${ids.filter((id) => !found.has(id)).join(', ')}`,
+      );
+    }
+
+    const products = await tx.product.findMany({
+      where: { id: { in: ids } },
+      include: { stockItem: true },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const lines = stockIssueLines(
+      input.orderLines,
+      new Map(
+        products.map((p) => [
+          p.id,
+          { name: p.name, tracksStock: p.tracksStock },
+        ]),
+      ),
+    );
+    if (lines.length === 0) return nothing;
+
+    const errors = lines.flatMap((line, i) => {
+      const p = byId.get(line.productId)!;
+      const shortage = insufficientStockError(
+        `lines.${i}.qty`,
+        line.qty,
+        p.stockItem?.onHand ?? 0,
+        p.unit,
+      );
+      return shortage ? [shortage] : [];
+    });
+    if (errors.length > 0) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        INSUFFICIENT_STOCK_MESSAGE,
+        errors,
+      );
+    }
+
+    const snapshots: StockIssuedLineSnapshot[] = [];
+    for (const line of lines) {
+      const p = byId.get(line.productId)!;
+      const onHandBefore = p.stockItem?.onHand ?? 0;
+      const onHandAfter = onHandBefore - line.qty;
+      const stockItem = await tx.stockItem.upsert({
+        where: { productId: p.id },
+        create: { productId: p.id, onHand: onHandAfter },
+        update: { onHand: onHandAfter },
+      });
+      const held = await tx.stockMovement.aggregate({
+        where: { orderId: input.orderId, stockItemId: stockItem.id },
+        _sum: { qty: true },
+      });
+      const reservedReleased = Math.max(held._sum.qty ?? 0, 0);
+      if (reservedReleased > 0) {
+        await tx.stockMovement.create({
+          data: {
+            stockItemId: stockItem.id,
+            orderId: input.orderId,
+            orderVersionId: input.orderVersionId,
+            qty: -reservedReleased,
+            type: 'xuat',
+          },
+        });
+      }
+      snapshots.push({
+        productId: p.id,
+        qty: line.qty,
+        // A stock-out does NOT move the weighted-average cost; the line cost is a snapshot.
+        unitCost: p.costPrice,
+        onHandBefore,
+        onHandAfter,
+        reservedReleased,
+      });
+    }
+
+    const voucher = chiTiet(
+      await tx.stockVoucher.create({
+        data: {
+          type: 'xuat',
+          note: null,
+          orderId: input.orderId,
+          orderVersionId: input.orderVersionId,
+          createdByAccountId: input.actorAccountId,
+          lines: {
+            create: snapshots.map((s) => ({
+              productId: s.productId,
+              qty: s.qty,
+              unitCost: s.unitCost,
+            })),
+          },
+        },
+        include: CHI_TIET_INCLUDE,
+      }),
+    );
+
+    return {
+      voucher,
+      costByProduct: new Map(snapshots.map((s) => [s.productId, s.unitCost])),
+      event: new StockIssued(
+        input.actorAccountId,
+        {
+          id: voucher.id,
+          code: voucher.ma,
+          orderId: input.orderId,
+          orderVersionId: input.orderVersionId,
+          lines: snapshots,
+        },
+        input.occurredAt,
+      ),
+    };
+  }
+
+  /**
+   * Ids among `productIds` that track stock — runs INSIDE the caller's tx AFTER the order row
+   * lock, and locks `products` with the SAME statement as every stock write (`ORDER BY id
+   * FOR UPDATE`) before reading `tracksStock`. Read-only otherwise.
+   */
+  async lockTrackedProductsInTx(
+    tx: Prisma.TransactionClient,
+    productIds: readonly string[],
+  ): Promise<ReadonlySet<string>> {
+    const ids = [...new Set(productIds)];
+    if (ids.length === 0) return new Set();
+    await tx.$queryRaw`
+      SELECT id FROM products WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
+    const tracked = await tx.product.findMany({
+      where: { id: { in: ids }, tracksStock: true },
+      select: { id: true },
+    });
+    return new Set(tracked.map((p) => p.id));
+  }
+
+  /**
+   * The existing stock-out of (order, current version) — `client` is the caller's `tx` (read
+   * AFTER the order lock) or the root client for a plain read.
+   */
+  async findOrderIssueVoucher(
+    client: Prisma.TransactionClient,
+    orderId: string,
+    orderVersionId: string,
+  ): Promise<StockVoucherDetail | null> {
+    const voucher = await client.stockVoucher.findUnique({
+      where: { orderId_orderVersionId: { orderId, orderVersionId } },
+      include: CHI_TIET_INCLUDE,
+    });
+    return voucher === null ? null : chiTiet(voucher);
+  }
+
+  /**
+   * Preview of an order-bound stock-out — PLAIN READ, no lock: on-hand is shown for whoever
+   * counts the goods; enough/short is decided by the write path under the lock. `tracked` =
+   * the products that will be on the voucher.
+   */
+  async previewOrderIssue(
+    orderLines: readonly { productId: string; qty: number }[],
+  ): Promise<{
+    lines: StockIssuePreviewLine[];
+    tracked: ReadonlySet<string>;
+  }> {
+    const ids = [...new Set(orderLines.map((l) => l.productId))];
+    if (ids.length === 0) return { lines: [], tracked: new Set() };
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        unit: true,
+        tracksStock: true,
+        stockItem: { select: { onHand: true } },
+      },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const lines = stockIssueLines(
+      orderLines,
+      new Map(
+        products.map((p) => [
+          p.id,
+          { name: p.name, tracksStock: p.tracksStock },
+        ]),
+      ),
+    ).map((line) => {
+      const p = byId.get(line.productId)!;
+      return {
+        productId: line.productId,
+        name: line.name,
+        sku: p.sku,
+        unit: p.unit,
+        qty: line.qty,
+        onHand: p.stockItem?.onHand ?? 0,
+      };
+    });
+    return { lines, tracked: new Set(lines.map((l) => l.productId)) };
   }
 
   async lietKePhieu(query: {

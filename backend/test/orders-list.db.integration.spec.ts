@@ -8,6 +8,7 @@ import {
 } from '../src/orders/domain/order-status';
 import type { ListOrdersQueryDto } from '../src/orders/dto/list-orders-query.dto';
 import { OrdersService } from '../src/orders/orders.service';
+import type { StockVouchersService } from '../src/inventory/stock-vouchers.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import { fakeStorage } from './util/fake-storage';
 
@@ -102,6 +103,7 @@ moTa('Danh sách đơn: phạm vi theo quyền trên Postgres THẬT', () => {
       prisma as unknown as PrismaService,
       { publish: async () => {}, subscribe: () => {} } as unknown as EventBus,
       fakeStorage(),
+      {} as unknown as StockVouchersService,
     );
 
     const facebook = await prisma.customerSource.findUnique({

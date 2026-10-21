@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import type { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
 import type { EventBus } from '../src/events/event-bus';
@@ -420,6 +421,348 @@ describe('StockVouchersService', () => {
 
     expect(tx.stockVoucher.create).toHaveBeenCalledTimes(1);
     expect(eventBus.publish).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Order-bound stock-out primitive — runs INSIDE the caller's tx. Guards: the lock is the first
+ * op on `tx`; it never opens/commits a tx, never publishes, never moves the average cost; short
+ * stock ⇒ 0 writes; `reserved` is released by what is HELD, not by the issued `qty`.
+ */
+describe('StockVouchersService.issueForOrderInTx', () => {
+  const ACTOR = 'acc-warehouse';
+  const P1 = '11111111-1111-4111-8111-111111111111';
+  const P2 = '22222222-2222-4222-8222-222222222222';
+  const P3 = '33333333-3333-4333-8333-333333333333';
+  const AT = new Date('2026-10-21T04:00:00Z');
+
+  const calls: string[] = [];
+  function recorded<T>(name: string, result: T): jest.Mock {
+    return jest.fn(() => {
+      calls.push(name);
+      return Promise.resolve(result);
+    });
+  }
+
+  function product(
+    id: string,
+    name: string,
+    o: {
+      onHand?: number | null;
+      costPrice?: number;
+      tracksStock?: boolean;
+    } = {},
+  ) {
+    return {
+      id,
+      name,
+      sku: `SKU-${id.slice(0, 2)}`,
+      unit: 'tấm',
+      costPrice: o.costPrice ?? 2_000_000,
+      tracksStock: o.tracksStock ?? true,
+      stockItem:
+        o.onHand === null
+          ? null
+          : { id: `s-${id}`, productId: id, onHand: o.onHand ?? 10 },
+    };
+  }
+
+  let tx: {
+    $queryRaw: jest.Mock;
+    $transaction: jest.Mock;
+    product: { findMany: jest.Mock; update: jest.Mock };
+    stockItem: { upsert: jest.Mock };
+    stockMovement: { aggregate: jest.Mock; create: jest.Mock };
+    stockVoucher: { create: jest.Mock };
+  };
+  const prisma = { $transaction: jest.fn() };
+  const eventBus = { publish: jest.fn(), subscribe: jest.fn() };
+  const service = new StockVouchersService(
+    prisma as unknown as PrismaService,
+    eventBus as unknown as EventBus,
+  );
+
+  function given(products: ReturnType<typeof product>[], held = 0) {
+    tx.$queryRaw = recorded(
+      '$queryRaw',
+      products.map((p) => ({ id: p.id })),
+    );
+    tx.product.findMany = recorded('product.findMany', products);
+    tx.stockItem.upsert = jest.fn((args: { where: { productId: string } }) => {
+      calls.push('stockItem.upsert');
+      return Promise.resolve({ id: `s-${args.where.productId}` });
+    });
+    tx.stockMovement.aggregate = recorded('stockMovement.aggregate', {
+      _sum: { qty: held },
+    });
+    tx.stockVoucher.create = jest.fn(
+      (args: {
+        data: {
+          orderId: string;
+          lines: {
+            create: { productId: string; qty: number; unitCost: number }[];
+          };
+        };
+      }) => {
+        calls.push('stockVoucher.create');
+        return Promise.resolve({
+          id: 'v-9',
+          seq: 96,
+          type: 'xuat',
+          note: null,
+          orderId: args.data.orderId,
+          createdAt: AT,
+          createdBy: { id: ACTOR, displayName: 'Thủ kho' },
+          lines: args.data.lines.create.map((l, i) => ({
+            id: `l-${i}`,
+            ...l,
+            product: { name: 'SP', sku: 'SKU', unit: 'tấm' },
+          })),
+        });
+      },
+    );
+  }
+
+  function issue(orderLines: { productId: string; qty: number }[]) {
+    return service.issueForOrderInTx(
+      tx as unknown as Prisma.TransactionClient,
+      {
+        orderId: 'ord-1',
+        orderVersionId: 'ver-1',
+        orderLines,
+        actorAccountId: ACTOR,
+        occurredAt: AT,
+      },
+    );
+  }
+
+  beforeEach(() => {
+    calls.length = 0;
+    jest.clearAllMocks();
+    tx = {
+      $queryRaw: recorded('$queryRaw', []),
+      $transaction: jest.fn(),
+      product: {
+        findMany: recorded('product.findMany', []),
+        update: recorded('product.update', {}),
+      },
+      stockItem: { upsert: recorded('stockItem.upsert', {}) },
+      stockMovement: {
+        aggregate: recorded('stockMovement.aggregate', { _sum: { qty: null } }),
+        create: recorded('stockMovement.create', {}),
+      },
+      stockVoucher: { create: recorded('stockVoucher.create', {}) },
+    };
+  });
+
+  it('locks products FOR UPDATE as the FIRST op on tx; never opens a tx, never publishes, never moves the cost', async () => {
+    given([product(P2, 'Tấm pin'), product(P1, 'Inverter')]);
+
+    await issue([
+      { productId: P2, qty: 4 },
+      { productId: P1, qty: 1 },
+      { productId: P2, qty: 2 },
+    ]);
+
+    expect(calls[0]).toBe('$queryRaw');
+    const [sql, ids] = tx.$queryRaw.mock.calls[0] as [
+      TemplateStringsArray,
+      string[],
+    ];
+    expect(sql.join('?')).toMatch(
+      /SELECT id FROM products WHERE id = ANY\(\?\) ORDER BY id FOR UPDATE/,
+    );
+    expect([...ids].sort()).toEqual([P1, P2]);
+    expect(tx.$transaction).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(eventBus.publish).not.toHaveBeenCalled();
+    expect(tx.product.update).not.toHaveBeenCalled();
+  });
+
+  it('merges same-product lines, deducts onHand, order-bound xuat voucher, unitCost = costPrice read under the lock', async () => {
+    given([
+      product(P1, 'Tấm pin', { onHand: 10, costPrice: 2_088_000 }),
+      product(P3, 'Công lắp', { tracksStock: false, onHand: null }),
+    ]);
+
+    const result = await issue([
+      { productId: P1, qty: 4 },
+      { productId: P3, qty: 1 },
+      { productId: P1, qty: 2 },
+    ]);
+
+    expect(tx.stockItem.upsert).toHaveBeenCalledTimes(1);
+    expect(tx.stockItem.upsert).toHaveBeenCalledWith({
+      where: { productId: P1 },
+      create: { productId: P1, onHand: 4 },
+      update: { onHand: 4 },
+    });
+    expect(tx.stockVoucher.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: 'xuat',
+          orderId: 'ord-1',
+          orderVersionId: 'ver-1',
+          createdByAccountId: ACTOR,
+          lines: { create: [{ productId: P1, qty: 6, unitCost: 2_088_000 }] },
+        }) as unknown,
+      }),
+    );
+    expect([...result.costByProduct]).toEqual([[P1, 2_088_000]]);
+    expect(result.voucher?.orderId).toBe('ord-1');
+    expect(result.event?.type).toBe('StockIssued');
+    expect(result.event?.actorAccountId).toBe(ACTOR);
+    expect(result.event?.occurredAt).toBe(AT);
+    expect(result.event?.target).toEqual({ type: 'StockVoucher', id: 'v-9' });
+    expect(result.event?.after).toEqual({
+      id: 'v-9',
+      code: 'PK-X-0096',
+      orderId: 'ord-1',
+      orderVersionId: 'ver-1',
+      lines: [
+        {
+          productId: P1,
+          qty: 6,
+          unitCost: 2_088_000,
+          onHandBefore: 10,
+          onHandAfter: 4,
+          reservedReleased: 0,
+        },
+      ],
+    });
+  });
+
+  it('short stock ⇒ 409 INSUFFICIENT_STOCK on `lines.{i}.qty` in canonical order, NO writes', async () => {
+    given([
+      product(P1, 'B Tấm pin', { onHand: 1 }),
+      product(P2, 'A Inverter', { onHand: 5 }),
+    ]);
+
+    const err = await issue([
+      { productId: P1, qty: 3 },
+      { productId: P2, qty: 2 },
+    ]).catch((e: AppException) => e);
+
+    expect((err as AppException).getStatus()).toBe(409);
+    expect((err as AppException).message).toBe(
+      'Không đủ tồn — không thể xuất quá số tồn hiện có.',
+    );
+    expect((err as AppException).fieldErrors).toEqual([
+      {
+        field: 'lines.1.qty',
+        code: 'INSUFFICIENT_STOCK',
+        message: 'Còn 1 tấm, không xuất được 3.',
+      },
+    ]);
+    expect(tx.stockItem.upsert).not.toHaveBeenCalled();
+    expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+  });
+
+  it('no stock-tracked line ⇒ voucher null, empty map, event null, NO writes', async () => {
+    given([product(P3, 'Công lắp', { tracksStock: false })]);
+
+    const result = await issue([{ productId: P3, qty: 1 }]);
+
+    expect(result.voucher).toBeNull();
+    expect(result.event).toBeNull();
+    expect(result.costByProduct.size).toBe(0);
+    expect(tx.stockItem.upsert).not.toHaveBeenCalled();
+    expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+  });
+
+  it('no product line ⇒ no lock, no read, no write', async () => {
+    const result = await issue([]);
+
+    expect(result.voucher).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it('unknown product ⇒ 404', async () => {
+    tx.$queryRaw = recorded('$queryRaw', [{ id: P1 }]);
+
+    const err = await issue([
+      { productId: P1, qty: 1 },
+      { productId: P2, qty: 1 },
+    ]).catch((e: AppException) => e);
+
+    expect((err as AppException).getStatus()).toBe(404);
+    expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+  });
+
+  it('releases reserved = what is HELD for the order (+5 ⇒ one −5 xuat movement), not the issued qty', async () => {
+    given([product(P1, 'Tấm pin', { onHand: 10 })], 5);
+
+    const result = await issue([{ productId: P1, qty: 8 }]);
+
+    expect(tx.stockMovement.aggregate).toHaveBeenCalledWith({
+      where: { orderId: 'ord-1', stockItemId: `s-${P1}` },
+      _sum: { qty: true },
+    });
+    expect(tx.stockMovement.create).toHaveBeenCalledTimes(1);
+    expect(tx.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        stockItemId: `s-${P1}`,
+        orderId: 'ord-1',
+        orderVersionId: 'ver-1',
+        qty: -5,
+        type: 'xuat',
+      },
+    });
+    expect(result.event?.after.lines[0].reservedReleased).toBe(5);
+  });
+
+  it.each([0, -3])(
+    'held = %d ⇒ NO movement (never pushes reserved negative)',
+    async (held) => {
+      given([product(P1, 'Tấm pin', { onHand: 10 })], held);
+
+      await issue([{ productId: P1, qty: 2 }]);
+
+      expect(tx.stockMovement.create).not.toHaveBeenCalled();
+    },
+  );
+
+  describe('lockTrackedProductsInTx', () => {
+    function tracked(ids: string[]) {
+      return service.lockTrackedProductsInTx(
+        tx as unknown as Prisma.TransactionClient,
+        ids,
+      );
+    }
+
+    it('locks products (same statement, de-duplicated ids) as the FIRST op, THEN reads tracksStock; writes nothing', async () => {
+      tx.$queryRaw = recorded('$queryRaw', []);
+      tx.product.findMany = recorded('product.findMany', [{ id: P1 }]);
+
+      const result = await tracked([P2, P1, P2]);
+
+      expect(calls).toEqual(['$queryRaw', 'product.findMany']);
+      const [strings, ids] = tx.$queryRaw.mock.calls[0] as [
+        TemplateStringsArray,
+        string[],
+      ];
+      expect(strings.join('?').replace(/\s+/g, ' ').trim()).toBe(
+        'SELECT id FROM products WHERE id = ANY(?) ORDER BY id FOR UPDATE',
+      );
+      expect(ids).toEqual([P2, P1]);
+      expect(tx.product.findMany).toHaveBeenCalledWith({
+        where: { id: { in: [P2, P1] }, tracksStock: true },
+        select: { id: true },
+      });
+      expect([...result]).toEqual([P1]);
+      expect(tx.$transaction).not.toHaveBeenCalled();
+      expect(tx.product.update).not.toHaveBeenCalled();
+      expect(tx.stockItem.upsert).not.toHaveBeenCalled();
+      expect(tx.stockVoucher.create).not.toHaveBeenCalled();
+    });
+
+    it('no product id ⇒ empty set, no query at all', async () => {
+      const result = await tracked([]);
+
+      expect(result.size).toBe(0);
+      expect(calls).toEqual([]);
+    });
   });
 });
 

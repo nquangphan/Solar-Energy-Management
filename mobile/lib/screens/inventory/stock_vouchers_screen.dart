@@ -10,6 +10,9 @@
 //
 // `unitCost` is null when the caller lacks `costs.view`: no column, no "0".
 //
+// An order-bound stock-out (`orderId` present) is read-only here: it
+// is created from the order, and its author is the person who CONFIRMED it.
+//
 // LABELS are byte-identical with the web twin (UX-DR-27).
 
 import 'package:flutter/widgets.dart';
@@ -52,8 +55,10 @@ String _hai(int n) => n.toString().padLeft(2, '0');
 String _soLuongCoDau(String type, int qty) =>
     '${type == 'nhap' ? '+' : '−'}$qty';
 
-String _moTaLoai(String type) =>
-    type == 'nhap' ? 'Nhập kho' : 'Xuất kho · không gắn đơn';
+String _moTaLoai(String type, {required bool orderBound}) {
+  if (type == 'nhap') return 'Nhập kho';
+  return orderBound ? 'Xuất kho · gắn đơn' : 'Xuất kho · không gắn đơn';
+}
 
 /// Keep digits only — quantities and costs are whole numbers; the backend validates ranges.
 /// No digit ⇒ null (blank is NOT 0: a blank cost must reach the backend as absent).
@@ -261,9 +266,13 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             ],
           ),
           const SizedBox(height: AppTokens.space8),
-          _kv('Loại', _moTaLoai(d.type)),
+          _kv('Loại', _moTaLoai(d.type, orderBound: d.orderId != null)),
+          if (d.orderId != null) _kv('Gắn đơn', d.orderId!),
           _kv('Ngày', ngayGio(d.createdAt)),
-          _kv('Người tạo', d.nguoiTao.displayName),
+          _kv(
+            d.orderId != null ? 'Người xác nhận' : 'Người tạo',
+            d.nguoiTao.displayName,
+          ),
           _kv('Ghi chú', d.note ?? '—'),
           const SizedBox(height: AppTokens.space8),
           AppTable(
@@ -287,10 +296,30 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             ],
           ),
           const SizedBox(height: AppTokens.space8),
-          AppBanner(
-            tone: AppBannerTone.info,
-            message: d.type == 'nhap' ? _kNoteNhap : _kNoteXuat,
-          ),
+          if (d.orderId != null)
+            const AppBanner(
+              tone: AppBannerTone.info,
+              child: Text.rich(
+                TextSpan(
+                  style: _strong,
+                  children: <InlineSpan>[
+                    TextSpan(
+                      text: 'Một Đơn — một phiếu xuất.',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    TextSpan(
+                      text:
+                          ' Lúc xác nhận, giá vốn được đóng băng vào từng dòng đơn. Audit ghi người xác nhận. Không sửa/xoá sau khi lưu.',
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            AppBanner(
+              tone: AppBannerTone.info,
+              message: d.type == 'nhap' ? _kNoteNhap : _kNoteXuat,
+            ),
         ],
       ),
     );

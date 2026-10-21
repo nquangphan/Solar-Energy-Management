@@ -11,7 +11,9 @@ import { stripToCode } from './util/strip-to-code';
  * (b) Trong `src/inventory/**`, lệnh ghi Prisma — kể cả SQL thô (`$queryRaw` chạy được `UPDATE`)
  *     và `$transaction` — CHỈ được nằm ở các file trong `FILE_DUOC_GHI`. Mỗi file đó PHẢI ghi
  *     dưới khoá: chứa `FOR UPDATE` và dạng interactive `$transaction(async` (dạng mảng không đọc
- *     được trạng thái sau khoá). Đường đọc `stock-items.service.ts` mãi đọc thuần. Thêm một
+ *     được trạng thái sau khoá). Đường đọc `stock-items.service.ts` mãi đọc thuần — the ONLY,
+ *     NARROW exception: an array-form `$transaction([` WITH `RepeatableRead` (the `onHand` and
+ *     `reserved` reads share one snapshot); every write and the interactive form stay banned. Thêm một
  *     đường ghi tồn mới ⇒ thêm file vào `FILE_DUOC_GHI`, nó tự chịu cùng luật khoá. Lệnh ghi
  *     trong file đó phải đi qua `tx` của transaction: một `this.prisma.<model>.<ghi>(` nằm NGOÀI
  *     khoá, nên khoá có cũng như không.
@@ -88,6 +90,17 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
     const laFileDuocGhi = (f: string): boolean =>
       FILE_DUOC_GHI.some((ten) => f.endsWith(`/${ten}`));
 
+    /**
+     * The read path is excused EXACTLY ONE form: `$transaction([` + `RepeatableRead`. Strip the
+     * array form and rescan ⇒ any write or `$transaction(async` is still caught by `LENH_GHI`.
+     */
+    const TX_MANG = /\$transaction\(\s*\[/g;
+    function viPhamDuongDoc(code: string): boolean {
+      const coTxMang = new RegExp(TX_MANG.source).test(code);
+      if (coTxMang && !/\bRepeatableRead\b/.test(code)) return true;
+      return LENH_GHI.test(code.replace(TX_MANG, ''));
+    }
+
     /** Câu khoá trong template SQL — đọc trên mã RAW. */
     const KHOA_FOR_UPDATE = /\bFOR\s+UPDATE\b/;
     const TX_INTERACTIVE = /\$transaction\(\s*async\b/;
@@ -155,12 +168,47 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
       ).toBe(false);
     });
 
-    it('ngoài file được phép: không lệnh ghi, không transaction', () => {
-      const viPham = fileTs(INVENTORY).filter(
-        (f) =>
-          !laFileDuocGhi(f) &&
-          LENH_GHI.test(stripToCode(readFileSync(f, 'utf8'))),
+    it('read-path detector: excuses the RepeatableRead array tx, catches every other variant', () => {
+      const RR = 'Prisma.TransactionIsolationLevel.RepeatableRead';
+      expect(
+        viPhamDuongDoc(
+          `await this.prisma.$transaction([a(), b()], { isolationLevel: ${RR} });`,
+        ),
+      ).toBe(false);
+      expect(
+        viPhamDuongDoc('await this.prisma.$transaction([a(), b()]);'),
+      ).toBe(true);
+      expect(
+        viPhamDuongDoc(
+          `await this.prisma.$transaction(async (tx) => a(), { isolationLevel: ${RR} });`,
+        ),
+      ).toBe(true);
+      expect(
+        viPhamDuongDoc(
+          `await this.prisma.$transaction([a()], { isolationLevel: ${RR} });\nawait this.prisma.stockItem.update({});`,
+        ),
+      ).toBe(true);
+      expect(viPhamDuongDoc('await this.prisma.product.findMany({});')).toBe(
+        false,
       );
+    });
+
+    it('anti-empty-guard: the real read path has the RepeatableRead array tx', () => {
+      const code = stripToCode(
+        readFileSync(join(INVENTORY, DOC_THUAN), 'utf8'),
+      );
+      expect(new RegExp(TX_MANG.source).test(code)).toBe(true);
+      expect(code).toContain('RepeatableRead');
+    });
+
+    it('outside the allowed files: no write, no transaction (read path: only the RepeatableRead array tx)', () => {
+      const viPham = fileTs(INVENTORY).filter((f) => {
+        if (laFileDuocGhi(f)) return false;
+        const code = stripToCode(readFileSync(f, 'utf8'));
+        return f.endsWith(`/${DOC_THUAN}`)
+          ? viPhamDuongDoc(code)
+          : LENH_GHI.test(code);
+      });
       expect(viPham).toEqual([]);
     });
 

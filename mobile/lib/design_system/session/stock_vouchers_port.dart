@@ -25,6 +25,7 @@ class StockVoucherSummary {
     required this.id,
     required this.ma,
     required this.type,
+    this.orderId,
     required this.createdAt,
     required this.nguoiTao,
     required this.soDong,
@@ -36,8 +37,13 @@ class StockVoucherSummary {
   /// Display code, e.g. `PK-N-0119` — built by the backend.
   final String ma;
 
-  /// `nhap` = stock in · `xuat` = stock out with no order attached.
+  /// `nhap` = stock in · `xuat` = stock out (free-standing, or bound to an
+  /// order via [orderId]).
   final String type;
+
+  /// The order this stock-out belongs to (one order, one stock-out).
+  /// NULL on a free-standing voucher (field absent).
+  final String? orderId;
 
   /// ISO-8601 UTC.
   final String createdAt;
@@ -77,6 +83,7 @@ class StockVoucherDetail extends StockVoucherSummary {
     required super.id,
     required super.ma,
     required super.type,
+    super.orderId,
     required super.createdAt,
     required super.nguoiTao,
     required super.soDong,

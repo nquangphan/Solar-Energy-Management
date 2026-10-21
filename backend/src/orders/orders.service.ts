@@ -11,6 +11,12 @@ import type { CustType } from '../customers/domain/customer-type';
 import { normalizeVnPhone } from '../customers/domain/phone';
 import { EventBus } from '../events/event-bus';
 import { PERM } from '../accounts/domain/permission-registry';
+import type { StockIssued } from '../inventory/domain/stock-issued-event';
+import {
+  StockVouchersService,
+  type StockIssuePreviewLine,
+  type StockVoucherDetail,
+} from '../inventory/stock-vouchers.service';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CHIET_KHAU_CHO_DUYET,
@@ -37,6 +43,7 @@ import {
   type AnhTaiLen,
 } from './domain/attachment-limits';
 import { diffDong, type ThayDoiBanUpdate } from './domain/version-diff';
+import { lineCostSnapshot } from './domain/cost-snapshot';
 import { lineAmount } from './domain/line-amount';
 import {
   soNgayConLai,
@@ -68,6 +75,10 @@ import {
   TRANG_THAI_BAO_GIA,
   TRANG_THAI_CHO_DUYET,
   TRANG_THAI_DA_CHOT,
+  TRANG_THAI_DA_COC,
+  TRANG_THAI_DANG_GIAO,
+  TRANG_THAI_HOAN_THANH,
+  TRANG_THAI_THI_CONG,
   type OrderStatusKey,
 } from './domain/order-status';
 import { scopePresetFor } from './domain/scope-preset';
@@ -114,6 +125,9 @@ import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
  * lấy CÙNG một khoá `SELECT … FOR UPDATE` trên dòng `orders` làm op đầu tiên trong tx của
  * mình. Khoá một phía là vô nghĩa: nếu chỉ transition khoá mà mutator dòng không khoá, một
  * `addLine` vẫn chèn được dòng chưa-snapshot vào giữa lúc `confirm` đọc dòng và lúc commit.
+ * An order-bound stock issue locks `orders` FIRST, then `products` (the `inventory/`
+ * primitive) — the system-wide lock order is `orders → products`; free-standing stock vouchers
+ * lock only `products`.
  */
 
 /**
@@ -348,8 +362,47 @@ const THU_CONG_GATE_THUA = new Error('thu-cong-gate-thua');
  */
 const HUY_GATE_THUA = new Error('huy-gate-thua');
 
+/**
+ * Statuses the STANDALONE stock-issue path accepts: confirmed (equipment-only orders that
+ * close straight `dachot → hoan_thanh` and never pass a delivery step), deposit paid
+ * (materials before installation / customer pick-up), in delivery (deduct when goods are
+ * loaded), installing. The "Đã giao" step issues by itself if not yet issued.
+ */
+const STOCK_ISSUE_STATUSES: readonly string[] = [
+  TRANG_THAI_DA_CHOT,
+  TRANG_THAI_DA_COC,
+  TRANG_THAI_DANG_GIAO,
+  TRANG_THAI_THI_CONG,
+];
+
+/** Refusal of the direct close `dachot → hoan_thanh` while tracked stock is not issued. */
+const STOCK_NOT_ISSUED_MESSAGE =
+  'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.';
+
+/** Refusal of re-opening an order whose stock already left the warehouse. */
+const REVISE_AFTER_ISSUE_MESSAGE =
+  'Đơn đã xuất kho — không mở lại để sửa được.';
+
+/** Preview of an order-bound stock-out — every flag computed by the backend (AD-2). */
+export interface OrderStockIssueView {
+  readonly issued: boolean;
+  readonly voucher?: StockVoucherDetail;
+  readonly canIssue: boolean;
+  readonly lines: readonly StockIssuePreviewLine[];
+  readonly untrackedItems: readonly string[];
+}
+
 /** Số ký tự tối thiểu của lý do huỷ SAU khi trim — chặn `"."` / `"x"` cho có lệ. */
 const DO_DAI_LY_DO_TOI_THIEU = 3;
+
+/** Lines with a product — input of an order-bound stock-out (free-text lines never are). */
+function productLines<T extends { productId: string | null; qty: number }>(
+  lines: readonly T[],
+): { productId: string; qty: number }[] {
+  return lines.flatMap((l) =>
+    l.productId === null ? [] : [{ productId: l.productId, qty: l.qty }],
+  );
+}
 
 /** Ảnh chụp Dòng cho event/audit. */
 function lineSnapshot(line: OrderLineItem): OrderLineSnapshot {
@@ -382,6 +435,10 @@ export class OrdersService {
     // metadata ảnh là MỘT `$transaction`, mà `applyTransition()` là `private` của service
     // này — tách ra buộc phải nới engine thành public, tức phá AD-11.
     private readonly storage: StoragePort,
+    // FOURTH dependency, only for order-bound stock issue: stock + order-line cost + order
+    // status are ONE transaction this service opens; `inventory/` supplies the primitive that
+    // runs inside it.
+    private readonly stockVouchers: StockVouchersService,
   ) {}
 
   /**
@@ -531,6 +588,17 @@ export class OrdersService {
     }
 
     await this.lockOrderRow(tx, order.id);
+    // The direct close `dachot → hoanthanh` skips every delivery/installation step, so
+    // nothing else guarantees the stock-out ⇒ it is gated here, under the order lock, for
+    // every lane (manual and auto). Other edges into `hoanthanh` are deliberately NOT
+    // gated: delivery orders issue at "Đã giao"; installation materials go through the
+    // standalone issue (an ungated `nghiemthu → hoanthanh` is a known, accepted gap).
+    if (
+      order.status === TRANG_THAI_DA_CHOT &&
+      ketQua.to === TRANG_THAI_HOAN_THANH
+    ) {
+      await this.assertNoUnissuedStockInTx(tx, order.id);
+    }
     const { count } = await tx.order.updateMany({
       where: { id: order.id, status: order.status },
       data: { status: ketQua.to },
@@ -697,6 +765,26 @@ export class OrdersService {
       );
     }
 
+    // "Đã giao" with stock-tracked lines NOT yet issued ⇒ this step issues stock ⇒ it also
+    // needs `inventory.manage`. Refused BEFORE paying for the R2 upload; the helper re-checks
+    // under the lock inside the tx.
+    if (
+      input.event === SU_KIEN.xongGiao &&
+      !input.quyen.has(PERM.inventoryManage) &&
+      (await this.hasUnissuedTrackedLines(before))
+    ) {
+      throw this.missingInventoryPermissionError();
+    }
+    // Direct close with stock still in the warehouse ⇒ refused BEFORE the R2 upload; the
+    // engine re-checks under the order lock (`assertNoUnissuedStockInTx`).
+    if (
+      before.status === TRANG_THAI_DA_CHOT &&
+      preCheck.to === TRANG_THAI_HOAN_THANH &&
+      (await this.hasUnissuedTrackedLines(before))
+    ) {
+      throw this.stockNotIssuedError();
+    }
+
     const loiFile = kiemTraAnh(input.anh);
     if (loiFile.length > 0) {
       throw new AppException(
@@ -727,6 +815,7 @@ export class OrdersService {
 
     const occurredAt = new Date();
     let statusChanged: StatusChanged;
+    let stockIssued: StockIssued | null = null;
     try {
       statusChanged = await this.prisma.$transaction(async (tx) => {
         const event = await this.applyTransition(tx, {
@@ -737,6 +826,22 @@ export class OrdersService {
           sentinel: THU_CONG_GATE_THUA,
           occurredAt,
         });
+        // "Đã giao" is the order's stock deduction (unless already issued standalone). The
+        // engine already holds the order lock ⇒ the primitive locks `products` next (order
+        // `orders → products`). Short stock ⇒ throws ⇒ the transition AND photos roll back.
+        if (input.event === SU_KIEN.xongGiao) {
+          // Re-read under the lock the engine holds — like the standalone path, never the
+          // pre-tx snapshot.
+          const locked = await this.findOrThrowIn(tx, input.orderId);
+          stockIssued = (
+            await this.issueStockIfNeeded(tx, locked, {
+              callerAccountId: input.callerAccountId,
+              permissions: input.quyen,
+              occurredAt,
+              requireVoucher: false,
+            })
+          ).event;
+        }
         if (anhDaLen.length > 0) {
           await tx.attachment.createMany({
             data: anhDaLen.map((item) => ({
@@ -770,12 +875,264 @@ export class OrdersService {
     }
 
     await this.eventBus.publish(statusChanged);
+    if (stockIssued !== null) await this.eventBus.publish(stockIssued);
 
     return {
       status: preCheck.to,
       occurredAt,
       soAnhDaLuu: anhDaLen.length,
     };
+  }
+
+  /**
+   * STANDALONE stock issue of an order (FR-26) — `POST /:id/stock-issue`: issues WITHOUT moving
+   * the status (materials for installation; deduct when goods are loaded). The "Đã giao" step
+   * still guarantees the order is issued.
+   *
+   * ORDER: scope → status (409 fast path) → tx [lock order → re-read + re-check status →
+   * already issued? return that voucher → primitive → order-line costs] → publish AFTER commit.
+   *
+   * IDEMPOTENT (NFR-1): an issued order returns its existing voucher, writes nothing, emits
+   * nothing (`created: false`). The order-row lock serialises two concurrent calls — the
+   * second sees the first one's voucher.
+   */
+  async issueStock(
+    callerAccountId: string,
+    permissions: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<{
+    readonly voucher: StockVoucherDetail;
+    readonly created: boolean;
+  }> {
+    const before = await this.findScopedOrThrow(
+      callerAccountId,
+      permissions,
+      orderId,
+    );
+    this.assertStockIssuable(before);
+
+    const occurredAt = new Date();
+    const result = await this.prisma.$transaction(async (tx) => {
+      await this.lockOrderRow(tx, orderId);
+      const order = await this.findOrThrowIn(tx, orderId);
+      this.assertStockIssuable(order);
+      return this.issueStockIfNeeded(tx, order, {
+        callerAccountId,
+        permissions,
+        occurredAt,
+        requireVoucher: true,
+      });
+    });
+
+    if (result.event !== null) await this.eventBus.publish(result.event);
+    // `requireVoucher` ⇒ the helper already threw 409 when there is no voucher.
+    return { voucher: result.voucher!, created: result.event !== null };
+  }
+
+  /**
+   * Stock-out preview of an order — `GET /:id/stock-issue`. PLAIN READ. `canIssue` is computed
+   * here (the client never derives it, AD-2); no cost, no money.
+   */
+  async getStockIssue(
+    callerAccountId: string,
+    permissions: ReadonlySet<string>,
+    orderId: string,
+  ): Promise<OrderStockIssueView> {
+    const order = await this.findScopedOrThrow(
+      callerAccountId,
+      permissions,
+      orderId,
+    );
+    const versionId = this.currentVersionIdOrThrow(order);
+    const voucher = await this.stockVouchers.findOrderIssueVoucher(
+      this.prisma,
+      order.id,
+      versionId,
+    );
+    if (voucher !== null) {
+      return {
+        issued: true,
+        voucher,
+        canIssue: false,
+        lines: [],
+        untrackedItems: [],
+      };
+    }
+
+    const orderLines = await this.prisma.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      select: { name: true, productId: true, qty: true },
+      orderBy: { displayOrder: 'asc' },
+    });
+    const { lines, tracked } = await this.stockVouchers.previewOrderIssue(
+      productLines(orderLines),
+    );
+    return {
+      issued: false,
+      canIssue:
+        STOCK_ISSUE_STATUSES.includes(order.status) &&
+        lines.length > 0 &&
+        permissions.has(PERM.inventoryManage),
+      lines,
+      untrackedItems: orderLines
+        .filter((l) => l.productId === null || !tracked.has(l.productId))
+        .map((l) => l.name),
+    };
+  }
+
+  private assertStockIssuable(order: Order): void {
+    if (STOCK_ISSUE_STATUSES.includes(order.status)) return;
+    throw new AppException(
+      ErrorCode.CONFLICT,
+      409,
+      'Đơn ở trạng thái này không xuất kho được.',
+    );
+  }
+
+  private stockNotIssuedError(): AppException {
+    return new AppException(ErrorCode.CONFLICT, 409, STOCK_NOT_ISSUED_MESSAGE);
+  }
+
+  /**
+   * The order's current version still has stock-tracked lines with no stock-out voucher ⇒ 409.
+   * Runs INSIDE the tx AFTER the order row lock (re-reads the order, so the version pointer is
+   * the committed one), then locks `products` (system order `orders → products`) so
+   * `tracksStock` is read under the same lock the issue path takes.
+   */
+  private async assertNoUnissuedStockInTx(
+    tx: PrismaTx,
+    orderId: string,
+  ): Promise<void> {
+    const order = await this.findOrThrowIn(tx, orderId);
+    const versionId = this.currentVersionIdOrThrow(order);
+    const voucher = await this.stockVouchers.findOrderIssueVoucher(
+      tx,
+      orderId,
+      versionId,
+    );
+    if (voucher !== null) return;
+    const orderLines = await tx.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      select: { productId: true, qty: true },
+    });
+    const tracked = await this.stockVouchers.lockTrackedProductsInTx(
+      tx,
+      productLines(orderLines).map((l) => l.productId),
+    );
+    if (tracked.size > 0) throw this.stockNotIssuedError();
+  }
+
+  private missingInventoryPermissionError(): AppException {
+    return new AppException(
+      ErrorCode.FORBIDDEN,
+      403,
+      'Xác nhận Đã giao sẽ xuất kho — cần quyền nhập/xuất kho.',
+    );
+  }
+
+  /** Plain read outside the tx (pre-check before R2): not issued yet AND has tracked lines. */
+  private async hasUnissuedTrackedLines(order: Order): Promise<boolean> {
+    const versionId = this.currentVersionIdOrThrow(order);
+    const existing = await this.stockVouchers.findOrderIssueVoucher(
+      this.prisma,
+      order.id,
+      versionId,
+    );
+    if (existing !== null) return false;
+    const orderLines = await this.prisma.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      select: { productId: true, qty: true },
+    });
+    const { lines } = await this.stockVouchers.previewOrderIssue(
+      productLines(orderLines),
+    );
+    return lines.length > 0;
+  }
+
+  /**
+   * Issues the order's stock IF NOT YET ISSUED — runs INSIDE the caller's tx, AFTER the order
+   * row is locked (by `lockOrderRow` or the engine). Shared by "Đã giao" and the standalone
+   * stock-issue path.
+   *
+   *  - (order, current version) already has a voucher ⇒ return it, write nothing, no event.
+   *  - The `inventory/` primitive locks `products`, checks stock, deducts `onHand`, releases
+   *    the reservation, creates the voucher. No tracked line ⇒ no voucher: the standalone path
+   *    answers 409 (`requireVoucher`), "Đã giao" carries on.
+   *  - A voucher is needed but the caller lacks `inventory.manage` ⇒ 403 — the check UNDER
+   *    THE LOCK (the order may have changed since the pre-check); throwing rolls the tx back.
+   *  - The cost of EVERY line of the current version is frozen now (AD-20): tracked lines =
+   *    the voucher line's `unitCost` (read by the primitive under the lock), others = the
+   *    selling price snapshot.
+   */
+  private async issueStockIfNeeded(
+    tx: PrismaTx,
+    order: Order,
+    input: {
+      readonly callerAccountId: string;
+      readonly permissions: ReadonlySet<string>;
+      readonly occurredAt: Date;
+      readonly requireVoucher: boolean;
+    },
+  ): Promise<{
+    readonly voucher: StockVoucherDetail | null;
+    readonly event: StockIssued | null;
+  }> {
+    const versionId = this.currentVersionIdOrThrow(order);
+    const existing = await this.stockVouchers.findOrderIssueVoucher(
+      tx,
+      order.id,
+      versionId,
+    );
+    if (existing !== null) return { voucher: existing, event: null };
+
+    const orderLines = await tx.orderLineItem.findMany({
+      where: { orderVersionId: versionId },
+      select: { id: true, productId: true, qty: true, unitPriceSnapshot: true },
+    });
+    if (orderLines.some((l) => l.unitPriceSnapshot === null)) {
+      // A line past Chốt without a selling price snapshot is corrupt data — never guessed.
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Dòng đơn chưa có giá chốt — không xuất kho được.',
+      );
+    }
+
+    const result = await this.stockVouchers.issueForOrderInTx(tx, {
+      orderId: order.id,
+      orderVersionId: versionId,
+      orderLines: productLines(orderLines),
+      actorAccountId: input.callerAccountId,
+      occurredAt: input.occurredAt,
+    });
+    if (result.voucher === null && input.requireVoucher) {
+      throw new AppException(
+        ErrorCode.CONFLICT,
+        409,
+        'Đơn không có vật tư theo dõi tồn kho — không cần phiếu xuất.',
+      );
+    }
+    if (
+      result.voucher !== null &&
+      !input.permissions.has(PERM.inventoryManage)
+    ) {
+      throw this.missingInventoryPermissionError();
+    }
+
+    for (const line of orderLines) {
+      await tx.orderLineItem.update({
+        where: { id: line.id },
+        data: {
+          costPriceSnapshot: lineCostSnapshot(
+            { unitPriceSnapshot: line.unitPriceSnapshot! },
+            line.productId === null
+              ? undefined
+              : result.costByProduct.get(line.productId),
+          ),
+        },
+      });
+    }
+    return { voucher: result.voucher, event: result.event };
   }
 
   /**
@@ -983,7 +1340,11 @@ export class OrdersService {
       nguoiTaiLen: row.uploadedBy.displayName,
       statusFrom: row.statusFrom,
       statusTo: row.statusTo,
-      coTheXoa: this.xoaDuocAnh(callerAccountId, quyen, row.uploadedByAccountId),
+      coTheXoa: this.xoaDuocAnh(
+        callerAccountId,
+        quyen,
+        row.uploadedByAccountId,
+      ),
     }));
   }
 
@@ -1001,7 +1362,8 @@ export class OrdersService {
     uploadedByAccountId: string,
   ): boolean {
     return (
-      uploadedByAccountId === callerAccountId || quyen.has(PERM.quotesCreateEdit)
+      uploadedByAccountId === callerAccountId ||
+      quyen.has(PERM.quotesCreateEdit)
     );
   }
 
@@ -1680,7 +2042,7 @@ export class OrdersService {
    * thời điểm chốt (không phải cache `unitPrice` lúc nhập); catalog `priceEditable=true` (phí
    * lắp) ⇒ `unitPriceSnapshot` = giá đã sửa, `catalogPriceSnapshot` = giá resolve — chênh lệch
    * lộ ra cho màn duyệt chiết khấu 4.7; dòng tự do ⇒ `catalogPriceSnapshot` null.
-   * `costPriceSnapshot` KHÔNG ghi — giá vốn đóng băng lúc XUẤT KHO (AD-20, Story 6.4).
+   * `costPriceSnapshot` KHÔNG ghi — giá vốn đóng băng lúc XUẤT KHO (AD-20, `issueStockIfNeeded`).
    *
    * `OrderVersion` hiệu lực ghi `vatRate` (config resolve ở controller) + `vatMode` GIÁ TRỊ
    * HIỆU LỰC (`order.vatMode ?? 'co_vat'` — sau chốt không bao giờ null) + `chotAt`.
@@ -2000,6 +2362,22 @@ export class OrdersService {
           sentinel: MO_LAI_GATE_THUA,
           occurredAt: moLaiAt,
         });
+        // A confirmed order may already be issued (equipment-only orders issue at `dachot`).
+        // A new version would orphan that voucher and allow a second stock-out ⇒ refused,
+        // checked under the order lock the engine just took.
+        if (
+          (await this.stockVouchers.findOrderIssueVoucher(
+            tx,
+            before.id,
+            currentVersionId,
+          )) !== null
+        ) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            REVISE_AFTER_ISSUE_MESSAGE,
+          );
+        }
         await tx.orderVersion.create({
           data: {
             id: newVersionId,
