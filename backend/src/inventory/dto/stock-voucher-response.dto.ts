@@ -1,9 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { LOAI_PHIEU } from '../domain/gia-von';
+import type {
+  StockVoucherDetail,
+  StockVoucherLineView,
+  StockVoucherSummary,
+} from '../stock-vouchers.service';
 
 /**
  * Response của `/stock-vouchers` — chỉ để OpenAPI có schema thật (AD-12); service trả object
- * thường. Mã phiếu, số dòng, tổng số lượng do BACKEND tính; client chỉ hiển thị.
+ * thường, controller dựng response qua các hàm `to…Dto` cuối file. Mã phiếu, số dòng, tổng số lượng
+ * do BACKEND tính; client chỉ hiển thị.
  *
  * KHÔNG BAO GIỜ có `Product.costPrice`: giá vốn hiện hành xem ở danh mục (gate `costs.view`).
  */
@@ -20,7 +26,7 @@ export class StockVoucherSummaryDto {
   id!: string;
 
   @ApiProperty({ description: 'Mã phiếu hiển thị.', example: 'PK-N-0119' })
-  ma!: string;
+  code!: string;
 
   @ApiProperty({ enum: LOAI_PHIEU })
   type!: string;
@@ -41,16 +47,16 @@ export class StockVoucherSummaryDto {
   createdAt!: Date;
 
   @ApiProperty({ type: StockVoucherCreatorDto })
-  nguoiTao!: StockVoucherCreatorDto;
+  createdBy!: StockVoucherCreatorDto;
 
   @ApiProperty({ description: 'Số dòng sản phẩm.', example: 2 })
-  soDong!: number;
+  lineCount!: number;
 
   @ApiProperty({
     description: 'Tổng số lượng các dòng (luôn dương).',
     example: 45,
   })
-  tongSoLuong!: number;
+  totalQty!: number;
 }
 
 export class StockVoucherListResponseDto {
@@ -66,13 +72,13 @@ export class StockVoucherLineResponseDto {
   productId!: string;
 
   @ApiProperty({ description: 'Tên sản phẩm.' })
-  ten!: string;
+  name!: string;
 
   @ApiProperty()
   sku!: string;
 
   @ApiProperty({ description: 'Đơn vị tính.', example: 'tấm' })
-  donVi!: string;
+  unit!: string;
 
   @ApiProperty({
     description: 'Số lượng (luôn dương; chiều theo `type`).',
@@ -92,7 +98,7 @@ export class StockVoucherReturnOfDto {
   id!: string;
 
   @ApiProperty({ description: 'Mã phiếu xuất gốc.', example: 'PK-X-0096' })
-  ma!: string;
+  code!: string;
 
   @ApiProperty({ description: 'Đơn (đã huỷ) của phiếu xuất gốc.' })
   orderId!: string;
@@ -103,7 +109,7 @@ export class StockVoucherReturnRefDto {
   id!: string;
 
   @ApiProperty({ description: 'Mã phiếu nhập trả.', example: 'PK-NT-0004' })
-  ma!: string;
+  code!: string;
 }
 
 export class StockVoucherDetailDto extends StockVoucherSummaryDto {
@@ -130,4 +136,78 @@ export class StockVoucherDetailDto extends StockVoucherSummaryDto {
       'true ⇔ phiếu xuất gắn đơn, đơn đã huỷ, chưa có phiếu nhập trả — backend tính, client không tự suy.',
   })
   canReturn!: boolean;
+}
+
+/*
+ * Service views keep their database-side names; these maps are the only place the contract
+ * names are produced. There is no serializer in the app, so the returned object IS the JSON
+ * body — every field is listed (no spread) and an absent optional key stays absent.
+ */
+
+export function toStockVoucherSummaryDto(
+  voucher: StockVoucherSummary,
+): StockVoucherSummaryDto {
+  return {
+    id: voucher.id,
+    code: voucher.ma,
+    type: voucher.type,
+    ...(voucher.orderId !== undefined && { orderId: voucher.orderId }),
+    ...(voucher.returnOfVoucherId !== undefined && {
+      returnOfVoucherId: voucher.returnOfVoucherId,
+    }),
+    createdAt: voucher.createdAt,
+    createdBy: {
+      id: voucher.nguoiTao.id,
+      displayName: voucher.nguoiTao.displayName,
+    },
+    lineCount: voucher.soDong,
+    totalQty: voucher.tongSoLuong,
+  };
+}
+
+/**
+ * Call AFTER `anGiaVonDongPhieu`: a line whose `unitCost` key was removed for a caller
+ * without `costs.view` keeps it removed here.
+ */
+export function toStockVoucherLineResponseDto(
+  line: StockVoucherLineView,
+): StockVoucherLineResponseDto {
+  return {
+    productId: line.productId,
+    name: line.ten,
+    sku: line.sku,
+    unit: line.donVi,
+    qty: line.qty,
+    ...(line.unitCost !== undefined && { unitCost: line.unitCost }),
+  };
+}
+
+export function toStockVoucherDetailDto(
+  voucher: StockVoucherDetail,
+): StockVoucherDetailDto {
+  return {
+    ...toStockVoucherSummaryDto(voucher),
+    note: voucher.note,
+    lines: voucher.lines.map(toStockVoucherLineResponseDto),
+    ...(voucher.returnOf !== undefined && {
+      returnOf: {
+        id: voucher.returnOf.id,
+        code: voucher.returnOf.ma,
+        orderId: voucher.returnOf.orderId,
+      },
+    }),
+    ...(voucher.returnVoucher !== undefined && {
+      returnVoucher: {
+        id: voucher.returnVoucher.id,
+        code: voucher.returnVoucher.ma,
+      },
+    }),
+    canReturn: voucher.canReturn,
+  };
+}
+
+export function toStockVoucherListResponseDto(view: {
+  items: StockVoucherSummary[];
+}): StockVoucherListResponseDto {
+  return { items: view.items.map(toStockVoucherSummaryDto) };
 }

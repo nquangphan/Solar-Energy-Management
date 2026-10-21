@@ -497,7 +497,7 @@ export class OrdersService {
         'Số điện thoại không hợp lệ.',
         [
           {
-            field: 'customerSdt',
+            field: 'customerPhone',
             code: 'isPhoneNumber',
             message:
               'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).',
@@ -1371,7 +1371,7 @@ export class OrdersService {
         'Cần lý do khi huỷ đơn.',
         [
           {
-            field: 'lyDo',
+            field: 'reason',
             code: 'required',
             message: `Lý do huỷ là bắt buộc, tối thiểu ${DO_DAI_LY_DO_TOI_THIEU} ký tự.`,
           },
@@ -1589,7 +1589,7 @@ export class OrdersService {
         ErrorCode.VALIDATION_ERROR,
         400,
         'Ảnh đính kèm không hợp lệ.',
-        [{ field: 'anh', code: 'minCount', message: 'Chọn ít nhất 1 ảnh.' }],
+        [{ field: 'files', code: 'minCount', message: 'Chọn ít nhất 1 ảnh.' }],
       );
     }
 
@@ -1724,7 +1724,7 @@ export class OrdersService {
     actorAccountId: string,
     dto: CreateOrderRequestDto,
   ): Promise<OrderView> {
-    const sdt = this.normalizeOrThrow(dto.customerSdt);
+    const sdt = this.normalizeOrThrow(dto.customerPhone);
     const customer = await this.prisma.customer.findUnique({ where: { sdt } });
     if (customer === null) {
       throw new AppException(
@@ -2194,7 +2194,7 @@ export class OrdersService {
     this.assertMutable(before);
 
     const coScope =
-      dto.scopeThiCong !== undefined || dto.scopeVanChuyen !== undefined;
+      dto.scopeConstruction !== undefined || dto.scopeDelivery !== undefined;
     const coMeta =
       dto.vatMode !== undefined ||
       dto.kWp !== undefined ||
@@ -2213,8 +2213,8 @@ export class OrdersService {
         // Partial: Prisma bỏ qua key `undefined` — đúng ngữ nghĩa PATCH; `kWp`/`validityNote`
         // = null GHI null (xoá giá trị).
         data: {
-          scopeThiCong: dto.scopeThiCong,
-          scopeVanChuyen: dto.scopeVanChuyen,
+          scopeThiCong: dto.scopeConstruction,
+          scopeVanChuyen: dto.scopeDelivery,
           vatMode: dto.vatMode,
           kWp: dto.kWp,
           validityNote: dto.validityNote,

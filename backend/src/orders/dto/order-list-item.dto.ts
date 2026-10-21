@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ORDER_STATUS_KEYS } from '../domain/order-status';
+import type { OrderListRow } from '../orders.service';
 
 /**
  * Một dòng của `GET /orders` — ĐỦ để vẽ danh sách, không hơn.
@@ -22,7 +23,7 @@ export class OrderListItemDto {
     description: 'SĐT khách dạng E.164 (PK khách).',
     example: '+84903176968',
   })
-  customerSdt!: string;
+  customerPhone!: string;
 
   @ApiProperty({
     description: 'Tên khách, đọc qua relation.',
@@ -44,4 +45,18 @@ export class OrderListItemDto {
 
   @ApiProperty({ description: 'ISO-8601 UTC.' })
   updatedAt!: Date;
+}
+
+/** Maps one list row of the service to the contract — fields listed, no spread. */
+export function toOrderListItemDto(row: OrderListRow): OrderListItemDto {
+  return {
+    id: row.id,
+    status: row.status,
+    customerPhone: row.customerSdt,
+    customerName: row.customerName,
+    ownerAccountId: row.ownerAccountId,
+    assigneeAccountId: row.assigneeAccountId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }

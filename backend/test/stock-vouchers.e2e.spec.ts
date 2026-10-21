@@ -172,12 +172,15 @@ describe('/stock-vouchers (e2e)', () => {
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
       id: VOUCHER_ID,
-      ma: 'PK-N-0007',
+      code: 'PK-N-0007',
       type: 'nhap',
-      soDong: 1,
-      tongSoLuong: 40,
-      nguoiTao: { id: ACCOUNT_ID, displayName: 'Thủ kho' },
+      lineCount: 1,
+      totalQty: 40,
+      createdBy: { id: ACCOUNT_ID, displayName: 'Thủ kho' },
     });
+    for (const old of ['ma', 'soDong', 'tongSoLuong', 'nguoiTao']) {
+      expect(res.body).not.toHaveProperty(old);
+    }
     expect(res.body.lines[0]).toMatchObject({ productId: P1, qty: 40 });
     expect(res.body.lines[0]).not.toHaveProperty('unitCost');
     expect(JSON.stringify(res.body)).not.toContain('costPrice');
@@ -230,7 +233,7 @@ describe('/stock-vouchers (e2e)', () => {
     });
 
     expect(res.status).toBe(201);
-    expect(res.body.ma).toBe('PK-X-0007');
+    expect(res.body.code).toBe('PK-X-0007');
     expect(res.body.lines[0].unitCost).toBe(2_000_000);
   });
 
@@ -491,12 +494,12 @@ describe('/stock-vouchers (e2e)', () => {
     expect(res.body.items).toEqual([
       {
         id: VOUCHER_ID,
-        ma: 'PK-N-0007',
+        code: 'PK-N-0007',
         type: 'nhap',
         createdAt: '2026-10-21T03:00:00.000Z',
-        nguoiTao: { id: ACCOUNT_ID, displayName: 'Thủ kho' },
-        soDong: 2,
-        tongSoLuong: 45,
+        createdBy: { id: ACCOUNT_ID, displayName: 'Thủ kho' },
+        lineCount: 2,
+        totalQty: 45,
       },
     ]);
     expect(voucherRepo.findMany).toHaveBeenCalledWith(
@@ -530,12 +533,12 @@ describe('/stock-vouchers (e2e)', () => {
       .set('Authorization', `Bearer ${token()}`);
 
     expect(resKho.status).toBe(200);
-    expect(resKho.body).toMatchObject({ note: null, ma: 'PK-N-0007' });
+    expect(resKho.body).toMatchObject({ note: null, code: 'PK-N-0007' });
     expect(resKho.body.lines[0]).toEqual({
       productId: P1,
-      ten: 'Tấm pin 550W',
+      name: 'Tấm pin 550W',
       sku: 'PIN-550',
-      donVi: 'tấm',
+      unit: 'tấm',
       qty: 40,
     });
     expect(resQl.body.lines[0].unitCost).toBe(2_110_000);
@@ -662,12 +665,13 @@ describe('/stock-vouchers (e2e)', () => {
 
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({
-        ma: 'PK-NT-0004',
+        code: 'PK-NT-0004',
         type: 'nhap',
         returnOfVoucherId: ORIGIN_ID,
-        returnOf: { id: ORIGIN_ID, ma: 'PK-X-0096', orderId: ORDER_ID },
+        returnOf: { id: ORIGIN_ID, code: 'PK-X-0096', orderId: ORDER_ID },
         canReturn: false,
       });
+      expect(res.body.returnOf).not.toHaveProperty('ma');
       expect(res.body).not.toHaveProperty('orderId');
       expect(res.body.lines[0]).not.toHaveProperty('unitCost');
       // The line cost is the ORIGIN line's, not the client's 1.
@@ -916,7 +920,7 @@ describe('/stock-vouchers (e2e)', () => {
         }),
       );
       expect(res.body.items[0]).toMatchObject({
-        ma: 'PK-NT-0004',
+        code: 'PK-NT-0004',
         returnOfVoucherId: ORIGIN_ID,
       });
     });
@@ -969,12 +973,12 @@ describe('/stock-vouchers (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({
-        ma: 'PK-NT-0004',
+        code: 'PK-NT-0004',
         type: 'nhap',
         returnOfVoucherId: ORIGIN_ID,
         returnOf: {
           id: ORIGIN_ID,
-          ma: 'PK-X-0096',
+          code: 'PK-X-0096',
           orderId: '66666666-6666-4666-8666-666666666666',
         },
         canReturn: false,
@@ -982,6 +986,10 @@ describe('/stock-vouchers (e2e)', () => {
       expect(res.body).not.toHaveProperty('orderId');
       expect(res.body).not.toHaveProperty('returnVoucher');
       expect(res.body.lines[0]).not.toHaveProperty('unitCost');
+      for (const old of ['ma', 'soDong', 'tongSoLuong', 'nguoiTao']) {
+        expect(res.body).not.toHaveProperty(old);
+      }
+      expect(res.body.returnOf).not.toHaveProperty('ma');
     });
 
     it('?isReturn=maybe ⇒ 400', async () => {
@@ -1029,7 +1037,7 @@ describe('/stock-vouchers (e2e)', () => {
         if (rel.returnVoucher) {
           expect(res.body.returnVoucher).toEqual({
             id: 'vr',
-            ma: 'PK-NT-0004',
+            code: 'PK-NT-0004',
           });
         } else {
           expect(res.body).not.toHaveProperty('returnVoucher');

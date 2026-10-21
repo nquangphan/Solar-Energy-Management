@@ -29,17 +29,17 @@ describe('attachment-limits (domain thuần)', () => {
   });
 
   it('đúng ngưỡng số lượng vẫn hợp lệ', () => {
-    expect(kiemTraAnh(Array.from({ length: SO_ANH_TOI_DA }, () => anh()))).toEqual(
-      [],
-    );
+    expect(
+      kiemTraAnh(Array.from({ length: SO_ANH_TOI_DA }, () => anh())),
+    ).toEqual([]);
   });
 
-  it('quá số ảnh tối đa ⇒ fieldError trên `anh`', () => {
+  it('quá số ảnh tối đa ⇒ fieldError trên `files`', () => {
     const loi = kiemTraAnh(
       Array.from({ length: SO_ANH_TOI_DA + 1 }, () => anh()),
     );
     expect(loi).toHaveLength(1);
-    expect(loi[0].field).toBe('anh');
+    expect(loi[0].field).toBe('files');
     expect(loi[0].code).toBe('maxCount');
   });
 
@@ -68,7 +68,7 @@ describe('attachment-limits (domain thuần)', () => {
       anh({ mimetype: 'text/plain' }),
       anh({ size: KICH_THUOC_TOI_DA_BYTE + 1 }),
     ]);
-    expect(loi.map((l) => l.field)).toEqual(['anh[1]', 'anh[2]']);
+    expect(loi.map((l) => l.field)).toEqual(['files[1]', 'files[2]']);
   });
 
   it('ĐUÔI SUY TỪ MIME, KHÔNG tin đuôi client gửi — file .exe khai image/png ra key .png', () => {

@@ -72,7 +72,7 @@ describe('CustomersService', () => {
 
   /** Body hợp lệ tối thiểu — bốn field bắt buộc, không hơn. */
   const bodyHopLe = {
-    sdt: SDT_THO,
+    phone: SDT_THO,
     custType: CUST_TYPE.caNhan,
     name: 'Nguyễn Văn A',
     sourceId: NGUON_FACEBOOK.id,
@@ -100,7 +100,7 @@ describe('CustomersService', () => {
     it('create ghi ĐÚNG payload, `sdt` là E.164 (không phải raw)', async () => {
       await service.create(ACTOR, {
         ...bodyHopLe,
-        cccd: '079201001234',
+        nationalId: '079201001234',
         address: '12 Nguyễn Huệ',
       });
 
@@ -129,7 +129,7 @@ describe('CustomersService', () => {
         SDT_E164,
       ]) {
         customerRepo.create.mockClear();
-        await service.create(ACTOR, { ...bodyHopLe, sdt: raw });
+        await service.create(ACTOR, { ...bodyHopLe, phone: raw });
         expect(customerRepo.create.mock.calls[0][0].data.sdt).toBe(SDT_E164);
       }
     });
@@ -145,15 +145,15 @@ describe('CustomersService', () => {
 
   describe('AC-2 — SĐT không hợp lệ ⇒ 400, KHÔNG chạm DB', () => {
     for (const rac of ['abc', '123', '+16505550123', '']) {
-      it(`create "${rac}" ⇒ 400 VALIDATION_ERROR field sdt`, async () => {
+      it(`create "${rac}" ⇒ 400 VALIDATION_ERROR field phone`, async () => {
         const err = await bat(
-          service.create(ACTOR, { ...bodyHopLe, sdt: rac }),
+          service.create(ACTOR, { ...bodyHopLe, phone: rac }),
         );
 
         expect(err).toBeInstanceOf(AppException);
         expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
         expect(err.getStatus()).toBe(400);
-        expect(err.fieldErrors?.[0].field).toBe('sdt');
+        expect(err.fieldErrors?.[0].field).toBe('phone');
         expect(customerRepo.create).not.toHaveBeenCalled();
         expect(eventBus.publish).not.toHaveBeenCalled();
       });
@@ -166,8 +166,8 @@ describe('CustomersService', () => {
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
 
-    // The error names the input the client sent: the path param is `phone`, the create body
-    // field is still `sdt` — one shared normaliser must not leak one name into the other.
+    // The error names the input the client sent: the path param and the create body field are
+    // both `phone` on the contract — never the `sdt` database column.
     it('findOne / update with an invalid path phone ⇒ fieldErrors point at `phone`', async () => {
       const findErr = await bat(service.findOne('abc'));
       const updateErr = await bat(
@@ -181,7 +181,7 @@ describe('CustomersService', () => {
   });
 
   describe('AC-3 — SĐT trùng: P2002 từ DB ⇒ 409, KHÔNG 500', () => {
-    it('create ⇒ 409 CONFLICT kèm fieldErrors trỏ ô sdt', async () => {
+    it('create ⇒ 409 CONFLICT kèm fieldErrors trỏ ô phone', async () => {
       customerRepo.create.mockRejectedValue(
         Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }),
       );
@@ -191,7 +191,7 @@ describe('CustomersService', () => {
       expect(err.errorCode).toBe(ErrorCode.CONFLICT);
       expect(err.getStatus()).toBe(409);
       expect(err.fieldErrors?.[0]).toMatchObject({
-        field: 'sdt',
+        field: 'phone',
         code: 'isUnique',
       });
       // Write hỏng ⇒ KHÔNG có event: audit không được ghi cho việc chưa xảy ra.
@@ -212,7 +212,7 @@ describe('CustomersService', () => {
     const matran: readonly [string, string][] = [
       [CUST_TYPE.caNhan, 'taxCode'],
       [CUST_TYPE.caNhan, 'bankAccount'],
-      [CUST_TYPE.thuongMai, 'cccd'],
+      [CUST_TYPE.thuongMai, 'nationalId'],
     ];
 
     for (const [custType, field] of matran) {
@@ -231,11 +231,11 @@ describe('CustomersService', () => {
       });
     }
 
-    it('CA_NHAN + cccd ⇒ hợp lệ (field ĐÚNG loại không bị chặn oan)', async () => {
+    it('CA_NHAN + nationalId ⇒ hợp lệ (field ĐÚNG loại không bị chặn oan)', async () => {
       await service.create(ACTOR, {
         ...bodyHopLe,
         custType: CUST_TYPE.caNhan,
-        cccd: '079201001234',
+        nationalId: '079201001234',
       });
 
       expect(customerRepo.create).toHaveBeenCalled();
@@ -274,11 +274,11 @@ describe('CustomersService', () => {
       );
 
       expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(err.fieldErrors?.[0].field).toBe('cccd');
+      expect(err.fieldErrors?.[0].field).toBe('nationalId');
       expect(customerRepo.update).not.toHaveBeenCalled();
     });
 
-    it('update đổi loại khách KÈM xoá field cũ (`cccd: null`) ⇒ hợp lệ (đường ra tồn tại)', async () => {
+    it('update đổi loại khách KÈM xoá field cũ (`nationalId: null`) ⇒ hợp lệ (đường ra tồn tại)', async () => {
       customerRepo.findUnique.mockResolvedValue({
         ...KHACH,
         cccd: '079201001234',
@@ -286,7 +286,7 @@ describe('CustomersService', () => {
 
       await service.update(ACTOR, SDT_E164, {
         custType: CUST_TYPE.thuongMai,
-        cccd: null,
+        nationalId: null,
         taxCode: '0312345678',
       });
 

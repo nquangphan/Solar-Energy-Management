@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { DiscountPendingView } from '../orders.service';
 
 /**
  * Một item của `GET /orders/pending-discount-approvals` (Story 4.7, FR-18/FR-37) — mọi con số do
@@ -32,7 +33,7 @@ export class DiscountPendingItemDto {
   orderId!: string;
 
   @ApiProperty({ description: 'SĐT khách (E.164).' })
-  customerSdt!: string;
+  customerPhone!: string;
 
   @ApiProperty({ description: 'Mức chiết khấu đề xuất — integer đồng.' })
   amount!: number;
@@ -68,4 +69,27 @@ export class DiscountPendingItemDto {
     description: 'Dòng của bản hiệu lực kèm biên ước tính per-line.',
   })
   lines!: DiscountPendingLineDto[];
+}
+
+/** Maps one pending-approval item of the service to the contract — fields listed, no spread. */
+export function toDiscountPendingItemDto(
+  view: DiscountPendingView,
+): DiscountPendingItemDto {
+  return {
+    orderId: view.orderId,
+    customerPhone: view.customerSdt,
+    amount: view.amount,
+    requestNote: view.requestNote,
+    requestedByAccountId: view.requestedByAccountId,
+    requestedByDisplayName: view.requestedByDisplayName,
+    requestedAt: view.requestedAt,
+    subtotal: view.subtotal,
+    afterDiscount: view.afterDiscount,
+    lines: view.lines.map((line) => ({
+      name: line.name,
+      qty: line.qty,
+      unitPrice: line.unitPrice,
+      estimatedMarginPct: line.estimatedMarginPct,
+    })),
+  };
 }

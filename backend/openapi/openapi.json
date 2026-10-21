@@ -1241,7 +1241,7 @@
         },
         "responses": {
           "201": {
-            "description": "Khách hàng đã tạo. `sdt` trả về là chuỗi ĐÃ chuẩn hoá E.164.",
+            "description": "Khách hàng đã tạo. `phone` trả về là chuỗi ĐÃ chuẩn hoá E.164.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1530,7 +1530,7 @@
         },
         "responses": {
           "200": {
-            "description": "Khách hàng sau khi sửa. `sdt` KHÔNG sửa được qua đây.",
+            "description": "Khách hàng sau khi sửa. `phone` KHÔNG sửa được qua đây.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1540,7 +1540,7 @@
             }
           },
           "400": {
-            "description": "Body chứa `sdt` (bất biến), field lạc loại khách, `sourceId` không tồn tại, hoặc thiếu `sourceNote` khi nguồn mới là \"Khác\" (VALIDATION_ERROR).",
+            "description": "Body chứa `phone` (bất biến), field lạc loại khách, `sourceId` không tồn tại, hoặc thiếu `sourceNote` khi nguồn mới là \"Khác\" (VALIDATION_ERROR).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2287,7 +2287,7 @@
         },
         "responses": {
           "200": {
-            "description": "Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeThietBi` luôn true — không nhận qua body (FR-2).",
+            "description": "Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeEquipment` luôn true — không nhận qua body (FR-2).",
             "content": {
               "application/json": {
                 "schema": {
@@ -2417,7 +2417,7 @@
         ],
         "responses": {
           "200": {
-            "description": "MỌI bản update của đơn theo versionNo tăng dần (FR-6); `laBanHienLuc` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).",
+            "description": "MỌI bản update của đơn theo versionNo tăng dần (FR-6); `isCurrent` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).",
             "content": {
               "application/json": {
                 "schema": {
@@ -3584,7 +3584,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Mọi ảnh của đơn theo createdAt giảm dần; `coTheXoa` tính ở backend cho từng ảnh.",
+            "description": "Mọi ảnh của đơn theo createdAt giảm dần; `canDelete` tính ở backend cho từng ảnh.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3635,6 +3635,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/AttachmentUploadRequestDto"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "description": "Ảnh đã lưu với ba cột toạ độ null — không thuộc bước chuyển trạng thái nào.",
@@ -5898,7 +5908,7 @@
       "CreateCustomerRequestDto": {
         "type": "object",
         "properties": {
-          "sdt": {
+          "phone": {
             "type": "string",
             "description": "SĐT dạng THÔ — backend tự chuẩn hoá về E.164 (`+84…`) và dùng làm khoá chính. Không hợp lệ ⇒ 400.",
             "example": "0912 345 678"
@@ -5917,7 +5927,7 @@
             "description": "Họ tên (Cá nhân) hoặc tên công ty (Thương mại).",
             "example": "Nguyễn Văn A"
           },
-          "cccd": {
+          "nationalId": {
             "type": "object",
             "description": "CCCD — CHỈ khách Cá nhân. Gửi kèm khách Thương mại ⇒ 400.",
             "example": "079201001234"
@@ -5949,7 +5959,7 @@
           }
         },
         "required": [
-          "sdt",
+          "phone",
           "custType",
           "name",
           "sourceId"
@@ -5958,7 +5968,7 @@
       "CustomerResponseDto": {
         "type": "object",
         "properties": {
-          "sdt": {
+          "phone": {
             "type": "string",
             "description": "SĐT đã chuẩn hoá E.164 — khoá chính của khách hàng.",
             "example": "+84912345678"
@@ -5971,7 +5981,7 @@
             "type": "string",
             "description": "Họ tên hoặc tên công ty."
           },
-          "cccd": {
+          "nationalId": {
             "type": "string",
             "nullable": true,
             "description": "CCCD — chỉ khách Cá nhân; `null` với khách Thương mại."
@@ -6009,7 +6019,7 @@
           }
         },
         "required": [
-          "sdt",
+          "phone",
           "custType",
           "name",
           "sourceId",
@@ -6057,7 +6067,7 @@
             "description": "Có khách hàng nào mang SĐT này chưa.",
             "example": true
           },
-          "sdt": {
+          "phone": {
             "type": "string",
             "description": "SĐT đã chuẩn hoá E.164 — trả về kể cả khi `found: false` (form tạo khách dùng lại chuỗi này).",
             "example": "+84912345678"
@@ -6075,14 +6085,14 @@
         },
         "required": [
           "found",
-          "sdt",
+          "phone",
           "customer"
         ]
       },
       "UpdateCustomerRequestDto": {
         "type": "object",
         "properties": {
-          "sdt": {
+          "phone": {
             "type": "string",
             "description": "KHÔNG gửi field này. SĐT là khoá chính, bất biến sau khi tạo — gửi kèm ⇒ 400 (không phải im lặng bỏ qua)."
           },
@@ -6098,7 +6108,7 @@
             "type": "string",
             "description": "Họ tên (Cá nhân) hoặc tên công ty (Thương mại)."
           },
-          "cccd": {
+          "nationalId": {
             "type": "object",
             "description": "CCCD — CHỈ khách Cá nhân."
           },
@@ -6210,14 +6220,14 @@
       "CreateOrderRequestDto": {
         "type": "object",
         "properties": {
-          "customerSdt": {
+          "customerPhone": {
             "type": "string",
             "description": "SĐT khách — thô hay E.164 đều được, backend chuẩn hoá trước khi tra (AD-9). Khách chưa tồn tại ⇒ 404 (luồng tạo khách inline đã có ở màn tra SĐT).",
             "example": "0912345678"
           }
         },
         "required": [
-          "customerSdt"
+          "customerPhone"
         ]
       },
       "OrderLineItemResponseDto": {
@@ -6334,7 +6344,7 @@
             "description": "Trạng thái đơn — đơn mới luôn 'baogia'; mọi thay đổi đi qua applyTransition().",
             "example": "baogia"
           },
-          "customerSdt": {
+          "customerPhone": {
             "type": "string",
             "description": "SĐT khách (E.164) — FK về Customer."
           },
@@ -6359,15 +6369,15 @@
             "type": "string",
             "description": "Loại khách — nhãn báo cáo, copy từ Customer lúc tạo."
           },
-          "scopeThietBi": {
+          "scopeEquipment": {
             "type": "boolean",
             "description": "Phạm vi: thiết bị. Hành vi preset thuộc Story 4.3."
           },
-          "scopeThiCong": {
+          "scopeConstruction": {
             "type": "boolean",
             "description": "Phạm vi: thi công. Hành vi preset thuộc Story 4.3."
           },
-          "scopeVanChuyen": {
+          "scopeDelivery": {
             "type": "boolean",
             "description": "Phạm vi: vận chuyển. Hành vi preset thuộc Story 4.3."
           },
@@ -6426,13 +6436,13 @@
         "required": [
           "id",
           "status",
-          "customerSdt",
+          "customerPhone",
           "ownerAccountId",
           "sourceId",
           "custType",
-          "scopeThietBi",
-          "scopeThiCong",
-          "scopeVanChuyen",
+          "scopeEquipment",
+          "scopeConstruction",
+          "scopeDelivery",
           "lineItems",
           "createdAt",
           "updatedAt"
@@ -6556,7 +6566,7 @@
             "type": "string",
             "description": "Id đơn hàng chờ duyệt chiết khấu."
           },
-          "customerSdt": {
+          "customerPhone": {
             "type": "string",
             "description": "SĐT khách (E.164)."
           },
@@ -6600,7 +6610,7 @@
         },
         "required": [
           "orderId",
-          "customerSdt",
+          "customerPhone",
           "amount",
           "requestedByAccountId",
           "requestedByDisplayName",
@@ -6613,7 +6623,7 @@
       "WarrantyCustomerDto": {
         "type": "object",
         "properties": {
-          "sdt": {
+          "phone": {
             "type": "string",
             "example": "+84903176968"
           },
@@ -6627,7 +6637,7 @@
           }
         },
         "required": [
-          "sdt",
+          "phone",
           "name",
           "custType"
         ]
@@ -6707,7 +6717,7 @@
             "type": "string",
             "description": "Trạng thái đơn — bộ khoá chip design-system."
           },
-          "chotAt": {
+          "confirmedAt": {
             "type": "object",
             "nullable": true,
             "description": "Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt."
@@ -6732,7 +6742,7 @@
             "type": "boolean",
             "description": "Có khách hàng nào mang SĐT này chưa."
           },
-          "sdt": {
+          "phone": {
             "type": "string",
             "description": "SĐT đã chuẩn hoá E.164 — trả về kể cả khi `found: false`.",
             "example": "+84903176968"
@@ -6757,7 +6767,7 @@
         },
         "required": [
           "found",
-          "sdt",
+          "phone",
           "customer",
           "orders"
         ]
@@ -6785,7 +6795,7 @@
             ],
             "example": "baogia"
           },
-          "customerSdt": {
+          "customerPhone": {
             "type": "string",
             "description": "SĐT khách dạng E.164 (PK khách).",
             "example": "+84903176968"
@@ -6818,7 +6828,7 @@
         "required": [
           "id",
           "status",
-          "customerSdt",
+          "customerPhone",
           "customerName",
           "ownerAccountId",
           "createdAt",
@@ -6876,7 +6886,7 @@
             ],
             "example": "baogia"
           },
-          "trangThai": {
+          "progress": {
             "type": "string",
             "enum": [
               "done",
@@ -6888,7 +6898,7 @@
         },
         "required": [
           "status",
-          "trangThai"
+          "progress"
         ]
       },
       "OrderNextStepDto": {
@@ -6928,80 +6938,80 @@
       "OrderLifecycleResponseDto": {
         "type": "object",
         "properties": {
-          "buoc": {
+          "steps": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrderLifecycleStepDto"
             }
           },
-          "buocKeTiep": {
+          "nextSteps": {
             "description": "Bước kế tiếp NGƯỜI GỌI bấm được. MẢNG RỖNG ⇒ nút \"Chuyển trạng thái\" ẩn hẳn, không vẽ xám (UX-DR-22).",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OrderNextStepDto"
             }
           },
-          "coTheHuy": {
+          "canCancel": {
             "type": "boolean",
-            "description": "Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút \"Huỷ đơn\", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `buocKeTiep`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó."
+            "description": "Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút \"Huỷ đơn\", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `nextSteps`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó."
           }
         },
         "required": [
-          "buoc",
-          "buocKeTiep",
-          "coTheHuy"
+          "steps",
+          "nextSteps",
+          "canCancel"
         ]
       },
-      "ThayDoiSoLuongDto": {
+      "QtyChangeDto": {
         "type": "object",
         "properties": {
-          "ten": {
+          "name": {
             "type": "string",
             "description": "Tên dòng ở bản mới."
           },
-          "tu": {
+          "from": {
             "type": "number",
             "description": "Số lượng ở bản trước."
           },
-          "den": {
+          "to": {
             "type": "number",
             "description": "Số lượng ở bản này."
           }
         },
         "required": [
-          "ten",
-          "tu",
-          "den"
+          "name",
+          "from",
+          "to"
         ]
       },
-      "ThayDoiBanUpdateDto": {
+      "VersionChangesDto": {
         "type": "object",
         "properties": {
-          "them": {
+          "added": {
             "description": "Tên các dòng mới thêm.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "xoa": {
+          "removed": {
             "description": "Tên các dòng bị xoá.",
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "doiSoLuong": {
+          "qtyChanged": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ThayDoiSoLuongDto"
+              "$ref": "#/components/schemas/QtyChangeDto"
             }
           }
         },
         "required": [
-          "them",
-          "xoa",
-          "doiSoLuong"
+          "added",
+          "removed",
+          "qtyChanged"
         ]
       },
       "OrderVersionItemDto": {
@@ -7015,7 +7025,7 @@
             "description": "Số thứ tự bản, bắt đầu từ 1.",
             "example": 1
           },
-          "laBanHienLuc": {
+          "isCurrent": {
             "type": "boolean",
             "description": "Bản đang hiệu lực (theo currentVersionId)."
           },
@@ -7024,7 +7034,7 @@
             "type": "string",
             "description": "ISO-8601 UTC."
           },
-          "chotAt": {
+          "confirmedAt": {
             "type": "object",
             "description": "Thời điểm bản này được Chốt; null nếu chưa chốt.",
             "nullable": true
@@ -7038,21 +7048,21 @@
             "description": "Tên hiển thị người tạo bản; null với bản cũ không có actor.",
             "nullable": true
           },
-          "soDong": {
+          "lineCount": {
             "type": "number",
             "description": "Số dòng của chính bản này."
           },
-          "thayDoi": {
-            "$ref": "#/components/schemas/ThayDoiBanUpdateDto"
+          "changes": {
+            "$ref": "#/components/schemas/VersionChangesDto"
           }
         },
         "required": [
           "id",
           "versionNo",
-          "laBanHienLuc",
+          "isCurrent",
           "createdAt",
-          "soDong",
-          "thayDoi"
+          "lineCount",
+          "changes"
         ]
       },
       "OrderVersionsResponseDto": {
@@ -7072,11 +7082,11 @@
       "UpdateOrderRequestDto": {
         "type": "object",
         "properties": {
-          "scopeThiCong": {
+          "scopeConstruction": {
             "type": "boolean",
             "description": "Cờ phạm vi Thi công — chỉ đổi được khi đơn còn ở baogia."
           },
-          "scopeVanChuyen": {
+          "scopeDelivery": {
             "type": "boolean",
             "description": "Cờ phạm vi Vận chuyển — chỉ đổi được khi đơn còn ở baogia."
           },
@@ -7276,6 +7286,14 @@
             ],
             "description": "Sự kiện chuyển trạng thái. CHỈ năm sự kiện của lane thủ công — `chot`/`mo_lai`/`huy`/`du_coc`/`ap_chiet_khau` có cửa riêng mang theo logic riêng và bị từ chối 409 ở đây.",
             "example": "bat_dau_thi_cong"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "description": "Ảnh bằng chứng của bước (JPEG/PNG/WebP) — optional; ngưỡng số ảnh/kích thước do backend kiểm."
           }
         },
         "required": [
@@ -7305,7 +7323,7 @@
             "type": "string",
             "description": "Thời điểm của bước (ISO-8601 UTC). CÙNG một giá trị với `occurredAt` của hàng audit và của mọi ảnh trong lượt — đây là khoá nối ảnh vào bước (FR-23)."
           },
-          "soAnhDaLuu": {
+          "savedAttachmentCount": {
             "type": "number",
             "description": "Số ảnh bằng chứng đã ghi cho bước này (0 là hợp lệ — upload luôn optional).",
             "example": 0
@@ -7314,13 +7332,13 @@
         "required": [
           "status",
           "occurredAt",
-          "soAnhDaLuu"
+          "savedAttachmentCount"
         ]
       },
       "CancelOrderRequestDto": {
         "type": "object",
         "properties": {
-          "lyDo": {
+          "reason": {
             "type": "string",
             "maxLength": 500,
             "description": "Lý do huỷ đơn — BẮT BUỘC, tối thiểu 3 ký tự sau khi trim (service enforce).",
@@ -7328,7 +7346,7 @@
           }
         },
         "required": [
-          "lyDo"
+          "reason"
         ]
       },
       "CancelOrderResponseDto": {
@@ -7382,14 +7400,14 @@
           "productId": {
             "type": "string"
           },
-          "ten": {
+          "name": {
             "type": "string",
             "description": "Tên sản phẩm."
           },
           "sku": {
             "type": "string"
           },
-          "donVi": {
+          "unit": {
             "type": "string",
             "description": "Đơn vị tính.",
             "example": "tấm"
@@ -7406,9 +7424,9 @@
         },
         "required": [
           "productId",
-          "ten",
+          "name",
           "sku",
-          "donVi",
+          "unit",
           "qty"
         ]
       },
@@ -7418,7 +7436,7 @@
           "id": {
             "type": "string"
           },
-          "ma": {
+          "code": {
             "type": "string",
             "description": "Mã phiếu xuất gốc.",
             "example": "PK-X-0096"
@@ -7430,7 +7448,7 @@
         },
         "required": [
           "id",
-          "ma",
+          "code",
           "orderId"
         ]
       },
@@ -7440,7 +7458,7 @@
           "id": {
             "type": "string"
           },
-          "ma": {
+          "code": {
             "type": "string",
             "description": "Mã phiếu nhập trả.",
             "example": "PK-NT-0004"
@@ -7448,7 +7466,7 @@
         },
         "required": [
           "id",
-          "ma"
+          "code"
         ]
       },
       "StockVoucherDetailDto": {
@@ -7457,7 +7475,7 @@
           "id": {
             "type": "string"
           },
-          "ma": {
+          "code": {
             "type": "string",
             "description": "Mã phiếu hiển thị.",
             "example": "PK-N-0119"
@@ -7482,15 +7500,15 @@
             "type": "string",
             "description": "Thời điểm lưu phiếu (ISO-8601 UTC)."
           },
-          "nguoiTao": {
+          "createdBy": {
             "$ref": "#/components/schemas/StockVoucherCreatorDto"
           },
-          "soDong": {
+          "lineCount": {
             "type": "number",
             "description": "Số dòng sản phẩm.",
             "example": 2
           },
-          "tongSoLuong": {
+          "totalQty": {
             "type": "number",
             "description": "Tổng số lượng các dòng (luôn dương).",
             "example": 45
@@ -7528,12 +7546,12 @@
         },
         "required": [
           "id",
-          "ma",
+          "code",
           "type",
           "createdAt",
-          "nguoiTao",
-          "soDong",
-          "tongSoLuong",
+          "createdBy",
+          "lineCount",
+          "totalQty",
           "note",
           "lines",
           "canReturn"
@@ -7744,7 +7762,7 @@
             "type": "string",
             "description": "ISO-8601 UTC."
           },
-          "nguoiTaiLen": {
+          "uploadedBy": {
             "type": "string",
             "description": "Tên hiển thị người tải ảnh lên."
           },
@@ -7758,7 +7776,7 @@
             "description": "Trạng thái SAU bước ảnh này thuộc về; null với ảnh bổ sung.",
             "nullable": true
           },
-          "coTheXoa": {
+          "canDelete": {
             "type": "boolean",
             "description": "Người gọi có xoá được ảnh này không — tính Ở BACKEND (người tải lên HOẶC có quyền chỉnh sửa đơn). Client CHỈ hiển thị, không dựng lại luật."
           }
@@ -7769,8 +7787,8 @@
           "contentType",
           "size",
           "createdAt",
-          "nguoiTaiLen",
-          "coTheXoa"
+          "uploadedBy",
+          "canDelete"
         ]
       },
       "AttachmentListResponseDto": {
@@ -7787,10 +7805,26 @@
           "items"
         ]
       },
+      "AttachmentUploadRequestDto": {
+        "type": "object",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "binary"
+            },
+            "description": "Ảnh bổ sung (JPEG/PNG/WebP). Thiếu hoặc rỗng ⇒ 400; ngưỡng số ảnh/kích thước do backend kiểm."
+          }
+        },
+        "required": [
+          "files"
+        ]
+      },
       "AttachmentUploadResponseDto": {
         "type": "object",
         "properties": {
-          "soAnhDaLuu": {
+          "savedAttachmentCount": {
             "type": "number",
             "description": "Số ảnh đã lưu trong lượt này."
           },
@@ -7802,7 +7836,7 @@
           }
         },
         "required": [
-          "soAnhDaLuu",
+          "savedAttachmentCount",
           "attachmentIds"
         ]
       },
@@ -7878,14 +7912,14 @@
           "productId": {
             "type": "string"
           },
-          "ten": {
+          "name": {
             "type": "string",
             "description": "Tên sản phẩm."
           },
           "sku": {
             "type": "string"
           },
-          "donVi": {
+          "unit": {
             "type": "string",
             "description": "Đơn vị tính.",
             "example": "tấm"
@@ -7900,17 +7934,17 @@
             "description": "Đã hứa cho đơn đã chốt — tổng ledger giữ chỗ.",
             "example": 20
           },
-          "khaDung": {
+          "available": {
             "type": "number",
             "description": "`onHand − reserved` — CÓ THỂ ÂM.",
             "example": -15
           },
-          "canNhap": {
+          "toPurchase": {
             "type": "number",
             "description": "Phần thiếu phải nhập (0 khi khả dụng không âm).",
             "example": 15
           },
-          "tinhTrang": {
+          "stockStatus": {
             "type": "string",
             "enum": [
               "du",
@@ -7922,39 +7956,39 @@
         },
         "required": [
           "productId",
-          "ten",
+          "name",
           "sku",
-          "donVi",
+          "unit",
           "onHand",
           "reserved",
-          "khaDung",
-          "canNhap",
-          "tinhTrang"
+          "available",
+          "toPurchase",
+          "stockStatus"
         ]
       },
-      "CanMuaViewDto": {
+      "PurchaseNeedViewDto": {
         "type": "object",
         "properties": {
           "productId": {
             "type": "string"
           },
-          "ten": {
+          "name": {
             "type": "string"
           },
-          "donVi": {
+          "unit": {
             "type": "string",
             "example": "tấm"
           },
-          "canNhap": {
+          "toPurchase": {
             "type": "number",
             "example": 15
           }
         },
         "required": [
           "productId",
-          "ten",
-          "donVi",
-          "canNhap"
+          "name",
+          "unit",
+          "toPurchase"
         ]
       },
       "StockListResponseDto": {
@@ -7967,17 +8001,17 @@
               "$ref": "#/components/schemas/StockItemViewDto"
             }
           },
-          "danhSachCanMua": {
-            "description": "Các sản phẩm khả dụng âm của CÙNG tập `items`, sắp `canNhap` giảm dần rồi theo tên.",
+          "purchaseList": {
+            "description": "Các sản phẩm khả dụng âm của CÙNG tập `items`, sắp `toPurchase` giảm dần rồi theo tên.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CanMuaViewDto"
+              "$ref": "#/components/schemas/PurchaseNeedViewDto"
             }
           }
         },
         "required": [
           "items",
-          "danhSachCanMua"
+          "purchaseList"
         ]
       },
       "StockVoucherLineRequestDto": {
@@ -8076,7 +8110,7 @@
           "id": {
             "type": "string"
           },
-          "ma": {
+          "code": {
             "type": "string",
             "description": "Mã phiếu hiển thị.",
             "example": "PK-N-0119"
@@ -8101,15 +8135,15 @@
             "type": "string",
             "description": "Thời điểm lưu phiếu (ISO-8601 UTC)."
           },
-          "nguoiTao": {
+          "createdBy": {
             "$ref": "#/components/schemas/StockVoucherCreatorDto"
           },
-          "soDong": {
+          "lineCount": {
             "type": "number",
             "description": "Số dòng sản phẩm.",
             "example": 2
           },
-          "tongSoLuong": {
+          "totalQty": {
             "type": "number",
             "description": "Tổng số lượng các dòng (luôn dương).",
             "example": 45
@@ -8117,12 +8151,12 @@
         },
         "required": [
           "id",
-          "ma",
+          "code",
           "type",
           "createdAt",
-          "nguoiTao",
-          "soDong",
-          "tongSoLuong"
+          "createdBy",
+          "lineCount",
+          "totalQty"
         ]
       },
       "StockVoucherListResponseDto": {
@@ -8958,7 +8992,7 @@
             "description": "Số báo giá của đơn (\"Gắn đơn\") — cùng số in trên báo giá và hợp đồng.",
             "example": "BG-3F2A9B1C"
           },
-          "customerSdt": {
+          "customerPhone": {
             "type": "string",
             "description": "SĐT khách (E.164) chụp lúc lập.",
             "example": "+84901234567"
@@ -9005,7 +9039,7 @@
           "lineCount",
           "orderId",
           "quoteNo",
-          "customerSdt",
+          "customerPhone",
           "customerAddress",
           "seller",
           "lines",

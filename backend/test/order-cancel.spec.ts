@@ -176,12 +176,15 @@ describe('OrdersService.huyDon (Story 5.7)', () => {
       ['rỗng', ''],
       ['chỉ khoảng trắng', '    '],
       ['hai ký tự sau trim', ' x. '],
-    ])('%s ⇒ 400 VALIDATION_ERROR kèm fieldErrors.lyDo', async (_ten, lyDo) => {
-      const err = await bat(goi({ lyDo }));
-      expect(err.getStatus()).toBe(400);
-      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(err.fieldErrors?.[0].field).toBe('lyDo');
-    });
+    ])(
+      '%s ⇒ 400 VALIDATION_ERROR kèm fieldErrors.reason',
+      async (_ten, lyDo) => {
+        const err = await bat(goi({ lyDo }));
+        expect(err.getStatus()).toBe(400);
+        expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(err.fieldErrors?.[0].field).toBe('reason');
+      },
+    );
 
     it('lý do không hợp lệ ⇒ status KHÔNG đổi, KHÔNG event nào phát ra', async () => {
       await bat(goi({ lyDo: '  ' }));
@@ -197,25 +200,27 @@ describe('OrdersService.huyDon (Story 5.7)', () => {
 
   describe('quyền và trạng thái (AC-6, AC-7)', () => {
     it('thiếu `quotes.create_edit` ⇒ 403, status không đổi', async () => {
-      const err = await bat(
-        goi({ quyen: new Set([PERM.ordersViewAll]) }),
-      );
+      const err = await bat(goi({ quyen: new Set([PERM.ordersViewAll]) }));
       expect(err.getStatus()).toBe(403);
       expect(err.errorCode).toBe(ErrorCode.FORBIDDEN);
       expect(orderRepo.updateMany).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
-    it.each(['choduyet', 'thicong', 'nghiemthu', 'danggiao', 'dagiao', 'hoanthanh'])(
-      'trạng thái `%s` không có cạnh huỷ ⇒ 409',
-      async (status) => {
-        orderRepo.findFirst.mockResolvedValue(don(status));
-        const err = await bat(goi());
-        expect(err.getStatus()).toBe(409);
-        expect(err.errorCode).toBe(ErrorCode.CONFLICT);
-        expect(orderRepo.updateMany).not.toHaveBeenCalled();
-      },
-    );
+    it.each([
+      'choduyet',
+      'thicong',
+      'nghiemthu',
+      'danggiao',
+      'dagiao',
+      'hoanthanh',
+    ])('trạng thái `%s` không có cạnh huỷ ⇒ 409', async (status) => {
+      orderRepo.findFirst.mockResolvedValue(don(status));
+      const err = await bat(goi());
+      expect(err.getStatus()).toBe(409);
+      expect(err.errorCode).toBe(ErrorCode.CONFLICT);
+      expect(orderRepo.updateMany).not.toHaveBeenCalled();
+    });
 
     it('đơn ĐÃ huỷ ⇒ 409, KHÔNG no-op im lặng — người bấm cần biết việc đã xảy ra rồi', async () => {
       orderRepo.findFirst.mockResolvedValue(don('huy'));
@@ -237,10 +242,12 @@ describe('OrdersService.huyDon (Story 5.7)', () => {
       // ⚠️ Mock phải CHẠY callback rồi mới ném. `mockRejectedValue` trần không chạy thân tx,
       // nên nó xanh y hệt cho cả bản publish-trong-tx lẫn publish-sau-commit — tức là không
       // đo được thứ nó tự nhận là đang đo (đột biến "publish trước commit" sống sót).
-      transaction.mockImplementation(async (fn: (tx: typeof txMock) => Promise<unknown>) => {
-        await fn(txMock);
-        throw new Error('commit-that-bai');
-      });
+      transaction.mockImplementation(
+        async (fn: (tx: typeof txMock) => Promise<unknown>) => {
+          await fn(txMock);
+          throw new Error('commit-that-bai');
+        },
+      );
 
       await bat(goi());
 
@@ -260,9 +267,9 @@ describe('OrdersService.huyDon (Story 5.7)', () => {
       await goi();
       expect(orderRepo.updateMany).toHaveBeenCalledTimes(1);
       expect(orderRepo.update).toHaveBeenCalledTimes(1);
-      expect(Object.keys(orderRepo.update.mock.calls[0][0].data).sort()).toEqual(
-        ['cancelReason', 'cancelledAt'],
-      );
+      expect(
+        Object.keys(orderRepo.update.mock.calls[0][0].data).sort(),
+      ).toEqual(['cancelReason', 'cancelledAt']);
     });
   });
 

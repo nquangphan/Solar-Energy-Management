@@ -184,7 +184,7 @@ flowchart TD
 | --- | --- |
 | Đặt tên entity | PascalCase entity (`Order`, `OrderLineItem`); bảng snake_case số nhiều (`order_line_items`) |
 | Đặt tên file | kebab-case (`orders.service.ts`, `allowed-transition.ts`) |
-| REST route | danh từ số nhiều, kebab-case, **tiếng Anh** (`/orders/{id}/line-items`); action nghiệp vụ là sub-resource POST (`/orders/{id}/confirm`); route/tham số/field DTO tiếng Anh, enum value nghiệp vụ (khoá trạng thái, khoá event, loại khách, loại phiếu) giữ nguyên. Route/tham số tiếng Việt cũ đã đổi ở Story 10.1; field DTO đổi ở Story 10.2 |
+| REST route | danh từ số nhiều, kebab-case, **tiếng Anh** (`/orders/{id}/line-items`); action nghiệp vụ là sub-resource POST (`/orders/{id}/confirm`); route/tham số/field DTO tiếng Anh, enum value nghiệp vụ (khoá trạng thái, khoá event, loại khách, loại phiếu) giữ nguyên. Route/tham số tiếng Việt cũ đã đổi ở Story 10.1; field DTO đã tiếng Anh từ Story 10.2 (guard `no-vietnamese-api-contract.spec.ts` soi cả schema) |
 | ID | UUID v4 cho tất cả entity, **trừ** `Customer` (PK = SĐT chuẩn hoá **E.164** `+84…`, chuẩn hoá chỉ ở backend `customers`, AD-9) |
 | Ngày giờ | ISO-8601 UTC lưu trong DB; client hiển thị theo giờ VN (UTC+7) |
 | Tiền | integer đồng (AD-10); không float, không decimal |

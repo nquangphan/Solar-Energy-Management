@@ -90,13 +90,14 @@ export function tenFileAnToan(originalname: string): string {
  * MẢNG RỖNG LÀ HỢP LỆ: upload luôn optional (FR-23, UX-DR-25) — chuyển trạng thái không kèm
  * ảnh là đường đi bình thường nhất, không phải ngoại lệ.
  *
- * Lỗi số lượng báo trên `anh`; lỗi của từng ảnh báo trên `anh[i]` để FE tô đúng thumbnail.
+ * Lỗi số lượng báo trên `files`; lỗi của từng ảnh báo trên `files[i]` để FE tô đúng thumbnail
+ * (tên field form multipart mà client gửi).
  */
 export function kiemTraAnh(files: readonly AnhTaiLen[]): readonly LoiField[] {
   if (files.length > SO_ANH_TOI_DA) {
     return [
       {
-        field: 'anh',
+        field: 'files',
         code: 'maxCount',
         message: `Tối đa ${SO_ANH_TOI_DA} ảnh cho một lần tải lên.`,
       },
@@ -107,7 +108,7 @@ export function kiemTraAnh(files: readonly AnhTaiLen[]): readonly LoiField[] {
   files.forEach((file, i) => {
     if (!coTrongAllowList(file.mimetype)) {
       loi.push({
-        field: `anh[${i}]`,
+        field: `files[${i}]`,
         code: 'mimeType',
         message: `Chỉ nhận ảnh ${Object.keys(MIME_CHO_PHEP).join(', ')}.`,
       });
@@ -115,7 +116,7 @@ export function kiemTraAnh(files: readonly AnhTaiLen[]): readonly LoiField[] {
     }
     if (file.size > KICH_THUOC_TOI_DA_BYTE) {
       loi.push({
-        field: `anh[${i}]`,
+        field: `files[${i}]`,
         code: 'maxSize',
         message: `Mỗi ảnh tối đa ${KICH_THUOC_TOI_DA_BYTE / (1024 * 1024)} MB.`,
       });

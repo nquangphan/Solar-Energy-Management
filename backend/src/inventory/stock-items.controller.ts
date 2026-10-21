@@ -10,7 +10,10 @@ import { PERM } from '../accounts/domain/permission-registry';
 import { RequireAnyPermissions } from '../auth/require-any-permission.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { StockListQueryDto } from './dto/stock-list-query.dto';
-import { StockListResponseDto } from './dto/stock-list-response.dto';
+import {
+  StockListResponseDto,
+  toStockListResponseDto,
+} from './dto/stock-list-response.dto';
 import { StockItemsService } from './stock-items.service';
 
 /**
@@ -42,6 +45,6 @@ export class StockItemsController {
       'Thiếu CẢ inventory.manage lẫn quotes.create_edit (FORBIDDEN).',
   })
   async list(@Query() query: StockListQueryDto): Promise<StockListResponseDto> {
-    return (await this.stockItems.lietKeTonKho(query)) as StockListResponseDto;
+    return toStockListResponseDto(await this.stockItems.lietKeTonKho(query));
   }
 }

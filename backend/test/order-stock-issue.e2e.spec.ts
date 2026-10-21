@@ -333,16 +333,19 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       const first = await post();
 
       expect(first.status).toBe(201);
-      expect(first.body.voucher.ma).toBe('PK-X-0096');
+      expect(first.body.voucher.code).toBe('PK-X-0096');
+      expect(first.body.voucher.createdBy).toBeDefined();
+      expect(first.body.voucher).not.toHaveProperty('ma');
+      expect(first.body.voucher).not.toHaveProperty('nguoiTao');
       expect(first.body.voucher.orderId).toBe(ORDER_ID);
       // A live order's stock-out offers no return; the flag is always present.
       expect(first.body.voucher.canReturn).toBe(false);
       expect(first.body.voucher.lines).toEqual([
         {
           productId: PANEL,
-          ten: 'Tấm pin 550W',
+          name: 'Tấm pin 550W',
           sku: 'PIN-550',
-          donVi: 'tấm',
+          unit: 'tấm',
           qty: 10,
         },
       ]);
@@ -737,7 +740,8 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       expect(res.body.issued).toBe(true);
       expect(res.body.canIssue).toBe(false);
       expect(res.body.lines).toEqual([]);
-      expect(res.body.voucher.ma).toBe('PK-X-0096');
+      expect(res.body.voucher.code).toBe('PK-X-0096');
+      expect(res.body.voucher).not.toHaveProperty('ma');
       expect(res.body.voucher.lines[0]).not.toHaveProperty('unitCost');
     });
   });

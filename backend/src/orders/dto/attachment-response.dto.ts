@@ -14,7 +14,8 @@ export class AttachmentItemDto {
   id!: string;
 
   @ApiProperty({
-    description: 'Tên file đã dọn ký tự nguy hiểm lúc ghi, giữ tiếng Việt có dấu.',
+    description:
+      'Tên file đã dọn ký tự nguy hiểm lúc ghi, giữ tiếng Việt có dấu.',
   })
   fileName!: string;
 
@@ -28,10 +29,11 @@ export class AttachmentItemDto {
   createdAt!: Date;
 
   @ApiProperty({ description: 'Tên hiển thị người tải ảnh lên.' })
-  nguoiTaiLen!: string;
+  uploadedBy!: string;
 
   @ApiPropertyOptional({
-    description: 'Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung.',
+    description:
+      'Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung.',
     nullable: true,
   })
   statusFrom!: string | null;
@@ -46,7 +48,7 @@ export class AttachmentItemDto {
     description:
       'Người gọi có xoá được ảnh này không — tính Ở BACKEND (người tải lên HOẶC có quyền chỉnh sửa đơn). Client CHỈ hiển thị, không dựng lại luật.',
   })
-  coTheXoa!: boolean;
+  canDelete!: boolean;
 }
 
 /**
@@ -63,8 +65,37 @@ export class AttachmentListResponseDto {
 /** Response của `POST /orders/:id/attachments` — id các ảnh vừa lưu, để client refresh đúng chỗ. */
 export class AttachmentUploadResponseDto {
   @ApiProperty({ description: 'Số ảnh đã lưu trong lượt này.' })
-  soAnhDaLuu!: number;
+  savedAttachmentCount!: number;
 
   @ApiProperty({ type: [String] })
   attachmentIds!: string[];
+}
+
+/** Maps the attachment list of the service to the contract — fields listed, no spread. */
+export function toAttachmentListResponseDto(
+  items: readonly {
+    readonly id: string;
+    readonly fileName: string;
+    readonly contentType: string;
+    readonly size: number;
+    readonly createdAt: Date;
+    readonly nguoiTaiLen: string;
+    readonly statusFrom: string | null;
+    readonly statusTo: string | null;
+    readonly coTheXoa: boolean;
+  }[],
+): AttachmentListResponseDto {
+  return {
+    items: items.map((item) => ({
+      id: item.id,
+      fileName: item.fileName,
+      contentType: item.contentType,
+      size: item.size,
+      createdAt: item.createdAt,
+      uploadedBy: item.nguoiTaiLen,
+      statusFrom: item.statusFrom,
+      statusTo: item.statusTo,
+      canDelete: item.coTheXoa,
+    })),
+  };
 }

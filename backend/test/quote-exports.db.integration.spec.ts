@@ -164,7 +164,7 @@ moTa('Ràng buộc tầng DB của hồ sơ xuất báo giá (Postgres THẬT)',
     orderId: string;
     versionId: string;
   }> {
-    const view = await service.create(accountId, { customerSdt: SDT });
+    const view = await service.create(accountId, { customerPhone: SDT });
     await service.addLine(
       accountId,
       view.id,

@@ -10,7 +10,8 @@ import { ORDER_STATUS_KEYS } from '../domain/order-status';
 export class StatusChangeResponseDto {
   @ApiProperty({
     enum: ORDER_STATUS_KEYS,
-    description: 'Trạng thái đơn SAU khi chuyển — đích đến do bảng transition quyết.',
+    description:
+      'Trạng thái đơn SAU khi chuyển — đích đến do bảng transition quyết.',
   })
   status!: string;
 
@@ -21,8 +22,9 @@ export class StatusChangeResponseDto {
   occurredAt!: string;
 
   @ApiProperty({
-    description: 'Số ảnh bằng chứng đã ghi cho bước này (0 là hợp lệ — upload luôn optional).',
+    description:
+      'Số ảnh bằng chứng đã ghi cho bước này (0 là hợp lệ — upload luôn optional).',
     example: 0,
   })
-  soAnhDaLuu!: number;
+  savedAttachmentCount!: number;
 }

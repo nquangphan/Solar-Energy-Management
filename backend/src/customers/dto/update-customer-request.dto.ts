@@ -19,9 +19,9 @@ import { IsAbsent } from './is-absent.decorator';
  * học HIGH của review 3.1). Khai tay từng field: cột NOT NULL dùng `@IsOptionalNotNull()`
  * (vắng mặt thì thôi, `null` là sai), cột nullable dùng `@IsOptional()` — ở đó `null` là đường
  * XOÁ hợp lệ ("khách này không còn CCCD"), và chính nó là đường để đổi loại khách: chuyển
- * Cá nhân → Thương mại thì gửi `{"custType": "THUONG_MAI", "cccd": null, "taxCode": "…"}`.
+ * Cá nhân → Thương mại thì gửi `{"custType": "THUONG_MAI", "nationalId": null, "taxCode": "…"}`.
  *
- * `sdt` BẤT BIẾN: có mặt trong body ⇒ 400. Đổi SĐT là đổi khoá chính = đổi danh tính, mà Epic 4
+ * `phone` BẤT BIẾN: có mặt trong body ⇒ 400. Đổi SĐT là đổi khoá chính = đổi danh tính, mà Epic 4
  * sẽ FK vào đây — nếu nghiệp vụ thật sự cần "khách đổi số", đó là một thao tác di trú riêng, có
  * story riêng, KHÔNG phải một `PATCH` lặng lẽ.
  *
@@ -40,7 +40,7 @@ export class UpdateCustomerRequestDto {
   @IsAbsent(
     'SĐT là khoá chính, không sửa được sau khi tạo (đổi SĐT cần thao tác di trú riêng).',
   )
-  sdt?: string;
+  phone?: string;
 
   @ApiPropertyOptional({ description: 'Loại khách.', enum: CUST_TYPES })
   @IsOptionalNotNull()
@@ -61,7 +61,7 @@ export class UpdateCustomerRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  cccd?: string | null;
+  nationalId?: string | null;
 
   @ApiPropertyOptional({ description: 'Mã số thuế — CHỈ khách Thương mại.' })
   @IsOptional()

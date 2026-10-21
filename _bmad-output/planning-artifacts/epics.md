@@ -676,6 +676,7 @@ As a lập trình viên client, I want mọi field request/response trên contra
 - **Given** validation trả `fieldErrors[].field`, **When** request sai, **Then** `field` mang tên mới (vd `reason`, không còn `lyDo`) — e2e qua `ValidationPipe` chứng minh (AD-5).
 - **Given** `openapi.json` sinh lại, **When** chạy guard mới, **Then** không property nào trong `components.schemas` thuộc danh sách tên tiếng Việt cũ, có assert chống-guard-rỗng; mutant đổi ngược một field ⇒ ĐỎ.
 - **Given** fake port web/mobile còn chép tay tên cũ, **When** story này xong, **Then** KHÔNG sửa client (chưa consumer HTTP); fake được viết lại theo type sinh ở 10.3/10.6 — ghi rõ trong Dev Notes để review không coi là drift.
+- **Tinh chỉnh khi làm story (quyết 2026-10-22, Story 10.2 — ghi vào bảng §4.2 khối "Tinh chỉnh 10.2"):** field form multipart `anh` đổi thành `files` (transition + ảnh bổ sung; spec có `StatusChangeRequestDto.files` optional và schema mới `AttachmentUploadRequestDto` với `files` required); `fieldErrors[].field` do service ném dùng tên field mới (`customerPhone`, `reason`, `phone`, `nationalId`, `files`); `FORBIDDEN_FIELDS` theo tên DTO (`nationalId`); response dựng qua hàm map `to…Dto` ở ranh giới controller, service/domain/Prisma/event giữ tên cũ; guard `no-vietnamese-api-contract.spec.ts` soi cả tên schema và mọi property (kể cả inline).
 
 ### Story 10.3: Web: client sinh từ OpenAPI, phiên đăng nhập và xử lý lỗi một chỗ
 As a người dùng web, I want đăng nhập thật vào backend và mọi lỗi API hiển thị nhất quán, So that web là client REST thật thay vì demo fake.

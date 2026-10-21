@@ -262,7 +262,7 @@ describe('OrdersService', () => {
 
   describe('AC-1/AC-4 — tạo đơn: một transaction 3 op, snapshot sourceId từ Customer', () => {
     it('ghi ĐÚNG payload: status baogia, owner = actor, sourceId = Customer.sourceId, versionNo 1, repoint pointer', async () => {
-      await service.create(ACTOR, { customerSdt: '0912 345 678' });
+      await service.create(ACTOR, { customerPhone: '0912 345 678' });
 
       // Đúng MỘT transaction, đúng 3 op — FK vòng không cho phép tách rời.
       expect(transaction).toHaveBeenCalledTimes(1);
@@ -319,7 +319,7 @@ describe('OrdersService', () => {
         taxCode: '0312345678',
       });
 
-      await service.create(ACTOR, { customerSdt: '0912 345 678' });
+      await service.create(ACTOR, { customerPhone: '0912 345 678' });
 
       expect(orderRepo.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -335,7 +335,7 @@ describe('OrdersService', () => {
       customerRepo.findUnique.mockResolvedValue(null);
 
       const err = await bat(
-        service.create(ACTOR, { customerSdt: '0912345678' }),
+        service.create(ACTOR, { customerPhone: '0912345678' }),
       );
 
       expect(err).toBeInstanceOf(AppException);
@@ -344,11 +344,11 @@ describe('OrdersService', () => {
       expect(transaction).not.toHaveBeenCalled();
     });
 
-    it('SĐT rác ⇒ 400 kèm fieldErrors trỏ customerSdt', async () => {
-      const err = await bat(service.create(ACTOR, { customerSdt: 'abc' }));
+    it('SĐT rác ⇒ 400 kèm fieldErrors trỏ customerPhone', async () => {
+      const err = await bat(service.create(ACTOR, { customerPhone: 'abc' }));
 
       expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(err.fieldErrors?.[0]?.field).toBe('customerSdt');
+      expect(err.fieldErrors?.[0]?.field).toBe('customerPhone');
       expect(customerRepo.findUnique).not.toHaveBeenCalled();
     });
   });
@@ -897,7 +897,7 @@ describe('OrdersService', () => {
         thuTu.push('publish');
       });
 
-      await service.create(ACTOR, { customerSdt: SDT_E164 });
+      await service.create(ACTOR, { customerPhone: SDT_E164 });
 
       expect(thuTu).toEqual(['commit', 'publish']);
       const event = eventBus.publish.mock.calls[0][0] as OrderCreated;
@@ -962,7 +962,7 @@ describe('OrdersService', () => {
       const view = await service.update(
         ACTOR,
         DON_BAOGIA.id,
-        { scopeThiCong: true },
+        { scopeConstruction: true },
         true,
         TOAN_QUYEN,
       );
@@ -984,7 +984,7 @@ describe('OrdersService', () => {
         service.update(
           ACTOR,
           'ord-x',
-          { scopeThiCong: true },
+          { scopeConstruction: true },
           true,
           TOAN_QUYEN,
         ),
@@ -1005,7 +1005,7 @@ describe('OrdersService', () => {
         service.update(
           ACTOR,
           DON_BAOGIA.id,
-          { scopeVanChuyen: true },
+          { scopeDelivery: true },
           true,
           TOAN_QUYEN,
         ),
@@ -1030,7 +1030,7 @@ describe('OrdersService', () => {
       await service.update(
         ACTOR,
         DON_BAOGIA.id,
-        { scopeVanChuyen: true },
+        { scopeDelivery: true },
         true,
         TOAN_QUYEN,
       );
@@ -1054,7 +1054,7 @@ describe('OrdersService', () => {
       const view = await service.update(
         ACTOR,
         DON_BAOGIA.id,
-        { scopeThiCong: true, scopeVanChuyen: true },
+        { scopeConstruction: true, scopeDelivery: true },
         true,
         TOAN_QUYEN,
       );
@@ -1198,7 +1198,7 @@ describe('OrdersService', () => {
       await service.update(
         ACTOR,
         DON_BAOGIA.id,
-        { scopeThiCong: true },
+        { scopeConstruction: true },
         true,
         TOAN_QUYEN,
       );
@@ -1224,7 +1224,7 @@ describe('OrdersService', () => {
       await service.update(
         ACTOR,
         DON_BAOGIA.id,
-        { scopeVanChuyen: true, vatMode: 'khong_vat' },
+        { scopeDelivery: true, vatMode: 'khong_vat' },
         true,
         TOAN_QUYEN,
       );
@@ -3841,7 +3841,7 @@ describe('OrdersService', () => {
           service.update(
             ACTOR,
             DON_BAOGIA.id,
-            { scopeThiCong: true },
+            { scopeConstruction: true },
             true,
             TOAN_QUYEN,
           ),

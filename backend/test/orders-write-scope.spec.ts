@@ -63,7 +63,8 @@ describe('OrdersService — đường GHI đơn thu hẹp theo phạm vi quyền
   const DUONG_GHI: readonly [string, Goi][] = [
     [
       'update',
-      (s, q) => s.update(CALLER, ORDER_ID, { scopeThiCong: true }, false, q),
+      (s, q) =>
+        s.update(CALLER, ORDER_ID, { scopeConstruction: true }, false, q),
     ],
     ['confirm', (s, q) => s.confirm(CALLER, ORDER_ID, 8, false, q)],
     ['revise', (s, q) => s.revise(CALLER, ORDER_ID, false, q)],

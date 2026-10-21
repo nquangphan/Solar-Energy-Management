@@ -385,7 +385,7 @@ describe('/orders/:id/invoices/:invoiceId (e2e)', () => {
         lineCount: 2,
         orderId: ORDER_A,
         quoteNo: quoteNumberOf(ORDER_A),
-        customerSdt: '+84912345678',
+        customerPhone: '+84912345678',
         customerAddress: null,
         seller: {
           legalName: 'CÔNG TY NLMT PHƯƠNG NAM',

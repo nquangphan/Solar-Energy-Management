@@ -32,6 +32,8 @@ import { StockVoucherListQueryDto } from './dto/stock-voucher-list-query.dto';
 import {
   StockVoucherDetailDto,
   StockVoucherListResponseDto,
+  toStockVoucherDetailDto,
+  toStockVoucherListResponseDto,
 } from './dto/stock-voucher-response.dto';
 import { StockVouchersService } from './stock-vouchers.service';
 
@@ -90,10 +92,9 @@ export class StockVouchersController {
     @Body() body: CreateStockVoucherRequestDto,
   ): Promise<StockVoucherDetailDto> {
     const phieu = await this.stockVouchers.taoPhieu(body, account.id);
-    return anGiaVonDongPhieu(
-      phieu,
-      await this.canViewCosts(account.id),
-    ) as StockVoucherDetailDto;
+    return toStockVoucherDetailDto(
+      anGiaVonDongPhieu(phieu, await this.canViewCosts(account.id)),
+    );
   }
 
   @Post(':id/return')
@@ -131,10 +132,9 @@ export class StockVouchersController {
       body,
       account.id,
     );
-    return anGiaVonDongPhieu(
-      phieu,
-      await this.canViewCosts(account.id),
-    ) as StockVoucherDetailDto;
+    return toStockVoucherDetailDto(
+      anGiaVonDongPhieu(phieu, await this.canViewCosts(account.id)),
+    );
   }
 
   @Get()
@@ -152,9 +152,9 @@ export class StockVouchersController {
   async list(
     @Query() query: StockVoucherListQueryDto,
   ): Promise<StockVoucherListResponseDto> {
-    return (await this.stockVouchers.lietKePhieu(
-      query,
-    )) as StockVoucherListResponseDto;
+    return toStockVoucherListResponseDto(
+      await this.stockVouchers.lietKePhieu(query),
+    );
   }
 
   @Get(':id')
@@ -183,6 +183,6 @@ export class StockVouchersController {
       this.stockVouchers.chiTietPhieu(id),
       this.canViewCosts(account.id),
     ]);
-    return anGiaVonDongPhieu(phieu, canViewCosts) as StockVoucherDetailDto;
+    return toStockVoucherDetailDto(anGiaVonDongPhieu(phieu, canViewCosts));
   }
 }

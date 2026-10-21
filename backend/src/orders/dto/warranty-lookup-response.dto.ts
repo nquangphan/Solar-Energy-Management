@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { WarrantyLookupView } from '../orders.service';
 
 /**
  * Response của `GET /orders/warranty-lookup?phone=<thô>` — chỉ để OpenAPI có schema thật
- * (AD-12); service trả object thường, KHÔNG instantiate class nào ở đây.
+ * (AD-12); service trả object thường, controller dựng response qua `toWarrantyLookupResponseDto`,
+ * KHÔNG instantiate class nào ở đây.
  *
  * Field nullable khai `type` TƯỜNG MINH: union `string | null` sinh `"type":"object"` làm hỏng
  * codegen (bug đã sửa ở 3.6).
@@ -11,7 +13,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 /** Tóm tắt khách trên thẻ đầu màn — CHỈ thứ cần để xác nhận "đúng người đang gọi". */
 export class WarrantyCustomerDto {
   @ApiProperty({ example: '+84903176968' })
-  sdt!: string;
+  phone!: string;
 
   @ApiProperty({ description: 'Họ tên hoặc tên công ty.' })
   name!: string;
@@ -88,7 +90,7 @@ export class WarrantyOrderDto {
     description:
       'Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt.',
   })
-  chotAt!: Date | null;
+  confirmedAt!: Date | null;
 
   @ApiProperty({ type: [WarrantyLineItemDto] })
   lineItems!: WarrantyLineItemDto[];
@@ -107,7 +109,7 @@ export class WarrantyLookupResponseDto {
     description: 'SĐT đã chuẩn hoá E.164 — trả về kể cả khi `found: false`.',
     example: '+84903176968',
   })
-  sdt!: string;
+  phone!: string;
 
   @ApiProperty({
     type: WarrantyCustomerDto,
@@ -122,4 +124,39 @@ export class WarrantyLookupResponseDto {
       'Đơn của khách ĐÃ thu hẹp theo quyền người gọi, chỉ giữ đơn còn ít nhất một dòng có bảo hành.',
   })
   orders!: WarrantyOrderDto[];
+}
+
+/** Maps the warranty lookup of the service to the contract — fields listed, no spread. */
+export function toWarrantyLookupResponseDto(
+  view: WarrantyLookupView,
+): WarrantyLookupResponseDto {
+  return {
+    found: view.found,
+    phone: view.sdt,
+    customer:
+      view.customer === null
+        ? null
+        : {
+            phone: view.customer.sdt,
+            name: view.customer.name,
+            custType: view.customer.custType,
+          },
+    orders: view.orders.map((order) => ({
+      id: order.id,
+      status: order.status,
+      confirmedAt: order.chotAt,
+      lineItems: order.lineItems.map((line) => ({
+        id: line.id,
+        name: line.name,
+        qty: line.qty,
+        unit: line.unit,
+        warrantyMonths: line.warrantyMonths,
+        warrantyStartAt: line.warrantyStartAt,
+        warrantyEndAt: line.warrantyEndAt,
+        remainingDays: line.remainingDays,
+        remainingMonths: line.remainingMonths,
+        warrantyStatus: line.warrantyStatus,
+      })),
+    })),
+  };
 }

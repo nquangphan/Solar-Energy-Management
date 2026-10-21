@@ -11,7 +11,8 @@ Hợp đồng đặt tên & quy ước cho **mọi** story backend. Nguồn: `AR
 | File | **kebab-case** | `prisma.service.ts`, `allowed-transition.ts` |
 | REST route | **danh từ số nhiều, kebab-case** | `/orders`, `/orders/{id}/line-items`, `/stock-vouchers` |
 | Action nghiệp vụ | **POST sub-resource** (không phải verb ở path) | `POST /orders/{id}/stock-issue`, `POST /stock-vouchers/{id}/return` |
-| Ngôn ngữ contract | Route, field DTO/OpenAPI, mã `fieldErrors` **mới** viết **tiếng Anh** (Đại Ca chốt 2026-10-21, xem `project-context.md`). Route, tham số và operationId đã tiếng Anh từ Story 10.1 (guard `no-vietnamese-api-contract.spec.ts`); field DTO tiếng Việt cũ đổi ở Story 10.2; enum value nghiệp vụ giữ nguyên | `lines.{i}.qty`, không `dong.{i}.qty` |
+| Ngôn ngữ contract | Route, field DTO/OpenAPI, mã `fieldErrors` **mới** viết **tiếng Anh** (Đại Ca chốt 2026-10-21, xem `project-context.md`). Route, tham số và operationId đã tiếng Anh từ Story 10.1; field DTO đã tiếng Anh từ Story 10.2 (guard `no-vietnamese-api-contract.spec.ts` soi cả schema); enum value nghiệp vụ giữ nguyên | `lines.{i}.qty`, không `dong.{i}.qty` |
+| Response DTO | Dựng bằng **hàm map có kiểu trả về tường minh** (`toXxxDto(view): XxxDto`, trong chính file DTO, liệt kê từng field), KHÔNG cast `as XxxDto` object service/Prisma. App không có serializer: object controller trả CHÍNH LÀ JSON, nên cast làm spec lệch runtime | `toOrderResponseDto(view)`, không `view as OrderResponseDto` |
 | ID | **UUID v4** mọi entity — **trừ** `Customer` (PK = SĐT chuẩn hoá **E.164**, chỉ chuẩn hoá ở backend `customers`, AD-9) | `id: uuid` |
 | Tiền | **integer đồng** — KHÔNG float/decimal (AD-10) | `unitPriceSnapshot: int` |
 | Ngày giờ | **ISO-8601 UTC** lưu DB; client hiển thị UTC+7 | `2026-07-08T09:00:00.000Z` |

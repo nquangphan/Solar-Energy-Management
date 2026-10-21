@@ -27,9 +27,18 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { CustomersService } from './customers.service';
 import { CreateCustomerRequestDto } from './dto/create-customer-request.dto';
-import { CustomerListResponseDto } from './dto/customer-list-response.dto';
-import { CustomerLookupResponseDto } from './dto/customer-lookup-response.dto';
-import { CustomerResponseDto } from './dto/customer-response.dto';
+import {
+  CustomerListResponseDto,
+  toCustomerListResponseDto,
+} from './dto/customer-list-response.dto';
+import {
+  CustomerLookupResponseDto,
+  toCustomerLookupResponseDto,
+} from './dto/customer-lookup-response.dto';
+import {
+  CustomerResponseDto,
+  toCustomerResponseDto,
+} from './dto/customer-response.dto';
 import { ListCustomersQueryDto } from './dto/list-customers-query.dto';
 import { LookupCustomerQueryDto } from './dto/lookup-customer-query.dto';
 import { UpdateCustomerRequestDto } from './dto/update-customer-request.dto';
@@ -55,7 +64,8 @@ export class CustomersController {
   @RequirePermissions(PERM.customersManage)
   @ApiCreatedResponse({
     type: CustomerResponseDto,
-    description: 'Khách hàng đã tạo. `sdt` trả về là chuỗi ĐÃ chuẩn hoá E.164.',
+    description:
+      'Khách hàng đã tạo. `phone` trả về là chuỗi ĐÃ chuẩn hoá E.164.',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
@@ -74,10 +84,7 @@ export class CustomersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Body() body: CreateCustomerRequestDto,
   ): Promise<CustomerResponseDto> {
-    return (await this.customers.create(
-      account.id,
-      body,
-    )) as CustomerResponseDto;
+    return toCustomerResponseDto(await this.customers.create(account.id, body));
   }
 
   @Get()
@@ -95,7 +102,7 @@ export class CustomersController {
   async list(
     @Query() query: ListCustomersQueryDto,
   ): Promise<CustomerListResponseDto> {
-    return (await this.customers.list(query)) as CustomerListResponseDto;
+    return toCustomerListResponseDto(await this.customers.list(query));
   }
 
   /**
@@ -121,9 +128,9 @@ export class CustomersController {
   async lookup(
     @Query() query: LookupCustomerQueryDto,
   ): Promise<CustomerLookupResponseDto> {
-    return (await this.customers.lookup(
-      query.phone,
-    )) as CustomerLookupResponseDto;
+    return toCustomerLookupResponseDto(
+      await this.customers.lookup(query.phone),
+    );
   }
 
   @Get(':phone')
@@ -148,7 +155,7 @@ export class CustomersController {
     description: 'Không có khách hàng với SĐT này (NOT_FOUND).',
   })
   async findOne(@Param('phone') phone: string): Promise<CustomerResponseDto> {
-    return (await this.customers.findOne(phone)) as CustomerResponseDto;
+    return toCustomerResponseDto(await this.customers.findOne(phone));
   }
 
   @Patch(':phone')
@@ -156,12 +163,12 @@ export class CustomersController {
   @ApiParam({ name: 'phone', example: '0912345678' })
   @ApiOkResponse({
     type: CustomerResponseDto,
-    description: 'Khách hàng sau khi sửa. `sdt` KHÔNG sửa được qua đây.',
+    description: 'Khách hàng sau khi sửa. `phone` KHÔNG sửa được qua đây.',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Body chứa `sdt` (bất biến), field lạc loại khách, `sourceId` không tồn tại, hoặc thiếu `sourceNote` khi nguồn mới là "Khác" (VALIDATION_ERROR).',
+      'Body chứa `phone` (bất biến), field lạc loại khách, `sourceId` không tồn tại, hoặc thiếu `sourceNote` khi nguồn mới là "Khác" (VALIDATION_ERROR).',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
@@ -176,10 +183,8 @@ export class CustomersController {
     @Param('phone') phone: string,
     @Body() body: UpdateCustomerRequestDto,
   ): Promise<CustomerResponseDto> {
-    return (await this.customers.update(
-      account.id,
-      phone,
-      body,
-    )) as CustomerResponseDto;
+    return toCustomerResponseDto(
+      await this.customers.update(account.id, phone, body),
+    );
   }
 }

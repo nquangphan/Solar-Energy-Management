@@ -21,5 +21,5 @@ export class CancelOrderRequestDto {
   })
   @IsString()
   @MaxLength(500)
-  lyDo!: string;
+  reason!: string;
 }

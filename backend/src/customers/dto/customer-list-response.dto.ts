@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { CustomerResponseDto } from './customer-response.dto';
+import type { Customer } from '@prisma/client';
+import {
+  CustomerResponseDto,
+  toCustomerResponseDto,
+} from './customer-response.dto';
 
 /**
  * Response của `GET /customers` — ENVELOPE phân trang, không phải mảng trần.
@@ -24,4 +28,19 @@ export class CustomerListResponseDto {
 
   @ApiProperty({ description: 'Số bản ghi mỗi trang.', example: 20 })
   pageSize!: number;
+}
+
+/** Maps the paginated service result (Prisma rows) to the contract. */
+export function toCustomerListResponseDto(view: {
+  items: Customer[];
+  total: number;
+  page: number;
+  pageSize: number;
+}): CustomerListResponseDto {
+  return {
+    items: view.items.map(toCustomerResponseDto),
+    total: view.total,
+    page: view.page,
+    pageSize: view.pageSize,
+  };
 }

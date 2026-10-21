@@ -150,7 +150,7 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     ]);
   });
 
-  it('CustomerLookupResponseDto khai đủ found/sdt/customer (FE điền sẵn form từ đây)', () => {
+  it('CustomerLookupResponseDto khai đủ found/phone/customer (FE điền sẵn form từ đây)', () => {
     const document = buildOpenApiDocument(app);
     const schema = document.components?.schemas?.CustomerLookupResponseDto as {
       required?: string[];
@@ -159,14 +159,14 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect([...(schema.required ?? [])].sort()).toEqual([
       'customer',
       'found',
-      'sdt',
+      'phone',
     ]);
   });
 
   it('CreateCustomerRequestDto đòi ĐÚNG 4 field định danh — không siết thêm', () => {
     // Bộ field bắt buộc là một QUYẾT ĐỊNH có chủ đích: Story 3.4 tạo khách INLINE giữa lúc dựng
     // báo giá, nên bắt gõ CCCD/MST lúc tạo sẽ giết chính luồng đó. Ai thêm một `@IsNotEmpty()`
-    // vào `cccd` sẽ đổi hợp đồng của 3.4 mà không hay — test này chặn đúng chỗ ấy.
+    // vào `nationalId` sẽ đổi hợp đồng của 3.4 mà không hay — test này chặn đúng chỗ ấy.
     const document = buildOpenApiDocument(app);
     const schema = document.components?.schemas?.CreateCustomerRequestDto as {
       required?: string[];
@@ -175,7 +175,7 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     expect([...(schema.required ?? [])].sort()).toEqual([
       'custType',
       'name',
-      'sdt',
+      'phone',
       'sourceId',
     ]);
   });

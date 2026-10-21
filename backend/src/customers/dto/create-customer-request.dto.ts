@@ -12,19 +12,19 @@ import { CUST_TYPE, CUST_TYPES } from '../domain/customer-type';
 /**
  * Body của `POST /customers`.
  *
- * `sdt` nhận chuỗi **THÔ** (`0912 345 678`, `+84912345678`, `84912345678`…) — client KHÔNG bao
+ * `phone` nhận chuỗi **THÔ** (`0912 345 678`, `+84912345678`, `84912345678`…) — client KHÔNG bao
  * giờ tự chuẩn hoá (AD-9). Backend chuẩn hoá về E.164 rồi mới chạm DB; số không phân giải được
  * ⇒ 400 kèm `fieldErrors`, KHÔNG bao giờ 500.
  *
- * BẮT BUỘC đúng bốn thứ: `sdt` + `custType` + `name` + `sourceId` (+ `sourceNote` khi nguồn có
- * cờ `isOther` — luật đó ở service, vì DTO không biết cờ của nguồn nào). `cccd`/`taxCode`/
+ * BẮT BUỘC đúng bốn thứ: `phone` + `custType` + `name` + `sourceId` (+ `sourceNote` khi nguồn có
+ * cờ `isOther` — luật đó ở service, vì DTO không biết cờ của nguồn nào). `nationalId`/`taxCode`/
  * `address`/`bankAccount` là OPTIONAL có chủ đích: Story 3.4 tạo khách INLINE giữa lúc dựng báo
  * giá — bắt sale gõ CCCD/MST lúc đang nói chuyện điện thoại sẽ giết chính luồng đó. Các field
  * này bị chặn ở nơi thật sự cần chúng: Hợp đồng (FR-13) và Hoá đơn (FR-27).
  *
- * `null` được phép ĐÚNG ở những cột nullable (`cccd`/`taxCode`/`address`/`bankAccount`/
+ * `null` được phép ĐÚNG ở những cột nullable (`nationalId`/`taxCode`/`address`/`bankAccount`/
  * `sourceNote`) — ở đó `null` là giá trị NGHIỆP VỤ ("không có"), y như `warrantyMonths` của
- * 3.1. Cột NOT NULL (`sdt`/`custType`/`name`/`sourceId`) là bắt buộc, nên `{"name": null}` bị
+ * 3.1. Cột NOT NULL (`phone`/`custType`/`name`/`sourceId`) là bắt buộc, nên `{"name": null}` bị
  * chặn ngay ở 400 chứ không lọt xuống DB thành 500 (bài học HIGH của review 3.1: `@IsOptional()`
  * tha cả `null` — dùng nó cho cột NOT NULL là mở cửa hậu).
  *
@@ -40,7 +40,7 @@ export class CreateCustomerRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)
-  sdt!: string;
+  phone!: string;
 
   @ApiProperty({
     description: 'Loại khách — quyết định bộ trường hợp lệ.',
@@ -67,7 +67,7 @@ export class CreateCustomerRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
-  cccd?: string | null;
+  nationalId?: string | null;
 
   @ApiPropertyOptional({
     description:

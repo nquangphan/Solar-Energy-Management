@@ -60,6 +60,37 @@ describe('/orders (e2e)', () => {
   };
 
   const SDT_E164 = '+84912345678';
+
+  // Key set of `OrderResponseDto`. There is no serializer, so a handler that returns the service
+  // row instead of mapping it would leak column names (`customerSdt`, `scopeThiCong`…). Checked
+  // as "no key outside the contract": mocked rows omit some nullable columns (JSON drops undefined).
+  const ORDER_RESPONSE_KEYS = [
+    'assigneeAccountId',
+    'cancelReason',
+    'cancelledAt',
+    'createdAt',
+    'currentVersionId',
+    'custType',
+    'customerPhone',
+    'discount',
+    'id',
+    'kWp',
+    'lineItems',
+    'ownerAccountId',
+    'scopeConstruction',
+    'scopeDelivery',
+    'scopeEquipment',
+    'sourceId',
+    'status',
+    'updatedAt',
+    'validityNote',
+    'vatMode',
+  ];
+  const expectOrderResponseKeys = (body: object): void => {
+    expect(ORDER_RESPONSE_KEYS).toEqual(
+      expect.arrayContaining(Object.keys(body)),
+    );
+  };
   const NGUON_FACEBOOK_ID = '5f4d3c2b-1a09-4e8d-9c7b-6a5f4e3d2c1b';
   const KHACH = {
     sdt: SDT_E164,
@@ -664,7 +695,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         found: false,
-        sdt: '+84903176968',
+        phone: '+84903176968',
         customer: null,
         orders: [],
       });
@@ -699,13 +730,15 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .post('/orders')
         .set('Authorization', `Bearer ${token()}`)
-        .send({ customerSdt: '0912 345 678' });
+        .send({ customerPhone: '0912 345 678' });
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('baogia');
       expect(res.body.sourceId).toBe(NGUON_FACEBOOK_ID);
       expect(res.body.ownerAccountId).toBe(ACCOUNT_ID);
       expect(res.body.lineItems).toEqual([]);
+      expect(res.body.customerPhone).toBe(SDT_E164);
+      expectOrderResponseKeys(res.body);
       // Event tới AuditSubscriber thật: OrderCreated được ghi.
       expect(auditRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -724,6 +757,21 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body.lineItems).toHaveLength(1);
       expect(res.body.lineItems[0].amount).toBe(2_450_000 * 8);
+      // Built by a map, not a cast of the Prisma row: contract names only on the wire.
+      expect(res.body).toMatchObject({
+        customerPhone: SDT_E164,
+        scopeEquipment: true,
+        scopeConstruction: false,
+        scopeDelivery: false,
+      });
+      for (const old of [
+        'customerSdt',
+        'scopeThietBi',
+        'scopeThiCong',
+        'scopeVanChuyen',
+      ]) {
+        expect(res.body).not.toHaveProperty(old);
+      }
       // Response KHÔNG có tổng đơn — Story 4.2.
       expect(res.body).not.toHaveProperty('subtotal');
       expect(res.body).not.toHaveProperty('total');
@@ -903,11 +951,13 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThiCong: true });
+        .send({ scopeConstruction: true });
 
       expect(res.status).toBe(200);
-      expect(res.body.scopeThiCong).toBe(true);
-      expect(res.body.scopeThietBi).toBe(true);
+      expect(res.body.scopeConstruction).toBe(true);
+      expect(res.body.scopeEquipment).toBe(true);
+      expect(res.body).not.toHaveProperty('scopeThiCong');
+      expect(res.body).not.toHaveProperty('customerSdt');
       expect(auditRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ eventType: 'OrderScopeChanged' }),
@@ -915,19 +965,19 @@ describe('/orders (e2e)', () => {
       );
     });
 
-    it('cờ không phải boolean (scopeThiCong: "yes") ⇒ 400 kèm fieldErrors, không ghi', async () => {
+    it('cờ không phải boolean (scopeConstruction: "yes") ⇒ 400 kèm fieldErrors, không ghi', async () => {
       givenPermissions(PERM.quotesCreateEdit);
 
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThiCong: 'yes' });
+        .send({ scopeConstruction: 'yes' });
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
       expect(res.body.fieldErrors).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ field: 'scopeThiCong' }),
+          expect.objectContaining({ field: 'scopeConstruction' }),
         ]),
       );
       expect(orderRepo.update).not.toHaveBeenCalled();
@@ -939,7 +989,7 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeVanChuyen: null });
+        .send({ scopeDelivery: null });
 
       expect(res.status).toBe(400);
       expect(orderRepo.update).not.toHaveBeenCalled();
@@ -955,25 +1005,25 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThiCong: true });
+        .send({ scopeConstruction: true });
 
       expect(res.status).toBe(409);
       expect(res.body.code).toBe(ErrorCode.CONFLICT);
       expect(orderRepo.update).not.toHaveBeenCalled();
     });
 
-    it('scopeThietBi: false bị whitelist strip IM LẶNG ⇒ 200, KHÔNG ghi, KHÔNG audit, cờ vẫn true', async () => {
-      // `scopeThietBi` không có trong DTO — client cố tắt cờ bất biến thì field bị strip,
+    it('scopeEquipment: false bị whitelist strip IM LẶNG ⇒ 200, KHÔNG ghi, KHÔNG audit, cờ vẫn true', async () => {
+      // `scopeEquipment` không có trong DTO — client cố tắt cờ bất biến thì field bị strip,
       // dto còn lại RỖNG ⇒ nhánh "trả view hiện tại": không có đường ghi nào chạm tới cờ.
       givenPermissions(PERM.quotesCreateEdit);
 
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThietBi: false });
+        .send({ scopeEquipment: false });
 
       expect(res.status).toBe(200);
-      expect(res.body.scopeThietBi).toBe(true);
+      expect(res.body.scopeEquipment).toBe(true);
       expect(orderRepo.update).not.toHaveBeenCalled();
       expect(auditRepo.create).not.toHaveBeenCalled();
     });
@@ -988,7 +1038,7 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ custType: 'THUONG_MAI', scopeVanChuyen: true });
+        .send({ custType: 'THUONG_MAI', scopeDelivery: true });
 
       expect(res.status).toBe(200);
       // toHaveBeenCalledWith so KHỚP TOÀN BỘ object ⇒ chứng minh `custType` vắng mặt
@@ -1004,7 +1054,7 @@ describe('/orders (e2e)', () => {
         },
       });
       expect(res.body.custType).toBe('CA_NHAN');
-      expect(res.body.scopeVanChuyen).toBe(true);
+      expect(res.body.scopeDelivery).toBe(true);
     });
   });
 
@@ -1428,6 +1478,7 @@ describe('/orders (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('dachot');
+      expectOrderResponseKeys(res.body);
       expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
         where: { id: ORDER_ID, status: 'baogia' },
         data: { status: 'dachot' },
@@ -1840,7 +1891,7 @@ describe('/orders (e2e)', () => {
       const tao = await request(server())
         .post('/orders')
         .set('Authorization', `Bearer ${token()}`)
-        .send({ customerSdt: '0912 345 678' });
+        .send({ customerPhone: '0912 345 678' });
       expect(tao.status).toBe(201);
       // create() trả order SAU op repoint — con trỏ đã trỏ version 1.
       const verCu = tao.body.currentVersionId as string;
@@ -2224,7 +2275,7 @@ describe('/orders (e2e)', () => {
       const tao = await request(server())
         .post('/orders')
         .set('Authorization', `Bearer ${token()}`)
-        .send({ customerSdt: '0912 345 678' });
+        .send({ customerPhone: '0912 345 678' });
       expect(tao.status).toBe(201);
       expect(tao.body.discount).toBeNull();
       const verCu = tao.body.currentVersionId as string;
@@ -2288,9 +2339,10 @@ describe('/orders (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
       expect(listCo.status).toBe(200);
       expect(listCo.body).toHaveLength(1);
+      expect(listCo.body[0]).not.toHaveProperty('customerSdt');
       expect(listCo.body[0]).toMatchObject({
         orderId: tao.body.id,
-        customerSdt: SDT_E164,
+        customerPhone: SDT_E164,
         amount: 1_000_000,
         requestNote: 'Khách quen',
         requestedByAccountId: ACCOUNT_ID,
@@ -2793,10 +2845,37 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .post('/orders')
         .set('Authorization', `Bearer ${token()}`)
-        .send({ customerSdt: '0912345678' });
+        .send({ customerPhone: '0912345678' });
 
       expect(res.status).toBe(404);
       expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+    });
+
+    it('POST /orders invalid phone ⇒ 400, fieldErrors point at `customerPhone`', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ customerPhone: 'abc' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.fieldErrors[0].field).toBe('customerPhone');
+      expect(orderRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('POST /orders with the old body name `customerSdt` ⇒ 400 on `customerPhone` (no alias)', async () => {
+      givenPermissions(PERM.quotesCreateEdit);
+
+      const res = await request(server())
+        .post('/orders')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ customerSdt: '0912345678' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors[0].field).toBe('customerPhone');
+      expect(orderRepo.create).not.toHaveBeenCalled();
     });
   });
 
@@ -2880,10 +2959,11 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ total: 1, page: 1, pageSize: 20 });
       const item = res.body.items[0] as Record<string, unknown>;
+      expect(item).not.toHaveProperty('customerSdt');
       expect(item).toMatchObject({
         id: DON_BAOGIA.id,
         status: DON_BAOGIA.status,
-        customerSdt: SDT_E164,
+        customerPhone: SDT_E164,
         customerName: KHACH.name,
       });
       // Fence tiền/giá vốn: list KHÔNG được lộ tổng tiền hay costPrice (AD-4/AD-10).
@@ -3122,27 +3202,34 @@ describe('/orders (e2e)', () => {
       const caNhan = await request(server())
         .get(`/orders/${ORDER_ID}/lifecycle`)
         .set('Authorization', `Bearer ${token()}`);
+      // Built by a map: the service's domain names never reach the wire.
+      for (const old of ['buoc', 'buocKeTiep', 'coTheHuy']) {
+        expect(caNhan.body).not.toHaveProperty(old);
+      }
+      expect(Array.isArray(caNhan.body.nextSteps)).toBe(true);
+      expect(typeof caNhan.body.canCancel).toBe('boolean');
+      expect(caNhan.body.steps[0]).not.toHaveProperty('trangThai');
 
       expect(thuongMai.status).toBe(200);
       const buocThuongMai = (
-        thuongMai.body.buoc as Array<{ status: string }>
+        thuongMai.body.steps as Array<{ status: string }>
       ).map((b) => b.status);
       expect(buocThuongMai).not.toContain('thicong');
       expect(buocThuongMai).not.toContain('danggiao');
 
-      const buocCaNhan = (caNhan.body.buoc as Array<{ status: string }>).map(
+      const buocCaNhan = (caNhan.body.steps as Array<{ status: string }>).map(
         (b) => b.status,
       );
       expect(buocCaNhan).toContain('thicong');
       // Bước đơn đang đứng phải được đánh dấu — stepper thiếu `current` là stepper câm.
       expect(
-        (caNhan.body.buoc as Array<{ status: string; trangThai: string }>).find(
+        (caNhan.body.steps as Array<{ status: string; progress: string }>).find(
           (b) => b.status === 'baogia',
-        )?.trangThai,
+        )?.progress,
       ).toBe('current');
     });
 
-    it('/versions: mọi bản theo versionNo tăng dần, ĐÚNG MỘT bản laBanHienLuc — và nó theo CON TRỎ, không theo versionNo lớn nhất', async () => {
+    it('/versions: mọi bản theo versionNo tăng dần, ĐÚNG MỘT bản isCurrent — và nó theo CON TRỎ, không theo versionNo lớn nhất', async () => {
       // ⚠️ Fixture cố ý trỏ `currentVersionId` vào bản CŨ hơn. Với fixture "tự nhiên"
       // (con trỏ luôn ở bản mới nhất) thì một cài đặt sai theo `max(versionNo)` vẫn xanh —
       // ca này là chốt chặn của AD-6.
@@ -3177,7 +3264,7 @@ describe('/orders (e2e)', () => {
           createdByAccountId: null,
           createdBy: null,
           // ⚠️ Bản 2 có SỐ DÒNG KHÁC bản 1 có chủ đích: với hai bản cùng số dòng,
-          // `soDong` lấy nhầm từ bản khác (hoặc từ bản đầu) vẫn xanh ở mọi assert.
+          // `lineCount` lấy nhầm từ bản khác (hoặc từ bản đầu) vẫn xanh ở mọi assert.
           lineItems: [
             {
               productId: 'prod-pin',
@@ -3202,38 +3289,50 @@ describe('/orders (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
-      const items = res.body.items as Array<{
-        versionNo: number;
-        laBanHienLuc: boolean;
-        createdByDisplayName: string | null;
-        soDong: number;
-        thayDoi: {
-          them: string[];
-          xoa: string[];
-          doiSoLuong: Array<{ tu: number; den: number }>;
-        };
-      }>;
+      const items = res.body.items as Array<
+        Record<string, unknown> & {
+          versionNo: number;
+          isCurrent: boolean;
+          confirmedAt: string | null;
+          createdByDisplayName: string | null;
+          lineCount: number;
+          changes: {
+            added: string[];
+            removed: string[];
+            qtyChanged: Array<{ name: string; from: number; to: number }>;
+          };
+        }
+      >;
       expect(items.map((v) => v.versionNo)).toEqual([1, 2]);
-      expect(items.filter((v) => v.laBanHienLuc)).toHaveLength(1);
+      expect(items.filter((v) => v.isCurrent)).toHaveLength(1);
       // Bản HIỆU LỰC là bản CŨ (con trỏ), không phải bản versionNo lớn nhất.
-      expect(items[0].laBanHienLuc).toBe(true);
-      expect(items[1].laBanHienLuc).toBe(false);
+      expect(items[0].isCurrent).toBe(true);
+      expect(items[1].isCurrent).toBe(false);
+      expect(items[0].confirmedAt).toBeNull();
 
       // Bản gốc: không có gì để so. Bản 2: đổi số lượng 8 → 12.
-      expect(items[0].thayDoi).toEqual({ them: [], xoa: [], doiSoLuong: [] });
-      expect(items[1].thayDoi.doiSoLuong).toEqual([
-        { ten: 'Tấm pin', tu: 8, den: 12 },
+      expect(items[0].changes).toEqual({
+        added: [],
+        removed: [],
+        qtyChanged: [],
+      });
+      expect(items[1].changes.qtyChanged).toEqual([
+        { name: 'Tấm pin', from: 8, to: 12 },
       ]);
       // Chiều diff: bản N so với bản N-1. Đảo hai đối số thì dòng mới thành "xoá" —
       // lịch sử kể ngược chuyện đã xảy ra, và không assert nào khác thấy được.
-      expect(items[1].thayDoi.them).toEqual(['Inverter']);
-      expect(items[1].thayDoi.xoa).toEqual([]);
+      expect(items[1].changes.added).toEqual(['Inverter']);
+      expect(items[1].changes.removed).toEqual([]);
 
       // Bản cũ không có actor ⇒ null, KHÔNG bịa tên.
       expect(items[0].createdByDisplayName).toBe('Nguyễn Quản Lý');
       expect(items[1].createdByDisplayName).toBeNull();
-      // `soDong` là số dòng của CHÍNH bản đó — hai giá trị khác nhau, không một hằng chép.
-      expect(items.map((v) => v.soDong)).toEqual([1, 2]);
+      // `lineCount` là số dòng của CHÍNH bản đó — hai giá trị khác nhau, không một hằng chép.
+      expect(items.map((v) => v.lineCount)).toEqual([1, 2]);
+      // Built by a map, not a cast of the service row: the old keys never reach the wire.
+      for (const old of ['laBanHienLuc', 'chotAt', 'soDong', 'thayDoi']) {
+        expect(items[1][old]).toBeUndefined();
+      }
     });
 
     it('/versions: KHÔNG trả tiền/giá (AD-10 — tiền chỉ qua preview-total)', async () => {
@@ -3304,7 +3403,7 @@ describe('/orders (e2e)', () => {
       stream.on('end', () => callback(null, Buffer.concat(chunks)));
     }
 
-    /** Một request multipart: field `event` + N file trên field `anh`. */
+    /** Một request multipart: field `event` + N file trên field `files`. */
     function post(
       event: string,
       files: readonly { name: string; mime: string; size: number }[] = [],
@@ -3314,7 +3413,7 @@ describe('/orders (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`)
         .field('event', event);
       for (const f of files) {
-        req.attach('anh', Buffer.alloc(f.size, 0x41), {
+        req.attach('files', Buffer.alloc(f.size, 0x41), {
           filename: f.name,
           contentType: f.mime,
         });
@@ -3338,13 +3437,33 @@ describe('/orders (e2e)', () => {
     });
 
     describe('đường hạnh phúc qua dây (AC-1, AC-2, AC-3)', () => {
-      it('không ảnh ⇒ 200, soAnhDaLuu 0 — upload LUÔN optional (FR-23)', async () => {
+      it('không ảnh ⇒ 200, savedAttachmentCount 0 — upload LUÔN optional (FR-23)', async () => {
         const res = await post(SU_KIEN.batDauThiCong);
 
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('thicong');
-        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(res.body.savedAttachmentCount).toBe(0);
         expect(typeof res.body.occurredAt).toBe('string');
+        expect(storageMap.size).toBe(0);
+      });
+
+      // The form field was renamed with no alias on this route too: a file under the old
+      // name is rejected before the handler, so no transition and nothing stored.
+      it('a file under the old form field `anh` ⇒ 400 envelope, no transition, nothing stored', async () => {
+        const res = await request(server())
+          .post(`/orders/${ORDER_ID}/transition`)
+          .set('Authorization', `Bearer ${token()}`)
+          .field('event', SU_KIEN.batDauThiCong)
+          .attach('anh', Buffer.alloc(512, 0x41), {
+            filename: 'cong-truong.jpg',
+            contentType: 'image/jpeg',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(typeof res.body.traceId).toBe('string');
+        expect(res.body).not.toHaveProperty('status');
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
         expect(storageMap.size).toBe(0);
       });
 
@@ -3355,7 +3474,7 @@ describe('/orders (e2e)', () => {
         ]);
 
         expect(res.status).toBe(200);
-        expect(res.body.soAnhDaLuu).toBe(2);
+        expect(res.body.savedAttachmentCount).toBe(2);
         expect(storageMap.size).toBe(2);
 
         // Metadata trỏ đúng object đã ghi — hàng DB mồ côi là ảnh vô hình.
@@ -3686,8 +3805,10 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.items).toHaveLength(1);
-        expect(res.body.items[0].nguoiTaiLen).toBe('Trần Thợ');
-        expect(res.body.items[0]).toHaveProperty('coTheXoa');
+        expect(res.body.items[0].uploadedBy).toBe('Trần Thợ');
+        expect(res.body.items[0]).toHaveProperty('canDelete');
+        expect(res.body.items[0]).not.toHaveProperty('nguoiTaiLen');
+        expect(res.body.items[0]).not.toHaveProperty('coTheXoa');
         expect(JSON.stringify(res.body)).not.toContain('attachments/');
       });
 
@@ -3728,13 +3849,14 @@ describe('/orders (e2e)', () => {
         const res = await request(server())
           .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`)
-          .attach('anh', Buffer.alloc(1024, 0x41), {
+          .attach('files', Buffer.alloc(1024, 0x41), {
             filename: 'bo-sung.jpg',
             contentType: 'image/jpeg',
           });
 
         expect(res.status).toBe(201);
-        expect(res.body.soAnhDaLuu).toBe(1);
+        expect(res.body.savedAttachmentCount).toBe(1);
+        expect(res.body).not.toHaveProperty('soAnhDaLuu');
         expect(res.body.attachmentIds).toHaveLength(1);
         // Ba cột toạ độ null — hàng này không thuộc bước nào.
         const hang = attachmentRepo.createMany.mock.calls[0][0].data[0];
@@ -3747,7 +3869,7 @@ describe('/orders (e2e)', () => {
         const res = await request(server())
           .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`)
-          .attach('anh', Buffer.alloc(512, 0x41), {
+          .attach('files', Buffer.alloc(512, 0x41), {
             filename: 'hop-dong.pdf',
             contentType: 'application/pdf',
           });
@@ -3766,7 +3888,7 @@ describe('/orders (e2e)', () => {
           .post(`/orders/${ORDER_ID}/attachments`)
           .set('Authorization', `Bearer ${token()}`);
         for (const f of files) {
-          req.attach('anh', Buffer.alloc(f.size, 0x41), {
+          req.attach('files', Buffer.alloc(f.size, 0x41), {
             filename: f.name,
             contentType: f.mime,
           });
@@ -3781,6 +3903,36 @@ describe('/orders (e2e)', () => {
        * service, không đi qua interceptor.
        */
       describe('AC-10 — envelope 400 sống sót qua multer trên route ảnh bổ sung', () => {
+        it('no file ⇒ 400 `minCount` on `files`', async () => {
+          const res = await postAnh([]);
+
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+          expect(res.body.fieldErrors[0]).toMatchObject({
+            field: 'files',
+            code: 'minCount',
+          });
+          expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        });
+
+        // The form field was renamed with no alias: a file sent under the old name is not
+        // taken as `files`, and the rejection is a 4xx envelope, never a 500.
+        it('a file under the old form field `anh` ⇒ 400 envelope, nothing stored', async () => {
+          const res = await request(server())
+            .post(`/orders/${ORDER_ID}/attachments`)
+            .set('Authorization', `Bearer ${token()}`)
+            .attach('anh', Buffer.alloc(512, 0x41), {
+              filename: 'bo-sung.jpg',
+              contentType: 'image/jpeg',
+            });
+
+          expect(res.status).toBe(400);
+          expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+          expect(typeof res.body.traceId).toBe('string');
+          expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+          expect(storageMap.size).toBe(0);
+        });
+
         it(`${SO_ANH_TOI_DA + 1} ảnh ⇒ 400 \`maxCount\`, KHÔNG 500/413`, async () => {
           const res = await postAnh(
             Array.from({ length: SO_ANH_TOI_DA + 1 }, () => anh()),
@@ -3906,7 +4058,7 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(200);
         expect(
-          res.body.buocKeTiep.map((b: { event: string }) => b.event),
+          res.body.nextSteps.map((b: { event: string }) => b.event),
         ).toEqual([SU_KIEN.batDauGiao]);
       });
 
@@ -3918,8 +4070,8 @@ describe('/orders (e2e)', () => {
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
-        expect(res.body.buocKeTiep).toEqual([]);
-        expect(res.body.buoc.length).toBeGreaterThan(0);
+        expect(res.body.nextSteps).toEqual([]);
+        expect(res.body.steps.length).toBeGreaterThan(0);
       });
     });
 
@@ -3948,7 +4100,7 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('nghiemthu');
-        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(res.body.savedAttachmentCount).toBe(0);
         expect(typeof res.body.occurredAt).toBe('string');
         expect(storageMap.size).toBe(0);
       });
@@ -3959,7 +4111,7 @@ describe('/orders (e2e)', () => {
         const res = await post(SU_KIEN.xongThiCong, [anh()]);
 
         expect(res.status).toBe(200);
-        expect(res.body.soAnhDaLuu).toBe(1);
+        expect(res.body.savedAttachmentCount).toBe(1);
 
         const { data } = attachmentRepo.createMany.mock.calls[0][0];
         expect(data).toHaveLength(1);
@@ -3995,7 +4147,7 @@ describe('/orders (e2e)', () => {
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
-        expect(res.body.buocKeTiep).toEqual([]);
+        expect(res.body.nextSteps).toEqual([]);
       });
 
       it('LỐI RA: `nghiemthu` chỉ còn ĐÚNG MỘT bước kế — nhánh không cụt', async () => {
@@ -4006,7 +4158,7 @@ describe('/orders (e2e)', () => {
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
-        expect(res.body.buocKeTiep).toEqual([
+        expect(res.body.nextSteps).toEqual([
           {
             event: SU_KIEN.hoanThanh,
             to: 'hoanthanh',
@@ -4104,17 +4256,17 @@ describe('/orders (e2e)', () => {
         const res = await vongDoi();
 
         expect(res.status).toBe(200);
-        expect(res.body.buocKeTiep).toEqual([
+        expect(res.body.nextSteps).toEqual([
           {
             event: SU_KIEN.xongGiao,
             to: 'dagiao',
             requires: PERM.deliveryConfirm,
           },
         ]);
-        const buoc = res.body.buoc as { status: string; trangThai: string }[];
+        const buoc = res.body.steps as { status: string; progress: string }[];
         expect(buoc).toContainEqual({
           status: 'dagiao',
-          trangThai: 'upcoming',
+          progress: 'upcoming',
         });
         expect(buoc.map((b) => b.status)).not.toContain('danggiao');
       });
@@ -4126,7 +4278,7 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.status).toBe('dagiao');
-        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(res.body.savedAttachmentCount).toBe(0);
         expect(storageMap.size).toBe(0);
       });
 
@@ -4136,7 +4288,7 @@ describe('/orders (e2e)', () => {
         const res = await post(SU_KIEN.xongGiao, [anh()]);
 
         expect(res.status).toBe(200);
-        expect(res.body.soAnhDaLuu).toBe(1);
+        expect(res.body.savedAttachmentCount).toBe(1);
         const { data } = attachmentRepo.createMany.mock.calls[0][0];
         expect(data).toHaveLength(1);
         expect(data[0].statusFrom).toBe('dacoc');
@@ -4172,7 +4324,7 @@ describe('/orders (e2e)', () => {
         const ke = await vongDoi();
 
         expect(ke.status).toBe(200);
-        expect(ke.body.buocKeTiep).toEqual([
+        expect(ke.body.nextSteps).toEqual([
           {
             event: SU_KIEN.batDauThiCong,
             to: 'thicong',
@@ -4195,7 +4347,7 @@ describe('/orders (e2e)', () => {
 
         expect(ke.status).toBe(200);
         expect(
-          ke.body.buocKeTiep.map((b: { event: string }) => b.event),
+          ke.body.nextSteps.map((b: { event: string }) => b.event),
         ).toEqual([SU_KIEN.batDauThiCong, SU_KIEN.batDauGiao]);
       });
 
@@ -4204,7 +4356,7 @@ describe('/orders (e2e)', () => {
 
         const ke = await vongDoi();
         expect(ke.status).toBe(200);
-        expect(ke.body.buocKeTiep).toEqual([
+        expect(ke.body.nextSteps).toEqual([
           {
             event: SU_KIEN.hoanThanh,
             to: 'hoanthanh',
@@ -4232,7 +4384,7 @@ describe('/orders (e2e)', () => {
 
         const ke = await vongDoi();
         expect(ke.status).toBe(200);
-        expect(ke.body.buocKeTiep).toEqual([
+        expect(ke.body.nextSteps).toEqual([
           {
             event: SU_KIEN.xongGiao,
             to: 'dagiao',
@@ -4257,7 +4409,7 @@ describe('/orders (e2e)', () => {
         expect(res.status).toBe(200);
         expect(Object.keys(res.body as object).sort()).toEqual([
           'occurredAt',
-          'soAnhDaLuu',
+          'savedAttachmentCount',
           'status',
         ]);
         expect(stockVoucherRepo.create).toHaveBeenCalledTimes(1);
@@ -4361,7 +4513,7 @@ describe('/orders (e2e)', () => {
         const ke = await vongDoi();
         expect(ke.status).toBe(200);
         expect(
-          ke.body.buocKeTiep.map((b: { event: string }) => b.event),
+          ke.body.nextSteps.map((b: { event: string }) => b.event),
         ).not.toContain(SU_KIEN.xongGiao);
       });
     });
@@ -4378,7 +4530,7 @@ describe('/orders (e2e)', () => {
   describe('Story 5.7 — POST /orders/:id/cancel (huỷ đơn kèm lý do)', () => {
     const LY_DO = 'Khách đổi ý, không lắp nữa';
 
-    function huy(body: unknown = { lyDo: LY_DO }): request.Test {
+    function huy(body: unknown = { reason: LY_DO }): request.Test {
       return request(server())
         .post(`/orders/${ORDER_ID}/cancel`)
         .set('Authorization', `Bearer ${token()}`)
@@ -4456,16 +4608,18 @@ describe('/orders (e2e)', () => {
 
     it.each([
       ['thiếu hẳn field', {}],
-      ['rỗng', { lyDo: '' }],
-      ['chỉ khoảng trắng', { lyDo: '     ' }],
-      ['hai ký tự sau trim', { lyDo: ' ok ' }],
-      ['quá 500 ký tự', { lyDo: 'x'.repeat(501) }],
+      ['rỗng', { reason: '' }],
+      ['chỉ khoảng trắng', { reason: '     ' }],
+      ['hai ký tự sau trim', { reason: ' ok ' }],
+      ['quá 500 ký tự', { reason: 'x'.repeat(501) }],
       // Sai KIỂU: `@IsString` là hàng rào duy nhất. Gỡ nó ⇒ service chạy `input.lyDo.trim()`
       // trên một số/null/mảng ⇒ TypeError ⇒ 500 INTERNAL, không phải 400 có `fieldErrors`.
       // Unit test luôn truyền string nên không lane nào khác thấy được độ lệch này.
-      ['số, không phải chuỗi', { lyDo: 123 }],
-      ['null tường minh', { lyDo: null }],
-      ['mảng chuỗi', { lyDo: ['khách', 'đổi ý'] }],
+      ['số, không phải chuỗi', { reason: 123 }],
+      ['null tường minh', { reason: null }],
+      ['mảng chuỗi', { reason: ['khách', 'đổi ý'] }],
+      // Renamed with no alias: the old name is stripped by `whitelist`, so `reason` is absent.
+      ['old body name `lyDo`', { lyDo: 'Khách đổi ý, không lắp nữa' }],
     ])(
       '%s ⇒ 400 VALIDATION_ERROR — envelope trung tâm, không do controller dựng',
       async (_ten, body) => {
@@ -4473,7 +4627,7 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(400);
         expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-        expect(res.body.fieldErrors?.[0]?.field).toBe('lyDo');
+        expect(res.body.fieldErrors?.[0]?.field).toBe('reason');
         expect(orderRepo.updateMany).not.toHaveBeenCalled();
       },
     );
@@ -4484,7 +4638,7 @@ describe('/orders (e2e)', () => {
       // `minLength` và đổi message — unit test không thấy vì pipe không chạy ở đó.
       // Input KHÔNG có khoảng trắng bao quanh: `' ok '` dài 4 ký tự thô nên lọt qua
       // `@MinLength(3)`, và một mutant thêm decorator đó vào DTO sẽ sống sót.
-      const res = await huy({ lyDo: 'ok' });
+      const res = await huy({ reason: 'ok' });
 
       expect(res.status).toBe(400);
       expect(res.body.fieldErrors?.[0]?.code).toBe('required');
@@ -4496,7 +4650,7 @@ describe('/orders (e2e)', () => {
       // mình không khoá được trần — hạ xuống 499 (hay 50) thì nó vẫn đỏ đúng như cũ.
       const lyDo = 'x'.repeat(500);
 
-      const res = await huy({ lyDo });
+      const res = await huy({ reason: lyDo });
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('huy');
@@ -4507,7 +4661,7 @@ describe('/orders (e2e)', () => {
     });
 
     it('lý do ĐÚNG 3 ký tự ⇒ 200 — ngưỡng dưới là >= 3 trên dây thật', async () => {
-      const res = await huy({ lyDo: 'xa.' });
+      const res = await huy({ reason: 'xa.' });
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('huy');
@@ -4517,7 +4671,7 @@ describe('/orders (e2e)', () => {
       // `whitelist: true` sống ở pipe, nên chỉ lane này chứng minh được rằng client không
       // thể tự nhét cột vào lệnh update bằng cách gửi thêm field.
       const res = await huy({
-        lyDo: LY_DO,
+        reason: LY_DO,
         status: 'hoanthanh',
         cancelledAt: '2020-01-01T00:00:00.000Z',
         cancelReason: 'lý do giả mạo',
@@ -4581,10 +4735,10 @@ describe('/orders (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.coTheHuy).toBe(true);
+      expect(res.body.canCancel).toBe(true);
       // `huy` KHÔNG BAO GIỜ lọt vào lane thủ công — cờ trên là đường DUY NHẤT client biết.
       expect(
-        res.body.buocKeTiep.map((b: { event: string }) => b.event),
+        res.body.nextSteps.map((b: { event: string }) => b.event),
       ).not.toContain(SU_KIEN.huy);
     });
 
@@ -4596,7 +4750,7 @@ describe('/orders (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.coTheHuy).toBe(false);
+      expect(res.body.canCancel).toBe(false);
     });
 
     it('`GET /orders/:id` trả `cancelReason`/`cancelledAt` của đơn đã huỷ', async () => {
@@ -4654,12 +4808,15 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body.found).toBe(true);
       // SĐT trả về đã chuẩn hoá — client gửi thô, nhận chuẩn (AD-9).
-      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.phone).toBe(SDT_E164);
+      expect(res.body.sdt).toBeUndefined();
       expect(res.body.customer).toEqual({
-        sdt: SDT_E164,
+        phone: SDT_E164,
         name: KHACH.name,
         custType: KHACH.custType,
       });
+      expect(res.body.orders[0].confirmedAt).toBe('2026-01-15T02:00:00.000Z');
+      expect(res.body.orders[0]).not.toHaveProperty('chotAt');
       const dong = res.body.orders[0].lineItems[0];
       expect(dong.warrantyEndAt).toBe('2038-01-15T00:00:00.000Z');
       expect(dong.warrantyStatus).toBe('con_han');
@@ -4677,7 +4834,7 @@ describe('/orders (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         found: false,
-        sdt: SDT_E164,
+        phone: SDT_E164,
         customer: null,
         orders: [],
       });
@@ -4770,7 +4927,7 @@ describe('/orders (e2e)', () => {
         () =>
           request(server())
             .patch(`/orders/${ORDER_ID}`)
-            .send({ scopeThiCong: true }),
+            .send({ scopeConstruction: true }),
       ],
       [
         'POST /:id/confirm',
@@ -5000,7 +5157,7 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThiCong: true });
+        .send({ scopeConstruction: true });
 
       expect(res.status).toBe(200);
       expect(orderRepo.update).toHaveBeenCalledTimes(1);
@@ -5039,7 +5196,7 @@ describe('/orders (e2e)', () => {
       const res = await request(server())
         .patch(`/orders/${ORDER_ID}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ scopeThiCong: true });
+        .send({ scopeConstruction: true });
 
       expect(res.status).toBe(200);
       expect(orderRepo.update).toHaveBeenCalledTimes(1);

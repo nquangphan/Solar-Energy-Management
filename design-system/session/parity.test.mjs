@@ -516,8 +516,8 @@ test('the inventory port is the SAME one-method read contract on both platforms 
   assert.match(webPort, /listStock\(query\?: StockListQuery\): Promise<StockList>/, 'web InventoryPort must expose listStock(query?) => StockList');
   assert.match(mobPort, /Future<StockList> listStock\(\{String\? q\}\)/, 'mobile InventoryPort must expose listStock({q}) => StockList');
   assert.match(webPort, /q\?: string/, 'web StockListQuery must carry q');
-  // Field names mirror the backend DTO word for word — the parity here is between
-  // the twins; matching `openapi.json` is the author's check.
+  // Field names mirror the client twin; the backend names differ until the ports use
+  // types generated from openapi.json.
   const fields = ['productId', 'ten', 'sku', 'donVi', 'onHand', 'reserved', 'khaDung', 'canNhap', 'tinhTrang', 'items', 'danhSachCanMua'];
   for (const field of fields) {
     assert.ok(new RegExp(`\\b${field}\\b`).test(webPort), `web inventory port missing ${field}`);
@@ -542,6 +542,19 @@ test('the stock-vouchers port is the SAME four-method contract on both platforms
 
   // Every property of every voucher DTO in the backend's generated spec is named in
   // BOTH ports — parity with the contract, not only between the twins.
+  //
+  // The hand-written ports still carry the client's older field names; this table is the
+  // ONLY place a contract name may differ from its client name. Delete it once the ports
+  // are replaced by types generated from openapi.json. Every entry must be used, so the
+  // table cannot keep a mapping the contract no longer needs.
+  const CONTRACT_TO_CLIENT_FIELD = {
+    code: 'ma',
+    createdBy: 'nguoiTao',
+    lineCount: 'soDong',
+    totalQty: 'tongSoLuong',
+    name: 'ten',
+    unit: 'donVi',
+  };
   const spec = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'));
   const dtos = [
     'StockVoucherCreatorDto',
@@ -565,10 +578,15 @@ test('the stock-vouchers port is the SAME four-method contract on both platforms
     for (const key of Object.keys(props)) fields.add(key);
   }
   assert.ok(fields.size >= 15, `extracted only ${fields.size} DTO fields — the spec reader went blind`);
+  const mapped = new Set();
   for (const field of fields) {
-    assert.ok(new RegExp(`\\b${field}\\b`).test(webPort), `web stock-vouchers port missing ${field}`);
-    assert.ok(new RegExp(`\\b${field}\\b`).test(mobPort), `mobile stock-vouchers port missing ${field}`);
+    const clientField = Object.hasOwn(CONTRACT_TO_CLIENT_FIELD, field)
+      ? (mapped.add(field), CONTRACT_TO_CLIENT_FIELD[field])
+      : field;
+    assert.ok(new RegExp(`\\b${clientField}\\b`).test(webPort), `web stock-vouchers port missing ${clientField} (contract ${field})`);
+    assert.ok(new RegExp(`\\b${clientField}\\b`).test(mobPort), `mobile stock-vouchers port missing ${clientField} (contract ${field})`);
   }
+  assert.deepEqual([...mapped].sort(), Object.keys(CONTRACT_TO_CLIENT_FIELD).sort(), 'every CONTRACT_TO_CLIENT_FIELD entry must map a field the contract actually has');
   // The voucher payload never carries the product's current cost price.
   for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
     assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} stock-vouchers port must not carry costPrice`);

@@ -191,7 +191,7 @@ moTa('Ràng buộc tầng DB của duyệt chiết khấu (Postgres THẬT)', ()
 
   /** Đơn baogia có 1 dòng catalog (subtotal 300_000) — điểm xuất phát của mọi test. */
   async function taoDonCoDong(): Promise<string> {
-    const view = await service.create(accountId, { customerSdt: SDT });
+    const view = await service.create(accountId, { customerPhone: SDT });
     await service.addLine(
       accountId,
       view.id,

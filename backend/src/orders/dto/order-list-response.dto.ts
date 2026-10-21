@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrderListItemDto } from './order-list-item.dto';
+import type { OrderListRow } from '../orders.service';
+import { OrderListItemDto, toOrderListItemDto } from './order-list-item.dto';
 
 /**
  * Response của `GET /orders` — ENVELOPE phân trang, không phải mảng trần.
@@ -25,4 +26,18 @@ export class OrderListResponseDto {
 
   @ApiProperty({ description: 'Số bản ghi mỗi trang.', example: 20 })
   pageSize!: number;
+}
+
+export function toOrderListResponseDto(view: {
+  items: OrderListRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}): OrderListResponseDto {
+  return {
+    items: view.items.map(toOrderListItemDto),
+    total: view.total,
+    page: view.page,
+    pageSize: view.pageSize,
+  };
 }

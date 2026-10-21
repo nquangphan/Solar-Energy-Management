@@ -162,12 +162,12 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
       },
     });
 
-    donCuaB = (await service.create(THO_B, { customerSdt: SDT })).id;
+    donCuaB = (await service.create(THO_B, { customerPhone: SDT })).id;
     dongCuaB = (
       await service.addLine(THO_B, donCuaB, DONG_TU_DO, false, QUYEN_THO_KS)
     ).id;
-    donCuaA = (await service.create(THO_A, { customerSdt: SDT })).id;
-    donGiaoChoA = (await service.create(THO_B, { customerSdt: SDT })).id;
+    donCuaA = (await service.create(THO_A, { customerPhone: SDT })).id;
+    donGiaoChoA = (await service.create(THO_B, { customerPhone: SDT })).id;
     await prisma.order.update({
       where: { id: donGiaoChoA },
       data: { assigneeAccountId: THO_A },
@@ -187,7 +187,7 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
           service.update(
             THO_A,
             donCuaB,
-            { scopeThiCong: true, kWp: 9.9 },
+            { scopeConstruction: true, kWp: 9.9 },
             false,
             QUYEN_THO_KS,
           ),
@@ -270,7 +270,7 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
       await service.update(
         THO_A,
         donCuaA,
-        { scopeThiCong: true },
+        { scopeConstruction: true },
         false,
         QUYEN_THO_KS,
       );
@@ -295,7 +295,7 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
       await service.update(
         THO_A,
         donGiaoChoA,
-        { scopeVanChuyen: true },
+        { scopeDelivery: true },
         false,
         QUYEN_THO_KS,
       );
@@ -370,7 +370,8 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
         false,
         QUYEN_THO_KS,
       );
-      const donChoCuaB = (await service.create(THO_B, { customerSdt: SDT })).id;
+      const donChoCuaB = (await service.create(THO_B, { customerPhone: SDT }))
+        .id;
       await service.addLine(THO_B, donChoCuaB, DONG_TU_DO, false, QUYEN_THO_KS);
       await service.applyDiscount(
         THO_B,
@@ -407,7 +408,7 @@ moTa('Đường GHI đơn chịu phạm vi trên Postgres THẬT', () => {
     let dongKhongBaoHanh: string;
 
     beforeAll(async () => {
-      donBaoHanh = (await service.create(THO_B, { customerSdt: SDT })).id;
+      donBaoHanh = (await service.create(THO_B, { customerPhone: SDT })).id;
       dongCoBaoHanh = (
         await service.addLine(
           THO_B,

@@ -29,7 +29,10 @@ import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { SettingsService } from '../settings/settings.service';
-import { InvoiceDetailResponseDto } from './dto/invoice-detail-response.dto';
+import {
+  InvoiceDetailResponseDto,
+  toInvoiceDetailResponseDto,
+} from './dto/invoice-detail-response.dto';
 import { InvoicePdfResponseDto } from './dto/invoice-pdf-response.dto';
 import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { InvoicesOverviewResponseDto } from './dto/invoices-overview-response.dto';
@@ -163,11 +166,13 @@ export class InvoicesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
   ): Promise<InvoiceDetailResponseDto> {
-    return this.documents.detail(
-      account.id,
-      await this.accountPermissions.listForAccount(account.id),
-      id,
-      invoiceId,
+    return toInvoiceDetailResponseDto(
+      await this.documents.detail(
+        account.id,
+        await this.accountPermissions.listForAccount(account.id),
+        id,
+        invoiceId,
+      ),
     );
   }
 

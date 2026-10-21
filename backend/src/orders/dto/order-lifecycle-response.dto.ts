@@ -1,4 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  type BuocKeTiep,
+  type BuocVongDoi,
+} from '../domain/allowed-transition';
 import { ORDER_STATUS_KEYS } from '../domain/order-status';
 
 /**
@@ -16,7 +20,7 @@ export class OrderLifecycleStepDto {
     enum: ['done', 'current', 'upcoming'],
     description: 'Đơn đã qua bước này / đang đứng ở đây / sắp tới.',
   })
-  trangThai!: 'done' | 'current' | 'upcoming';
+  progress!: 'done' | 'current' | 'upcoming';
 }
 
 /**
@@ -41,28 +45,51 @@ export class OrderNextStepDto {
 
   @ApiProperty({
     enum: ORDER_STATUS_KEYS,
-    description: 'Đơn sẽ tới trạng thái nào — do bảng transition quyết, không do client.',
+    description:
+      'Đơn sẽ tới trạng thái nào — do bảng transition quyết, không do client.',
   })
   to!: string;
 
-  @ApiProperty({ description: 'Quyền mà bước này đòi (thông tin hiển thị/chẩn đoán).' })
+  @ApiProperty({
+    description: 'Quyền mà bước này đòi (thông tin hiển thị/chẩn đoán).',
+  })
   requires!: string;
 }
 
 export class OrderLifecycleResponseDto {
   @ApiProperty({ type: [OrderLifecycleStepDto] })
-  buoc!: OrderLifecycleStepDto[];
+  steps!: OrderLifecycleStepDto[];
 
   @ApiProperty({
     type: [OrderNextStepDto],
     description:
       'Bước kế tiếp NGƯỜI GỌI bấm được. MẢNG RỖNG ⇒ nút "Chuyển trạng thái" ẩn hẳn, không vẽ xám (UX-DR-22).',
   })
-  buocKeTiep!: OrderNextStepDto[];
+  nextSteps!: OrderNextStepDto[];
 
   @ApiProperty({
     description:
-      'Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút "Huỷ đơn", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `buocKeTiep`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó.',
+      'Người gọi này huỷ được đơn này không (Story 5.7) — tính từ bảng transition × trạng thái hiện tại × quyền THẬT. `false` ⇒ ẩn HẲN nút "Huỷ đơn", không vẽ xám (UX-DR-22). Client KHÔNG suy được cờ này từ `nextSteps`: `huy` không thuộc lane thủ công nên không bao giờ có mặt ở đó.',
   })
-  coTheHuy!: boolean;
+  canCancel!: boolean;
+}
+
+/** Maps the lifecycle computed by the service to the contract — fields listed, no spread. */
+export function toOrderLifecycleResponseDto(view: {
+  readonly buoc: readonly BuocVongDoi[];
+  readonly buocKeTiep: readonly BuocKeTiep[];
+  readonly coTheHuy: boolean;
+}): OrderLifecycleResponseDto {
+  return {
+    steps: view.buoc.map((step) => ({
+      status: step.status,
+      progress: step.trangThai,
+    })),
+    nextSteps: view.buocKeTiep.map((step) => ({
+      event: step.event,
+      to: step.to,
+      requires: step.requires,
+    })),
+    canCancel: view.coTheHuy,
+  };
 }

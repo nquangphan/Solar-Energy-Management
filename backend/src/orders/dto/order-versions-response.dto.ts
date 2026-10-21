@@ -1,5 +1,9 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { OrderVersionItemDto } from './order-version-item.dto';
+import type { OrderVersionRow } from '../orders.service';
+import {
+  OrderVersionItemDto,
+  toOrderVersionItemDto,
+} from './order-version-item.dto';
 
 /**
  * Response của `GET /orders/:id/versions` — MỌI bản của đơn theo `versionNo` tăng dần.
@@ -10,4 +14,10 @@ import { OrderVersionItemDto } from './order-version-item.dto';
 export class OrderVersionsResponseDto {
   @ApiProperty({ type: [OrderVersionItemDto] })
   items!: OrderVersionItemDto[];
+}
+
+export function toOrderVersionsResponseDto(
+  rows: readonly OrderVersionRow[],
+): OrderVersionsResponseDto {
+  return { items: rows.map(toOrderVersionItemDto) };
 }

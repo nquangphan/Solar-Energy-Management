@@ -15,5 +15,5 @@ export class CreateOrderRequestDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(32)
-  customerSdt!: string;
+  customerPhone!: string;
 }

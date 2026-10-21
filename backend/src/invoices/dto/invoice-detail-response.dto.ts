@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import type { InvoiceDetailView } from '../invoice-document.service';
 import { InvoiceLineDto } from './invoice-line.dto';
 import { InvoicePdfResponseDto } from './invoice-pdf-response.dto';
 import { InvoiceResponseDto } from './invoice-response.dto';
@@ -23,7 +24,7 @@ export class InvoiceDetailResponseDto extends InvoiceResponseDto {
     description: 'SĐT khách (E.164) chụp lúc lập.',
     example: '+84901234567',
   })
-  customerSdt!: string;
+  customerPhone!: string;
 
   @ApiProperty({
     type: String,
@@ -47,4 +48,35 @@ export class InvoiceDetailResponseDto extends InvoiceResponseDto {
     description: 'File PDF đã xuất; null khi chưa xuất.',
   })
   pdf!: InvoicePdfResponseDto | null;
+}
+
+/**
+ * Maps the detail view (snapshot column names) to the contract. There is no serializer in the
+ * app, so the returned object IS the JSON body — top-level fields are listed (no spread).
+ */
+export function toInvoiceDetailResponseDto(
+  view: InvoiceDetailView,
+): InvoiceDetailResponseDto {
+  return {
+    id: view.id,
+    invoiceNo: view.invoiceNo,
+    versionNo: view.versionNo,
+    issuedAt: view.issuedAt,
+    customerName: view.customerName,
+    customerTaxCode: view.customerTaxCode,
+    vatRate: view.vatRate,
+    applyVat: view.applyVat,
+    subtotal: view.subtotal,
+    discountAmount: view.discountAmount,
+    vatAmount: view.vatAmount,
+    total: view.total,
+    lineCount: view.lineCount,
+    orderId: view.orderId,
+    quoteNo: view.quoteNo,
+    customerPhone: view.customerSdt,
+    customerAddress: view.customerAddress,
+    seller: view.seller,
+    lines: view.lines,
+    pdf: view.pdf,
+  };
 }

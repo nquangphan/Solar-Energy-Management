@@ -60,9 +60,9 @@ export class CustomersService {
   /**
    * SĐT thô ⇒ E.164, hoặc 400. Đây là CỬA DUY NHẤT mà SĐT đi vào hệ thống — đọc lẫn ghi đều
    * qua đây, nên `GET /customers/:phone` với `0912345678` tìm đúng bản ghi đã lưu là `+84912345678`.
-   * `field` names the input the client actually sent: body `sdt` on create, path/query `phone` elsewhere.
+   * Every caller's input is named `phone` on the contract (body on create, path/query elsewhere).
    */
-  private normalizeOrThrow(raw: string, field: 'sdt' | 'phone'): string {
+  private normalizeOrThrow(raw: string): string {
     const sdt = normalizeVnPhone(raw);
     if (sdt === null) {
       throw new AppException(
@@ -71,7 +71,7 @@ export class CustomersService {
         'Số điện thoại không hợp lệ.',
         [
           {
-            field,
+            field: 'phone',
             code: 'isPhoneNumber',
             message:
               'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).',
@@ -145,7 +145,7 @@ export class CustomersService {
    *
    * Kiểm trên bản ghi HIỆU LỰC (sau khi trộn PATCH vào bản ghi cũ), không chỉ trên body: đổi
    * `custType` từ Cá nhân sang Thương mại mà `cccd` cũ còn nằm đó thì bản ghi kết quả vẫn sai.
-   * Đường ra là gửi kèm `"cccd": null` để xoá — đó là lý do các cột nullable nhận `null`.
+   * Đường ra là gửi kèm `"nationalId": null` để xoá — đó là lý do các cột nullable nhận `null`.
    */
   private assertFieldsMatchType(
     custType: string,
@@ -186,7 +186,7 @@ export class CustomersService {
   ): Promise<Customer> {
     // Thứ tự có chủ đích: mọi thứ kiểm được TRƯỚC khi chạm DB thì kiểm trước — request hỏng
     // không được để lại dấu vết nào trong DB.
-    const sdt = this.normalizeOrThrow(dto.sdt, 'sdt');
+    const sdt = this.normalizeOrThrow(dto.phone);
     const source = await this.loadSourceOrThrow(dto.sourceId);
     this.assertSourceNote(source, dto.sourceNote);
     this.assertFieldsMatchType(dto.custType, { ...dto });
@@ -195,12 +195,12 @@ export class CustomersService {
     try {
       created = await this.prisma.customer.create({
         data: {
-          // `sdt` đã CHUẨN HOÁ — KHÔNG phải `dto.sdt` thô. Ghi chuỗi thô vào PK là cách tạo ra
+          // `sdt` đã CHUẨN HOÁ — KHÔNG phải `dto.phone` thô. Ghi chuỗi thô vào PK là cách tạo ra
           // hai bản ghi cho cùng một người, đúng cái AD-9 tồn tại để chặn.
           sdt,
           custType: dto.custType,
           name: dto.name,
-          cccd: dto.cccd ?? null,
+          cccd: dto.nationalId ?? null,
           taxCode: dto.taxCode ?? null,
           address: dto.address ?? null,
           bankAccount: dto.bankAccount ?? null,
@@ -225,7 +225,7 @@ export class CustomersService {
     rawSdt: string,
     dto: UpdateCustomerRequestDto,
   ): Promise<Customer> {
-    const sdt = this.normalizeOrThrow(rawSdt, 'phone');
+    const sdt = this.normalizeOrThrow(rawSdt);
     const before = await this.findOrThrow(sdt);
 
     const custType = effective(dto.custType, before.custType);
@@ -235,7 +235,7 @@ export class CustomersService {
     const source = await this.loadSourceOrThrow(sourceId);
     this.assertSourceNote(source, effective(dto.sourceNote, before.sourceNote));
     this.assertFieldsMatchType(custType, {
-      cccd: effective(dto.cccd, before.cccd),
+      nationalId: effective(dto.nationalId, before.cccd),
       taxCode: effective(dto.taxCode, before.taxCode),
       bankAccount: effective(dto.bankAccount, before.bankAccount),
     });
@@ -247,7 +247,7 @@ export class CustomersService {
       data: {
         custType: dto.custType,
         name: dto.name,
-        cccd: dto.cccd,
+        cccd: dto.nationalId,
         taxCode: dto.taxCode,
         address: dto.address,
         bankAccount: dto.bankAccount,
@@ -281,7 +281,7 @@ export class CustomersService {
     sdt: string;
     customer: Customer | null;
   }> {
-    const sdt = this.normalizeOrThrow(rawSdt, 'phone');
+    const sdt = this.normalizeOrThrow(rawSdt);
     const customer = await this.prisma.customer.findUnique({ where: { sdt } });
     return { found: customer !== null, sdt, customer };
   }
@@ -337,7 +337,7 @@ export class CustomersService {
   async findOne(rawSdt: string): Promise<Customer> {
     // Tra cứu chạy CÙNG bộ chuẩn hoá với lúc ghi (AD-9) — nếu không, khách lưu bằng
     // `+84912345678` sẽ "không tồn tại" khi tra bằng `0912345678`.
-    return await this.findOrThrow(this.normalizeOrThrow(rawSdt, 'phone'));
+    return await this.findOrThrow(this.normalizeOrThrow(rawSdt));
   }
 
   /**
@@ -354,7 +354,7 @@ export class CustomersService {
       `Số điện thoại đã có khách hàng: ${sdt}`,
       [
         {
-          field: 'sdt',
+          field: 'phone',
           code: 'isUnique',
           message: 'Số điện thoại này đã thuộc về một khách hàng khác.',
         },

@@ -185,6 +185,13 @@ Chèn vào **Epic List** và **Epic Details** ngay sau Epic 7, trước Epic 8, 
 
 Story 10.2 được phép tinh chỉnh một tên nếu nó đụng tên đã có trong cùng DTO (ví dụ `OrderLifecycleStepDto` đã có `status`, nên `trangThai` thành `progress`), với điều kiện ghi lại vào bảng này trong cùng commit (luật G-5).
 
+**Tinh chỉnh 10.2** (ghi theo luật G-5, cùng commit story 10.2):
+
+- Field form multipart `anh` → `files` trên `POST /orders/{id}/transition` và `POST /orders/{id}/attachments` (`FilesInterceptor('files', …)`, ngưỡng `limits` giữ nguyên). Spec mô tả field này qua `StatusChangeRequestDto.files` và schema mới `AttachmentUploadRequestDto` (`@ApiBody` của route ảnh bổ sung; `files` **required** ở đây vì route này từ chối upload 0 ảnh, còn ở transition thì optional) ⇒ 109 schema. Lỗi ảnh trỏ `fieldErrors[].field = 'files'` / `'files[i]'`. Gửi file dưới tên cũ `anh` ⇒ 400 `VALIDATION_ERROR` ("Unexpected field - anh"), không 500.
+- `fieldErrors[].field` do service ném đổi theo tên field mới của request: `customerPhone` (`POST /orders`), `reason` (`POST /orders/{id}/cancel`), `phone` (SĐT sai + trùng SĐT 409 ở `POST /customers`; mọi input SĐT của customers giờ đều là `phone`), `nationalId`.
+- `FORBIDDEN_FIELDS` (`customers/domain/customer-type.ts`) khai theo tên field của request DTO: Thương mại cấm `nationalId` (không còn `cccd`) — mảng được so với key của body.
+- Response dựng bằng hàm map `to…Dto` có kiểu trả về tường minh (trong chính file DTO) ở ranh giới controller, thay cho cast `as XxxDto` object service/Prisma; service, domain, cột Prisma, event/audit payload và snapshot JSON giữ tên cũ.
+
 ### 4.3. `sprint-status.yaml`
 
 ```

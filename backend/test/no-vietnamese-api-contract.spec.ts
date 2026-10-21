@@ -2,15 +2,17 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * The HTTP contract (paths, parameter names, operation ids) is English. Generated clients take
- * method names from `operationId` and argument names from `parameters[].name`, so a Vietnamese
- * token that slips back in becomes a breaking rename once a client depends on it.
+ * The HTTP contract (paths, parameter names, operation ids, schema names and every request/response
+ * property) is English. Generated clients take method names from `operationId`, argument names
+ * from `parameters[].name` and type/field names from the schemas, so a Vietnamese token that slips
+ * back in becomes a breaking rename once a client depends on it.
  *
  * Reads the COMMITTED `openapi/openapi.json`: the drift-guard already proves that file equals the
  * spec built from code, so this guard only has to judge its content.
  *
- * Path segments are compared WHOLE (`split('/')`), never by substring: `anh` hides inside plenty
- * of legitimate words, and a substring match would either miss a real hit or flag a good path.
+ * Path segments and property names are compared WHOLE (`split('/')`, exact key), never by
+ * substring: `anh`, `tu`, `ma`, `ten` hide inside plenty of legitimate words (`status`, `email`,
+ * `tenant`), and a substring match would either miss a real hit or flag a good name.
  */
 
 /** Route segments the API used before it was renamed to English. */
@@ -40,6 +42,50 @@ const OLD_OPERATION_SUFFIXES = [
   'huyDon',
   'lietKe',
   'chiTiet',
+];
+
+/** Request/response property names (and multipart form fields) the API used before. */
+const OLD_SCHEMA_PROPERTIES = [
+  'sdt',
+  'customerSdt',
+  'cccd',
+  'chotAt',
+  'buoc',
+  'buocKeTiep',
+  'coTheHuy',
+  'trangThai',
+  'coTheXoa',
+  'nguoiTaiLen',
+  'soAnhDaLuu',
+  'laBanHienLuc',
+  'thayDoi',
+  'soDong',
+  'them',
+  'xoa',
+  'doiSoLuong',
+  'ten',
+  'tu',
+  'den',
+  'donVi',
+  'khaDung',
+  'tinhTrang',
+  'canNhap',
+  'danhSachCanMua',
+  'ma',
+  'nguoiTao',
+  'tongSoLuong',
+  'lyDo',
+  'scopeThiCong',
+  'scopeThietBi',
+  'scopeVanChuyen',
+  'anh',
+];
+
+/** Schema (class) names the API used before. */
+const OLD_SCHEMA_NAMES = [
+  'ThayDoiBanUpdateDto',
+  'ThayDoiSoLuongDto',
+  'CanMuaViewDto',
 ];
 
 const HTTP_METHODS = [
@@ -121,6 +167,69 @@ function scanContract(doc: OpenApiDoc): Scan {
     operationIdCount,
     violations,
   };
+}
+
+interface SchemaScan {
+  schemaCount: number;
+  propertyCount: number;
+  violations: string[];
+}
+
+/**
+ * Walks every node of the components AND of every operation (request bodies, responses,
+ * parameters): a property can sit at any depth (`allOf`, `items`, a nested object) and a
+ * multipart body may be described inline instead of through a named schema.
+ */
+function scanSchemas(doc: {
+  components?: { schemas?: Record<string, unknown> };
+  paths?: Record<string, Record<string, unknown>>;
+}): SchemaScan {
+  const violations: string[] = [];
+  let propertyCount = 0;
+
+  const walk = (node: unknown, where: string): void => {
+    if (Array.isArray(node)) {
+      node.forEach((child) => walk(child, where));
+      return;
+    }
+    if (node === null || typeof node !== 'object') return;
+    const record = node as Record<string, unknown>;
+    const ref = record.$ref;
+    if (typeof ref === 'string') {
+      const target = ref.slice(ref.lastIndexOf('/') + 1);
+      if (OLD_SCHEMA_NAMES.includes(target)) {
+        violations.push(`${where}: $ref to schema "${target}"`);
+      }
+    }
+    for (const [key, value] of Object.entries(record)) {
+      if (key === 'properties' && value !== null && typeof value === 'object') {
+        for (const [name, child] of Object.entries(value)) {
+          propertyCount++;
+          if (OLD_SCHEMA_PROPERTIES.includes(name)) {
+            violations.push(`property ${where}.${name}`);
+          }
+          walk(child, `${where}.${name}`);
+        }
+      } else {
+        walk(value, where);
+      }
+    }
+  };
+
+  const schemas = Object.entries(doc.components?.schemas ?? {});
+  for (const [name, schema] of schemas) {
+    if (OLD_SCHEMA_NAMES.includes(name)) {
+      violations.push(`schema name "${name}"`);
+    }
+    walk(schema, name);
+  }
+  for (const [path, item] of Object.entries(doc.paths ?? {})) {
+    for (const method of HTTP_METHODS.filter((m) => m in item)) {
+      walk(item[method], `${method.toUpperCase()} ${path}`);
+    }
+  }
+
+  return { schemaCount: schemas.length, propertyCount, violations };
 }
 
 describe('HTTP contract in openapi.json has no Vietnamese route, parameter or operation id', () => {
@@ -227,5 +336,97 @@ describe('HTTP contract in openapi.json has no Vietnamese route, parameter or op
     });
 
     expect(good.violations).toEqual([]);
+  });
+});
+
+describe('Schemas in openapi.json have no Vietnamese name or property', () => {
+  const doc = JSON.parse(
+    readFileSync(resolve(__dirname, '../openapi/openapi.json'), 'utf8'),
+  ) as Parameters<typeof scanSchemas>[0];
+  const scan = scanSchemas(doc);
+
+  it('scans a non-empty spec (an empty scan would pass vacuously)', () => {
+    // Measured after the rename: 109 schemas, 529 properties.
+    expect(scan.schemaCount).toBeGreaterThanOrEqual(100);
+    expect(scan.propertyCount).toBeGreaterThanOrEqual(450);
+  });
+
+  it('no schema name, property or form field from the old Vietnamese contract', () => {
+    expect(scan.violations).toEqual([]);
+  });
+
+  // The ban list alone passes if a renamed schema simply vanished; the English ones must exist.
+  it('the renamed schemas exist under their English names', () => {
+    expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
+      expect.arrayContaining([
+        'VersionChangesDto',
+        'QtyChangeDto',
+        'PurchaseNeedViewDto',
+      ]),
+    );
+  });
+
+  it('catches an old schema name, a top-level, a nested and an inline multipart property', () => {
+    const bad = scanSchemas({
+      components: {
+        schemas: {
+          ThayDoiBanUpdateDto: { properties: { them: {} } },
+          X: { properties: { nested: { properties: { lyDo: {} } } } },
+        },
+      },
+      paths: {
+        '/x': {
+          post: {
+            requestBody: {
+              content: {
+                'multipart/form-data': {
+                  schema: { properties: { anh: {} } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(bad.violations).toEqual([
+      'schema name "ThayDoiBanUpdateDto"',
+      'property ThayDoiBanUpdateDto.them',
+      'property X.nested.lyDo',
+      'property POST /x.anh',
+    ]);
+  });
+
+  it('catches a $ref to an old schema name, inside items/allOf', () => {
+    const bad = scanSchemas({
+      components: {
+        schemas: {
+          Y: {
+            properties: {
+              list: { items: { $ref: '#/components/schemas/CanMuaViewDto' } },
+              one: {
+                allOf: [{ $ref: '#/components/schemas/ThayDoiSoLuongDto' }],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(bad.violations).toEqual([
+      'Y.list: $ref to schema "CanMuaViewDto"',
+      'Y.one: $ref to schema "ThayDoiSoLuongDto"',
+    ]);
+  });
+
+  it('does not flag English properties that merely contain an old token as a substring', () => {
+    const good = scanSchemas({
+      components: {
+        schemas: { Z: { properties: { status: {}, name: {}, tenant: {} } } },
+      },
+    });
+
+    expect(good.violations).toEqual([]);
+    expect(good.propertyCount).toBe(3);
   });
 });

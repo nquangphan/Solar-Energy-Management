@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsIn } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsIn, IsOptional } from 'class-validator';
 import { SU_KIEN, SU_KIEN_THU_CONG } from '../domain/allowed-transition';
 
 /** Mọi sự kiện CÓ THẬT trong bảng transition — kể cả sáu sự kiện có cửa riêng. */
@@ -32,4 +32,15 @@ export class StatusChangeRequestDto {
   })
   @IsIn(SU_KIEN_CO_THAT)
   event!: string;
+
+  // Documents the form's file field name only: Multer puts files in `req.files`, not in the
+  // body, so the handler reads `@UploadedFiles()` and never this property.
+  @ApiPropertyOptional({
+    type: 'array',
+    items: { type: 'string', format: 'binary' },
+    description:
+      'Ảnh bằng chứng của bước (JPEG/PNG/WebP) — optional; ngưỡng số ảnh/kích thước do backend kiểm.',
+  })
+  @IsOptional()
+  files?: unknown[];
 }

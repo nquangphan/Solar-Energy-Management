@@ -20,6 +20,7 @@ import type { Response } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiBody,
   ApiConflictResponse,
   ApiConsumes,
   ApiCreatedResponse,
@@ -42,6 +43,7 @@ import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { FLAG } from '../feature-flags/domain/feature-flag-registry';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { anGiaVonDongPhieu } from '../inventory/domain/stock-voucher-visibility';
+import { toStockVoucherDetailDto } from '../inventory/dto/stock-voucher-response.dto';
 import { SettingsService } from '../settings/settings.service';
 import { type TransitionEvent } from './domain/allowed-transition';
 import {
@@ -53,21 +55,35 @@ import { AddLineItemRequestDto } from './dto/add-line-item-request.dto';
 import {
   AttachmentListResponseDto,
   AttachmentUploadResponseDto,
+  toAttachmentListResponseDto,
 } from './dto/attachment-response.dto';
+import { AttachmentUploadRequestDto } from './dto/attachment-upload-request.dto';
 import { ApplyDiscountRequestDto } from './dto/apply-discount-request.dto';
 import { CreateOrderRequestDto } from './dto/create-order-request.dto';
-import { DiscountPendingItemDto } from './dto/discount-pending-item.dto';
+import {
+  DiscountPendingItemDto,
+  toDiscountPendingItemDto,
+} from './dto/discount-pending-item.dto';
 import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
-import { OrderLifecycleResponseDto } from './dto/order-lifecycle-response.dto';
-import { OrderListResponseDto } from './dto/order-list-response.dto';
+import {
+  OrderLifecycleResponseDto,
+  toOrderLifecycleResponseDto,
+} from './dto/order-lifecycle-response.dto';
+import {
+  OrderListResponseDto,
+  toOrderListResponseDto,
+} from './dto/order-list-response.dto';
 import { OrderLineItemResponseDto } from './dto/order-line-item-response.dto';
-import { OrderResponseDto } from './dto/order-response.dto';
+import { OrderResponseDto, toOrderResponseDto } from './dto/order-response.dto';
 import {
   OrderStockIssueResultDto,
   OrderStockIssueViewDto,
 } from './dto/order-stock-issue-response.dto';
 import { OrderStockCheckDto } from './dto/order-stock-check-response.dto';
-import { OrderVersionsResponseDto } from './dto/order-versions-response.dto';
+import {
+  OrderVersionsResponseDto,
+  toOrderVersionsResponseDto,
+} from './dto/order-versions-response.dto';
 import { PreviewTotalRequestDto } from './dto/preview-total-request.dto';
 import { PreviewTotalResponseDto } from './dto/preview-total-response.dto';
 import { QuoteExportResponseDto } from './dto/quote-export-response.dto';
@@ -79,7 +95,10 @@ import { StatusChangeResponseDto } from './dto/status-change-response.dto';
 import { UpdateLineItemRequestDto } from './dto/update-line-item-request.dto';
 import { UpdateOrderRequestDto } from './dto/update-order-request.dto';
 import { WarrantyLookupQueryDto } from './dto/warranty-lookup-query.dto';
-import { WarrantyLookupResponseDto } from './dto/warranty-lookup-response.dto';
+import {
+  WarrantyLookupResponseDto,
+  toWarrantyLookupResponseDto,
+} from './dto/warranty-lookup-response.dto';
 import { OrdersService } from './orders.service';
 import { QuoteExportService } from './quote-export.service';
 
@@ -170,7 +189,7 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Body() body: CreateOrderRequestDto,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.create(account.id, body)) as OrderResponseDto;
+    return toOrderResponseDto(await this.orders.create(account.id, body));
   }
 
   // Route TĨNH khai TRƯỚC các route `:id` — kỷ luật từ 3.4 (dù POST hiện không collision).
@@ -226,12 +245,14 @@ export class OrdersController {
     const permissions = await this.accountPermissions.listForAccount(
       account.id,
     );
-    return (await this.orders.listPendingDiscounts(
-      permissions.has(PERM.costsView),
-      await this.tieredPricingEnabled(),
-      account.id,
-      permissions,
-    )) as DiscountPendingItemDto[];
+    return (
+      await this.orders.listPendingDiscounts(
+        permissions.has(PERM.costsView),
+        await this.tieredPricingEnabled(),
+        account.id,
+        permissions,
+      )
+    ).map(toDiscountPendingItemDto);
   }
 
   /**
@@ -262,11 +283,13 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Query() query: WarrantyLookupQueryDto,
   ): Promise<WarrantyLookupResponseDto> {
-    return (await this.orders.traCuuBaoHanh(
-      account.id,
-      await this.quyenCuaNguoiGoi(account.id),
-      query.phone,
-    )) as WarrantyLookupResponseDto;
+    return toWarrantyLookupResponseDto(
+      await this.orders.traCuuBaoHanh(
+        account.id,
+        await this.quyenCuaNguoiGoi(account.id),
+        query.phone,
+      ),
+    );
   }
 
   /**
@@ -297,11 +320,13 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Query() query: ListOrdersQueryDto,
   ): Promise<OrderListResponseDto> {
-    return (await this.orders.list(
-      account.id,
-      await this.quyenCuaNguoiGoi(account.id),
-      query,
-    )) as OrderListResponseDto;
+    return toOrderListResponseDto(
+      await this.orders.list(
+        account.id,
+        await this.quyenCuaNguoiGoi(account.id),
+        query,
+      ),
+    );
   }
 
   @Get(':id')
@@ -324,12 +349,14 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.getScoped(
-      account.id,
-      await this.quyenCuaNguoiGoi(account.id),
-      id,
-      await this.tieredPricingEnabled(),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.getScoped(
+        account.id,
+        await this.quyenCuaNguoiGoi(account.id),
+        id,
+        await this.tieredPricingEnabled(),
+      ),
+    );
   }
 
   @Get(':id/lifecycle')
@@ -356,11 +383,7 @@ export class OrdersController {
       await this.quyenCuaNguoiGoi(account.id),
       id,
     );
-    return {
-      buoc: [...vongDoi.buoc],
-      buocKeTiep: [...vongDoi.buocKeTiep],
-      coTheHuy: vongDoi.coTheHuy,
-    };
+    return toOrderLifecycleResponseDto(vongDoi);
   }
 
   @Get(':id/versions')
@@ -368,7 +391,7 @@ export class OrdersController {
   @ApiOkResponse({
     type: OrderVersionsResponseDto,
     description:
-      'MỌI bản update của đơn theo versionNo tăng dần (FR-6); `laBanHienLuc` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).',
+      'MỌI bản update của đơn theo versionNo tăng dần (FR-6); `isCurrent` phân giải qua currentVersionId (AD-6). KHÔNG có tiền/giá (AD-10).',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
@@ -382,15 +405,13 @@ export class OrdersController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Param('id') id: string,
   ): Promise<OrderVersionsResponseDto> {
-    return {
-      items: [
-        ...(await this.orders.listVersions(
-          account.id,
-          await this.quyenCuaNguoiGoi(account.id),
-          id,
-        )),
-      ],
-    } as OrderVersionsResponseDto;
+    return toOrderVersionsResponseDto(
+      await this.orders.listVersions(
+        account.id,
+        await this.quyenCuaNguoiGoi(account.id),
+        id,
+      ),
+    );
   }
 
   @Patch(':id')
@@ -398,7 +419,7 @@ export class OrdersController {
   @ApiOkResponse({
     type: OrderResponseDto,
     description:
-      'Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeThietBi` luôn true — không nhận qua body (FR-2).',
+      'Đơn sau khi PATCH: cờ phạm vi Thi công/Vận chuyển (4.3) và/hoặc metadata vatMode/kWp/validityNote (4.4) — partial. `scopeEquipment` luôn true — không nhận qua body (FR-2).',
   })
   @ApiBadRequestResponse({
     type: ErrorEnvelopeDto,
@@ -423,13 +444,15 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() body: UpdateOrderRequestDto,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.update(
-      account.id,
-      id,
-      body,
-      await this.tieredPricingEnabled(),
-      await this.quyenCuaNguoiGoi(account.id),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.update(
+        account.id,
+        id,
+        body,
+        await this.tieredPricingEnabled(),
+        await this.quyenCuaNguoiGoi(account.id),
+      ),
+    );
   }
 
   // Action nghiệp vụ là sub-resource POST (`/orders/{id}/confirm` — spine Consistency
@@ -470,13 +493,15 @@ export class OrdersController {
   ): Promise<OrderResponseDto> {
     // vatRate resolve TƯƠI từ config MỘT lần mỗi request rồi truyền xuống (pattern 4.4) —
     // service giữ đúng 2 dep, client không bao giờ gửi rate.
-    return (await this.orders.confirm(
-      account.id,
-      id,
-      await this.settings.vatRatePercent(),
-      await this.tieredPricingEnabled(),
-      await this.quyenCuaNguoiGoi(account.id),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.confirm(
+        account.id,
+        id,
+        await this.settings.vatRatePercent(),
+        await this.tieredPricingEnabled(),
+        await this.quyenCuaNguoiGoi(account.id),
+      ),
+    );
   }
 
   // Mở lại đơn đã chốt để sửa (Story 4.6, FR-6) — action nghiệp vụ là sub-resource POST
@@ -512,12 +537,14 @@ export class OrdersController {
     @Param('id') id: string,
   ): Promise<OrderResponseDto> {
     // KHÔNG resolve vatRate — mở lại không ghi thuế; re-chốt qua :id/confirm mới đóng băng lại.
-    return (await this.orders.revise(
-      account.id,
-      id,
-      await this.tieredPricingEnabled(),
-      await this.quyenCuaNguoiGoi(account.id),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.revise(
+        account.id,
+        id,
+        await this.tieredPricingEnabled(),
+        await this.quyenCuaNguoiGoi(account.id),
+      ),
+    );
   }
 
   // Áp chiết khấu + gửi duyệt (Story 4.7, FR-18) — action nghiệp vụ là sub-resource POST
@@ -555,14 +582,16 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() body: ApplyDiscountRequestDto,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.applyDiscount(
-      account.id,
-      id,
-      body.amount,
-      body.note ?? null,
-      await this.tieredPricingEnabled(),
-      await this.quyenCuaNguoiGoi(account.id),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.applyDiscount(
+        account.id,
+        id,
+        body.amount,
+        body.note ?? null,
+        await this.tieredPricingEnabled(),
+        await this.quyenCuaNguoiGoi(account.id),
+      ),
+    );
   }
 
   // Duyệt / từ chối chiết khấu (Story 4.7, FR-18) — sub-resource POST (khuôn `:id/confirm`).
@@ -599,14 +628,16 @@ export class OrdersController {
     @Param('id') id: string,
     @Body() body: ResolveDiscountRequestDto,
   ): Promise<OrderResponseDto> {
-    return (await this.orders.resolveDiscount(
-      account.id,
-      id,
-      body.approve,
-      body.reason ?? null,
-      await this.tieredPricingEnabled(),
-      await this.quyenCuaNguoiGoi(account.id),
-    )) as OrderResponseDto;
+    return toOrderResponseDto(
+      await this.orders.resolveDiscount(
+        account.id,
+        id,
+        body.approve,
+        body.reason ?? null,
+        await this.tieredPricingEnabled(),
+        await this.quyenCuaNguoiGoi(account.id),
+      ),
+    );
   }
 
   @Post(':id/line-items')
@@ -854,7 +885,7 @@ export class OrdersController {
     PERM.paymentsRecord,
   )
   @UseInterceptors(
-    FilesInterceptor('anh', TRAN_CUNG_SO_ANH, {
+    FilesInterceptor('files', TRAN_CUNG_SO_ANH, {
       limits: { fileSize: TRAN_CUNG_KICH_THUOC_BYTE },
     }),
   )
@@ -871,7 +902,8 @@ export class OrdersController {
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
-    description: 'Thiếu quyền cho bước đã chọn (FORBIDDEN) — Order.status không đổi.',
+    description:
+      'Thiếu quyền cho bước đã chọn (FORBIDDEN) — Order.status không đổi.',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -898,7 +930,7 @@ export class OrdersController {
     return {
       status: ketQua.status,
       occurredAt: ketQua.occurredAt.toISOString(),
-      soAnhDaLuu: ketQua.soAnhDaLuu,
+      savedAttachmentCount: ketQua.soAnhDaLuu,
     };
   }
 
@@ -927,7 +959,8 @@ export class OrdersController {
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
-    description: 'Thiếu quotes.create_edit (FORBIDDEN) — Order.status không đổi.',
+    description:
+      'Thiếu quotes.create_edit (FORBIDDEN) — Order.status không đổi.',
   })
   @ApiConflictResponse({
     type: ErrorEnvelopeDto,
@@ -947,7 +980,7 @@ export class OrdersController {
       callerAccountId: account.id,
       quyen: await this.quyenCuaNguoiGoi(account.id),
       orderId: id,
-      lyDo: dto.lyDo,
+      lyDo: dto.reason,
     });
     return {
       status: ketQua.status,
@@ -986,14 +1019,17 @@ export class OrdersController {
     const permissions = await this.quyenCuaNguoiGoi(account.id);
     const view = await this.orders.getStockIssue(account.id, permissions, id);
     return {
-      ...view,
+      issued: view.issued,
       ...(view.voucher && {
-        voucher: anGiaVonDongPhieu(
-          view.voucher,
-          permissions.has(PERM.costsView),
+        voucher: toStockVoucherDetailDto(
+          anGiaVonDongPhieu(view.voucher, permissions.has(PERM.costsView)),
         ),
       }),
-    } as OrderStockIssueViewDto;
+      canIssue: view.canIssue,
+      blocked: view.blocked,
+      lines: [...view.lines],
+      untrackedItems: [...view.untrackedItems],
+    };
   }
 
   /**
@@ -1077,11 +1113,10 @@ export class OrdersController {
     const result = await this.orders.issueStock(account.id, permissions, id);
     res.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
     return {
-      voucher: anGiaVonDongPhieu(
-        result.voucher,
-        permissions.has(PERM.costsView),
+      voucher: toStockVoucherDetailDto(
+        anGiaVonDongPhieu(result.voucher, permissions.has(PERM.costsView)),
       ),
-    } as OrderStockIssueResultDto;
+    };
   }
 
   /**
@@ -1095,7 +1130,7 @@ export class OrdersController {
   @ApiOkResponse({
     type: AttachmentListResponseDto,
     description:
-      'Mọi ảnh của đơn theo createdAt giảm dần; `coTheXoa` tính ở backend cho từng ảnh.',
+      'Mọi ảnh của đơn theo createdAt giảm dần; `canDelete` tính ở backend cho từng ảnh.',
   })
   @ApiForbiddenResponse({
     type: ErrorEnvelopeDto,
@@ -1114,7 +1149,7 @@ export class OrdersController {
       await this.quyenCuaNguoiGoi(account.id),
       id,
     );
-    return { items: [...items] };
+    return toAttachmentListResponseDto(items);
   }
 
   /**
@@ -1136,11 +1171,12 @@ export class OrdersController {
   )
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
-    FilesInterceptor('anh', TRAN_CUNG_SO_ANH, {
+    FilesInterceptor('files', TRAN_CUNG_SO_ANH, {
       limits: { fileSize: TRAN_CUNG_KICH_THUOC_BYTE },
     }),
   )
   @ApiConsumes('multipart/form-data')
+  @ApiBody({ type: AttachmentUploadRequestDto })
   @ApiCreatedResponse({
     type: AttachmentUploadResponseDto,
     description:
@@ -1171,7 +1207,7 @@ export class OrdersController {
       anh: anh ?? [],
     });
     return {
-      soAnhDaLuu: ketQua.soAnhDaLuu,
+      savedAttachmentCount: ketQua.soAnhDaLuu,
       attachmentIds: [...ketQua.attachmentIds],
     };
   }

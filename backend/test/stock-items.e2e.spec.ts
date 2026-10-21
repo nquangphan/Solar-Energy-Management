@@ -161,7 +161,7 @@ describe('GET /stock-items (e2e)', () => {
   });
 
   for (const role of ['KHO_GIAO', 'THO_KS'] as const) {
-    it(`${role} ⇒ 200 với items + danhSachCanMua, không có giá vốn`, async () => {
+    it(`${role} ⇒ 200 với items + purchaseList, không có giá vốn`, async () => {
       givenPermissions(...ROLE_PRESETS[role]);
 
       const res = await request(server())
@@ -173,18 +173,23 @@ describe('GET /stock-items (e2e)', () => {
         items: [
           {
             productId: 'p1',
-            ten: 'Tấm pin 550W',
+            name: 'Tấm pin 550W',
             sku: 'PIN-550',
-            donVi: 'tấm',
+            unit: 'tấm',
             onHand: 5,
             reserved: 20,
-            khaDung: -15,
-            canNhap: 15,
-            tinhTrang: 'am',
+            available: -15,
+            toPurchase: 15,
+            stockStatus: 'am',
           },
         ],
-        danhSachCanMua: [
-          { productId: 'p1', ten: 'Tấm pin 550W', donVi: 'tấm', canNhap: 15 },
+        purchaseList: [
+          {
+            productId: 'p1',
+            name: 'Tấm pin 550W',
+            unit: 'tấm',
+            toPurchase: 15,
+          },
         ],
       });
       expect(JSON.stringify(res.body)).not.toContain('costPrice');

@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { OrderView } from '../orders.service';
 import { OrderLineItemResponseDto } from './order-line-item-response.dto';
 
 /**
@@ -54,7 +55,7 @@ export class OrderResponseDto {
   status!: string;
 
   @ApiProperty({ description: 'SĐT khách (E.164) — FK về Customer.' })
-  customerSdt!: string;
+  customerPhone!: string;
 
   @ApiPropertyOptional({
     type: String,
@@ -83,17 +84,17 @@ export class OrderResponseDto {
   @ApiProperty({
     description: 'Phạm vi: thiết bị. Hành vi preset thuộc Story 4.3.',
   })
-  scopeThietBi!: boolean;
+  scopeEquipment!: boolean;
 
   @ApiProperty({
     description: 'Phạm vi: thi công. Hành vi preset thuộc Story 4.3.',
   })
-  scopeThiCong!: boolean;
+  scopeConstruction!: boolean;
 
   @ApiProperty({
     description: 'Phạm vi: vận chuyển. Hành vi preset thuộc Story 4.3.',
   })
-  scopeVanChuyen!: boolean;
+  scopeDelivery!: boolean;
 
   @ApiPropertyOptional({
     type: Number,
@@ -155,4 +156,35 @@ export class OrderResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
+}
+
+/**
+ * Maps the service view (a Prisma `Order` row + resolved lines) to the contract. There is no
+ * serializer in the app, so the returned object IS the JSON body: every property the class
+ * declares is listed explicitly (no spread), so the column names (`customerSdt`,
+ * `scopeThiCong`…) never leak into the response.
+ */
+export function toOrderResponseDto(view: OrderView): OrderResponseDto {
+  return {
+    id: view.id,
+    status: view.status,
+    customerPhone: view.customerSdt,
+    currentVersionId: view.currentVersionId,
+    ownerAccountId: view.ownerAccountId,
+    assigneeAccountId: view.assigneeAccountId,
+    sourceId: view.sourceId,
+    custType: view.custType,
+    scopeEquipment: view.scopeThietBi,
+    scopeConstruction: view.scopeThiCong,
+    scopeDelivery: view.scopeVanChuyen,
+    kWp: view.kWp,
+    vatMode: view.vatMode,
+    validityNote: view.validityNote,
+    cancelReason: view.cancelReason,
+    cancelledAt: view.cancelledAt,
+    lineItems: view.lineItems,
+    discount: view.discount,
+    createdAt: view.createdAt,
+    updatedAt: view.updatedAt,
+  };
 }

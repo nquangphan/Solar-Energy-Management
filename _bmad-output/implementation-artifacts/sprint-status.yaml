@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-22 (dev-story 10.1)
+# last_updated: 2026-10-22 (dev-story 10.2)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-22 (dev-story 10.1)
+last_updated: 2026-10-22 (dev-story 10.2)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -99,7 +99,7 @@ development_status:
   # Epic 10 chạy TRƯỚC Epic 8 (correct-course 2026-10-22, sprint-change-proposal-2026-10-22.md)
   epic-10: in-progress
   10-1-doi-route-va-tham-so-tieng-viet-sang-tieng-anh: done
-  10-2-doi-field-dto-tieng-viet-sang-tieng-anh: backlog
+  10-2-doi-field-dto-tieng-viet-sang-tieng-anh: done
   10-3-web-client-sinh-tu-openapi-phien-dang-nhap-va-xu-ly-loi-mot-cho: backlog
   10-4-web-composition-root-router-va-adapter-danh-muc-khach-cai-dat: backlog
   10-5-web-adapter-don-kho-tien-chung-tu-va-nut-chi-tiet-don-theo-quyen: backlog

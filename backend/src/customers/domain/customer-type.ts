@@ -19,12 +19,13 @@ export type CustType = (typeof CUST_TYPE)[keyof typeof CUST_TYPE];
 export const CUST_TYPES: readonly CustType[] = Object.values(CUST_TYPE);
 
 /**
- * Field KHÔNG được phép gửi kèm cho từng loại khách. `name`/`address`/`sdt`/`sourceId`/
+ * Field KHÔNG được phép gửi kèm cho từng loại khách. `name`/`address`/`phone`/`sourceId`/
  * `sourceNote` dùng chung cả hai loại nên không nằm ở đây.
+ * Entries are request DTO field names (compared with body keys), not Prisma column names.
  */
 export const FORBIDDEN_FIELDS: Readonly<Record<CustType, readonly string[]>> = {
   // Cá nhân không có Mã số thuế, không có tài khoản ngân hàng công ty.
   [CUST_TYPE.caNhan]: ['taxCode', 'bankAccount'],
   // Công ty không có CCCD.
-  [CUST_TYPE.thuongMai]: ['cccd'],
+  [CUST_TYPE.thuongMai]: ['nationalId'],
 };

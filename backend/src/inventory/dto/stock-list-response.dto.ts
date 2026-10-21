@@ -1,9 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { TINH_TRANG_TON } from '../domain/ton-kho';
+import type {
+  CanMuaView,
+  StockItemView,
+  StockList,
+} from '../stock-items.service';
 
 /**
  * Response của `GET /stock-items` — chỉ để OpenAPI có schema thật (AD-12); service trả object
- * thường. Mọi con số do BACKEND tính (`tinhTonKho`); client chỉ ghép chuỗi hiển thị.
+ * thường, controller dựng response qua `toStockListResponseDto`. Mọi con số do BACKEND tính
+ * (`tinhTonKho`); client chỉ ghép chuỗi hiển thị.
  *
  * KHÔNG có giá vốn: payload này mở cho cả sale (`quotes.create_edit`) — thêm `costPrice` vào
  * đây là rò giá vốn cho người không có `costs.view`.
@@ -13,13 +19,13 @@ export class StockItemViewDto {
   productId!: string;
 
   @ApiProperty({ description: 'Tên sản phẩm.' })
-  ten!: string;
+  name!: string;
 
   @ApiProperty()
   sku!: string;
 
   @ApiProperty({ description: 'Đơn vị tính.', example: 'tấm' })
-  donVi!: string;
+  unit!: string;
 
   @ApiProperty({ description: 'Tồn thật trong kho.', example: 5 })
   onHand!: number;
@@ -34,35 +40,35 @@ export class StockItemViewDto {
     description: '`onHand − reserved` — CÓ THỂ ÂM.',
     example: -15,
   })
-  khaDung!: number;
+  available!: number;
 
   @ApiProperty({
     description: 'Phần thiếu phải nhập (0 khi khả dụng không âm).',
     example: 15,
   })
-  canNhap!: number;
+  toPurchase!: number;
 
   @ApiProperty({
     enum: TINH_TRANG_TON,
     description:
       'du = còn khả dụng · het = khả dụng 0 · am = hứa vượt hàng thật.',
   })
-  tinhTrang!: string;
+  stockStatus!: string;
 }
 
 /** Một dòng của danh sách cần mua — gộp mọi sản phẩm khả dụng âm. */
-export class CanMuaViewDto {
+export class PurchaseNeedViewDto {
   @ApiProperty()
   productId!: string;
 
   @ApiProperty()
-  ten!: string;
+  name!: string;
 
   @ApiProperty({ example: 'tấm' })
-  donVi!: string;
+  unit!: string;
 
   @ApiProperty({ example: 15 })
-  canNhap!: number;
+  toPurchase!: number;
 }
 
 export class StockListResponseDto {
@@ -73,9 +79,40 @@ export class StockListResponseDto {
   items!: StockItemViewDto[];
 
   @ApiProperty({
-    type: [CanMuaViewDto],
+    type: [PurchaseNeedViewDto],
     description:
-      'Các sản phẩm khả dụng âm của CÙNG tập `items`, sắp `canNhap` giảm dần rồi theo tên.',
+      'Các sản phẩm khả dụng âm của CÙNG tập `items`, sắp `toPurchase` giảm dần rồi theo tên.',
   })
-  danhSachCanMua!: CanMuaViewDto[];
+  purchaseList!: PurchaseNeedViewDto[];
+}
+
+/** Maps one stock row of the service (domain names) to the contract — fields listed, no spread. */
+export function toStockItemViewDto(item: StockItemView): StockItemViewDto {
+  return {
+    productId: item.productId,
+    name: item.ten,
+    sku: item.sku,
+    unit: item.donVi,
+    onHand: item.onHand,
+    reserved: item.reserved,
+    available: item.khaDung,
+    toPurchase: item.canNhap,
+    stockStatus: item.tinhTrang,
+  };
+}
+
+export function toPurchaseNeedViewDto(need: CanMuaView): PurchaseNeedViewDto {
+  return {
+    productId: need.productId,
+    name: need.ten,
+    unit: need.donVi,
+    toPurchase: need.canNhap,
+  };
+}
+
+export function toStockListResponseDto(list: StockList): StockListResponseDto {
+  return {
+    items: list.items.map(toStockItemViewDto),
+    purchaseList: list.danhSachCanMua.map(toPurchaseNeedViewDto),
+  };
 }

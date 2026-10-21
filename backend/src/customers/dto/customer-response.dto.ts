@@ -1,10 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { Customer } from '@prisma/client';
 
 /**
  * Response của mọi endpoint `/customers`. Chỉ để OpenAPI có schema thật (AD-12) — service trả
- * object thường, KHÔNG instantiate class này.
+ * row Prisma, KHÔNG instantiate class này.
+ * The controller builds the response body with `toCustomerResponseDto` (end of this file).
  *
- * `sdt` LUÔN là chuỗi đã chuẩn hoá E.164 — client gửi thô, nhận về chuẩn. Đây cũng chính là
+ * `phone` LUÔN là chuỗi đã chuẩn hoá E.164 — client gửi thô, nhận về chuẩn. Đây cũng chính là
  * khoá chính dùng ở `GET /customers/:phone` và `PATCH /customers/:phone`.
  */
 export class CustomerResponseDto {
@@ -12,7 +14,7 @@ export class CustomerResponseDto {
     description: 'SĐT đã chuẩn hoá E.164 — khoá chính của khách hàng.',
     example: '+84912345678',
   })
-  sdt!: string;
+  phone!: string;
 
   @ApiProperty({ description: 'Loại khách: CA_NHAN | THUONG_MAI.' })
   custType!: string;
@@ -25,7 +27,7 @@ export class CustomerResponseDto {
     nullable: true,
     description: 'CCCD — chỉ khách Cá nhân; `null` với khách Thương mại.',
   })
-  cccd!: string | null;
+  nationalId!: string | null;
 
   @ApiPropertyOptional({
     type: String,
@@ -59,4 +61,25 @@ export class CustomerResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
+}
+
+/**
+ * Maps a Prisma customer row to the contract. There is no serializer in the app, so the
+ * returned object IS the JSON body: every field is listed explicitly (no spread) so the
+ * database column names (`sdt`, `cccd`) never leak into the response.
+ */
+export function toCustomerResponseDto(customer: Customer): CustomerResponseDto {
+  return {
+    phone: customer.sdt,
+    custType: customer.custType,
+    name: customer.name,
+    nationalId: customer.cccd,
+    taxCode: customer.taxCode,
+    address: customer.address,
+    bankAccount: customer.bankAccount,
+    sourceId: customer.sourceId,
+    sourceNote: customer.sourceNote,
+    createdAt: customer.createdAt,
+    updatedAt: customer.updatedAt,
+  };
 }

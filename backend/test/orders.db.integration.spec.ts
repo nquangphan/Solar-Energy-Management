@@ -166,7 +166,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
 
   describe('AC-1 — FK vòng Order ↔ OrderVersion tạo được trong MỘT transaction', () => {
     it('service.create dựng đơn + version 1 + pointer trên Postgres thật; FK hai chiều đều đúng', async () => {
-      const view = await service.create(accountId, { customerSdt: SDT });
+      const view = await service.create(accountId, { customerPhone: SDT });
 
       const order = await prisma.order.findUnique({ where: { id: view.id } });
       expect(order).not.toBeNull();
@@ -181,7 +181,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
     });
 
     it('pointer trỏ version MA ⇒ Postgres ném FK violation (ràng buộc có thật, không phải lời hứa)', async () => {
-      const view = await service.create(accountId, { customerSdt: SDT });
+      const view = await service.create(accountId, { customerPhone: SDT });
 
       await expect(
         prisma.order.update({
@@ -194,7 +194,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
 
   describe('AC-4 — bản chất SNAPSHOT của Order.sourceId (FR-35)', () => {
     it('đổi Customer.sourceId SAU khi tạo đơn ⇒ Order.sourceId GIỮ NGUYÊN kênh cũ', async () => {
-      const view = await service.create(accountId, { customerSdt: SDT });
+      const view = await service.create(accountId, { customerPhone: SDT });
       expect(view.sourceId).toBe(sourceFacebookId);
 
       // Khách quay lại qua kênh KHÁC — hồ sơ khách đổi nguồn.
@@ -208,14 +208,14 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
       expect(order?.sourceId).toBe(sourceFacebookId);
 
       // Và đơn MỚI tạo sau khi đổi phải mang kênh MỚI (snapshot theo thời điểm tạo).
-      const donMoi = await service.create(accountId, { customerSdt: SDT });
+      const donMoi = await service.create(accountId, { customerPhone: SDT });
       expect(donMoi.sourceId).toBe(sourceZaloId);
     });
   });
 
   describe('AC-5 — FK order_line_items.product_id ON DELETE RESTRICT', () => {
     it('xoá cứng Product đang có dòng đơn trỏ vào ⇒ Postgres CHẶN', async () => {
-      const view = await service.create(accountId, { customerSdt: SDT });
+      const view = await service.create(accountId, { customerPhone: SDT });
       await service.addLine(
         accountId,
         view.id,
@@ -237,7 +237,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
     });
 
     it('dòng catalog auto-điền giá + amount từ DB thật; UNIQUE (orderId, versionNo) enforce', async () => {
-      const view = await service.create(accountId, { customerSdt: SDT });
+      const view = await service.create(accountId, { customerPhone: SDT });
       const line = await service.addLine(
         accountId,
         view.id,
@@ -276,7 +276,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
 
     it('đơn đã chốt ⇒ MỌI dòng đều có snapshot giá (không dòng nào lọt qua cửa sổ)', async () => {
       for (let vong = 0; vong < SO_VONG; vong++) {
-        const don = await service.create(accountId, { customerSdt: SDT });
+        const don = await service.create(accountId, { customerPhone: SDT });
         await service.addLine(
           accountId,
           don.id,
@@ -346,7 +346,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
       const GIA_SUA = 777_000;
 
       for (let vong = 0; vong < SO_VONG; vong++) {
-        const don = await service.create(accountId, { customerSdt: SDT });
+        const don = await service.create(accountId, { customerPhone: SDT });
         // Dòng TỰ DO: `priceEditable` = true ⇒ `unitPrice` sửa được, và `confirm` đóng băng
         // đúng con số đang thấy (dòng catalog thì snapshot theo giá danh mục, không phản
         // ánh được lệnh sửa).
@@ -445,7 +445,9 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
 
     it('hai auto-transition song song ⇒ MỘT lần đổi status, MỘT StatusChanged, kẻ thua no-op', async () => {
       for (let vong = 0; vong < SO_VONG; vong++) {
-        const don = await serviceCoBus.create(accountId, { customerSdt: SDT });
+        const don = await serviceCoBus.create(accountId, {
+          customerPhone: SDT,
+        });
         await serviceCoBus.addLine(
           accountId,
           don.id,
@@ -484,7 +486,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
     });
 
     it('gọi lại sau khi ĐÃ tới đích ⇒ no-op tuyệt đối: không event, không đổi updatedAt', async () => {
-      const don = await serviceCoBus.create(accountId, { customerSdt: SDT });
+      const don = await serviceCoBus.create(accountId, { customerPhone: SDT });
       await serviceCoBus.addLine(
         accountId,
         don.id,
@@ -536,7 +538,7 @@ moTa('Ràng buộc tầng DB của orders (Postgres THẬT)', () => {
 
     it('updateLine thành công ⇒ thay đổi nằm ở BẢN HIỆU LỰC (không dòng nào rơi vào bản đã chết)', async () => {
       for (let vong = 0; vong < SO_VONG; vong++) {
-        const don = await service.create(accountId, { customerSdt: SDT });
+        const don = await service.create(accountId, { customerPhone: SDT });
         const dong = await service.addLine(
           accountId,
           don.id,

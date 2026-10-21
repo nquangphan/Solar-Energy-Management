@@ -13,10 +13,10 @@ import { VAT_MODES } from '../domain/vat-mode';
 
 /**
  * Body của `PATCH /orders/:id` — partial VIẾT TAY, CẤM `PartialType` (nó auto-gắn
- * `@IsOptional` không gỡ được — `{"scopeThiCong": null}` sẽ lọt xuống cột NOT NULL).
+ * `@IsOptional` không gỡ được — `{"scopeConstruction": null}` sẽ lọt xuống cột NOT NULL).
  *
  * Hai NHÓM field, mỗi nhóm một event audit riêng:
- *  - Cờ phạm vi (Story 4.3): `scopeThiCong`/`scopeVanChuyen` — `scopeThietBi` KHÔNG có ở
+ *  - Cờ phạm vi (Story 4.3): `scopeConstruction`/`scopeDelivery` — `scopeEquipment` KHÔNG có ở
  *    đây, luôn `true` với mọi đơn (EXPERIENCE.md: mọi đơn có vật tư); client gửi kèm sẽ bị
  *    `whitelist: true` strip im lặng.
  *  - Metadata (Story 4.4): `vatMode`/`kWp`/`validityNote`. `kWp`/`validityNote` nullable ở
@@ -30,14 +30,14 @@ export class UpdateOrderRequestDto {
   })
   @IsOptionalNotNull()
   @IsBoolean()
-  scopeThiCong?: boolean;
+  scopeConstruction?: boolean;
 
   @ApiPropertyOptional({
     description: 'Cờ phạm vi Vận chuyển — chỉ đổi được khi đơn còn ở baogia.',
   })
   @IsOptionalNotNull()
   @IsBoolean()
-  scopeVanChuyen?: boolean;
+  scopeDelivery?: boolean;
 
   @ApiPropertyOptional({
     enum: [...VAT_MODES],

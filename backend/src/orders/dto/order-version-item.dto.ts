@@ -1,15 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import type { ThayDoiBanUpdate } from '../domain/version-diff';
+import type { OrderVersionRow } from '../orders.service';
 
 /** Đổi số lượng của MỘT dòng giữa hai bản. */
-export class ThayDoiSoLuongDto {
+export class QtyChangeDto {
   @ApiProperty({ description: 'Tên dòng ở bản mới.' })
-  ten!: string;
+  name!: string;
 
   @ApiProperty({ description: 'Số lượng ở bản trước.' })
-  tu!: number;
+  from!: number;
 
   @ApiProperty({ description: 'Số lượng ở bản này.' })
-  den!: number;
+  to!: number;
 }
 
 /**
@@ -18,21 +20,21 @@ export class ThayDoiSoLuongDto {
  * KHÔNG so tiền/đơn giá: trước Chốt giá là live-resolve từ danh mục, nên so giá sẽ báo "đổi"
  * cho một bản không ai đụng vào.
  */
-export class ThayDoiBanUpdateDto {
+export class VersionChangesDto {
   @ApiProperty({ type: [String], description: 'Tên các dòng mới thêm.' })
-  them!: string[];
+  added!: string[];
 
   @ApiProperty({ type: [String], description: 'Tên các dòng bị xoá.' })
-  xoa!: string[];
+  removed!: string[];
 
-  @ApiProperty({ type: [ThayDoiSoLuongDto] })
-  doiSoLuong!: ThayDoiSoLuongDto[];
+  @ApiProperty({ type: [QtyChangeDto] })
+  qtyChanged!: QtyChangeDto[];
 }
 
 /**
  * Một bản update trong lịch sử đơn (FR-6).
  *
- * `laBanHienLuc` phân giải qua `Order.currentVersionId` — KHÔNG suy bằng `versionNo` lớn nhất
+ * `isCurrent` phân giải qua `Order.currentVersionId` — KHÔNG suy bằng `versionNo` lớn nhất
  * hay timestamp (AD-6 cấm tường minh: con trỏ có thể trỏ bản không phải bản mới nhất).
  *
  * `createdByAccountId`/`createdByDisplayName` null với bản tạo trước khi cột actor tồn tại —
@@ -46,7 +48,7 @@ export class OrderVersionItemDto {
   versionNo!: number;
 
   @ApiProperty({ description: 'Bản đang hiệu lực (theo currentVersionId).' })
-  laBanHienLuc!: boolean;
+  isCurrent!: boolean;
 
   @ApiProperty({ description: 'ISO-8601 UTC.' })
   createdAt!: Date;
@@ -55,7 +57,7 @@ export class OrderVersionItemDto {
     description: 'Thời điểm bản này được Chốt; null nếu chưa chốt.',
     nullable: true,
   })
-  chotAt!: Date | null;
+  confirmedAt!: Date | null;
 
   @ApiPropertyOptional({ nullable: true })
   createdByAccountId!: string | null;
@@ -67,8 +69,43 @@ export class OrderVersionItemDto {
   createdByDisplayName!: string | null;
 
   @ApiProperty({ description: 'Số dòng của chính bản này.' })
-  soDong!: number;
+  lineCount!: number;
 
-  @ApiProperty({ type: ThayDoiBanUpdateDto })
-  thayDoi!: ThayDoiBanUpdateDto;
+  @ApiProperty({ type: VersionChangesDto })
+  changes!: VersionChangesDto;
+}
+
+export function toQtyChangeDto(change: {
+  ten: string;
+  tu: number;
+  den: number;
+}): QtyChangeDto {
+  return { name: change.ten, from: change.tu, to: change.den };
+}
+
+export function toVersionChangesDto(
+  changes: ThayDoiBanUpdate,
+): VersionChangesDto {
+  return {
+    added: [...changes.them],
+    removed: [...changes.xoa],
+    qtyChanged: changes.doiSoLuong.map(toQtyChangeDto),
+  };
+}
+
+/** Maps one history row of the service to the contract — fields listed, no spread. */
+export function toOrderVersionItemDto(
+  row: OrderVersionRow,
+): OrderVersionItemDto {
+  return {
+    id: row.id,
+    versionNo: row.versionNo,
+    isCurrent: row.laBanHienLuc,
+    createdAt: row.createdAt,
+    confirmedAt: row.chotAt,
+    createdByAccountId: row.createdByAccountId,
+    createdByDisplayName: row.createdByDisplayName,
+    lineCount: row.soDong,
+    changes: toVersionChangesDto(row.thayDoi),
+  };
 }

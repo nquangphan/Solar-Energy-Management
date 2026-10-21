@@ -25,7 +25,7 @@ process.env.JWT_ACCESS_SECRET = TEST_JWT_SECRET;
  *
  *  - Guard toàn cục thật sự chạy: thiếu `customers.manage` ⇒ 403 trên MỌI route.
  *  - `ValidationPipe` thật: SĐT rác/`null` trên cột NOT NULL ⇒ 400 và DB KHÔNG bị chạm.
- *  - `sdt` trong body PATCH ⇒ 400 — KHÔNG bị `whitelist: true` âm thầm cắt đi rồi trả 200.
+ *  - `phone` trong body PATCH ⇒ 400 — KHÔNG bị `whitelist: true` âm thầm cắt đi rồi trả 200.
  *  - Event đi qua `EventBus` tới `AuditSubscriber` THẬT và ghi `AuditLog`.
  */
 describe('/customers (e2e)', () => {
@@ -107,7 +107,7 @@ describe('/customers (e2e)', () => {
   const accountPermissionsMock = { listForAccount: jest.fn() };
 
   const bodyHopLe = {
-    sdt: '0912 345 678',
+    phone: '0912 345 678',
     custType: CUST_TYPE.caNhan,
     name: 'Nguyễn Văn A',
     sourceId: NGUON_FACEBOOK.id,
@@ -221,8 +221,29 @@ describe('/customers (e2e)', () => {
         .send(bodyHopLe);
 
       expect(res.status).toBe(201);
-      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.phone).toBe(SDT_E164);
       expect(customerRepo.create.mock.calls[0][0].data.sdt).toBe(SDT_E164);
+    });
+
+    // The response is built by a map, not a cast of the Prisma row: the column names must not
+    // reach the wire next to (or instead of) the contract names.
+    it('POST ⇒ response carries contract names only (`phone`, `nationalId`), never the columns', async () => {
+      givenPermissions(PERM.customersManage);
+      customerRepo.create.mockResolvedValue({ ...KHACH, cccd: '079201001234' });
+
+      const res = await request(server())
+        .post('/customers')
+        .set('Authorization', `Bearer ${token()}`)
+        .send({ ...bodyHopLe, nationalId: '079201001234' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.phone).toBe(SDT_E164);
+      expect(res.body.nationalId).toBe('079201001234');
+      expect(res.body.sdt).toBeUndefined();
+      expect(res.body.cccd).toBeUndefined();
+      expect(customerRepo.create.mock.calls[0][0].data.cccd).toBe(
+        '079201001234',
+      );
     });
 
     for (const rac of [
@@ -233,17 +254,17 @@ describe('/customers (e2e)', () => {
       '',
       '09123456789012345678',
     ]) {
-      it(`POST sdt "${rac}" ⇒ 400 VALIDATION_ERROR, KHÔNG ghi DB`, async () => {
+      it(`POST phone "${rac}" ⇒ 400 VALIDATION_ERROR, KHÔNG ghi DB`, async () => {
         givenPermissions(PERM.customersManage);
 
         const res = await request(server())
           .post('/customers')
           .set('Authorization', `Bearer ${token()}`)
-          .send({ ...bodyHopLe, sdt: rac });
+          .send({ ...bodyHopLe, phone: rac });
 
         expect(res.status).toBe(400);
         expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-        expect(res.body.fieldErrors[0].field).toBe('sdt');
+        expect(res.body.fieldErrors[0].field).toBe('phone');
         expect(customerRepo.create).not.toHaveBeenCalled();
       });
     }
@@ -251,21 +272,21 @@ describe('/customers (e2e)', () => {
     // Khoá chính không được nhận thứ không phải chuỗi: một mảng/số lọt tới `normalizeVnPhone`
     // là 500 chờ sẵn, và `@IsString()` là thứ duy nhất đứng chắn. Không test = không ai biết
     // khi nó bị gỡ.
-    for (const [nhan, sdt] of [
+    for (const [nhan, phone] of [
       ['số', 912345678],
       ['mảng', ['0912345678']],
       ['object lồng', { $ne: null }],
     ] as const) {
-      it(`POST sdt là ${nhan} ⇒ 400, KHÔNG ghi DB`, async () => {
+      it(`POST phone là ${nhan} ⇒ 400, KHÔNG ghi DB`, async () => {
         givenPermissions(PERM.customersManage);
 
         const res = await request(server())
           .post('/customers')
           .set('Authorization', `Bearer ${token()}`)
-          .send({ ...bodyHopLe, sdt });
+          .send({ ...bodyHopLe, phone });
 
         expect(res.status).toBe(400);
-        expect(res.body.fieldErrors[0].field).toBe('sdt');
+        expect(res.body.fieldErrors[0].field).toBe('phone');
         expect(customerRepo.create).not.toHaveBeenCalled();
       });
     }
@@ -305,6 +326,10 @@ describe('/customers (e2e)', () => {
         .set('Authorization', `Bearer ${token()}`);
 
       expect(res.status).toBe(200);
+      expect(res.body.phone).toBe(SDT_E164);
+      expect(res.body).toHaveProperty('nationalId');
+      expect(res.body.sdt).toBeUndefined();
+      expect(res.body.cccd).toBeUndefined();
       expect(customerRepo.findUnique).toHaveBeenCalledWith({
         where: { sdt: SDT_E164 },
       });
@@ -336,7 +361,8 @@ describe('/customers (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.items).toHaveLength(2);
-      expect(res.body.items[0].sdt).toBe(SDT_E164);
+      expect(res.body.items[0].phone).toBe(SDT_E164);
+      expect(res.body.items[0].sdt).toBeUndefined();
       expect(res.body).toMatchObject({ total: 2, page: 1, pageSize: 20 });
       expect(customerRepo.findMany.mock.calls[0][0]).toMatchObject({
         orderBy: { createdAt: 'desc' },
@@ -430,7 +456,7 @@ describe('/customers (e2e)', () => {
       expect(res.body).toHaveProperty('customer');
     });
 
-    it('tìm thấy ⇒ 200 { found: true, sdt E.164, customer } (đủ để form điền sẵn)', async () => {
+    it('tìm thấy ⇒ 200 { found: true, phone E.164, customer } (đủ để form điền sẵn)', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
@@ -439,8 +465,10 @@ describe('/customers (e2e)', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.found).toBe(true);
-      expect(res.body.sdt).toBe(SDT_E164);
-      expect(res.body.customer.sdt).toBe(SDT_E164);
+      expect(res.body.phone).toBe(SDT_E164);
+      expect(res.body.sdt).toBeUndefined();
+      expect(res.body.customer.phone).toBe(SDT_E164);
+      expect(res.body.customer.sdt).toBeUndefined();
       expect(customerRepo.findUnique).toHaveBeenCalledWith({
         where: { sdt: SDT_E164 },
       });
@@ -457,7 +485,7 @@ describe('/customers (e2e)', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
         found: false,
-        sdt: SDT_E164,
+        phone: SDT_E164,
         customer: null,
       });
     });
@@ -477,7 +505,7 @@ describe('/customers (e2e)', () => {
           .set('Authorization', `Bearer ${token()}`);
 
         expect(res.status).toBe(200);
-        expect(res.body.sdt).toBe(SDT_E164);
+        expect(res.body.phone).toBe(SDT_E164);
         expect(res.body.found).toBe(true);
       }
     });
@@ -650,7 +678,7 @@ describe('/customers (e2e)', () => {
 
   describe('AC-3 — chặn trùng SĐT: dạng thô KHÁC NHAU, cùng một E.164 ⇒ 409', () => {
     for (const raw of ['0912345678', '0912.345.678', '84912345678', SDT_E164]) {
-      it(`POST "${raw}" khi SĐT đã tồn tại ⇒ 409 CONFLICT (fieldErrors trỏ ô sdt)`, async () => {
+      it(`POST "${raw}" khi SĐT đã tồn tại ⇒ 409 CONFLICT (fieldErrors trỏ ô phone)`, async () => {
         givenPermissions(PERM.customersManage);
         // Tín hiệu đến từ PK của Postgres (P2002) — không phải từ một câu `if` ở tầng app.
         customerRepo.create.mockRejectedValue(
@@ -662,11 +690,11 @@ describe('/customers (e2e)', () => {
         const res = await request(server())
           .post('/customers')
           .set('Authorization', `Bearer ${token()}`)
-          .send({ ...bodyHopLe, sdt: raw });
+          .send({ ...bodyHopLe, phone: raw });
 
         expect(res.status).toBe(409);
         expect(res.body.code).toBe(ErrorCode.CONFLICT);
-        expect(res.body.fieldErrors[0].field).toBe('sdt');
+        expect(res.body.fieldErrors[0].field).toBe('phone');
         expect(res.body.fieldErrors[0].code).toBe('isUnique');
         // Mọi dạng thô đều đi tới DB bằng CÙNG một khoá — đó là lý do DB chặn được chúng.
         expect(customerRepo.create.mock.calls[0][0].data.sdt).toBe(SDT_E164);
@@ -689,7 +717,7 @@ describe('/customers (e2e)', () => {
       expect(customerRepo.create).not.toHaveBeenCalled();
     });
 
-    it('THUONG_MAI kèm cccd ⇒ 400', async () => {
+    it('THUONG_MAI kèm nationalId ⇒ 400 `nationalId`, KHÔNG ghi DB', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
@@ -698,11 +726,12 @@ describe('/customers (e2e)', () => {
         .send({
           ...bodyHopLe,
           custType: CUST_TYPE.thuongMai,
-          cccd: '079201001234',
+          nationalId: '079201001234',
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.fieldErrors[0].field).toBe('cccd');
+      expect(res.body.fieldErrors[0].field).toBe('nationalId');
+      expect(customerRepo.create).not.toHaveBeenCalled();
     });
 
     it('custType lạ ⇒ 400', async () => {
@@ -750,7 +779,7 @@ describe('/customers (e2e)', () => {
         .post('/customers')
         .set('Authorization', `Bearer ${token()}`)
         .send({
-          sdt: bodyHopLe.sdt,
+          phone: bodyHopLe.phone,
           custType: bodyHopLe.custType,
           name: bodyHopLe.name,
         });
@@ -833,33 +862,33 @@ describe('/customers (e2e)', () => {
     });
   });
 
-  describe('AC-7 — sdt BẤT BIẾN: PATCH kèm sdt ⇒ 400 (không im lặng bỏ qua)', () => {
-    it('PATCH body chứa sdt ⇒ 400, KHÔNG ghi DB', async () => {
+  describe('AC-7 — phone BẤT BIẾN: PATCH kèm phone ⇒ 400 (không im lặng bỏ qua)', () => {
+    it('PATCH body chứa phone ⇒ 400, KHÔNG ghi DB', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
         .patch(`/customers/${SDT_E164}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ sdt: '+84987654321', name: 'Tên mới' });
+        .send({ phone: '+84987654321', name: 'Tên mới' });
 
       // `whitelist: true` sẽ ÂM THẦM CẮT field không khai báo ⇒ client tin là đã đổi được SĐT.
-      // DTO khai `sdt` rồi từ chối tường minh, nên nó phải là 400 chứ không phải 200.
+      // DTO khai `phone` rồi từ chối tường minh, nên nó phải là 400 chứ không phải 200.
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
       expect(customerRepo.update).not.toHaveBeenCalled();
     });
 
-    it('PATCH sdt: null ⇒ vẫn 400 (có mặt KEY là sai, bất kể giá trị)', async () => {
+    it('PATCH phone: null ⇒ vẫn 400 (có mặt KEY là sai, bất kể giá trị)', async () => {
       givenPermissions(PERM.customersManage);
 
       const res = await request(server())
         .patch(`/customers/${SDT_E164}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ sdt: null });
+        .send({ phone: null });
 
       expect(res.status).toBe(400);
-      expect(res.body.fieldErrors[0].field).toBe('sdt');
+      expect(res.body.fieldErrors[0].field).toBe('phone');
     });
 
     it('PATCH hợp lệ ⇒ 200 và payload ghi DB KHÔNG chứa sdt', async () => {
@@ -872,7 +901,8 @@ describe('/customers (e2e)', () => {
         .send({ name: 'Tên mới' });
 
       expect(res.status).toBe(200);
-      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.phone).toBe(SDT_E164);
+      expect(res.body.sdt).toBeUndefined();
       expect(customerRepo.update.mock.calls[0][0].data).not.toHaveProperty(
         'sdt',
       );
@@ -887,7 +917,7 @@ describe('/customers (e2e)', () => {
         .send({});
 
       expect(res.status).toBe(200);
-      expect(res.body.sdt).toBe(SDT_E164);
+      expect(res.body.phone).toBe(SDT_E164);
     });
   });
 
@@ -954,7 +984,7 @@ describe('/customers (e2e)', () => {
       });
     }
 
-    it('PATCH cccd: null ⇒ 200 (cột nullable — `null` là đường XOÁ hợp lệ)', async () => {
+    it('PATCH nationalId: null ⇒ 200 (cột nullable — `null` là đường XOÁ hợp lệ)', async () => {
       givenPermissions(PERM.customersManage);
       customerRepo.findUnique.mockResolvedValue({
         ...KHACH,
@@ -965,9 +995,10 @@ describe('/customers (e2e)', () => {
       const res = await request(server())
         .patch(`/customers/${SDT_E164}`)
         .set('Authorization', `Bearer ${token()}`)
-        .send({ cccd: null });
+        .send({ nationalId: null });
 
       expect(res.status).toBe(200);
+      expect(res.body.nationalId).toBeNull();
       expect(customerRepo.update.mock.calls[0][0].data.cccd).toBeNull();
     });
   });
@@ -1017,7 +1048,7 @@ describe('/customers (e2e)', () => {
     // thì cái trần đó chỉ là bình luận. Field lạc loại khách nên body phải khớp loại: pipe chạy
     // TRƯỚC service, nên đây vẫn là lỗi trần, không phải lỗi loại khách.
     const tranChuoi: readonly [string, number, string][] = [
-      ['cccd', 20, CUST_TYPE.caNhan],
+      ['nationalId', 20, CUST_TYPE.caNhan],
       ['address', 500, CUST_TYPE.caNhan],
       ['sourceNote', 500, CUST_TYPE.caNhan],
       ['taxCode', 20, CUST_TYPE.thuongMai],
@@ -1047,7 +1078,7 @@ describe('/customers (e2e)', () => {
   describe('field bắt buộc VẮNG MẶT ⇒ 400 (không chỉ `null`)', () => {
     // `null` đã được canh ở khối trên. Đây là ca KHÁC: field không xuất hiện trong body. Cả bốn
     // field định danh đều phải đòi — trước đây chỉ `sourceId` có test, ba field kia đi lọt.
-    for (const field of ['sdt', 'custType', 'name', 'sourceId'] as const) {
+    for (const field of ['phone', 'custType', 'name', 'sourceId'] as const) {
       it(`POST thiếu hẳn ${field} ⇒ 400, KHÔNG ghi DB`, async () => {
         givenPermissions(PERM.customersManage);
         const body: Record<string, unknown> = { ...bodyHopLe };
