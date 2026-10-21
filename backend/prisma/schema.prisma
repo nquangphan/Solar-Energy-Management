@@ -50,6 +50,7 @@ model Account {
   paymentsRecorded     Payment[]         @relation("PaymentRecordedBy")
   contractsCreated     Contract[]        @relation("ContractCreatedBy")
   invoicesCreated      Invoice[]         @relation("InvoiceCreatedBy")
+  invoicePdfsCreated   InvoicePdf[]      @relation("InvoicePdfCreatedBy")
 
   @@map("accounts")
 }
@@ -781,6 +782,7 @@ model Invoice {
   createdBy                 Account       @relation("InvoiceCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
   createdAt                 DateTime      @default(now()) @map("created_at")
   lines                     InvoiceLine[]
+  pdf                       InvoicePdf?
 
   @@index([orderId])
   @@map("invoices")
@@ -800,6 +802,23 @@ model InvoiceLine {
 
   @@unique([invoiceId, displayOrder])
   @@map("invoice_lines")
+}
+
+/// The exported PDF of one invoice (FR-28, AD-3). Rendered once from the invoice snapshot and
+/// stored in R2; the invoice row itself is never updated. At most one per invoice.
+/// CHECK constraint (pdf_size > 0) lives in the migration.
+model InvoicePdf {
+  id                 String   @id @default(uuid())
+  invoiceId          String   @unique @map("invoice_id")
+  invoice            Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  pdfKey             String   @map("pdf_key")
+  pdfSize            Int      @map("pdf_size")
+  fileName           String   @map("file_name")
+  createdByAccountId String   @map("created_by_account_id")
+  createdBy          Account  @relation("InvoicePdfCreatedBy", fields: [createdByAccountId], references: [id], onDelete: Restrict)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@map("invoice_pdfs")
 }
 
 /// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2

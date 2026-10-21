@@ -4974,6 +4974,224 @@
           "invoices"
         ]
       }
+    },
+    "/orders/{id}/invoices/{invoiceId}": {
+      "get": {
+        "operationId": "InvoicesController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Toàn bộ nội dung một hoá đơn (số, ngày, người bán, khách, dòng, VAT, tổng, gắn đơn) đọc từ bản chụp lúc lập — không đọc lại đơn, khách hay cài đặt. Xem được bất kể trạng thái đơn hiện tại. pdf = null khi chưa xuất.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoiceDetailResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id hoặc invoiceId không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu invoices.manage, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND, cùng message đơn không tồn tại); hoặc hoá đơn không tồn tại / không thuộc đơn này — \"Không tìm thấy hoá đơn.\" (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invoices"
+        ]
+      }
+    },
+    "/orders/{id}/invoices/{invoiceId}/pdf": {
+      "post": {
+        "operationId": "InvoicesController_exportPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lần đầu: dựng PDF từ bản chụp hoá đơn và lưu ở R2 (AD-3). Các lần sau: trả lại đúng file đã lưu, không dựng lại, không ghi thêm — cùng mã 200, cùng thân. Body rỗng. Xuất được bất kể trạng thái đơn hiện tại. Tải bytes qua GET cùng đường dẫn.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvoicePdfResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id hoặc invoiceId không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu invoices.manage, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND, cùng message đơn không tồn tại); hoặc hoá đơn không tồn tại / không thuộc đơn này — \"Không tìm thấy hoá đơn.\" (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invoices"
+        ]
+      },
+      "get": {
+        "operationId": "InvoicesController_downloadPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "invoiceId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bytes PDF đã xuất của một hoá đơn.",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id hoặc invoiceId không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu invoices.manage, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND, cùng message đơn không tồn tại); hoá đơn không tồn tại / không thuộc đơn này — \"Không tìm thấy hoá đơn.\"; hoặc hoá đơn chưa xuất PDF — \"Hoá đơn này chưa xuất PDF.\" (NOT_FOUND).",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "invoices"
+        ]
+      }
     }
   },
   "info": {
@@ -8556,6 +8774,242 @@
           "lineCount",
           "orderTotal",
           "invoices"
+        ]
+      },
+      "InvoiceSellerDto": {
+        "type": "object",
+        "properties": {
+          "legalName": {
+            "type": "string",
+            "description": "Tên pháp nhân bên bán lúc lập; rỗng = chưa cấu hình."
+          },
+          "taxCode": {
+            "type": "string",
+            "description": "MST bên bán lúc lập; rỗng = chưa cấu hình."
+          },
+          "address": {
+            "type": "string",
+            "description": "Địa chỉ bên bán lúc lập; rỗng = chưa cấu hình."
+          },
+          "representative": {
+            "type": "string",
+            "description": "Người đại diện lúc lập; rỗng = chưa cấu hình."
+          },
+          "representativeTitle": {
+            "type": "string",
+            "description": "Chức danh người đại diện lúc lập; rỗng = chưa cấu hình."
+          },
+          "phone": {
+            "type": "string",
+            "description": "Điện thoại bên bán lúc lập; rỗng = chưa cấu hình."
+          },
+          "bankAccount": {
+            "type": "string",
+            "description": "Tài khoản ngân hàng bên bán lúc lập; rỗng = chưa cấu hình."
+          }
+        },
+        "required": [
+          "legalName",
+          "taxCode",
+          "address",
+          "representative",
+          "representativeTitle",
+          "phone",
+          "bankAccount"
+        ]
+      },
+      "InvoiceLineDto": {
+        "type": "object",
+        "properties": {
+          "displayOrder": {
+            "type": "number",
+            "description": "Thứ tự dòng trên hoá đơn (tăng dần).",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "Tấm pin AE 630W"
+          },
+          "unit": {
+            "type": "string",
+            "example": "Tấm"
+          },
+          "qty": {
+            "type": "number",
+            "description": "Số lượng.",
+            "example": 14
+          },
+          "unitPrice": {
+            "type": "number",
+            "description": "Đơn giá — số nguyên đồng.",
+            "example": 2583000
+          },
+          "amount": {
+            "type": "number",
+            "description": "Thành tiền — số nguyên đồng.",
+            "example": 36162000
+          }
+        },
+        "required": [
+          "displayOrder",
+          "name",
+          "unit",
+          "qty",
+          "unitPrice",
+          "amount"
+        ]
+      },
+      "InvoicePdfResponseDto": {
+        "type": "object",
+        "properties": {
+          "fileName": {
+            "type": "string",
+            "description": "Tên file tải về (ASCII, có đuôi .pdf).",
+            "example": "hoa-don-HD-2026-0731.pdf"
+          },
+          "pdfSize": {
+            "type": "number",
+            "description": "Kích thước file — byte.",
+            "example": 48213
+          },
+          "exportedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Lúc xuất PDF lần đầu (ISO-8601 UTC)."
+          }
+        },
+        "required": [
+          "fileName",
+          "pdfSize",
+          "exportedAt"
+        ]
+      },
+      "InvoiceDetailResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "invoiceNo": {
+            "type": "string",
+            "description": "Số hoá đơn nội bộ — `HD-{năm}-{số thứ tự ≥ 4 chữ số}`.",
+            "example": "HD-2026-0731"
+          },
+          "versionNo": {
+            "type": "number",
+            "description": "Số thứ tự bản đơn (version) được chụp lại.",
+            "example": 1
+          },
+          "issuedAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Ngày lập (ISO-8601 UTC)."
+          },
+          "customerName": {
+            "type": "string",
+            "description": "Tên khách chụp lúc lập."
+          },
+          "customerTaxCode": {
+            "type": "string",
+            "nullable": true,
+            "description": "MST khách chụp lúc lập; null khi khách không có MST.",
+            "example": "0316552018"
+          },
+          "vatRate": {
+            "type": "number",
+            "description": "Thuế suất VAT (%) chụp lúc lập.",
+            "example": 8
+          },
+          "applyVat": {
+            "type": "boolean",
+            "description": "Có áp VAT hay không, chụp lúc lập."
+          },
+          "subtotal": {
+            "type": "number",
+            "description": "Tổng trước chiết khấu và VAT — số nguyên đồng.",
+            "example": 76862000
+          },
+          "discountAmount": {
+            "type": "number",
+            "description": "Chiết khấu đã duyệt — số nguyên đồng (0 khi không có).",
+            "example": 0
+          },
+          "vatAmount": {
+            "type": "number",
+            "description": "Tiền VAT — số nguyên đồng (0 khi không áp VAT).",
+            "example": 6148960
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng thanh toán sau VAT — số nguyên đồng.",
+            "example": 83010960
+          },
+          "lineCount": {
+            "type": "number",
+            "description": "Số dòng vật tư trên hoá đơn.",
+            "example": 4
+          },
+          "orderId": {
+            "type": "string",
+            "description": "Đơn mà hoá đơn gắn vào."
+          },
+          "quoteNo": {
+            "type": "string",
+            "description": "Số báo giá của đơn (\"Gắn đơn\") — cùng số in trên báo giá và hợp đồng.",
+            "example": "BG-3F2A9B1C"
+          },
+          "customerSdt": {
+            "type": "string",
+            "description": "SĐT khách (E.164) chụp lúc lập.",
+            "example": "+84901234567"
+          },
+          "customerAddress": {
+            "type": "string",
+            "nullable": true,
+            "description": "Địa chỉ khách chụp lúc lập; null khi không có."
+          },
+          "seller": {
+            "$ref": "#/components/schemas/InvoiceSellerDto"
+          },
+          "lines": {
+            "description": "Các dòng của hoá đơn theo thứ tự hiển thị.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InvoiceLineDto"
+            }
+          },
+          "pdf": {
+            "nullable": true,
+            "description": "File PDF đã xuất; null khi chưa xuất.",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InvoicePdfResponseDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "invoiceNo",
+          "versionNo",
+          "issuedAt",
+          "customerName",
+          "customerTaxCode",
+          "vatRate",
+          "applyVat",
+          "subtotal",
+          "discountAmount",
+          "vatAmount",
+          "total",
+          "lineCount",
+          "orderId",
+          "quoteNo",
+          "customerSdt",
+          "customerAddress",
+          "seller",
+          "lines",
+          "pdf"
         ]
       }
     }

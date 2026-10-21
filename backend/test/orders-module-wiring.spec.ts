@@ -59,14 +59,18 @@ describe('ContractsModule wiring — shares the orders renderer', () => {
   });
 });
 
-describe('InvoicesModule wiring — no renderer, no storage', () => {
-  it('provides only InvoicesService and imports OrdersModule for the scope', async () => {
+describe('InvoicesModule wiring — shares the orders renderer, storage from StorageModule', () => {
+  it('provides InvoicesService and InvoiceDocumentService only (no renderer or storage binding of its own)', async () => {
     const { InvoicesModule } = await import('../src/invoices/invoices.module');
     expect(Reflect.getMetadata('providers', InvoicesModule)).toEqual([
       (await import('../src/invoices/invoices.service')).InvoicesService,
+      (await import('../src/invoices/invoice-document.service'))
+        .InvoiceDocumentService,
     ]);
-    expect(Reflect.getMetadata('imports', InvoicesModule)).toContain(
-      OrdersModule,
+    const imports = Reflect.getMetadata('imports', InvoicesModule) as unknown[];
+    expect(imports).toContain(OrdersModule);
+    expect(imports).toContain(
+      (await import('../src/storage/storage.module')).StorageModule,
     );
   });
 });

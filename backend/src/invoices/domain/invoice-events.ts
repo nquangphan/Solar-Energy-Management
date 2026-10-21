@@ -34,3 +34,34 @@ export class InvoiceCreated implements DomainEvent {
     this.after = { ...invoice };
   }
 }
+
+/**
+ * The PDF of an invoice was rendered and stored for the first time. A later export returns the
+ * stored file and publishes nothing. `occurredAt` is the stored row's `createdAt`, so the audit
+ * row and the response carry one timestamp.
+ */
+export class InvoicePdfExported implements DomainEvent {
+  readonly type = 'InvoicePdfExported';
+
+  readonly target: { readonly type: string; readonly id: string };
+
+  readonly after: {
+    readonly invoiceId: string;
+    readonly invoiceNo: string;
+    readonly fileName: string;
+  };
+
+  constructor(
+    readonly actorAccountId: string,
+    orderId: string,
+    pdf: {
+      readonly invoiceId: string;
+      readonly invoiceNo: string;
+      readonly fileName: string;
+    },
+    readonly occurredAt: Date,
+  ) {
+    this.target = { type: 'Order', id: orderId };
+    this.after = { ...pdf };
+  }
+}

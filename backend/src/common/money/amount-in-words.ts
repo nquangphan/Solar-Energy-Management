@@ -1,5 +1,7 @@
 /**
- * Integer dong → Vietnamese words for the "(Bằng chữ: …)" lines of a contract — PURE DOMAIN.
+ * Integer dong → Vietnamese words for the "(Bằng chữ: …)" lines of a contract and the
+ * "Số tiền viết bằng chữ" line of an invoice — PURE DOMAIN. Shared here, not owned by either
+ * module, so `contracts/` and `invoices/` stay independent of each other.
  *
  * Wording follows the two company templates: group units `ngàn`/`triệu`/`tỷ`; `mươi`/`mười`;
  * `mốt` (1 after tens ≥ 2); `lăm` (5 after tens ≥ 1); `lẻ` (tens 0, units ≠ 0); a non-leading

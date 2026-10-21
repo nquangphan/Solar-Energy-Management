@@ -1,9 +1,10 @@
-// Source-guard + parity for the HOÁ ĐƠN BÁN HÀNG screens (Story 7.4).
+// Source-guard + parity for the HOÁ ĐƠN BÁN HÀNG screens (Story 7.4) and the
+// Xem hoá đơn screens (Story 7.5).
 //
 // A text-guard reads these files AS STRINGS. It cannot see whether a screen
 // renders — web/src/test/invoices-screen.test.tsx and
-// mobile/test/screens/invoices/invoices_screen_test.dart are the lanes that
-// prove the behaviour.
+// mobile/test/screens/invoices/invoices_screen_test.dart (+ the
+// invoice-detail twins) are the lanes that prove the behaviour.
 //
 // The load-bearing rules:
 //  - THE CLIENT COMPUTES NOTHING (AD-2/AD-10/AD-16): the total, whether the
@@ -11,7 +12,9 @@
 //    the backend's.
 //  - Creating an invoice is an irreversible money document, so both platforms
 //    go through a confirm dialog before calling the port.
-//  - Viewing / exporting the invoice is Story 7.5: no "Xuất PDF" / "Xem lại" yet.
+//  - "Xuất PDF" lives ONLY on the detail screens and goes export → download →
+//    share through the port, without a confirm (the backend renders once and
+//    returns the same file afterwards). The list opens a detail with "Xem".
 //  - Both platforms show the SAME Vietnamese labels.
 
 import { test } from 'node:test';
@@ -32,6 +35,8 @@ const FILES = {
   mobilePort: 'mobile/lib/design_system/session/invoices_port.dart',
   webFake: 'web/src/design-system/session/fake-invoices-port.ts',
   mobileFake: 'mobile/lib/design_system/session/fake_invoices_port.dart',
+  webDetail: 'web/src/screens/invoices/InvoiceDetailScreen.tsx',
+  mobileDetail: 'mobile/lib/screens/invoices/invoice_detail_screen.dart',
 };
 
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
@@ -49,6 +54,14 @@ const webRaw = read(FILES.webScreen);
 const mobileRaw = read(FILES.mobileScreen);
 const webCode = stripTsx(webRaw);
 const mobileCode = stripDart(mobileRaw);
+const webDetailRaw = read(FILES.webDetail);
+const mobileDetailRaw = read(FILES.mobileDetail);
+const webDetailCode = stripTsx(webDetailRaw);
+const mobileDetailCode = stripDart(mobileDetailRaw);
+const details = [
+  ['web:detail', webDetailCode],
+  ['mobile:detail', mobileDetailCode],
+];
 
 const screens = [
   ['web:screen', webCode],
@@ -58,8 +71,13 @@ const rawScreens = [
   ['web:screen', webRaw],
   ['mobile:screen', mobileRaw],
 ];
+const rawDetails = [
+  ['web:detail', webDetailRaw],
+  ['mobile:detail', mobileDetailRaw],
+];
 const allCode = [
   ...screens,
+  ...details,
   ['web:port', stripTsx(read(FILES.webPort))],
   ['mobile:port', stripDart(read(FILES.mobilePort))],
   ['web:fake', stripTsx(read(FILES.webFake))],
@@ -93,7 +111,47 @@ const SHARED_LABELS = [
   'Thử lại',
 ];
 
-const MONEY = '(?:amount|orderTotal|total|subtotal|vatAmount|discountAmount)';
+/** Labels both detail screens must render verbatim (story 7.5 "Nhãn hiển thị chung"). */
+const DETAIL_LABELS = [
+  'Hoá đơn bán hàng',
+  'HOÁ ĐƠN',
+  'Hoá đơn nội bộ — không tích hợp nhà cung cấp hoá đơn điện tử (Phase sau).',
+  'HOÁ ĐƠN BÁN HÀNG',
+  'Số HĐ',
+  'Ngày lập',
+  'Gắn đơn',
+  ' · Bản ',
+  'Người bán',
+  'Tên công ty',
+  'MST',
+  'Địa chỉ',
+  'Điện thoại',
+  'Tài khoản ngân hàng',
+  'Chưa cấu hình',
+  'Khách hàng',
+  'MST khách',
+  'Không có MST',
+  'Tổng trước VAT',
+  'Chiết khấu',
+  'VAT ',
+  'Không áp VAT',
+  'Tổng thanh toán',
+  'Chưa xuất PDF',
+  'Đã xuất PDF · ',
+  'Xuất PDF',
+  'Không xuất được PDF hoá đơn. Vui lòng thử lại.',
+  'Không tải được hoá đơn.',
+  'Thử lại',
+];
+
+/**
+ * Line-table headers: web only. Mobile follows the mockup's two columns
+ * (`name ×qty` | amount) so a long name wraps on a 320 px phone; it has no header.
+ */
+const WEB_DETAIL_ONLY_LABELS = ['Hạng mục', 'SL', 'Đơn giá', 'Thành tiền'];
+
+const MONEY =
+  '(?:amount|orderTotal|total|subtotal|vatAmount|discountAmount|unitPrice)';
 
 /** The computations only the backend may do — each pattern with why. */
 const BANNED = [
@@ -206,11 +264,90 @@ test('blocked or already invoiced hides the button; the gate is the server flag'
   }
 });
 
-test('viewing and exporting belong to Story 7.5 — no "Xuất PDF" / "Xem lại" yet', () => {
-  for (const [name, code] of rawScreens) {
-    for (const later of ['Xuất PDF', 'Xem lại']) {
-      assert.ok(!code.includes(later), `${name} must not render "${later}" — Story 7.5 owns it`);
+test('every detail file has real code (not blind)', () => {
+  assertCodeNotBlind(details, 2000, 'invoice detail screens');
+  assertCodeNotBlind(rawDetails, 3000, 'invoice detail screens (raw)');
+});
+
+test('both detail screens render the same Vietnamese labels', () => {
+  // A label that sits inside a longer label ("MST" in "MST khách", "HOÁ ĐƠN" in "HOÁ ĐƠN BÁN
+  // HÀNG") would be found inside the longer one even when deleted, so it must stand alone as a
+  // whole string literal or JSX text.
+  const nested = DETAIL_LABELS.filter((label) =>
+    DETAIL_LABELS.some((other) => other !== label && other.includes(label)),
+  );
+  assert.deepEqual(nested.sort(), ['HOÁ ĐƠN', 'MST'], 'the nested-label set must not go blind');
+  for (const label of DETAIL_LABELS) {
+    for (const [name, code] of details) {
+      assert.ok(code.includes(label), `${name} must render "${label}"`);
+      if (nested.includes(label)) {
+        assert.ok(
+          new RegExp(`["'>]${label}["'<]`).test(code),
+          `${name} must render "${label}" on its own, not only inside a longer label`,
+        );
+      }
     }
+  }
+  for (const label of WEB_DETAIL_ONLY_LABELS) {
+    assert.ok(webDetailCode.includes(`>${label}<`), `web:detail must render the "${label}" header`);
+  }
+  for (const [name, code] of rawDetails) {
+    assert.ok(!/Hóa|hóa/.test(code), `${name} must spell "Hoá", not "Hóa"`);
+  }
+});
+
+test('"Xuất PDF" lives only on the detail screens; the list opens them with "Xem"', () => {
+  for (const [name, code] of rawScreens) {
+    assert.ok(!code.includes('Xuất PDF'), `${name} must not render "Xuất PDF" — the detail screen owns it`);
+    assert.ok(!code.includes('Xem lại'), `${name} must not render "Xem lại" (not a mockup label)`);
+  }
+  for (const [name, code] of rawDetails) {
+    assert.ok(!code.includes('Xem lại'), `${name} must not render "Xem lại"`);
+  }
+  // The list's "Xem" is gated on the caller's callback.
+  assert.match(webCode, /\{onOpenInvoice !== undefined && \(/);
+  assert.match(webCode, /onClick=\{\(\) => onOpenInvoice\(inv\.id\)\}\s*>\s*Xem\s*</);
+  assert.match(mobileCode, /if \(widget\.onOpenInvoice != null\)/);
+  assert.match(mobileCode, /label:\s*'Xem'/);
+});
+
+test('"Xuất PDF" goes export → download → share through the port, once, without a confirm', () => {
+  const flows = [
+    ['web:detail', webDetailCode, /port\.exportInvoicePdf\(orderId, invoiceId\);\s*const pdf = await port\.downloadInvoicePdf\(orderId, invoiceId\);\s*await shareFiles\(/],
+    [
+      'mobile:detail',
+      mobileDetailCode,
+      /widget\.port\.exportInvoicePdf\(widget\.orderId, widget\.invoiceId\);\s*final InvoicePdfFile file =\s*await widget\.port\s*\.downloadInvoicePdf\(widget\.orderId, widget\.invoiceId\);\s*final AppShareFn share = widget\.shareImpl \?\? platformShareXFiles;/,
+    ],
+  ];
+  for (const [name, code, flow] of flows) {
+    assert.match(code, flow, `${name}: export, then download, then share`);
+    assert.equal((code.match(/\.exportInvoicePdf\(/g) ?? []).length, 1, `${name} must export in exactly one place`);
+    assert.ok(!/ConfirmDialog/.test(code), `${name}: exporting is not confirmed (it is idempotent)`);
+    assert.ok(!/\bfetch\(|axios|package:http\/|HttpClient/.test(code), `${name} must not call HTTP directly`);
+    assert.match(code, /\.getInvoice\(/, `${name} must load through the port`);
+  }
+  // In flight ⇒ the button cannot be pressed again.
+  assert.match(webDetailCode, /if \(inFlight\.current\) return;/);
+  assert.match(webDetailCode, /disabled=\{busy\}\s*onClick=\{\(\) => void exportPdf\(\)\}/);
+  assert.match(mobileDetailCode, /if \(_busy\) return;/);
+  assert.match(mobileDetailCode, /onPressed: _busy \? null : _exportPdf/);
+});
+
+test('detail amounts render only through the money component', () => {
+  for (const field of ['subtotal', 'discountAmount', 'vatAmount', 'total']) {
+    assert.match(webDetailCode, new RegExp(`<Money value=\\{invoice\\.${field}\\}\\s*/>`), `web:detail ${field}`);
+    assert.match(mobileDetailCode, new RegExp(`MoneyText\\(i\\.${field}\\)`), `mobile:detail ${field}`);
+  }
+  assert.match(webDetailCode, /<Money value=\{line\.unitPrice\}\s*\/>/);
+  assert.match(webDetailCode, /<Money value=\{line\.amount\}\s*\/>/);
+  assert.match(mobileDetailCode, /MoneyText\(line\.amount\)/);
+  for (const [name, code] of details) {
+    assert.ok(
+      !new RegExp(`\\$\\{[^}]*${MONEY}[^}]*\\}`, 'i').test(code),
+      `${name} must not interpolate an amount as text`,
+    );
+    assert.ok(!/toLocaleString|Intl\.|NumberFormat/.test(code), `${name} must not format money itself`);
   }
 });
 
@@ -229,7 +366,10 @@ test('the money guard watches the invoice totals but not its counters (AC-10)', 
   for (const money of ['orderTotal', 'subtotal', 'discountAmount', 'vatAmount', 'total']) {
     assert.ok(fields.includes(money), `${money} is money`);
   }
-  for (const notMoney of ['vatRate', 'versionNo', 'lineCount', 'seq']) {
+  for (const money of ['unitPrice', 'amount']) {
+    assert.ok(fields.includes(money), `${money} is money`);
+  }
+  for (const notMoney of ['vatRate', 'versionNo', 'lineCount', 'seq', 'qty', 'displayOrder', 'pdfSize']) {
     assert.ok(!fields.includes(notMoney), `${notMoney} is not money`);
   }
 });

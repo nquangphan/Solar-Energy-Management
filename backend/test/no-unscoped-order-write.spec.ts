@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -52,6 +52,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       file: 'invoices/invoices.service.ts',
       goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
     },
+    {
+      file: 'invoices/invoice-document.service.ts',
+      goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
+    },
   ];
 
   /**
@@ -92,8 +96,11 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     /this\.loadInputs\s*\(/,
     // An invoice belongs to one order: reading or writing invoice rows (the replay lookup
     // included) touches that order.
-    /\.invoice\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
-    /\.invoiceLine\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
+    /\.invoice\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?|find(?:Unique|First|Many)(?:OrThrow)?|count)\s*\(/,
+    /\.invoiceLine\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?|find(?:Unique|First|Many)(?:OrThrow)?|count)\s*\(/,
+    // The exported PDF of an invoice belongs to that invoice's order: reading or writing it (the
+    // replay lookup included) touches the order.
+    /\.invoicePdf\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?|find(?:Unique|First|Many)(?:OrThrow)?|count)\s*\(/,
   ];
 
   /**
@@ -309,6 +316,47 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       }
     });
 
+    it('extracts the public methods of InvoiceDocumentService with full bodies, each scoped and touching the order', () => {
+      const methods = trichMethod(
+        docFile('invoices/invoice-document.service.ts'),
+      );
+      const detail = methods.find((m) => m.congKhai && m.ten === 'detail');
+      const exportPdf = methods.find(
+        (m) => m.congKhai && m.ten === 'exportPdf',
+      );
+      const getPdf = methods.find((m) => m.congKhai && m.ten === 'getPdf');
+      expect(detail?.than).toMatch(/\.invoice\.findFirst\s*\(/);
+      expect(exportPdf?.than).toMatch(/\.invoicePdf\.create\s*\(/);
+      expect(exportPdf?.than).toMatch(/this\.renderer\.renderPdf\s*\(/);
+      expect(getPdf?.than).toMatch(/this\.storage\.getObject\s*\(/);
+      for (const m of [detail, exportPdf, getPdf]) {
+        expect(m?.than).toMatch(/this\.orders\.assertScoped\s*\(/);
+        expect(viTriChamDau(m?.than ?? '')).toBeGreaterThan(-1);
+      }
+    });
+
+    it('catches an invoice PDF read placed before the scoped read, the *OrThrow forms included', () => {
+      for (const read of [
+        'this.prisma.invoicePdf.findUnique({ where: {} })',
+        'this.prisma.invoicePdf.findUniqueOrThrow({ where: {} })',
+        'this.prisma.invoice.findFirstOrThrow({ where: {} })',
+        'this.prisma.invoiceLine.createManyAndReturn({ data: [] })',
+      ]) {
+        const mau = [
+          'class X {',
+          '  async exportPdf(actor: string, q: Set<string>, id: string) {',
+          `    await ${read};`,
+          '    await this.orders.assertScoped(actor, q, id);',
+          '  }',
+          '}',
+          '',
+        ].join('\n');
+        expect(
+          viPham(mau, /this\.orders\.(?:getScoped|assertScoped)\s*\(/),
+        ).toEqual(['exportPdf']);
+      }
+    });
+
     it('BẮT an invoice read placed before the scoped read', () => {
       const mau = [
         'class X {',
@@ -414,5 +462,84 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       ].join('\n');
       expect(viPham(mau, /this\.findScopedOrThrow\s*\(/)).toEqual([]);
     });
+  });
+});
+
+/**
+ * Source-guard: an invoice is an immutable snapshot (FR-27/28). No code under `src/` may update or
+ * delete an invoice or its lines; the exported PDF lives in its own table (`invoice_pdfs`)
+ * precisely so the invoice row is never written after creation.
+ */
+describe('source-guard: invoices and their lines are never updated or deleted', () => {
+  const SRC_DIR = resolve(__dirname, '../src');
+  // Prisma calls, matched on code with comments and strings stripped; whitespace (a prettier
+  // line break) is allowed around the dots.
+  const MUTATION =
+    /\.\s*(?:invoice|invoiceLine)\s*\.\s*(?:update\w*|upsert|delete\w*)\s*\(/;
+  // Raw SQL lives inside template literals, which `stripToCode` empties: matched on RAW source.
+  const RAW_MUTATION =
+    /\b(?:UPDATE|DELETE\s+FROM)\s+"?invoice(?:s|_lines)"?(?![\w])/i;
+
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) return sourceFiles(path);
+      return entry.name.endsWith('.ts') ? [path] : [];
+    });
+  }
+
+  function offenders(files: readonly { name: string; code: string }[]) {
+    return files
+      .filter(
+        ({ code }) =>
+          MUTATION.test(stripToCode(code)) || RAW_MUTATION.test(code),
+      )
+      .map(({ name }) => name);
+  }
+
+  it('no file under src/ updates or deletes an invoice or an invoice line', () => {
+    const files = sourceFiles(SRC_DIR).map((path) => ({
+      name: relative(SRC_DIR, path),
+      code: readFileSync(path, 'utf8'),
+    }));
+    // Not blind: the scan covers the whole tree, including the invoice module itself.
+    expect(files.length).toBeGreaterThan(100);
+    expect(files.map((f) => f.name)).toEqual(
+      expect.arrayContaining([
+        'invoices/invoices.service.ts',
+        'invoices/invoice-document.service.ts',
+      ]),
+    );
+    expect(offenders(files)).toEqual([]);
+  });
+
+  it('catches every write form on both models, and lets reads and other models through', () => {
+    const caught = [
+      'await this.prisma.invoice.update({ where: { id } });',
+      'await tx.invoice.updateMany({});',
+      'await tx.invoice.upsert({});',
+      'await tx.invoice.delete({ where: { id } });',
+      'await tx.invoiceLine.deleteMany({});',
+      'await tx.invoiceLine.update({});',
+      'await tx.invoice.updateManyAndReturn({});',
+      'await this.prisma.invoice\n      .update({ where: { id } })\n      .catch(() => null);',
+      'await tx.$executeRaw`UPDATE invoices SET total = 0 WHERE id = ${id}`;',
+      "await tx.$executeRawUnsafe('DELETE FROM invoice_lines WHERE invoice_id = $1', id);",
+      'await tx.$executeRaw`UPDATE "invoices" SET total = 0`;',
+    ];
+    for (const code of caught) {
+      expect(offenders([{ name: 'x.ts', code }])).toEqual(['x.ts']);
+    }
+    const allowed = [
+      'await tx.invoice.findUnique({ where: { id } });',
+      'await tx.invoice.create({ data });',
+      'await tx.invoicePdf.create({ data });',
+      'await tx.invoicePdf.update({ data });',
+      'await tx.$queryRaw`SELECT id FROM invoices WHERE id = ${id} FOR UPDATE`;',
+      'await tx.$executeRaw`DELETE FROM invoice_pdfs WHERE id = ${id}`;',
+    ];
+    for (const code of allowed) {
+      expect(offenders([{ name: 'x.ts', code }])).toEqual([]);
+    }
   });
 });

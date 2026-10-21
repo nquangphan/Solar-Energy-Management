@@ -7,7 +7,7 @@ import {
   FILL_IN_LINE,
   type ContractTemplateData,
 } from '../src/contracts/contract-template';
-import { amountInWords } from '../src/contracts/domain/amount-in-words';
+import { amountInWords } from '../src/common/money/amount-in-words';
 import {
   CONTRACT_TYPE,
   NOT_CONFIGURED_LABEL,

@@ -345,3 +345,30 @@ describe('OrderDetailScreen — "Hoá đơn" entry', () => {
     expect(names).toEqual(["Hợp đồng", "Hoá đơn"]);
   });
 });
+
+describe('InvoicesScreen — "Xem" opens a created invoice', () => {
+  it("with onOpenInvoice: one Xem per created invoice, the click passes its id", async () => {
+    const opened = vi.fn();
+    renderScreen(
+      <InvoicesScreen
+        port={new FakeInvoicesPort({ invoices: [DEMO_INVOICE_SUMMARY] })}
+        orderId="DH-2048"
+        onOpenInvoice={opened}
+      />,
+    );
+    const view = await screen.findByRole("button", { name: "Xem" });
+    expect(screen.getAllByRole("button", { name: "Xem" })).toHaveLength(1);
+
+    fireEvent.click(view);
+
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(opened).toHaveBeenCalledWith(DEMO_INVOICE_SUMMARY.id);
+  });
+
+  it("without onOpenInvoice: the list is shown but has no Xem button", async () => {
+    renderInvoices(new FakeInvoicesPort({ invoices: [DEMO_INVOICE_SUMMARY] }));
+    // The outer condition is on: the created list really holds an invoice.
+    expect(await screen.findByText(/HD-2026-0001 · Bản 1/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Xem" })).toBeNull();
+  });
+});

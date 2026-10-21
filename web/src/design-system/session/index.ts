@@ -116,6 +116,10 @@ export type {
   InvoicesOverview,
   InvoiceSummary,
   InvoicesPortError,
+  InvoiceDetail,
+  InvoiceLine,
+  InvoicePdfInfo,
+  InvoiceSeller,
 } from './invoices-port';
 export type {
   CatalogPort,
@@ -164,7 +168,11 @@ export {
   DEMO_RECORD_DEPOSIT_RESULT,
 } from './fake-payments-port';
 export { FakeContractsPort, DEMO_CONTRACT_SUMMARY } from './fake-contracts-port';
-export { FakeInvoicesPort, DEMO_INVOICE_SUMMARY } from './fake-invoices-port';
+export {
+  FakeInvoicesPort,
+  DEMO_INVOICE_SUMMARY,
+  DEMO_INVOICE_DETAIL,
+} from './fake-invoices-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

@@ -66,3 +66,22 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+/* Xem hoá đơn (Story 7.5). */
+
+.iv-subhead {
+  margin-top: var(--space-12);
+  margin-bottom: var(--space-8);
+}
+
+.iv-line-name {
+  overflow-wrap: anywhere;
+}
+
+.iv-totals {
+  margin-top: var(--space-12);
+}
+
+.iv-file {
+  align-self: center;
+}

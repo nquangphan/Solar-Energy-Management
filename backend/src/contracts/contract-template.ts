@@ -11,7 +11,7 @@ import {
 import type { CompanyLegalEntity } from '../settings/domain/company-legal-entity';
 import { CONSTRUCTION_CLAUSES } from './clauses/construction-clauses';
 import { SALE_CLAUSES } from './clauses/sale-clauses';
-import { amountInWords } from './domain/amount-in-words';
+import { amountInWords } from '../common/money/amount-in-words';
 import {
   CONTRACT_TYPE,
   NOT_CONFIGURED_LABEL,

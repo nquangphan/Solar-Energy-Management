@@ -369,6 +369,28 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('the list row with its "Xem" button fits at ${width.toInt()}px',
+        (WidgetTester tester) async {
+      _screen(tester, width);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InvoicesScreen(
+              port: FakeInvoicesPort(
+                customerName: 'N' * 80,
+                initial: <InvoiceSummary>[longInvoice],
+              ),
+              orderId: _kOrderId,
+              onOpenInvoice: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppButton, 'Xem'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
         'blocked reason and current-invoice banners fit at '
         '${width.toInt()}px', (WidgetTester tester) async {
@@ -392,6 +414,42 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  group('"Xem" opens a created invoice', () {
+    testWidgets(
+        'with onOpenInvoice: one Xem per invoice, the tap passes its id',
+        (WidgetTester tester) async {
+      _screen(tester);
+      final List<String> opened = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InvoicesScreen(
+              port: FakeInvoicesPort(initial: <InvoiceSummary>[_existing]),
+              orderId: _kOrderId,
+              onOpenInvoice: opened.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(AppButton, 'Xem'), findsOneWidget);
+      await _tap(tester, find.widgetWithText(AppButton, 'Xem'));
+
+      expect(opened, <String>[_existing.id]);
+    });
+
+    testWidgets('without onOpenInvoice: the list is shown but has no Xem',
+        (WidgetTester tester) async {
+      _screen(tester);
+      await _pump(
+          tester, FakeInvoicesPort(initial: <InvoiceSummary>[_existing]));
+      // The outer condition is on: the created list really holds an invoice.
+      expect(find.text('HD-2026-0007 · Bản 2 · 22/10/2026'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Xem'), findsNothing);
+    });
+  });
 }
 
 /// Creates the invoice, then loses the response (a non-envelope error).

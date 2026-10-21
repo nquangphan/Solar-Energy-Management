@@ -1,6 +1,6 @@
 // hand-authored — web app-screen (Story 7.4). Hoá đơn bán hàng: creates the internal
 // sales invoice from the current order version and lists the invoices already created.
-// Viewing / exporting the invoice document is a later story.
+// Each created invoice opens its document (Xem hoá đơn) when the caller wires a route.
 //
 // THE CLIENT COMPUTES NOTHING (AD-2/AD-10/AD-16). Whether the order can be invoiced,
 // the total and the invoice number are the backend's answer.
@@ -41,6 +41,8 @@ export interface InvoicesScreenProps {
   port: InvoicesPort;
   orderId: string;
   onBack?: () => void;
+  /** Opens one created invoice. Without it the list has no "Xem" button. */
+  onOpenInvoice?: (invoiceId: string) => void;
 }
 
 type LoadState = "loading" | "ready" | "error";
@@ -72,7 +74,12 @@ function messageOf(e: unknown, fallback: string): string {
   return fallback;
 }
 
-export function InvoicesScreen({ port, orderId, onBack }: InvoicesScreenProps) {
+export function InvoicesScreen({
+  port,
+  orderId,
+  onBack,
+  onOpenInvoice,
+}: InvoicesScreenProps) {
   const { perms } = usePermissions();
   const [state, setState] = useState<LoadState>("loading");
   const [overview, setOverview] = useState<InvoicesOverview | null>(null);
@@ -242,6 +249,15 @@ export function InvoicesScreen({ port, orderId, onBack }: InvoicesScreenProps) {
                         {`${inv.invoiceNo} · Bản ${inv.versionNo} · ${vnDate(inv.issuedAt)}`}
                       </span>
                       <Money value={inv.total} />
+                      {onOpenInvoice !== undefined && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => onOpenInvoice(inv.id)}
+                        >
+                          Xem
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>

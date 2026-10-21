@@ -1,7 +1,8 @@
-import { amountInWords } from '../src/contracts/domain/amount-in-words';
+import { amountInWords } from '../src/common/money/amount-in-words';
 
 /**
- * `amountInWords` — the "(Bằng chữ: …)" sentence of a contract.
+ * `amountInWords` — the "(Bằng chữ: …)" sentence of a contract and the amount-in-words line of an
+ * invoice.
  *
  * The first block uses amounts and wording taken from the two real company templates
  * (`docs/1. Khảo sát lắp đặt/HĐ THI CÔNG CT .docx`, `docs/2. Thương mại/HDMB CT QTS l2.pdf`).

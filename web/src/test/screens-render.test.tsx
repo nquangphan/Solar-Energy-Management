@@ -27,6 +27,7 @@ import {
   FakePaymentsPort,
   FakeContractsPort,
   FakeInvoicesPort,
+  DEMO_INVOICE_SUMMARY,
   DEMO_PAYMENT_SCHEDULE,
   FakeSettingsPort,
   FakeStockVouchersPort,
@@ -42,6 +43,7 @@ import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { ContractsScreen } from '../screens/contracts/ContractsScreen';
+import { InvoiceDetailScreen } from '../screens/invoices/InvoiceDetailScreen';
 import { InvoicesScreen } from '../screens/invoices/InvoicesScreen';
 import { CreateQuoteScreen } from '../screens/orders/CreateQuoteScreen';
 import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen';
@@ -245,7 +247,18 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(await screen.findByText('Tạo hoá đơn từ đơn')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Tạo hoá đơn' })).toBeTruthy();
   });
+
+  it('InvoiceDetailScreen — invoice document loaded from the port', async () => {
+    renderScreen(
+      <InvoiceDetailScreen
+        port={new FakeInvoicesPort({ invoices: [DEMO_INVOICE_SUMMARY] })}
+        orderId="DH-2048"
+        invoiceId={DEMO_INVOICE_SUMMARY.id}
+      />,
+    );
+    expect(await screen.findByText('HOÁ ĐƠN BÁN HÀNG')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 18;
+const SCREEN_COUNT = 19;

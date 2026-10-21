@@ -8,7 +8,8 @@
 //
 // "Tạo hoá đơn" is hidden (not greyed out) when the backend says the order is not
 // `creatable` or the current version already has an invoice, and asks for a confirm
-// first: an invoice cannot be edited after creation.
+// first: an invoice cannot be edited after creation. Each created invoice opens its
+// document (Xem hoá đơn) when the caller wires a route.
 //
 // LABELS are byte-identical with the web twin.
 
@@ -53,11 +54,15 @@ class InvoicesScreen extends StatefulWidget {
     required this.port,
     required this.orderId,
     this.onBack,
+    this.onOpenInvoice,
   });
 
   final InvoicesPort port;
   final String orderId;
   final VoidCallback? onBack;
+
+  /// Opens one created invoice. Without it the list has no "Xem" button.
+  final ValueChanged<String>? onOpenInvoice;
 
   @override
   State<InvoicesScreen> createState() => _InvoicesScreenState();
@@ -187,6 +192,14 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
             ),
             const SizedBox(width: AppTokens.space8),
             MoneyText(i.total),
+            if (widget.onOpenInvoice != null) ...<Widget>[
+              const SizedBox(width: AppTokens.space8),
+              AppButton(
+                label: 'Xem',
+                size: AppButtonSize.sm,
+                onPressed: () => widget.onOpenInvoice!(i.id),
+              ),
+            ],
           ],
         ),
       );
