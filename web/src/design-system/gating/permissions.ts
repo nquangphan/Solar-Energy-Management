@@ -116,6 +116,10 @@ export const PERM = {
   customersManage: 'customers.manage',
   /** May configure the system — gates the Cấu hình nav item + the customer-source catalogue writes (FR-35). */
   settingsManage: 'settings.manage',
+  /** May move stock in/out — one of the two keys that open the Tồn kho screen (FR-25). */
+  inventoryManage: 'inventory.manage',
+  /** May create/edit quotes — sale reads Khả dụng on the Tồn kho screen to promise stock (FR-25). */
+  quotesCreateEdit: 'quotes.create_edit',
 } as const;
 
 /**

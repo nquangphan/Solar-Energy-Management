@@ -6,8 +6,9 @@ import 'package:flutter/widgets.dart';
 
 import '../tokens/app_tokens.dart';
 
-/// Card border colour variants (= `.card--ink` / `.card--teal`).
-enum AppCardVariant { line, ink, teal }
+/// Card border colour variants (= `.card--ink` / `.card--teal`). `warn`/`danger`
+/// flag a card whose row needs attention (Tồn kho: hết khả dụng / khả dụng âm).
+enum AppCardVariant { line, ink, teal, warn, danger }
 
 /// Surface card: `surface` fill, 1.5px border, `radiusLg`. The border colour
 /// steps up for the `ink`/`teal` variants (mirror `.card--ink/--teal`).
@@ -44,6 +45,10 @@ class AppCard extends StatelessWidget {
         return AppTokens.ink;
       case AppCardVariant.teal:
         return AppTokens.teal;
+      case AppCardVariant.warn:
+        return AppTokens.warn;
+      case AppCardVariant.danger:
+        return AppTokens.danger;
     }
   }
 }

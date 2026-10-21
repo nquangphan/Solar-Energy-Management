@@ -315,9 +315,8 @@ erDiagram
     }
     STOCK_ITEM {
         uuid id PK
-        uuid productId FK
-        int onHand
-        int reserved
+        uuid productId FK "UNIQUE - một kho"
+        int onHand "reserved KHÔNG là cột: = SUM(STOCK_MOVEMENT.qty)"
     }
     STOCK_VOUCHER {
         uuid id PK
@@ -368,7 +367,7 @@ erDiagram
         uuid stockItemId FK
         uuid orderId FK
         uuid orderVersionId FK
-        int qty
+        int qty "có dấu: giữ chỗ +, giải phóng/xuất -"
         string type
         datetime createdAt
     }

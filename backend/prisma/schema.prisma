@@ -139,8 +139,57 @@ model Product {
   prices         ProductPrice[]
   groupItems     ProductGroupItem[]
   orderLineItems OrderLineItem[]
+  stockItem      StockItem?
 
   @@map("products")
+}
+
+/// Tồn kho của MỘT sản phẩm (FR-25, AD-19) — Phase 1 chỉ có một kho nên `productId` UNIQUE.
+///
+/// CHỈ có `onHand` (hàng thật trong kho — chỉ phiếu nhập/xuất kho được đụng). KHÔNG có cột
+/// `reserved`: hàng đã hứa là `SUM(StockMovement.qty)` của dòng này, tính lúc đọc. Một cột
+/// cộng-trừ sẽ trôi khi retry chốt/xuất (không idempotent) — ERD vẽ `int reserved` nhưng rule
+/// AD-19 thắng. Khả dụng = `onHand − reserved` chỉ tính ở `inventory/domain/ton-kho.ts`.
+///
+/// Sinh LƯỜI: không seed/backfill, tạo sản phẩm không tạo dòng này. Đường đọc LEFT JOIN từ
+/// `products` — vắng dòng ⇒ `onHand = 0`, `reserved = 0`. Đường ghi (phiếu kho) upsert dưới
+/// `SELECT … FOR UPDATE`.
+///
+/// `onDelete: Restrict` — `Product` soft-delete; xoá cứng sản phẩm còn sổ tồn phải bị chặn.
+model StockItem {
+  id        String          @id @default(uuid())
+  productId String          @unique @map("product_id")
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  onHand    Int             @default(0) @map("on_hand")
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+  movements StockMovement[]
+
+  @@map("stock_items")
+}
+
+/// Ledger hàng ĐÃ HỨA cho đơn (AD-19) — APPEND-ONLY, không UPDATE/DELETE dòng cũ.
+///
+/// Hợp đồng cho mọi đường ghi sau này: `reserved = SUM(qty)` trên TOÀN BỘ dòng của một
+/// `stockItemId`; `qty` CÓ DẤU (giữ chỗ dương, giải phóng/xuất âm). `type` chỉ để truy vết —
+/// phép tính KHÔNG lọc theo `type`, nên ai thêm loại mới phải giữ đúng dấu.
+///
+/// CHƯA có unique idempotency: một version có nhiều sản phẩm nên unique `(orderId,
+/// orderVersionId)` không đặt được trên movement-per-product — đường giữ chỗ sẽ quyết khoá.
+model StockMovement {
+  id             String       @id @default(uuid())
+  stockItemId    String       @map("stock_item_id")
+  stockItem      StockItem    @relation(fields: [stockItemId], references: [id], onDelete: Restrict)
+  orderId        String       @map("order_id")
+  order          Order        @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderVersionId String       @map("order_version_id")
+  orderVersion   OrderVersion @relation(fields: [orderVersionId], references: [id], onDelete: Restrict)
+  qty            Int
+  type           String
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  @@index([stockItemId])
+  @@map("stock_movements")
 }
 
 /// Bậc thang giá theo SỐ LƯỢNG (FR-15). `minQty` = mua TỪ bao nhiêu trở lên thì ăn mức này;
@@ -360,6 +409,7 @@ model Order {
   discountApprovals DiscountApproval[]
   quoteExport       QuoteExport?
   attachments       Attachment[]
+  stockMovements    StockMovement[]
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -398,6 +448,7 @@ model OrderVersion {
   currentOf      Order?          @relation("OrderCurrentVersion")
   discountApprovals DiscountApproval[]
   quoteExports   QuoteExport[]
+  stockMovements StockMovement[]
 
   @@unique([orderId, versionNo])
   @@map("order_versions")

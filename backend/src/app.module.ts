@@ -11,6 +11,7 @@ import { CustomersModule } from './customers/customers.module';
 import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { OrdersModule } from './orders/orders.module';
 import { SettingsModule } from './settings/settings.module';
+import { InventoryModule } from './inventory/inventory.module';
 
 /**
  * Root module.
@@ -42,6 +43,8 @@ import { SettingsModule } from './settings/settings.module';
  *
  * Story 4.4 — `SettingsModule`: cấu hình hệ thống key-value trên DB (AD-14, FR-3) — thuế
  * suất VAT. `OrdersModule` import nó để resolve rate cho `preview-total`.
+ *
+ * Story 6.2 — `InventoryModule`: tồn kho hai con số `onHand` + `reserved` (AD-19), đường đọc.
  */
 @Module({
   imports: [
@@ -57,6 +60,7 @@ import { SettingsModule } from './settings/settings.module';
     CustomersModule,
     OrdersModule,
     SettingsModule,
+    InventoryModule,
   ],
 })
 export class AppModule {}

@@ -20,6 +20,7 @@ import {
   FakeCatalogPort,
   FakeCustomerSourcesPort,
   FakeCustomersPort,
+  FakeInventoryPort,
   FakeMePort,
   FakeOrdersPort,
   FakePasswordPort,
@@ -33,6 +34,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen';
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
+import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { CreateQuoteScreen } from '../screens/orders/CreateQuoteScreen';
 import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
@@ -188,7 +190,17 @@ describe('smoke render — mọi màn web/src/screens', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }));
     expect(await screen.findByText(/Đơn ord-2026-014/)).toBeTruthy();
   });
+
+  it('InventoryScreen — khả dụng âm hiện "Cần nhập", không hiện số âm', async () => {
+    renderScreen(<InventoryScreen port={new FakeInventoryPort()} />);
+    expect(await screen.findByText('Tồn kho · Tồn thật / Đã hứa / Khả dụng')).toBeTruthy();
+    expect(screen.getByText('Cần nhập 15')).toBeTruthy();
+    expect(screen.getByText('Còn 5 · Đã hứa 20 · Cần nhập 15 bộ')).toBeTruthy();
+    expect(screen.getByText('Hết khả dụng')).toBeTruthy();
+    expect(screen.getByText('Danh sách cần mua · gộp mọi khả dụng âm')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('-15');
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 13;
+const SCREEN_COUNT = 14;

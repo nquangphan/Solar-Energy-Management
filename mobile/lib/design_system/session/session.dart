@@ -16,6 +16,9 @@ export 'catalog_port.dart';
 // Warranty-lookup seam (Story 5.9): READ-ONLY — the backend computes every date
 // and the status; the screen only renders them.
 export 'warranty_port.dart';
+// Inventory seam (Story 6.2): READ-ONLY — the backend computes availability,
+// the purchase list and the status; the screen only renders them.
+export 'inventory_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
@@ -27,3 +30,4 @@ export 'fake_customers_port.dart';
 export 'fake_orders_port.dart';
 export 'fake_catalog_port.dart';
 export 'fake_warranty_port.dart';
+export 'fake_inventory_port.dart';

@@ -32,6 +32,8 @@ test('the session module ships on BOTH platforms (twin files)', () => {
     'fake-catalog-port.ts': 'fake_catalog_port.dart',
     'warranty-port.ts': 'warranty_port.dart',
     'fake-warranty-port.ts': 'fake_warranty_port.dart',
+    'inventory-port.ts': 'inventory_port.dart',
+    'fake-inventory-port.ts': 'fake_inventory_port.dart',
     'session.ts': 'app_session.dart',
     'PermissionsProvider.tsx': 'app_session.dart', // provider lives with mapping on mobile
     'fake-me-port.ts': 'fake_me_port.dart',
@@ -504,4 +506,22 @@ test('Story 5.6 attachment surface exists on BOTH platforms (ports + gallery com
     existsSync(resolve(repoRoot, 'mobile/lib/design_system/components/attachment_gallery.dart')),
     'mobile gallery widget missing',
   );
+});
+
+test('the inventory port is the SAME one-method read contract on both platforms (Story 6.2)', () => {
+  const webPort = readFileSync(resolve(webDir, 'inventory-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'inventory_port.dart'), 'utf8');
+  assert.match(webPort, /listStock\(query\?: StockListQuery\): Promise<StockList>/, 'web InventoryPort must expose listStock(query?) => StockList');
+  assert.match(mobPort, /Future<StockList> listStock\(\{String\? q\}\)/, 'mobile InventoryPort must expose listStock({q}) => StockList');
+  assert.match(webPort, /q\?: string/, 'web StockListQuery must carry q');
+  // Field names mirror the backend DTO word for word — the parity here is between
+  // the twins; matching `openapi.json` is the author's check.
+  const fields = ['productId', 'ten', 'sku', 'donVi', 'onHand', 'reserved', 'khaDung', 'canNhap', 'tinhTrang', 'items', 'danhSachCanMua'];
+  for (const field of fields) {
+    assert.ok(new RegExp(`\\b${field}\\b`).test(webPort), `web inventory port missing ${field}`);
+    assert.ok(new RegExp(`\\b${field}\\b`).test(mobPort), `mobile inventory port missing ${field}`);
+  }
+  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+    assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} inventory port must not carry costPrice — sale reads this payload`);
+  }
 });

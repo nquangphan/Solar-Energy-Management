@@ -69,7 +69,14 @@ export const SIDEBAR_NAV: NavSection[] = [
       },
       { key: 'customers', icon: 'ic-customer', label: 'Khách hàng', requires: PERM.customersManage },
       { key: 'catalog', icon: 'ic-catalog', label: 'Danh mục' },
-      { key: 'inventory', icon: 'ic-warehouse', label: 'Kho' },
+      // Tồn kho (Story 6.2): the storekeeper needs the numbers to issue stock, the
+      // sale needs Khả dụng to promise it — either key opens the screen.
+      {
+        key: 'inventory',
+        icon: 'ic-warehouse',
+        label: 'Kho',
+        requiresAny: [PERM.inventoryManage, PERM.quotesCreateEdit],
+      },
       // Warranty lookup (Story 5.9) reuses `ic-phone` — the mockup uses that icon
       // for this very entry, and the icon SSOT already ships it. It carries the
       // ORDER read permissions because what it returns IS order content.

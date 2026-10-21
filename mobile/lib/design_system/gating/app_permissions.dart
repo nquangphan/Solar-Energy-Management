@@ -119,6 +119,12 @@ class AppPerm {
   /// the web PERM and this AppPerm key lists IN ORDER, so a key added on one side
   /// only turns the guard red. Parity of KEYS is not parity of SCREENS.
   static const PermissionKey settingsManage = 'settings.manage';
+
+  /// May move stock in/out — one of the two keys that open the Tồn kho screen (FR-25).
+  static const PermissionKey inventoryManage = 'inventory.manage';
+
+  /// May create/edit quotes — sale reads Khả dụng on the Tồn kho screen to promise stock (FR-25).
+  static const PermissionKey quotesCreateEdit = 'quotes.create_edit';
 }
 
 /// STUB effective permission set — Epic 1 PLACEHOLDER ONLY (see [AppPerm]).

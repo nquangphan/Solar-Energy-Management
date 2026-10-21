@@ -53,6 +53,16 @@ export type {
   WarrantyCustomer,
   WarrantyPortError,
 } from './warranty-port';
+// Inventory seam (Story 6.2): READ-ONLY — the backend computes availability,
+// the purchase list and the status; the screen only renders them.
+export type {
+  InventoryPort,
+  StockList,
+  StockListQuery,
+  StockItemView,
+  CanMuaView,
+  TinhTrangTon,
+} from './inventory-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -84,6 +94,7 @@ export {
 export { FakeOrdersPort } from './fake-orders-port';
 export { FakeSettingsPort } from './fake-settings-port';
 export { FakeWarrantyPort, DEMO_WARRANTY_ORDERS } from './fake-warranty-port';
+export { FakeInventoryPort, DEMO_STOCK_LIST } from './fake-inventory-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

@@ -1,0 +1,31 @@
+/* hand-authored — screen-local layout for Tồn kho (Story 6.2).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class — this file invents no palette (AD-13). The status pill
+   reuses the shipped `.chip`; its colour arrives as an inline token reference
+   (`--ok` / `--warn` / `--danger`) chosen from the backend's `tinhTrang`. */
+
+.tk-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.tk-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* One colour token drives the whole pill: border follows the text colour. */
+.tk-chip {
+  border-color: currentColor;
+  background: transparent;
+}
+
+/* The purchase list is a call to action — the mockup frames it in warning. */
+.tk-can-mua {
+  border-color: var(--warn);
+}

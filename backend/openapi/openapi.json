@@ -3729,6 +3729,73 @@
           "settings"
         ]
       }
+    },
+    "/stock-items": {
+      "get": {
+        "operationId": "StockItemsController_lietKe",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Tìm theo TÊN hoặc SKU (chứa chuỗi, không phân biệt hoa thường).",
+            "schema": {
+              "example": "inverter",
+              "type": "string"
+            }
+          },
+          {
+            "name": "productIds",
+            "required": false,
+            "in": "query",
+            "description": "Chỉ lấy các sản phẩm này — danh sách UUID ngăn cách bằng dấu phẩy.",
+            "schema": {
+              "example": "3f1c9d2e-8b7a-4c6d-9e5f-1a2b3c4d5e6f,7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tồn thật / Đã hứa / Khả dụng theo sản phẩm + danh sách cần mua — mọi con số do backend tính.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`productIds` có phần tử không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ inventory.manage lẫn quotes.create_edit (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "inventory"
+        ]
+      }
     }
   },
   "info": {
@@ -6005,6 +6072,114 @@
         },
         "required": [
           "ratePercent"
+        ]
+      },
+      "StockItemViewDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "ten": {
+            "type": "string",
+            "description": "Tên sản phẩm."
+          },
+          "sku": {
+            "type": "string"
+          },
+          "donVi": {
+            "type": "string",
+            "description": "Đơn vị tính.",
+            "example": "tấm"
+          },
+          "onHand": {
+            "type": "number",
+            "description": "Tồn thật trong kho.",
+            "example": 5
+          },
+          "reserved": {
+            "type": "number",
+            "description": "Đã hứa cho đơn đã chốt — tổng ledger giữ chỗ.",
+            "example": 20
+          },
+          "khaDung": {
+            "type": "number",
+            "description": "`onHand − reserved` — CÓ THỂ ÂM.",
+            "example": -15
+          },
+          "canNhap": {
+            "type": "number",
+            "description": "Phần thiếu phải nhập (0 khi khả dụng không âm).",
+            "example": 15
+          },
+          "tinhTrang": {
+            "type": "string",
+            "enum": [
+              "du",
+              "het",
+              "am"
+            ],
+            "description": "du = còn khả dụng · het = khả dụng 0 · am = hứa vượt hàng thật."
+          }
+        },
+        "required": [
+          "productId",
+          "ten",
+          "sku",
+          "donVi",
+          "onHand",
+          "reserved",
+          "khaDung",
+          "canNhap",
+          "tinhTrang"
+        ]
+      },
+      "CanMuaViewDto": {
+        "type": "object",
+        "properties": {
+          "productId": {
+            "type": "string"
+          },
+          "ten": {
+            "type": "string"
+          },
+          "donVi": {
+            "type": "string",
+            "example": "tấm"
+          },
+          "canNhap": {
+            "type": "number",
+            "example": 15
+          }
+        },
+        "required": [
+          "productId",
+          "ten",
+          "donVi",
+          "canNhap"
+        ]
+      },
+      "StockListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Sắp theo tên sản phẩm.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockItemViewDto"
+            }
+          },
+          "danhSachCanMua": {
+            "description": "Các sản phẩm khả dụng âm của CÙNG tập `items`, sắp `canNhap` giảm dần rồi theo tên.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CanMuaViewDto"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "danhSachCanMua"
         ]
       }
     }
