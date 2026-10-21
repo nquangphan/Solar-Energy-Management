@@ -526,7 +526,10 @@ export class FakeOrdersPort implements OrdersPort {
    * sequence is derived from ALLOWED_TRANSITIONS server-side (AD-2/AD-11); this
    * one only needs to be shaped right so the screen has something to draw.
    *
-   * Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
+   * Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11). Thiết bị
+   * is always on in the demo, so `dagiao` is always reachable: through
+   * `danggiao` when Vận chuyển is on, straight from `dacoc` (customer pick-up)
+   * when it is off.
    */
   getLifecycle(orderId: string): Promise<OrderLifecycle> {
     const order = this.orders.get(orderId);
@@ -540,7 +543,8 @@ export class FakeOrdersPort implements OrdersPort {
       'dachot',
       'dacoc',
       ...(thiCong ? ['thicong', 'nghiemthu'] : []),
-      ...(vanChuyen ? ['danggiao', 'dagiao'] : []),
+      ...(vanChuyen ? ['danggiao'] : []),
+      'dagiao',
       'hoanthanh',
     ];
     const dangO = chuoi.indexOf(status);
@@ -635,6 +639,9 @@ export class FakeOrdersPort implements OrdersPort {
         to: 'danggiao',
         requires: 'delivery.confirm',
       });
+    }
+    if (status === 'dacoc' && !vanChuyen) {
+      buoc.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
     }
     if (status === 'thicong') {
       buoc.push({

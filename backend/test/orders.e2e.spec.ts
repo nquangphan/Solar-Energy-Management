@@ -3788,6 +3788,208 @@ describe('/orders (e2e)', () => {
         expect(res.body.status).toBe('hoanthanh');
       });
     });
+
+    /**
+     * NHÁNH GIAO HÀNG ĐI HẾT CHUỖI QUA DÂY. Hai đường vào `dagiao`: khách tự lấy
+     * (`dacoc → dagiao`, có Thiết bị, không Vận chuyển) và đi giao
+     * (`dacoc → danggiao → dagiao`, có Vận chuyển). Cạnh `danggiao → dagiao` trước đây chưa
+     * từng chạy qua lane HTTP nào.
+     */
+    describe('nhánh giao hàng đi hết chuỗi qua dây', () => {
+      /** Đơn Thương mại tự lấy: có Thiết bị, không Thi công, không Vận chuyển. */
+      const DON_TU_LAY = {
+        ...DON_DACOC,
+        scopeThiCong: false,
+        scopeVanChuyen: false,
+      };
+
+      function donTuLayO(status: string): void {
+        orderRepo.findUnique.mockResolvedValue({ ...DON_TU_LAY, status });
+      }
+
+      function vongDoi(): request.Test {
+        return request(server())
+          .get(`/orders/${ORDER_ID}/vong-doi`)
+          .set('Authorization', `Bearer ${token()}`);
+      }
+
+      it('tự lấy ở `dacoc`: bước kế ĐÚNG một — `xong_giao` thẳng tới `dagiao`; stepper có `dagiao`, không `danggiao`', async () => {
+        donTuLayO('dacoc');
+
+        const res = await vongDoi();
+
+        expect(res.status).toBe(200);
+        expect(res.body.buocKeTiep).toEqual([
+          {
+            event: SU_KIEN.xongGiao,
+            to: 'dagiao',
+            requires: PERM.deliveryConfirm,
+          },
+        ]);
+        const buoc = res.body.buoc as { status: string; trangThai: string }[];
+        expect(buoc).toContainEqual({
+          status: 'dagiao',
+          trangThai: 'upcoming',
+        });
+        expect(buoc.map((b) => b.status)).not.toContain('danggiao');
+      });
+
+      it('tự lấy: `dacoc` --xong_giao--> 200 `dagiao`, 0 ảnh', async () => {
+        donTuLayO('dacoc');
+
+        const res = await post(SU_KIEN.xongGiao);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('dagiao');
+        expect(res.body.soAnhDaLuu).toBe(0);
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('tự lấy kèm 1 ảnh ⇒ ảnh mang CẶP KHOÁ `dacoc`→`dagiao`', async () => {
+        donTuLayO('dacoc');
+
+        const res = await post(SU_KIEN.xongGiao, [anh()]);
+
+        expect(res.status).toBe(200);
+        expect(res.body.soAnhDaLuu).toBe(1);
+        const { data } = attachmentRepo.createMany.mock.calls[0][0];
+        expect(data).toHaveLength(1);
+        expect(data[0].statusFrom).toBe('dacoc');
+        expect(data[0].statusTo).toBe('dagiao');
+        expect(storageMap.has(data[0].objectKey as string)).toBe(true);
+      });
+
+      it('tự lấy qua dây để lại ĐÚNG MỘT vết StatusChanged `dacoc`→`dagiao`', async () => {
+        donTuLayO('dacoc');
+
+        const res = await post(SU_KIEN.xongGiao);
+
+        expect(res.status).toBe(200);
+        const vet = auditRepo.create.mock.calls
+          .map((call) => (call[0] as { data: Record<string, unknown> }).data)
+          .filter((data) => data.eventType === 'StatusChanged');
+        expect(vet).toHaveLength(1);
+        expect(vet[0]).toMatchObject({
+          actorAccountId: ACCOUNT_ID,
+          targetType: 'Order',
+          targetId: ORDER_ID,
+        });
+        expect(vet[0].before).toMatchObject({ status: 'dacoc' });
+        expect(vet[0].after).toMatchObject({ status: 'dagiao' });
+      });
+
+      it('Thi công + tự lấy ở `dacoc`: bước kế ĐÚNG hai — `bat_dau_thi_cong` và `xong_giao` thẳng tới `dagiao`', async () => {
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          scopeVanChuyen: false,
+        });
+
+        const ke = await vongDoi();
+
+        expect(ke.status).toBe(200);
+        expect(ke.body.buocKeTiep).toEqual([
+          {
+            event: SU_KIEN.batDauThiCong,
+            to: 'thicong',
+            requires: PERM.constructionTransition,
+          },
+          {
+            event: SU_KIEN.xongGiao,
+            to: 'dagiao',
+            requires: PERM.deliveryConfirm,
+          },
+        ]);
+
+        const res = await post(SU_KIEN.xongGiao);
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('dagiao');
+      });
+
+      it('có Vận chuyển ở `dacoc`: bước kế KHÔNG lộ `xong_giao` — chỉ `bat_dau_thi_cong` và `bat_dau_giao`', async () => {
+        const ke = await vongDoi();
+
+        expect(ke.status).toBe(200);
+        expect(
+          ke.body.buocKeTiep.map((b: { event: string }) => b.event),
+        ).toEqual([SU_KIEN.batDauThiCong, SU_KIEN.batDauGiao]);
+      });
+
+      it('LỐI RA: tự lấy ở `dagiao` chỉ còn `hoan_thanh`, và đi được ⇒ 200 `hoanthanh`', async () => {
+        donTuLayO('dagiao');
+
+        const ke = await vongDoi();
+        expect(ke.status).toBe(200);
+        expect(ke.body.buocKeTiep).toEqual([
+          {
+            event: SU_KIEN.hoanThanh,
+            to: 'hoanthanh',
+            requires: PERM.deliveryConfirm,
+          },
+        ]);
+
+        const res = await post(SU_KIEN.hoanThanh);
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('hoanthanh');
+      });
+
+      it('có Vận chuyển: `dacoc` --bat_dau_giao--> 200 `danggiao`', async () => {
+        const res = await post(SU_KIEN.batDauGiao);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('danggiao');
+      });
+
+      it('có Vận chuyển: `danggiao` --xong_giao--> 200 `dagiao`', async () => {
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_DACOC,
+          status: 'danggiao',
+        });
+
+        const ke = await vongDoi();
+        expect(ke.status).toBe(200);
+        expect(ke.body.buocKeTiep).toEqual([
+          {
+            event: SU_KIEN.xongGiao,
+            to: 'dagiao',
+            requires: PERM.deliveryConfirm,
+          },
+        ]);
+
+        const res = await post(SU_KIEN.xongGiao);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('dagiao');
+      });
+
+      it('có Vận chuyển ở `dacoc` gửi `xong_giao` ⇒ 409 PHẠM VI — không nhảy cóc qua `danggiao`', async () => {
+        const res = await post(SU_KIEN.xongGiao, [anh()]);
+
+        expect(res.status).toBe(409);
+        expect(res.body.message).toBe('Bước này không thuộc phạm vi của đơn.');
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        expect(storageMap.size).toBe(0);
+      });
+
+      it('thiếu `delivery.confirm` ở `dacoc` tự lấy ⇒ 403, không ghi gì; bước kế không có `xong_giao`', async () => {
+        // `construction.transition` mở được cửa route nhưng không mở được bước giao hàng.
+        givenPermissions(PERM.ordersViewAll, PERM.constructionTransition);
+        donTuLayO('dacoc');
+
+        const res = await post(SU_KIEN.xongGiao, [anh()]);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        expect(storageMap.size).toBe(0);
+
+        const ke = await vongDoi();
+        expect(ke.status).toBe(200);
+        expect(
+          ke.body.buocKeTiep.map((b: { event: string }) => b.event),
+        ).not.toContain(SU_KIEN.xongGiao);
+      });
+    });
   });
 
   /**

@@ -8,6 +8,7 @@ import {
   coTheHuy,
   daTaiDich,
   evaluateTransition,
+  thoaCoPhamVi,
   type OrderScopeFlags,
 } from '../src/orders/domain/allowed-transition';
 import {
@@ -59,8 +60,8 @@ describe('allowed-transition (domain thuần)', () => {
    * nhìn thấy được điều đó từ bên ngoài.
    */
   describe('hình dạng bảng', () => {
-    it('bảng có đúng 16 dòng — thêm/bớt một cạnh phải là quyết định có chủ ý', () => {
-      expect(ALLOWED_TRANSITIONS).toHaveLength(16);
+    it('bảng có đúng 17 dòng — thêm/bớt một cạnh phải là quyết định có chủ ý', () => {
+      expect(ALLOWED_TRANSITIONS).toHaveLength(17);
     });
 
     it('vòng đời KHÔNG có bước lên lịch: không trạng thái nào trong bảng mang tên đó', () => {
@@ -96,7 +97,7 @@ describe('allowed-transition (domain thuần)', () => {
         const cacDong = ALLOWED_TRANSITIONS.filter((r) => r.event === event);
         expect(cacDong.length).toBeGreaterThan(0);
         for (const rule of cacDong) {
-          expect(rule.scopeGuard).toBe('thiCong');
+          expect(rule.scopeGuard).toEqual({ thiCong: true });
         }
       }
     });
@@ -106,10 +107,16 @@ describe('allowed-transition (domain thuần)', () => {
     it.each(
       ALLOWED_TRANSITIONS.map((rule) => [rule.from, rule.event, rule.to]),
     )('%s --%s--> %s', (from, event, to) => {
+      const rule = ALLOWED_TRANSITIONS.find(
+        (r) => r.from === from && r.event === event,
+      );
       expect(
         danhGia({
           status: from as string,
           event: event as (typeof SU_KIEN)[keyof typeof SU_KIEN],
+          // Dòng có cờ PHỦ ĐỊNH (vd khách tự lấy đòi TẮT Vận chuyển) không đi được với bộ
+          // đủ cờ ⇒ dựng bộ cờ thoả đúng guard của chính dòng đó.
+          scopeFlags: { ...DU_CO, ...rule?.scopeGuard },
         }),
       ).toEqual({ ok: true, to });
     });
@@ -228,9 +235,10 @@ describe('allowed-transition (domain thuần)', () => {
       const ketCuc: string[] = [];
       for (const scopeFlags of boCoKhaDi) {
         // Đi được với bộ cờ này? (bỏ qua permission — quyền là chuyện của actor, không phải
-        // của hình dạng vòng đời.)
+        // của hình dạng vòng đời.) Cùng helper gate với production — một bản chép tay ở đây
+        // sẽ đo một luật khác luật thật.
         const diDuoc = (rule: (typeof ALLOWED_TRANSITIONS)[number]) =>
-          rule.scopeGuard === undefined || scopeFlags[rule.scopeGuard];
+          thoaCoPhamVi(rule, scopeFlags);
 
         // Loang từ `baogia` để biết đơn với bộ cờ này thực sự tới được những đâu.
         const toiDuoc = new Set<string>(['baogia']);
@@ -270,6 +278,160 @@ describe('allowed-transition (domain thuần)', () => {
         }
       }
       expect(ketCuc).toEqual([]);
+    });
+
+    /**
+     * Có hàng hoá thì đơn phải ĐÓNG ĐƯỢC THẬT, không chỉ huỷ được: "tới được trạng thái kết
+     * thúc" ở test trên coi `huy` là lối ra hợp lệ, nên một đơn có Thiết bị kẹt ở `dacoc` với
+     * lối duy nhất là huỷ vẫn xanh. Loang lại, lần này bỏ hẳn cạnh vào `huy`.
+     */
+    it('mọi bộ cờ có Thiết bị: từ `dacoc` tới được `hoanthanh` mà KHÔNG đi qua `huy`', () => {
+      const ketCuc: string[] = [];
+      for (const thiCong of [false, true]) {
+        for (const vanChuyen of [false, true]) {
+          const scopeFlags: OrderScopeFlags = {
+            thietBi: true,
+            thiCong,
+            vanChuyen,
+          };
+          const toiDuoc = new Set<string>(['dacoc']);
+          for (let doi = true; doi;) {
+            doi = false;
+            for (const rule of ALLOWED_TRANSITIONS) {
+              if (
+                rule.to !== 'huy' &&
+                toiDuoc.has(rule.from) &&
+                thoaCoPhamVi(rule, scopeFlags) &&
+                !toiDuoc.has(rule.to)
+              ) {
+                toiDuoc.add(rule.to);
+                doi = true;
+              }
+            }
+          }
+          if (!toiDuoc.has('hoanthanh'))
+            ketCuc.push(JSON.stringify(scopeFlags));
+        }
+      }
+      expect(ketCuc).toEqual([]);
+    });
+  });
+
+  describe('thoaCoPhamVi — điều kiện nhiều cờ, có phủ định', () => {
+    const dong = (
+      scopeGuard?: Partial<Record<keyof OrderScopeFlags, boolean>>,
+    ) => ({ ...ALLOWED_TRANSITIONS[0], scopeGuard });
+
+    it('không khai guard ⇒ luôn thoả', () => {
+      expect(
+        thoaCoPhamVi(dong(undefined), {
+          thietBi: false,
+          thiCong: false,
+          vanChuyen: false,
+        }),
+      ).toBe(true);
+    });
+
+    it('key khai `undefined` tường minh = cờ vắng, không chặn bộ cờ nào', () => {
+      const guard = { thietBi: true, vanChuyen: undefined };
+      expect(thoaCoPhamVi(dong(guard), { ...DU_CO, vanChuyen: true })).toBe(
+        true,
+      );
+      expect(thoaCoPhamVi(dong(guard), { ...DU_CO, vanChuyen: false })).toBe(
+        true,
+      );
+    });
+
+    it('cờ đòi TẮT: cờ đang bật ⇒ không thoả; cờ tắt ⇒ thoả', () => {
+      const guard = { vanChuyen: false };
+      expect(thoaCoPhamVi(dong(guard), { ...DU_CO, vanChuyen: true })).toBe(
+        false,
+      );
+      expect(thoaCoPhamVi(dong(guard), { ...DU_CO, vanChuyen: false })).toBe(
+        true,
+      );
+    });
+
+    it('nhiều cờ: MỌI cờ liệt kê phải khớp, cờ vắng không phụ thuộc', () => {
+      const guard = { thietBi: true, vanChuyen: false };
+      expect(
+        thoaCoPhamVi(dong(guard), {
+          thietBi: true,
+          thiCong: true,
+          vanChuyen: false,
+        }),
+      ).toBe(true);
+      expect(
+        thoaCoPhamVi(dong(guard), {
+          thietBi: false,
+          thiCong: true,
+          vanChuyen: false,
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe('nhánh giao hàng — gate theo cờ Thiết bị, Vận chuyển quyết đi qua `danggiao` hay không', () => {
+    const co = (
+      thietBi: boolean,
+      thiCong: boolean,
+      vanChuyen: boolean,
+    ): OrderScopeFlags => ({ thietBi, thiCong, vanChuyen });
+
+    it.each([[co(true, false, false)], [co(true, true, false)]])(
+      'có Thiết bị, không Vận chuyển (%j): `dacoc` + xong_giao ⇒ thẳng `dagiao` (khách tự lấy)',
+      (scopeFlags) => {
+        expect(
+          danhGia({ status: 'dacoc', event: SU_KIEN.xongGiao, scopeFlags }),
+        ).toEqual({ ok: true, to: 'dagiao' });
+      },
+    );
+
+    it.each([[co(true, false, true)], [co(true, true, true)]])(
+      'có Vận chuyển (%j): `dacoc` + xong_giao ⇒ scope — không được nhảy cóc qua `danggiao`',
+      (scopeFlags) => {
+        expect(
+          danhGia({ status: 'dacoc', event: SU_KIEN.xongGiao, scopeFlags }),
+        ).toEqual({ ok: false, reason: 'scope' });
+      },
+    );
+
+    it.each([
+      [co(false, false, true)],
+      [co(false, true, true)],
+      [co(false, true, false)],
+      [co(false, false, false)],
+    ])(
+      'KHÔNG Thiết bị (%j): `dacoc` không vào được bước giao nào',
+      (scopeFlags) => {
+        expect(
+          danhGia({ status: 'dacoc', event: SU_KIEN.batDauGiao, scopeFlags }),
+        ).toEqual({ ok: false, reason: 'scope' });
+        expect(
+          danhGia({ status: 'dacoc', event: SU_KIEN.xongGiao, scopeFlags }),
+        ).toEqual({ ok: false, reason: 'scope' });
+      },
+    );
+
+    it('MỌI cạnh VÀO nhánh giao đều gate cờ Thiết bị bật', () => {
+      // Cạnh vào = đích là `danggiao`/`dagiao` và không xuất phát từ bên trong nhánh. Một dòng
+      // anh em thiếu gate là một đường đi hợp lệ mà cờ Thiết bị tắt không chặn được.
+      const canhVao = ALLOWED_TRANSITIONS.filter(
+        (r) =>
+          (r.to === 'danggiao' || r.to === 'dagiao') && r.from !== 'danggiao',
+      );
+      expect(canhVao.length).toBeGreaterThanOrEqual(2);
+      for (const rule of canhVao) {
+        expect(rule.scopeGuard?.thietBi).toBe(true);
+      }
+    });
+
+    it('cạnh RA `danggiao → dagiao` KHÔNG gate — cờ đã kiểm ở bước vào', () => {
+      const rule = ALLOWED_TRANSITIONS.find(
+        (r) => r.from === 'danggiao' && r.event === SU_KIEN.xongGiao,
+      );
+      expect(rule).toBeDefined();
+      expect(rule?.scopeGuard).toBeUndefined();
     });
   });
 
@@ -369,26 +531,67 @@ describe('allowed-transition (domain thuần)', () => {
       ]);
     });
 
-    it('đơn thuong_mai (chỉ Thiết bị): nhánh thi công VÀ nhánh giao VẮNG MẶT HOÀN TOÀN', () => {
+    it('đơn thuong_mai (chỉ Thiết bị) ở `dachot`: không thi công, không `danggiao`, nhưng CÓ `dacoc`/`dagiao` (khách tự lấy)', () => {
       const b = bang('dachot', CHI_THIET_BI);
       // Không phải "có mà mờ" — không có mặt trong chuỗi (UX-DR-11).
       expect(b.thicong).toBeUndefined();
       expect(b.nghiemthu).toBeUndefined();
       expect(b.danggiao).toBeUndefined();
-      expect(b.dagiao).toBeUndefined();
-      // Đơn chỉ thiết bị vẫn đóng được: `dachot → hoanthanh` gate cờ Thiết bị.
+      expect(b.dacoc).toBe('upcoming');
+      expect(b.dagiao).toBe('upcoming');
       expect(b.hoanthanh).toBe('upcoming');
     });
 
-    it('AC-11: bật Thiết bị + TẮT Vận chuyển ⇒ KHÔNG có `danggiao`/`dagiao` — hệ quả của bảng transition HIỆN TẠI (không có cạnh dacoc→dagiao); Story 6.1 sẽ thêm cạnh đó', () => {
+    it('bật Thiết bị + TẮT Vận chuyển ở `dacoc`: `dagiao` sắp tới, `danggiao` vắng, `thicong` vẫn còn', () => {
       const b = bang('dacoc', {
         thietBi: true,
         thiCong: true,
         vanChuyen: false,
       });
       expect(b.danggiao).toBeUndefined();
-      expect(b.dagiao).toBeUndefined();
+      expect(b.dagiao).toBe('upcoming');
       expect(b.thicong).toBe('upcoming');
+    });
+
+    it.each([
+      [{ thietBi: true, thiCong: false, vanChuyen: false }],
+      [{ thietBi: true, thiCong: true, vanChuyen: false }],
+    ])(
+      'đơn tự lấy (%j) ở `dagiao`: `danggiao` VẮNG — đơn chưa từng đi giao; `dacoc` done',
+      (scopeFlags) => {
+        const b = bang('dagiao', scopeFlags);
+        expect(b.danggiao).toBeUndefined();
+        expect(b.dacoc).toBe('done');
+        expect(b.dagiao).toBe('current');
+      },
+    );
+
+    it('đơn thuong_mai ở `hoanthanh`: KHÔNG khoe `thicong`/`nghiemthu`/`danggiao` là done — bước không vào được với bộ cờ này', () => {
+      const b = bang('hoanthanh', CHI_THIET_BI);
+      expect(b.thicong).toBeUndefined();
+      expect(b.nghiemthu).toBeUndefined();
+      expect(b.danggiao).toBeUndefined();
+      expect(b.hoanthanh).toBe('current');
+    });
+
+    it('KHÔNG Thiết bị ⇒ không bước giao nào xuất hiện, ở mọi trạng thái × mọi bộ cờ còn lại', () => {
+      const loi: string[] = [];
+      for (const thiCong of [false, true]) {
+        for (const vanChuyen of [false, true]) {
+          const co: OrderScopeFlags = { thietBi: false, thiCong, vanChuyen };
+          for (const status of ORDER_STATUS_KEYS) {
+            for (const b of buocVongDoi(status, co)) {
+              if (
+                (b.status === 'danggiao' || b.status === 'dagiao') &&
+                b.status !== status
+              ) {
+                loi.push(`${status} ${JSON.stringify(co)} ⇒ ${b.status}`);
+              }
+            }
+          }
+        }
+      }
+      expect(loi).toEqual([]);
     });
 
     it('RẼ NHÁNH: đơn ở `danggiao` KHÔNG đánh done cho `thicong`/`nghiemthu` — đơn chưa từng thi công', () => {
@@ -473,6 +676,26 @@ describe('allowed-transition (domain thuần)', () => {
       expect(ke('dacoc').map((b) => b.event).sort()).toEqual(
         [SU_KIEN.batDauGiao, SU_KIEN.batDauThiCong].sort(),
       );
+    });
+
+    it('đơn `dacoc` Thi công + Thiết bị, KHÔNG Vận chuyển ⇒ đúng hai nhánh: thi công và khách tự lấy', () => {
+      expect(
+        ke('dacoc', { thietBi: true, thiCong: true, vanChuyen: false })
+          .map((b) => b.event)
+          .sort(),
+      ).toEqual([SU_KIEN.batDauThiCong, SU_KIEN.xongGiao].sort());
+    });
+
+    it('đơn `dacoc` chỉ Thiết bị ⇒ đúng một bước: `xong_giao` thẳng tới `dagiao`', () => {
+      expect(
+        ke('dacoc', { thietBi: true, thiCong: false, vanChuyen: false }),
+      ).toEqual([
+        {
+          event: SU_KIEN.xongGiao,
+          to: 'dagiao',
+          requires: PERM.deliveryConfirm,
+        },
+      ]);
     });
 
     it('CỜ: đơn KHÔNG bật cờ Thi công ⇒ không thấy `bat_dau_thi_cong`', () => {

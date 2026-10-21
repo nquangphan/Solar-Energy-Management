@@ -86,6 +86,7 @@ flowchart TD
 - **Binds:** FR-7, FR-8, FR-9, FR-23
 - **Prevents:** đơn chỉ-thiết-bị vẫn hiện bước thi công/giao hàng; chuyển bước tuỳ tiện.
 - **Rule:** vòng đời đơn gate theo cờ Thiết bị/Thi công/Vận chuyển. Một số transition tự nhảy theo sự kiện nghiệp vụ (ghi đủ đợt cọc → Đã cọc); mọi transition đều permission-gated và ghi Audit.
+- **Thi hành:** gate của một dòng `ALLOWED_TRANSITIONS` là điều kiện NHIỀU cờ, có phủ định (vd khách tự lấy = `{ thietBi: true, vanChuyen: false }`), diễn giải ở một hàm duy nhất `thoaCoPhamVi()`. Cạnh RA khỏi một nhánh không gate — cờ đã kiểm ở cạnh VÀO.
 
 ### AD-8 — RBAC theo từng account `[ADOPTED]`
 
@@ -396,8 +397,9 @@ stateDiagram-v2
     DaChot --> DaCoc : auto (đủ đợt cọc)
     DaCoc --> DangTC : cờ Thi công
     DangTC --> NghiemThu
-    DaCoc --> DangGiao : cờ Vận chuyển
+    DaCoc --> DangGiao : Thiết bị + Vận chuyển
     DangGiao --> DaGiao
+    DaCoc --> DaGiao : Thiết bị, không Vận chuyển (khách tự lấy)
     NghiemThu --> HoanThanh
     DaGiao --> HoanThanh
     DaChot --> HoanThanh : chỉ Thiết bị (đủ tiền)

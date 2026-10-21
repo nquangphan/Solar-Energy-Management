@@ -289,6 +289,86 @@ describe('OrdersService.chuyenTrangThaiThuCong (Story 5.5)', () => {
       });
     });
 
+    /**
+     * KHÁCH TỰ TỚI LẤY: đơn có hàng mà không Vận chuyển đi thẳng `dacoc → dagiao`. Cùng sự
+     * kiện `xong_giao` với cạnh `danggiao → dagiao` — executor phải chọn đúng dòng theo
+     * `from`, và gate cờ phủ định (`vanChuyen: false`) phải có hiệu lực cả trong tx.
+     */
+    describe('cạnh `dacoc` → `dagiao` (khách tự lấy)', () => {
+      /** Đơn Thương mại: có Thiết bị, không Thi công, không Vận chuyển. */
+      function goiTuLay(anhKem: ReturnType<typeof anh>[] = []) {
+        orderRepo.findFirst.mockResolvedValue({
+          ...DON_DACOC,
+          scopeThiCong: false,
+          scopeVanChuyen: false,
+        });
+        return goi({
+          event: SU_KIEN.xongGiao,
+          quyen: new Set([PERM.ordersViewAll, PERM.deliveryConfirm]),
+          anh: anhKem,
+        });
+      }
+
+      it('ghi status qua CỔNG ATOMIC theo status quan sát được', async () => {
+        const ketQua = await goiTuLay();
+
+        expect(ketQua.status).toBe('dagiao');
+        expect(orderRepo.updateMany).toHaveBeenCalledWith({
+          where: { id: ORDER_ID, status: 'dacoc' },
+          data: { status: 'dagiao' },
+        });
+      });
+
+      it('publish `StatusChanged` `dacoc`→`dagiao` đúng một lần', async () => {
+        await goiTuLay();
+
+        expect(eventBus.publish).toHaveBeenCalledTimes(1);
+        const [event] = eventBus.publish.mock.calls[0] as [StatusChanged];
+        expect(event).toBeInstanceOf(StatusChanged);
+        expect(event.before.status).toBe('dacoc');
+        expect(event.after.status).toBe('dagiao');
+      });
+
+      it('ảnh của bước mang cặp khoá `dacoc`→`dagiao` và CHUNG `occurredAt` với event', async () => {
+        await goiTuLay([anh()]);
+
+        const [event] = eventBus.publish.mock.calls[0] as [StatusChanged];
+        const [hang] = attachmentRepo.createMany.mock.calls[0][0].data;
+        expect(hang.statusFrom).toBe('dacoc');
+        expect(hang.statusTo).toBe('dagiao');
+        expect(hang.occurredAt).toBe(event.occurredAt);
+      });
+
+      it('tx ném SAU khi thân đã chạy ⇒ KHÔNG publish', async () => {
+        const thanTxDaChay = jest.fn();
+        transaction.mockImplementation(
+          async (fn: (tx: typeof txMock) => Promise<unknown>) => {
+            await fn(txMock);
+            thanTxDaChay();
+            throw new Error('commit hỏng');
+          },
+        );
+
+        await bat(goiTuLay([anh()]));
+
+        expect(thanTxDaChay).toHaveBeenCalled();
+        expect(orderRepo.updateMany).toHaveBeenCalled();
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      });
+
+      it('đơn CÓ Vận chuyển ở `dacoc` gửi `xong_giao` ⇒ 409 phạm vi, không ghi gì', async () => {
+        orderRepo.findFirst.mockResolvedValue(DON_DACOC);
+
+        const loi = await bat(goi({ event: SU_KIEN.xongGiao, anh: [anh()] }));
+
+        expect(loi.getStatus()).toBe(409);
+        expect(orderRepo.updateMany).not.toHaveBeenCalled();
+        expect(attachmentRepo.createMany).not.toHaveBeenCalled();
+        expect(storage.objects.size).toBe(0);
+        expect(eventBus.publish).not.toHaveBeenCalled();
+      });
+    });
+
     it('nhánh giao hàng dùng key quyền KHÁC — `bat_dau_giao` đi được với delivery.confirm', async () => {
       const ketQua = await goi({
         event: SU_KIEN.batDauGiao,

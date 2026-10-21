@@ -312,6 +312,63 @@ moTa('Chuyển trạng thái thủ công + ảnh trên Postgres THẬT', () => {
     });
   });
 
+  describe('khách tự lấy trên Postgres THẬT', () => {
+    it('đơn Thương mại `dacoc → dagiao → hoanthanh`: 2 hàng audit, ảnh nối vào bước `dagiao`', async () => {
+      const donId = await taoDon(TOI, null);
+      await prisma.order.update({
+        where: { id: donId },
+        data: { scopeThiCong: false, scopeVanChuyen: false },
+      });
+
+      const giao = await service.chuyenTrangThaiThuCong({
+        callerAccountId: TOI,
+        quyen: QUYEN_DU,
+        orderId: donId,
+        event: SU_KIEN.xongGiao,
+        anh: [anh('khach-nhan-hang.jpg')],
+      });
+      expect(giao.status).toBe('dagiao');
+
+      const xong = await service.chuyenTrangThaiThuCong({
+        callerAccountId: TOI,
+        quyen: QUYEN_DU,
+        orderId: donId,
+        event: SU_KIEN.hoanThanh,
+        anh: [],
+      });
+      expect(xong.status).toBe('hoanthanh');
+
+      const don = await prisma.order.findUniqueOrThrow({
+        where: { id: donId },
+      });
+      expect(don.status).toBe('hoanthanh');
+
+      const audit = await prisma.auditLog.findMany({
+        where: { targetId: donId, eventType: 'StatusChanged' },
+        orderBy: { occurredAt: 'asc' },
+      });
+      expect(
+        audit.map((a) => [
+          (a.before as { status?: string } | null)?.status,
+          (a.after as { status?: string } | null)?.status,
+        ]),
+      ).toEqual([
+        ['dacoc', 'dagiao'],
+        ['dagiao', 'hoanthanh'],
+      ]);
+
+      const hangAnh = await prisma.attachment.findMany({
+        where: { orderId: donId },
+      });
+      expect(hangAnh).toHaveLength(1);
+      expect(hangAnh[0].statusFrom).toBe('dacoc');
+      expect(hangAnh[0].statusTo).toBe('dagiao');
+      expect(hangAnh[0].occurredAt?.getTime()).toBe(
+        audit[0].occurredAt.getTime(),
+      );
+    });
+  });
+
   describe('từ chối trên dữ liệu THẬT (AC-5, AC-6, AC-7, AC-13)', () => {
     it('AC-7: thiếu quyền ⇒ 403, KHÔNG hàng attachment nào và status GIỮ NGUYÊN', async () => {
       const donId = await taoDon(TOI, null);
@@ -500,7 +557,7 @@ moTa('Chuyển trạng thái thủ công + ảnh trên Postgres THẬT', () => {
     });
   });
 
-  describe('bảng transition không đổi (AC-12)', () => {
+  describe('đơn đủ ba cờ ở `dacoc` (có Vận chuyển ⇒ không có lối tự lấy)', () => {
     it('`buocKeTiep` qua lifecycle trên đơn THẬT trả đúng hai nhánh mở', async () => {
       const donId = await taoDon(TOI, null);
       const vongDoi = await service.lifecycle(TOI, QUYEN_DU, donId);

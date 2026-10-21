@@ -294,7 +294,10 @@ class FakeOrdersPort implements OrdersPort {
   /// real sequence is derived from ALLOWED_TRANSITIONS server-side
   /// (AD-2/AD-11); this one only needs the right shape to draw.
   ///
-  /// Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11).
+  /// Steps blocked by a scope flag are ABSENT, not dimmed (UX-DR-11). Thiết bị
+  /// is always on in the demo, so `dagiao` is always reachable: through
+  /// `danggiao` when Vận chuyển is on, straight from `dacoc` (customer pick-up)
+  /// when it is off.
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async {
     final Order? order = _orders[orderId];
@@ -308,7 +311,8 @@ class FakeOrdersPort implements OrdersPort {
       'dachot',
       'dacoc',
       if (thiCong) ...<String>['thicong', 'nghiemthu'],
-      if (vanChuyen) ...<String>['danggiao', 'dagiao'],
+      if (vanChuyen) 'danggiao',
+      'dagiao',
       'hoanthanh',
     ];
     final int dangO = chuoi.indexOf(status);
@@ -361,6 +365,12 @@ class FakeOrdersPort implements OrdersPort {
         const OrderNextStep(
           event: 'bat_dau_giao',
           to: 'danggiao',
+          requires: 'delivery.confirm',
+        ),
+      if (status == 'dacoc' && !vanChuyen)
+        const OrderNextStep(
+          event: 'xong_giao',
+          to: 'dagiao',
           requires: 'delivery.confirm',
         ),
       if (status == 'thicong')

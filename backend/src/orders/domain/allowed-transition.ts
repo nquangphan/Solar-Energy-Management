@@ -77,8 +77,10 @@ export interface TransitionRule {
   readonly from: OrderStatusKey;
   readonly to: OrderStatusKey;
   readonly requires: PermissionKey;
-  /** Cờ phạm vi phải BẬT thì nhánh này mới đi được; vắng = không phụ thuộc cờ. */
-  readonly scopeGuard?: keyof OrderScopeFlags;
+  /** Mỗi cờ được liệt kê phải có ĐÚNG giá trị đó; cờ vắng = không phụ thuộc. Vắng cả field = không gate. */
+  readonly scopeGuard?: Partial<
+    Readonly<Record<keyof OrderScopeFlags, boolean>>
+  >;
 }
 
 /** Lý do từ chối — thứ tự ưu tiên phản ánh thứ tự đánh giá, xem `evaluateTransition`. */
@@ -142,30 +144,39 @@ export const ALLOWED_TRANSITIONS: readonly TransitionRule[] = [
     from: TRANG_THAI_DA_COC,
     to: TRANG_THAI_THI_CONG,
     requires: PERM.constructionTransition,
-    scopeGuard: 'thiCong',
+    scopeGuard: { thiCong: true },
   },
   {
     event: SU_KIEN.xongThiCong,
     from: TRANG_THAI_THI_CONG,
     to: TRANG_THAI_NGHIEM_THU,
     requires: PERM.constructionTransition,
-    scopeGuard: 'thiCong',
+    scopeGuard: { thiCong: true },
   },
   {
     event: SU_KIEN.batDauGiao,
     from: TRANG_THAI_DA_COC,
     to: TRANG_THAI_DANG_GIAO,
     requires: PERM.deliveryConfirm,
-    scopeGuard: 'vanChuyen',
+    scopeGuard: { thietBi: true, vanChuyen: true },
   },
   {
-    // KHÔNG gate cờ ở bước RA: cờ đã được kiểm ở bước VÀO (`dacoc → danggiao` đòi Vận
-    // chuyển). Gate bước ra bằng một cờ KHÁC (Thiết bị) sẽ nhốt vĩnh viễn mọi đơn có Vận
-    // chuyển mà không có Thiết bị: vào được `danggiao` rồi không còn đường nào đi tiếp.
+    // KHÔNG gate cờ ở bước RA: cờ đã được kiểm ở bước VÀO (`dacoc → danggiao` đòi Thiết bị
+    // + Vận chuyển). Gate bước ra bằng một điều kiện KHÁC điều kiện bước vào sẽ nhốt vĩnh
+    // viễn đơn lọt khe giữa hai điều kiện: vào được `danggiao` rồi không còn đường đi tiếp.
     event: SU_KIEN.xongGiao,
     from: TRANG_THAI_DANG_GIAO,
     to: TRANG_THAI_DA_GIAO,
     requires: PERM.deliveryConfirm,
+  },
+  {
+    // Khách tự tới lấy: có hàng mà không Vận chuyển ⇒ thẳng `dagiao`. `vanChuyen: false` là
+    // BẮT BUỘC — thiếu nó thì đơn có Vận chuyển nhảy cóc được qua `danggiao`.
+    event: SU_KIEN.xongGiao,
+    from: TRANG_THAI_DA_COC,
+    to: TRANG_THAI_DA_GIAO,
+    requires: PERM.deliveryConfirm,
+    scopeGuard: { thietBi: true, vanChuyen: false },
   },
   {
     event: SU_KIEN.hoanThanh,
@@ -185,7 +196,7 @@ export const ALLOWED_TRANSITIONS: readonly TransitionRule[] = [
     from: TRANG_THAI_DA_CHOT,
     to: TRANG_THAI_HOAN_THANH,
     requires: PERM.paymentsRecord,
-    scopeGuard: 'thietBi',
+    scopeGuard: { thietBi: true },
   },
   {
     event: SU_KIEN.huy,
@@ -208,6 +219,26 @@ export const ALLOWED_TRANSITIONS: readonly TransitionRule[] = [
 ];
 
 /**
+ * Bộ cờ của đơn có thoả `scopeGuard` của dòng này không? NƠI DUY NHẤT diễn giải guard —
+ * `evaluateTransition`, `buocKeTiep` và đồ thị stepper đều gọi hàm này; ba bản chép tay của
+ * cùng một luật là ba chỗ để lệch nhau.
+ */
+export function thoaCoPhamVi(
+  rule: TransitionRule,
+  scopeFlags: OrderScopeFlags,
+): boolean {
+  if (rule.scopeGuard === undefined) return true;
+  const dieuKien = Object.entries(rule.scopeGuard) as [
+    keyof OrderScopeFlags,
+    boolean | undefined,
+  ][];
+  // Key khai `undefined` tường minh = cờ vắng (đúng hợp đồng JSDoc), không phải "đòi undefined".
+  return dieuKien.every(
+    ([co, giaTri]) => giaTri === undefined || scopeFlags[co] === giaTri,
+  );
+}
+
+/**
  * Transition này có được phép không? Hàm THUẦN — không async, không chạm DB, không log.
  *
  * THỨ TỰ ĐÁNH GIÁ CỐ ĐỊNH, đây là quyết định bảo mật:
@@ -228,7 +259,7 @@ export function evaluateTransition(input: {
     (row) => row.from === input.order.status && row.event === input.event,
   );
   if (rule === undefined) return { ok: false, reason: 'not_in_table' };
-  if (rule.scopeGuard !== undefined && !input.scopeFlags[rule.scopeGuard]) {
+  if (!thoaCoPhamVi(rule, input.scopeFlags)) {
     return { ok: false, reason: 'scope' };
   }
   if (!input.actorPermissions.has(rule.requires)) {
@@ -320,7 +351,7 @@ export function buocKeTiep(
     (rule) =>
       SU_KIEN_THU_CONG.includes(rule.event) &&
       rule.from === status &&
-      (rule.scopeGuard === undefined || scopeFlags[rule.scopeGuard]) &&
+      thoaCoPhamVi(rule, scopeFlags) &&
       actorPermissions.has(rule.requires),
   ).map((rule) => ({
     event: rule.event,
@@ -383,7 +414,7 @@ function canhDaGate(
   return ALLOWED_TRANSITIONS.filter(
     (rule) =>
       !SU_KIEN_KHONG_PHAI_BUOC_TIEN.includes(rule.event) &&
-      (rule.scopeGuard === undefined || scopeFlags[rule.scopeGuard]),
+      thoaCoPhamVi(rule, scopeFlags),
   );
 }
 
@@ -419,7 +450,9 @@ function coDuongToi(
  * đơn đang `danggiao` chưa từng thi công — đánh `thicong` là `done` vì chỉ số nhỏ hơn là
  * để màn hình nói dối.
  *
- * Bước bị cờ chặn ⇒ KHÔNG có mặt trong chuỗi (UX-DR-11: ẩn hẳn, không vẽ mờ).
+ * Bước bị cờ chặn ⇒ KHÔNG có mặt trong chuỗi (UX-DR-11: ẩn hẳn, không vẽ mờ). Cạnh RA
+ * không gate (`danggiao → dagiao`, `nghiemthu → hoanthanh`…) vẫn nằm trong đồ thị, nên "có
+ * đường tới status" thôi chưa đủ — bước còn phải VÀO ĐƯỢC từ `baogia` với bộ cờ này.
  *
  * `huy`/`choduyet` không phải một nấc của vòng đời chính (kết thúc bất thường / nhánh phụ
  * của chiết khấu) — NGOẠI LỆ DUY NHẤT: khi đơn ĐANG Ở chính nó, bước đó vẫn được chèn với
@@ -443,6 +476,11 @@ export function buocVongDoi(
       continue;
     }
     if (ngoaiVongDoiChinh.includes(buocXet)) continue;
+    // `baogia` là điểm xuất phát nên luôn đạt (`coDuongToi` đòi ≥ 1 cạnh, tự nó không tới nó).
+    const vaoDuoc =
+      buocXet === TRANG_THAI_BAO_GIA ||
+      coDuongToi(canh, TRANG_THAI_BAO_GIA, buocXet);
+    if (!vaoDuoc) continue;
     if (coDuongToi(canh, buocXet, status)) {
       buoc.push({ status: buocXet, trangThai: 'done' });
       continue;

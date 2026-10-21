@@ -262,17 +262,28 @@ void main() {
   testWidgets(
       'a scope-blocked step is ABSENT, not dimmed: thuong_mai renders no "Đang thi công"',
       (WidgetTester tester) async {
-    // The backend already dropped the construction branch for an equipment-only
-    // order; the screen draws what it was given (UX-DR-11, AC-7).
+    // The backend already dropped the construction branch AND `danggiao` for an
+    // equipment-only order (customer pick-up goes `dacoc → dagiao`); the screen
+    // draws what it was given (UX-DR-11, AC-7).
     await tester.pumpWidget(
       _host(
-        _StubPort(steps: const <String>['baogia', 'dachot', 'hoanthanh']),
+        _StubPort(
+          steps: const <String>[
+            'baogia',
+            'dachot',
+            'dacoc',
+            'dagiao',
+            'hoanthanh',
+          ],
+        ),
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.text('Đang thi công'), findsNothing);
     expect(find.text('Nghiệm thu'), findsNothing);
+    expect(find.text('Đang giao'), findsNothing);
+    expect(find.text('Đã giao'), findsWidgets);
   });
 
   testWidgets(

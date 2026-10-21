@@ -98,12 +98,13 @@ Khảo sát / Báo giá (nháp)
 Đã chốt  ── Chốt: snapshot giá mọi Dòng (FR-5) ──
   → Đã cọc            (auto khi ghi nhận đủ đợt cọc đầu — FR-8)
   → [cờ Thi công]  Đang thi công → Nghiệm thu
-  → [cờ Vận chuyển] Đang giao hàng → Đã giao
+  → [cờ Thiết bị + Vận chuyển] Đang giao hàng → Đã giao
+  → [cờ Thiết bị, không Vận chuyển] Đã giao   (khách tự tới lấy)
 Hoàn thành           (thanh toán đủ + nghiệm thu/đã giao xong)
 Huỷ                  (có thể từ nhiều trạng thái, kèm lý do)
 ```
 
-- **Đơn chỉ Thiết bị** (Thương mại mặc định): Báo giá → Đã chốt → (thanh toán) → Hoàn thành. Không có bước thi công/giao hàng.
+- **Đơn chỉ Thiết bị** (Thương mại mặc định): Báo giá → Đã chốt → Đã cọc → Đã giao (khách tự lấy) → Hoàn thành, hoặc đóng thẳng Đã chốt → Hoàn thành khi đủ tiền. Không có bước thi công, không có Đang giao hàng.
 - **Đơn Cá nhân** (mặc định bật cả 3 cờ): đi trọn chuỗi.
 - **Auto-transition theo sự kiện nghiệp vụ (FR-8):** ghi nhận đủ đợt cọc đầu → Đơn **tự** sang "Đã cọc", không ai bấm chuyển trạng thái riêng. Mapping đợt→trạng thái cấu hình theo Lịch thanh toán.
 - **Manual + duyệt (FR-9):** các bước cần thao tác người chỉ mở cho Account có Quyền tương ứng; chiết khấu cần Duyệt. Mọi chuyển trạng thái ghi Audit (ai, khi nào, từ→đến).
