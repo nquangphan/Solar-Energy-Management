@@ -5553,7 +5553,8 @@
             "default": false
           },
           "warrantyMonths": {
-            "type": "object",
+            "type": "number",
+            "nullable": true,
             "description": "Bảo hành mặc định, tính bằng THÁNG. Bỏ trống/null = không bảo hành (công lắp, phí lắp đặt) — đây là giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.",
             "example": 144
           }
@@ -5690,7 +5691,8 @@
             "description": "Cho phép sửa giá tại chỗ lúc lập báo giá (phí lắp đặt = true; tấm pin = false)."
           },
           "warrantyMonths": {
-            "type": "object",
+            "type": "number",
+            "nullable": true,
             "description": "Bảo hành mặc định, tính bằng THÁNG. `null` = không bảo hành (công lắp, phí lắp đặt) — giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.",
             "example": 144
           }
@@ -5928,22 +5930,26 @@
             "example": "Nguyễn Văn A"
           },
           "nationalId": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "CCCD — CHỈ khách Cá nhân. Gửi kèm khách Thương mại ⇒ 400.",
             "example": "079201001234"
           },
           "taxCode": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Mã số thuế — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.",
             "example": "0312345678"
           },
           "address": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Địa chỉ — dùng cho cả hai loại khách.",
             "example": "12 Nguyễn Huệ, Quận 1, TP.HCM"
           },
           "bankAccount": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Tài khoản ngân hàng — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.",
             "example": "0071000123456 - Vietcombank"
           },
@@ -5953,7 +5959,8 @@
             "example": "5f4d3c2b-1a09-4e8d-9c7b-6a5f4e3d2c1b"
           },
           "sourceNote": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Ghi chú nguồn — BẮT BUỘC khi nguồn được chọn mang cờ `isOther` (thiếu ⇒ 400); optional với nguồn khác.",
             "example": "Khách cũ giới thiệu"
           }
@@ -6109,19 +6116,23 @@
             "description": "Họ tên (Cá nhân) hoặc tên công ty (Thương mại)."
           },
           "nationalId": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "CCCD — CHỈ khách Cá nhân."
           },
           "taxCode": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Mã số thuế — CHỈ khách Thương mại."
           },
           "address": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Địa chỉ — dùng cho cả hai loại khách."
           },
           "bankAccount": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Tài khoản ngân hàng — CHỈ khách Thương mại."
           },
           "sourceId": {
@@ -6129,7 +6140,8 @@
             "description": "Nguồn khách (id của CustomerSource). Trỏ tới nguồn không tồn tại ⇒ 400."
           },
           "sourceNote": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Ghi chú nguồn — BẮT BUỘC khi nguồn (mới hoặc đang có) mang cờ `isOther`."
           }
         }
@@ -6178,7 +6190,8 @@
             "example": "TikTok"
           },
           "description": {
-            "type": "object",
+            "type": "string",
+            "nullable": true,
             "description": "Một câu để sale phân biệt lúc nhập (\"Fanpage\" và \"Facebook\" nghe giống nhau).",
             "example": "Khách nhắn tin từ video TikTok của công ty."
           },
@@ -6718,7 +6731,8 @@
             "description": "Trạng thái đơn — bộ khoá chip design-system."
           },
           "confirmedAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "nullable": true,
             "description": "Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt."
           },

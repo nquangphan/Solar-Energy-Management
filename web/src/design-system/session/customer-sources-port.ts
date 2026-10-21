@@ -15,32 +15,27 @@
 // gate, the unique-name rule, the "the isOther row cannot be switched off" rule.
 // Nothing here is a security boundary — and nothing here decides business rules
 // either: `sortOrder` when omitted is computed by the SERVER, not here.
+//
+// Every data type below is the GENERATED contract type (AD-12).
 
-/** Mirrors the backend `CustomerSourceResponseDto`. */
-export interface CustomerSourceRow {
-  id: string;
-  name: string;
-  description: string | null;
-  active: boolean;
-  sortOrder: number;
-  /**
-   * The "Khác" flag. READ-ONLY across this port — there is no write method that
-   * accepts it, because the backend accepts it in no DTO. Exactly one row carries
-   * it, and that invariant is owned by the seed. The screen reads it to decide two
-   * things: show the flag chip, and disable the switch-off action.
-   */
-  isOther: boolean;
-}
+import type { components } from '../../api/generated/schema';
+
+type Schemas = components['schemas'];
+
+/**
+ * The backend `CustomerSourceResponseDto`. `isOther` (the "Khác" flag) is
+ * READ-ONLY across this port — there is no write method that accepts it, because
+ * the backend accepts it in no DTO. Exactly one row carries it, and that invariant
+ * is owned by the seed. The screen reads it to decide two things: show the flag
+ * chip, and disable the switch-off action.
+ */
+export type CustomerSourceRow = Schemas['CustomerSourceResponseDto'];
 
 /**
  * Body of `POST /customer-sources`. `sortOrder` omitted ⇒ the BACKEND appends the
  * row at the end (max + 1). The client does not count rows and does not guess.
  */
-export interface CreateCustomerSourceInput {
-  name: string;
-  description?: string | null;
-  sortOrder?: number;
-}
+export type CreateCustomerSourceInput = Schemas['CreateCustomerSourceRequestDto'];
 
 /**
  * Body of `PATCH /customer-sources/:id`. An ABSENT key means "leave it alone"; an
@@ -48,11 +43,7 @@ export interface CreateCustomerSourceInput {
  * switching a source off/on goes through `deactivate`/`reactivate`, so one action
  * is one call is one audit entry.
  */
-export interface UpdateCustomerSourceInput {
-  name?: string;
-  description?: string | null;
-  sortOrder?: number;
-}
+export type UpdateCustomerSourceInput = Schemas['UpdateCustomerSourceRequestDto'];
 
 /**
  * The AD-5 error envelope this port rejects with when the backend refuses a call
@@ -74,10 +65,8 @@ export interface CustomerSourcePortError {
  * HTTP client — the seam that lets the screen exist before the web app owns a
  * bundler/router/token store.
  *
- * TODO(app-runtime/login-network): the real implementation attaches
- * `Authorization: Bearer <accessToken>` (Story 2.3) and parses the AD-5 error
- * envelope into `CustomerSourcePortError`. Until then `FakeCustomerSourcesPort`
- * drives the guards/demo.
+ * The real adapter is `web/src/api/http-customer-sources-port.ts` (wired in
+ * main.tsx); `FakeCustomerSourcesPort` drives the guards and demos.
  */
 export interface CustomerSourcesPort {
   /** The whole catalogue. `includeInactive: true` — the config screen must see switched-off rows to switch them back on. */

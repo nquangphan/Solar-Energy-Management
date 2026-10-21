@@ -1070,6 +1070,8 @@ describe('/customers (e2e)', () => {
 
         expect(res.status).toBe(400);
         expect(res.body.fieldErrors[0].field).toBe(field);
+        // The screen shows this text under the input: Vietnamese, never class-validator's English.
+        expect(res.body.fieldErrors[0].message).toBe(`Tối đa ${tran} ký tự.`);
         expect(customerRepo.create).not.toHaveBeenCalled();
       });
     }

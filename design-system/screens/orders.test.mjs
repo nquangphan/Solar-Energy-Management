@@ -375,7 +375,8 @@ test('no group provenance is persisted or sent — items become ordinary lines',
 test('step 1 reuses CustomerPickScreen via onSelect — no second lookup UI', () => {
   assert.match(web, /import \{ CustomerPickScreen[^}]*\} from '\.\.\/customers\/CustomerPickScreen'/, 'web must import the Story 3.4 pick screen');
   assert.match(web, /<CustomerPickScreen\s+port=\{customersPort\}/, 'web must render the pick screen with the injected port');
-  assert.match(stripTsx(web), /ordersPort\.create\(\{ customerSdt: picked\.sdt \}\)/, 'web onSelect must create the order from the picked customer');
+  // Web reads the generated `CustomerResponseDto.phone` (Story 10.4); mobile keeps `sdt` until 10.7.
+  assert.match(stripTsx(web), /ordersPort\.create\(\{ customerSdt: picked\.phone \}\)/, 'web onSelect must create the order from the picked customer');
   assert.match(mobile, /import '\.\.\/customers\/customer_pick_screen\.dart'/, 'mobile must import the Story 3.4 pick screen');
   assert.match(mobile, /CustomerPickScreen\(\s*port: widget\.customersPort/, 'mobile must render the pick screen with the injected port');
   assert.match(stripDart(mobile), /CreateOrderInput\(customerSdt: picked\.sdt\)/, 'mobile onSelect must create the order from the picked customer');

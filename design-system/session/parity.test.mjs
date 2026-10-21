@@ -113,12 +113,22 @@ test('the customer-sources port is a DELIBERATE web-only exception (Story 3.5)',
   // The web-only port must also stay honest about what it cannot do: `isOther` is
   // readable but settable through NO write input, because the backend accepts it in no
   // write DTO. A create/update input carrying the flag would be a lie in the type system.
+  // Since Story 10.4 the inputs ARE the generated write DTOs, so the check reads the
+  // DTOs they alias in openapi.json.
   const webPort = readFileSync(resolve(webDir, 'customer-sources-port.ts'), 'utf8');
-  const inputs = webPort.match(/interface (?:Create|Update)CustomerSourceInput \{[^}]*\}/g) ?? [];
-  assert.equal(inputs.length, 2, 'both write inputs must be declared');
-  for (const input of inputs) {
-    assert.ok(!/isOther/.test(input), 'no write input may carry isOther — the flag belongs to the seed');
-    assert.ok(!/active/.test(input), 'no write input may carry active — switching off goes through deactivate/reactivate');
+  const spec = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'));
+  for (const [input, dto] of [
+    ['CreateCustomerSourceInput', 'CreateCustomerSourceRequestDto'],
+    ['UpdateCustomerSourceInput', 'UpdateCustomerSourceRequestDto'],
+  ]) {
+    assert.ok(
+      webPort.includes(`export type ${input} = Schemas['${dto}'];`),
+      `${input} must alias the generated ${dto}`,
+    );
+    const props = Object.keys(spec.components.schemas[dto]?.properties ?? {});
+    assert.ok(props.includes('name'), `${dto} must be read from the spec (name missing — reader went blind)`);
+    assert.ok(!props.includes('isOther'), 'no write input may carry isOther — the flag belongs to the seed');
+    assert.ok(!props.includes('active'), 'no write input may carry active — switching off goes through deactivate/reactivate');
   }
 });
 
@@ -361,8 +371,16 @@ test('the warranty port is the SAME one-method read contract on both platforms (
   // Every computed field crosses the wire on BOTH twins. A field missing on one
   // side is a screen that would have to compute it locally — the exact thing
   // QĐ-4 forbids.
+  // Web: WarrantyLine IS the generated WarrantyLineItemDto (Story 10.4), so the fields
+  // are read from the spec it aliases. Mobile still declares them by hand until 10.7.
+  assert.ok(
+    webPort.includes("export type WarrantyLine = Schemas['WarrantyLineItemDto'];"),
+    'web WarrantyLine must alias the generated WarrantyLineItemDto',
+  );
+  const lineDto = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'))
+    .components.schemas.WarrantyLineItemDto;
   for (const field of ['warrantyEndAt', 'remainingDays', 'remainingMonths', 'warrantyStatus', 'warrantyStartAt', 'warrantyMonths']) {
-    assert.ok(webPort.includes(field), `web WarrantyLine missing ${field}`);
+    assert.ok(lineDto.properties[field], `WarrantyLineItemDto (web WarrantyLine) missing ${field}`);
     assert.ok(mobPort.includes(field), `mobile WarrantyLine missing ${field}`);
   }
 });

@@ -60,6 +60,8 @@ export class CreateCustomerRequestDto {
   name!: string;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description: 'CCCD — CHỈ khách Cá nhân. Gửi kèm khách Thương mại ⇒ 400.',
     example: '079201001234',
   })
@@ -70,6 +72,8 @@ export class CreateCustomerRequestDto {
   nationalId?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description:
       'Mã số thuế — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.',
     example: '0312345678',
@@ -81,6 +85,8 @@ export class CreateCustomerRequestDto {
   taxCode?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description: 'Địa chỉ — dùng cho cả hai loại khách.',
     example: '12 Nguyễn Huệ, Quận 1, TP.HCM',
   })
@@ -91,6 +97,8 @@ export class CreateCustomerRequestDto {
   address?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description:
       'Tài khoản ngân hàng — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.',
     example: '0071000123456 - Vietcombank',
@@ -110,6 +118,8 @@ export class CreateCustomerRequestDto {
   sourceId!: string;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description:
       'Ghi chú nguồn — BẮT BUỘC khi nguồn được chọn mang cờ `isOther` (thiếu ⇒ 400); optional với nguồn khác.',
     example: 'Khách cũ giới thiệu',

@@ -1132,7 +1132,7 @@ export interface components {
              * @description Bảo hành mặc định, tính bằng THÁNG. Bỏ trống/null = không bảo hành (công lắp, phí lắp đặt) — đây là giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.
              * @example 144
              */
-            warrantyMonths?: Record<string, never>;
+            warrantyMonths?: number | null;
         };
         ProductPriceResponseDto: {
             id: string;
@@ -1197,7 +1197,7 @@ export interface components {
              * @description Bảo hành mặc định, tính bằng THÁNG. `null` = không bảo hành (công lắp, phí lắp đặt) — giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.
              * @example 144
              */
-            warrantyMonths?: Record<string, never>;
+            warrantyMonths?: number | null;
         };
         ProductPriceDto: {
             /** @description Mua TỪ số lượng này trở lên thì ăn mức giá này. Tối thiểu 2 — mức 1 chính là giá gốc của sản phẩm. */
@@ -1308,22 +1308,22 @@ export interface components {
              * @description CCCD — CHỈ khách Cá nhân. Gửi kèm khách Thương mại ⇒ 400.
              * @example 079201001234
              */
-            nationalId?: Record<string, never>;
+            nationalId?: string | null;
             /**
              * @description Mã số thuế — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.
              * @example 0312345678
              */
-            taxCode?: Record<string, never>;
+            taxCode?: string | null;
             /**
              * @description Địa chỉ — dùng cho cả hai loại khách.
              * @example 12 Nguyễn Huệ, Quận 1, TP.HCM
              */
-            address?: Record<string, never>;
+            address?: string | null;
             /**
              * @description Tài khoản ngân hàng — CHỈ khách Thương mại. Gửi kèm khách Cá nhân ⇒ 400.
              * @example 0071000123456 - Vietcombank
              */
-            bankAccount?: Record<string, never>;
+            bankAccount?: string | null;
             /**
              * @description Nguồn khách (id của CustomerSource) — BẮT BUỘC, không có mặc định. Trỏ tới nguồn không tồn tại ⇒ 400.
              * @example 5f4d3c2b-1a09-4e8d-9c7b-6a5f4e3d2c1b
@@ -1333,7 +1333,7 @@ export interface components {
              * @description Ghi chú nguồn — BẮT BUỘC khi nguồn được chọn mang cờ `isOther` (thiếu ⇒ 400); optional với nguồn khác.
              * @example Khách cũ giới thiệu
              */
-            sourceNote?: Record<string, never>;
+            sourceNote?: string | null;
         };
         CustomerResponseDto: {
             /**
@@ -1404,17 +1404,17 @@ export interface components {
             /** @description Họ tên (Cá nhân) hoặc tên công ty (Thương mại). */
             name?: string;
             /** @description CCCD — CHỈ khách Cá nhân. */
-            nationalId?: Record<string, never>;
+            nationalId?: string | null;
             /** @description Mã số thuế — CHỈ khách Thương mại. */
-            taxCode?: Record<string, never>;
+            taxCode?: string | null;
             /** @description Địa chỉ — dùng cho cả hai loại khách. */
-            address?: Record<string, never>;
+            address?: string | null;
             /** @description Tài khoản ngân hàng — CHỈ khách Thương mại. */
-            bankAccount?: Record<string, never>;
+            bankAccount?: string | null;
             /** @description Nguồn khách (id của CustomerSource). Trỏ tới nguồn không tồn tại ⇒ 400. */
             sourceId?: string;
             /** @description Ghi chú nguồn — BẮT BUỘC khi nguồn (mới hoặc đang có) mang cờ `isOther`. */
-            sourceNote?: Record<string, never>;
+            sourceNote?: string | null;
         };
         CustomerSourceResponseDto: {
             id: string;
@@ -1438,7 +1438,7 @@ export interface components {
              * @description Một câu để sale phân biệt lúc nhập ("Fanpage" và "Facebook" nghe giống nhau).
              * @example Khách nhắn tin từ video TikTok của công ty.
              */
-            description?: Record<string, never>;
+            description?: string | null;
             /**
              * @description Thứ tự hiện trên form tạo khách. Vắng ⇒ backend xếp xuống cuối (max + 1).
              * @example 5
@@ -1685,8 +1685,11 @@ export interface components {
             id: string;
             /** @description Trạng thái đơn — bộ khoá chip design-system. */
             status: string;
-            /** @description Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt. */
-            confirmedAt?: Record<string, never> | null;
+            /**
+             * Format: date-time
+             * @description Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt.
+             */
+            confirmedAt?: string | null;
             lineItems: components["schemas"]["WarrantyLineItemDto"][];
         };
         WarrantyLookupResponseDto: {

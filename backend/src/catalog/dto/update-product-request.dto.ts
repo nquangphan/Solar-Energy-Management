@@ -84,6 +84,8 @@ export class UpdateProductRequestDto {
   priceEditable?: boolean;
 
   @ApiPropertyOptional({
+    type: Number,
+    nullable: true,
     description:
       'Bảo hành mặc định, tính bằng THÁNG. `null` = không bảo hành (công lắp, phí lắp đặt) — giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.',
     example: 144,

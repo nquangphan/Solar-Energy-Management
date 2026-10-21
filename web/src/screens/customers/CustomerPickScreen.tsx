@@ -112,10 +112,10 @@ export function CustomerPickScreen({ port, onSelect }: CustomerPickScreenProps) 
     try {
       const created = await port.create({
         // Still the raw string — the backend re-normalises it into the key it stores.
-        sdt,
-        custType,
+        phone: sdt,
+        custType: custType === THUONG_MAI ? THUONG_MAI : CA_NHAN,
         name,
-        cccd: custType === CA_NHAN && cccd !== '' ? cccd : undefined,
+        nationalId: custType === CA_NHAN && cccd !== '' ? cccd : undefined,
         taxCode: custType === THUONG_MAI && taxCode !== '' ? taxCode : undefined,
         address: address !== '' ? address : undefined,
         bankAccount:
@@ -145,6 +145,8 @@ export function CustomerPickScreen({ port, onSelect }: CustomerPickScreenProps) 
               value={sdt}
               onChange={(e) => setSdt(e.target.value)}
             />
+            {/* The create form reuses this phone, so its field error belongs here. */}
+            {fieldErrors.phone && <Banner tone="danger">{fieldErrors.phone}</Banner>}
             <div className="cust-actions">
               <Button variant="primary" type="submit">
                 Tra cứu
@@ -215,7 +217,7 @@ export function CustomerPickScreen({ port, onSelect }: CustomerPickScreenProps) 
               {custType === CA_NHAN ? (
                 <>
                   <Field label="CCCD" size="lg" value={cccd} onChange={(e) => setCccd(e.target.value)} />
-                  {fieldErrors.cccd && <Banner tone="danger">{fieldErrors.cccd}</Banner>}
+                  {fieldErrors.nationalId && <Banner tone="danger">{fieldErrors.nationalId}</Banner>}
                 </>
               ) : (
                 <>
@@ -247,7 +249,8 @@ export function CustomerPickScreen({ port, onSelect }: CustomerPickScreenProps) 
                   <option value="" disabled>
                     — Chọn nguồn —
                   </option>
-                  {sources.map((source) => (
+                  {/* A switched-off source still names old customers, but takes no new one. */}
+                  {sources.filter((source) => source.active).map((source) => (
                     <option key={source.id} value={source.id}>
                       {source.name}
                     </option>
@@ -310,13 +313,13 @@ export function CustomerFacts({
       ) : (
         <>
           <dt>CCCD</dt>
-          <dd>{orDash(customer.cccd)}</dd>
+          <dd>{orDash(customer.nationalId)}</dd>
         </>
       )}
       <dt>Địa chỉ</dt>
       <dd>{orDash(customer.address)}</dd>
       <dt>SĐT (khoá chính)</dt>
-      <dd className="cust-mono">{customer.sdt}</dd>
+      <dd className="cust-mono">{customer.phone}</dd>
       {commercial && (
         <>
           <dt>Tài khoản NH</dt>
@@ -336,8 +339,8 @@ export function CustomerFacts({
 }
 
 /** An empty nullable field shows `—`: the row stays, so the user knows it is blank. */
-export function orDash(value: string | null): string {
-  return value === null || value === '' ? '—' : value;
+export function orDash(value: string | null | undefined): string {
+  return value == null || value === '' ? '—' : value;
 }
 
 /**

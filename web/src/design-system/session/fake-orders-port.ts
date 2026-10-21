@@ -285,7 +285,7 @@ export class FakeOrdersPort implements OrdersPort {
     // customers; an unknown phone falls back to CA_NHAN.
     const needle = digits(input.customerSdt);
     const customer = this.customers.find(
-      (c) => needle !== '' && digits(c.sdt).endsWith(needle),
+      (c) => needle !== '' && digits(c.phone).endsWith(needle),
     );
     const custType = customer?.custType ?? 'CA_NHAN';
     const order: Order = {
@@ -377,7 +377,7 @@ export class FakeOrdersPort implements OrdersPort {
         priceEditable: product.priceEditable,
         // Install/labour lines (priceEditable) never carry warranty — force null even
         // if the catalogue product happens to have one (mirrors backend addLine).
-        warrantyMonths: product.priceEditable ? null : product.warrantyMonths,
+        warrantyMonths: product.priceEditable ? null : (product.warrantyMonths ?? null),
         note: input.note ?? null,
         isFlexible: input.isFlexible ?? false,
       });
@@ -639,7 +639,7 @@ export class FakeOrdersPort implements OrdersPort {
         status: order.status,
         customerSdt: order.customerSdt,
         customerName:
-          this.customers.find((c) => c.sdt === order.customerSdt)?.name ??
+          this.customers.find((c) => c.phone === order.customerSdt)?.name ??
           'Khách lẻ',
         ownerAccountId: order.ownerAccountId,
         assigneeAccountId: order.assigneeAccountId,

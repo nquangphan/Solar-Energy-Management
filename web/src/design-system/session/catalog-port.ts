@@ -7,55 +7,44 @@
 // it is Story 3.1/3.6's screens behind `catalog.manage`. And there is NO
 // `costPrice` anywhere in these shapes — the backend strips it for callers
 // without `costs.view`, and the picker has no business rendering it anyway.
+//
+// Every data type below is a projection (`Pick`) of the GENERATED contract type
+// (AD-12) — the adapter builds each object field by field so `costPrice` never
+// leaves it.
 
-/** A pickable product — projection of the backend `ProductResponseDto` the picker needs. */
-export interface CatalogProduct {
-  id: string;
-  name: string;
-  sku: string;
-  unit: string;
-  /** Catalogue price — backend number, DISPLAY ONLY (the real line price is auto-filled server-side). */
-  price: number;
-  priceEditable: boolean;
-  warrantyMonths: number | null;
-  isActive: boolean;
-}
+import type { components } from '../../api/generated/schema';
+
+type Schemas = components['schemas'];
+
+/**
+ * A pickable product — projection of the backend `ProductResponseDto` the picker
+ * needs. `price` is DISPLAY ONLY (the real line price is auto-filled server-side).
+ */
+export type CatalogProduct = Pick<
+  Schemas['ProductResponseDto'],
+  'id' | 'name' | 'sku' | 'unit' | 'price' | 'priceEditable' | 'warrantyMonths' | 'isActive'
+>;
 
 /** A group row for the group list (`GET /product-groups`). */
-export interface CatalogGroup {
-  id: string;
-  name: string;
-  description: string | null;
-  isActive: boolean;
-}
+export type CatalogGroup = Pick<Schemas['ProductGroupResponseDto'], 'id' | 'name' | 'description' | 'isActive'>;
 
 /**
  * One item on a group's checklist (`GET /product-groups/:id`). `isActive` is the
  * PRODUCT's flag — a product can be deactivated after joining a group, and the
  * picker must render that item disabled (Story 3.6 contract).
  */
-export interface CatalogGroupItem {
-  productId: string;
-  name: string;
-  sku: string;
-  unit: string;
-  price: number;
-  isActive: boolean;
-  displayOrder: number;
-}
+export type CatalogGroupItem = Schemas['ProductGroupItemResponseDto'];
 
 /** A group + its checklist, ordered by `displayOrder`. */
-export interface CatalogGroupDetail extends CatalogGroup {
-  items: CatalogGroupItem[];
-}
+export type CatalogGroupDetail = Pick<
+  Schemas['ProductGroupDetailResponseDto'],
+  'id' | 'name' | 'description' | 'isActive' | 'items'
+>;
 
 /**
  * Injectable read-only transport for the quote pickers. A PORT, NOT an HTTP
- * client (see orders-port.ts).
- *
- * TODO(app-runtime): real impl calls `GET /products` / `GET /product-groups` /
- * `GET /product-groups/:id` with the bearer token. Until then `FakeCatalogPort`
- * drives the guards/demo.
+ * client (see orders-port.ts). The real adapter is
+ * `web/src/api/http-catalog-port.ts`; `FakeCatalogPort` drives the guards and demos.
  */
 export interface CatalogPort {
   /** Active products, optionally filtered by a name/SKU search string. */

@@ -37,6 +37,8 @@ export class CreateCustomerSourceRequestDto {
   name!: string;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description:
       'Một câu để sale phân biệt lúc nhập ("Fanpage" và "Facebook" nghe giống nhau).',
     example: 'Khách nhắn tin từ video TikTok của công ty.',

@@ -6,30 +6,19 @@
 // surfaces the UI SHOWS; the backend enforces EVERY request regardless. A hidden
 // nav item is convenience, never a security boundary.
 
+import type { components } from '../../api/generated/schema';
+
 /**
- * The `/me` payload shape — MUST match the backend `MeResponseDto`
- * (Story 2.5: `{ id, email, displayName, permissions: string[] }`; `permissions`
- * is sorted, each element a key in `backend/openapi/permissions.json`).
- *
- * TODO(app-runtime): when the FE OpenAPI client is generated from `openapi.json`
- * (AD-12), replace this hand-written type with the generated `MeResponseDto`
- * type — do not hand-edit the spec.
+ * The `/me` payload — the generated `MeResponseDto` (AD-12: no hand-written
+ * contract types). `permissions` is sorted, each element a key in
+ * `backend/openapi/permissions.json`.
  */
-export interface MeResponse {
-  id: string;
-  email: string;
-  displayName: string;
-  permissions: string[];
-}
+export type MeResponse = components['schemas']['MeResponseDto'];
 
 /**
  * Injectable transport for fetching `/me`. This is a PORT (a one-method
- * interface), NOT an HTTP client — the seam that lets gating consume `/me`
- * without the app owning a bundler/router/token store yet.
- *
- * TODO(Story 10.4): the HTTP adapter goes through the generated client; the
- * transport (web/src/api/transport.ts, Story 10.3) already attaches the bearer
- * and parses the AD-5 envelope. Until then `FakeMePort` drives tests.
+ * interface), NOT an HTTP client. The real adapter is `web/src/api/http-me-port.ts`
+ * (wired in main.tsx); `FakeMePort` drives tests and demos.
  */
 export interface MePort {
   fetchMe(): Promise<MeResponse>;

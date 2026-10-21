@@ -26,7 +26,7 @@ export const DEMO_WARRANTY_ORDERS: WarrantyOrder[] = [
   {
     id: 'ord-2026-014',
     status: 'nghiem_thu',
-    chotAt: '2026-02-10T00:00:00.000Z',
+    confirmedAt: '2026-02-10T00:00:00.000Z',
     lineItems: [
       {
         id: 'line-pin',
@@ -59,7 +59,7 @@ export const DEMO_WARRANTY_ORDERS: WarrantyOrder[] = [
   {
     id: 'ord-2023-101',
     status: 'nghiem_thu',
-    chotAt: '2023-08-01T00:00:00.000Z',
+    confirmedAt: '2023-08-01T00:00:00.000Z',
     lineItems: [
       {
         id: 'line-ac',
@@ -99,16 +99,16 @@ export class FakeWarrantyPort implements WarrantyPort {
       // "No such customer" is a 200 with an empty answer, never a rejection.
       return Promise.resolve({
         found: false,
-        sdt: DEMO_SDT,
+        phone: DEMO_SDT,
         customer: null,
         orders: [],
       });
     }
     return Promise.resolve({
       found: true,
-      sdt: DEMO_SDT,
+      phone: DEMO_SDT,
       customer: {
-        sdt: DEMO_SDT,
+        phone: DEMO_SDT,
         name: 'Nguyễn Văn A',
         custType: 'CA_NHAN',
       },

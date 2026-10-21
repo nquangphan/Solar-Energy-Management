@@ -34,13 +34,18 @@ import './profile.css';
 
 export interface ProfileScreenProps {
   port: PasswordPort;
+  /**
+   * Emits "sign me out" — the composition root ends the session. Optional so demo and
+   * test callers render without it. The mobile twin gets its button with its wiring (Story 10.7).
+   */
+  onLogout?: () => void;
 }
 
 // Mirror of the backend policy (`IsPasswordPolicy`): ≥8 chars, at least one letter and
 // one digit. Presentational only — the backend rejects a weak password regardless (AD-4).
 const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$/;
 
-export function ProfileScreen({ port }: ProfileScreenProps) {
+export function ProfileScreen({ port, onLogout }: ProfileScreenProps) {
   const { status, perms, me } = usePermissions();
   const [current, setCurrent] = useState('');
   const [password, setPassword] = useState('');
@@ -124,6 +129,13 @@ export function ProfileScreen({ port }: ProfileScreenProps) {
                 `isActive` on EVERY request (Story 2.5). */}
             <dd>Đang hoạt động</dd>
           </dl>
+          {onLogout && (
+            <div className="profile-actions">
+              <Button variant="ghost" type="button" onClick={onLogout}>
+                Đăng xuất
+              </Button>
+            </div>
+          )}
         </Card>
 
         <Frame label="Đổi mật khẩu" className="profile-change">

@@ -12,6 +12,8 @@
 // scan the whole tree AND must still see each allowed file's own binding.
 import { describe, expect, it } from 'vitest';
 
+import { codeOnly, withoutComments } from './source-text';
+
 const sources = import.meta.glob('../**/*.{ts,tsx}', {
   query: '?raw',
   import: 'default',
@@ -39,18 +41,6 @@ const RULES: Rule[] = [
   { name: 'axios', pattern: /\baxios\b/, on: 'raw', allowedIn: TRANSPORT },
   { name: 'openapi-fetch', pattern: /['"\x60]openapi-fetch['"\x60]/, on: 'raw', allowedIn: CLIENT },
 ];
-
-const TOKEN = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\[\s\S]|[^`\\])*`/g;
-
-/** Comments dropped, strings kept. */
-function withoutComments(code: string): string {
-  return code.replace(TOKEN, (t) => (t.startsWith('/') ? '' : t));
-}
-
-/** Comments dropped and quoted strings emptied (template literals kept: `${fetch(x)}` is code). */
-function codeOnly(code: string): string {
-  return code.replace(TOKEN, (t) => (t.startsWith('/') ? '' : t.startsWith('`') ? t : `${t[0]}${t[0]}`));
-}
 
 function violations(source: string): string[] {
   const text = { raw: withoutComments(source), code: codeOnly(source) };

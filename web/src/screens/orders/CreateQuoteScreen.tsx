@@ -243,7 +243,7 @@ export function CreateQuoteScreen({
           port={customersPort}
           onSelect={async (picked) => {
             try {
-              const created = await ordersPort.create({ customerSdt: picked.sdt });
+              const created = await ordersPort.create({ customerSdt: picked.phone });
               setCustomer(picked);
               setOrder(created);
               syncMetaTexts(created);

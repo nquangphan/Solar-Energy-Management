@@ -151,7 +151,7 @@ export function WarrantyLookupScreen({ port }: WarrantyLookupScreenProps) {
             <Card variant="teal">
               <div className="bh-khach">
                 <strong>{ketQua.customer?.name}</strong>
-                <span className="micro">{ketQua.sdt}</span>
+                <span className="micro">{ketQua.phone}</span>
               </div>
             </Card>
 
@@ -163,7 +163,7 @@ export function WarrantyLookupScreen({ port }: WarrantyLookupScreenProps) {
             )}
 
             {donCoBaoHanh.map((don) => (
-              <Frame key={don.id} label={`Đơn ${don.id} · chốt ${formatNgay(don.chotAt)}`}>
+              <Frame key={don.id} label={`Đơn ${don.id} · chốt ${formatNgay(don.confirmedAt ?? null)}`}>
                 <Table>
                   <thead>
                     <tr>

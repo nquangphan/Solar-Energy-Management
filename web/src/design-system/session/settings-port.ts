@@ -11,16 +11,10 @@
 // `settings.manage` gate on BOTH reads and writes, the Int 0..100 validation.
 // Nothing here is a security boundary.
 
-/** Mirrors `CompanyLegalEntityDto`: the seller party printed on contracts. Empty string = not configured. */
-export interface CompanyLegalEntity {
-  legalName: string;
-  taxCode: string;
-  address: string;
-  representative: string;
-  representativeTitle: string;
-  phone: string;
-  bankAccount: string;
-}
+import type { components } from '../../api/generated/schema';
+
+/** The generated `CompanyLegalEntityDto`: the seller party printed on contracts. Empty string = not configured. */
+export type CompanyLegalEntity = components['schemas']['CompanyLegalEntityDto'];
 
 /**
  * The AD-5 error envelope this port rejects with when the backend refuses a call
@@ -36,9 +30,8 @@ export interface SettingsPortError {
  * HTTP client — the seam that lets the screen exist before the web app owns a
  * bundler/router/token store.
  *
- * TODO(app-runtime): the real implementation attaches `Authorization: Bearer
- * <accessToken>` (Story 2.3) and parses the AD-5 envelope into
- * `SettingsPortError`. Until then `FakeSettingsPort` drives the guards/demo.
+ * The real adapter is `web/src/api/http-settings-port.ts` (wired in main.tsx);
+ * `FakeSettingsPort` drives the guards and demos.
  */
 export interface SettingsPort {
   /** The effective VAT rate (%) — 8 when the system was never configured (backend default). */

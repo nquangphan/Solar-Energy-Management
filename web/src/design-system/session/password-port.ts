@@ -17,10 +17,8 @@
  * NOT an HTTP client — the seam that lets the screens exist before the app owns
  * a bundler/router/token store.
  *
- * TODO(Story 10.4): the HTTP adapter goes through the generated client; the
- * transport (web/src/api/transport.ts, Story 10.3) already attaches the bearer
- * and parses the AD-5 envelope. Until then `FakePasswordPort` drives tests and
- * the Quên mật khẩu screen in main.tsx.
+ * The real adapter is `web/src/api/http-password-port.ts` (wired in main.tsx);
+ * `FakePasswordPort` drives tests and demos.
  */
 export interface PasswordPort {
   /**

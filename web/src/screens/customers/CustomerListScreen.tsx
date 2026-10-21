@@ -80,7 +80,7 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
       // the E.164 key, which is a thing only the backend knows how to do (AD-9).
       const result = await port.list({
         q: q === '' ? undefined : q,
-        custType: custType === ALL ? undefined : custType,
+        custType: custType === 'CA_NHAN' || custType === 'THUONG_MAI' ? custType : undefined,
         page,
       });
       if (ticket !== latest.current) return;
@@ -177,14 +177,14 @@ export function CustomerListScreen({ port, onOpen, onAdd }: CustomerListScreenPr
             </thead>
             <tbody>
               {items.map((customer) => (
-                <tr key={customer.sdt}>
+                <tr key={customer.phone}>
                   <td>{customer.name}</td>
-                  <td className="cust-mono">{customer.sdt}</td>
+                  <td className="cust-mono">{customer.phone}</td>
                   <td>
                     <CustomerTypeChip>{typeLabel(customer.custType)}</CustomerTypeChip>
                   </td>
                   <td>
-                    <Button variant="ghost" size="sm" type="button" onClick={() => onOpen?.(customer.sdt)}>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => onOpen?.(customer.phone)}>
                       Xem
                     </Button>
                   </td>

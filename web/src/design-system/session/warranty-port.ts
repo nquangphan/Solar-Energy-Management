@@ -12,56 +12,37 @@
 // ships a date library, and "start + N months" is arithmetic with real traps
 // (31/01 + 1 month = ?) — two implementations would be two answers. The screen
 // maps `warrantyStatus` to a colour and a label; it never derives it.
+//
+// Every data type below is the GENERATED contract type (AD-12).
 
-/** Mirrors the backend `WarrantyCustomerDto` — only what confirms "the right person". */
-export interface WarrantyCustomer {
-  sdt: string;
-  name: string;
-  custType: string;
-}
+import type { components } from '../../api/generated/schema';
+
+type Schemas = components['schemas'];
+
+/** The backend `WarrantyCustomerDto` — only what confirms "the right person". */
+export type WarrantyCustomer = Schemas['WarrantyCustomerDto'];
 
 /**
- * Mirrors `WarrantyLineItemDto`. Every date here is an ISO-8601 UTC string;
+ * `WarrantyLineItemDto`. Every date here is an ISO-8601 UTC string;
  * `warrantyEndAt` is always at `00:00:00Z` so slicing `YYYY-MM-DD` off the front
- * cannot shift the day.
+ * cannot shift the day. `remainingDays` is negative once expired — it is the
+ * number the backend derived `warrantyStatus` from; `remainingMonths` is rounded
+ * DOWN, floored at 0, display only ("Còn 5 năm").
  *
  * `warrantyStartAt` is the date THIS LINE was first finalised — two lines of the
  * same order may legitimately differ (FR-36, AD-20).
  */
-export interface WarrantyLine {
-  id: string;
-  name: string;
-  qty: number;
-  unit: string;
-  warrantyMonths: number;
-  warrantyStartAt: string;
-  warrantyEndAt: string;
-  /** Negative once expired. This is the number the backend derived the status from. */
-  remainingDays: number;
-  /** Rounded DOWN, floored at 0 — display only ("Còn 5 năm"). */
-  remainingMonths: number;
-  warrantyStatus: 'con_han' | 'sap_het' | 'het_han';
-}
+export type WarrantyLine = Schemas['WarrantyLineItemDto'];
 
-/** Mirrors `WarrantyOrderDto` — only lines of the effective version, only lines WITH warranty. */
-export interface WarrantyOrder {
-  id: string;
-  status: string;
-  chotAt: string | null;
-  lineItems: WarrantyLine[];
-}
+/** `WarrantyOrderDto` — only lines of the effective version, only lines WITH warranty. */
+export type WarrantyOrder = Schemas['WarrantyOrderDto'];
 
 /**
- * Mirrors `WarrantyLookupResponseDto`. `found: false` is a NORMAL 200 result, not
- * an error — the staffer asked a question and "no such customer" is an answer.
- * `sdt` carries the normalised key back even when nothing was found.
+ * `WarrantyLookupResponseDto`. `found: false` is a NORMAL 200 result, not an
+ * error — the staffer asked a question and "no such customer" is an answer.
+ * `phone` carries the normalised key back even when nothing was found.
  */
-export interface WarrantyLookup {
-  found: boolean;
-  sdt: string;
-  customer: WarrantyCustomer | null;
-  orders: WarrantyOrder[];
-}
+export type WarrantyLookup = Schemas['WarrantyLookupResponseDto'];
 
 /**
  * The AD-5 error envelope this port rejects with (400 invalid phone, 403 missing

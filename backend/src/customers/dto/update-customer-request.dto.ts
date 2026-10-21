@@ -56,21 +56,33 @@ export class UpdateCustomerRequestDto {
   @MaxLength(200)
   name?: string;
 
-  @ApiPropertyOptional({ description: 'CCCD — CHỈ khách Cá nhân.' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'CCCD — CHỈ khách Cá nhân.',
+  })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
   nationalId?: string | null;
 
-  @ApiPropertyOptional({ description: 'Mã số thuế — CHỈ khách Thương mại.' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Mã số thuế — CHỈ khách Thương mại.',
+  })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
   @MaxLength(20)
   taxCode?: string | null;
 
-  @ApiPropertyOptional({ description: 'Địa chỉ — dùng cho cả hai loại khách.' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Địa chỉ — dùng cho cả hai loại khách.',
+  })
   @IsOptional()
   @IsString()
   @IsNotEmpty()
@@ -78,6 +90,8 @@ export class UpdateCustomerRequestDto {
   address?: string | null;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description: 'Tài khoản ngân hàng — CHỈ khách Thương mại.',
   })
   @IsOptional()
@@ -95,6 +109,8 @@ export class UpdateCustomerRequestDto {
   sourceId?: string;
 
   @ApiPropertyOptional({
+    type: String,
+    nullable: true,
     description:
       'Ghi chú nguồn — BẮT BUỘC khi nguồn (mới hoặc đang có) mang cờ `isOther`.',
   })

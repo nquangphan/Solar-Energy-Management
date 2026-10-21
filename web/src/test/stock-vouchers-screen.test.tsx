@@ -504,7 +504,8 @@ describe("StockVouchersScreen — return vouchers", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
 
     // The new voucher is the open detail: its code in the header (list row + header) and its type.
-    expect(await screen.findAllByText("PK-NT-0005")).toHaveLength(2);
+    // `findAllByText` resolves on the first match (the list row), before the header renders.
+    await waitFor(() => expect(screen.getAllByText("PK-NT-0005")).toHaveLength(2));
     expect(screen.getByText("Nhập trả · từ đơn huỷ")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Tạo phiếu nhập trả" })).toBeNull();
 

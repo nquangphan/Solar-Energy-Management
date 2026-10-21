@@ -16,8 +16,8 @@
 export { Topbar } from './Topbar';
 export type { TopbarProps } from './Topbar';
 
-export { Sidebar, SIDEBAR_NAV } from './Sidebar';
-export type { SidebarProps, NavSection, NavLink } from './Sidebar';
+export { Sidebar, SIDEBAR_NAV, SidebarNavContext } from './Sidebar';
+export type { SidebarProps, NavSection, NavLink, SidebarNavValue } from './Sidebar';
 
 export { WebFrame } from './WebFrame';
 export type { WebFrameProps } from './WebFrame';

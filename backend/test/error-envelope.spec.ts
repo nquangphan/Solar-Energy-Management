@@ -223,6 +223,13 @@ describe('Error envelope thống nhất (e2e, AD-5)', () => {
       expect(typeof fe.code).toBe('string');
       expect(typeof fe.message).toBe('string');
     }
+    // The screen shows these under the inputs: Vietnamese, not class-validator's English defaults.
+    expect(fieldErrors.find((fe) => fe.field === 'email')?.message).toBe(
+      'Email không hợp lệ.',
+    );
+    expect(fieldErrors.find((fe) => fe.field === 'name')?.message).toBe(
+      'Không được để trống.',
+    );
   });
 
   it('traceId tái dùng header x-request-id nếu client/proxy gửi (trace xuyên tầng)', async () => {

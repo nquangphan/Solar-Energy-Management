@@ -395,8 +395,17 @@ test('the "Ghi rõ nguồn" row keys off the isOther FLAG, never off the source 
 // The row staying is the information: "this customer has no address" is a fact the
 // user needs. Dropping `orDash` on one field is how a raw `null` reaches the screen.
 test('every nullable fact renders through the em-dash fallback (AC-6)', () => {
+  // The web reads the generated contract names (Story 10.4); the mobile twin keeps its
+  // older client names until its own wiring story (10.7). This one-way table is the ONLY
+  // place the two may differ — delete it when mobile renames. Every entry must be used.
+  const WEB_TO_MOBILE_FIELD = { nationalId: 'cccd' };
+  const mapped = new Set();
   for (const [name, facts] of [['web', webFacts], ['mobile', mobileFacts]]) {
-    for (const field of ['taxCode', 'cccd', 'address', 'bankAccount', 'sourceNote']) {
+    for (const contractField of ['taxCode', 'nationalId', 'address', 'bankAccount', 'sourceNote']) {
+      const field =
+        name === 'mobile' && Object.hasOwn(WEB_TO_MOBILE_FIELD, contractField)
+          ? (mapped.add(contractField), WEB_TO_MOBILE_FIELD[contractField])
+          : contractField;
       assert.match(
         facts,
         new RegExp(`orDash\\(\\s*customer\\.${field}`),
@@ -405,6 +414,7 @@ test('every nullable fact renders through the em-dash fallback (AC-6)', () => {
     }
     assert.match(facts, /orDash\(\s*source\??\.?\??\.name/, `${name}: the source name is nullable on screen too`);
   }
+  assert.deepEqual([...mapped], Object.keys(WEB_TO_MOBILE_FIELD), 'every WEB_TO_MOBILE_FIELD entry must be used');
 });
 
 // (l) THE SCREENS ACTUALLY CALL THE PORT. Every rule above is satisfied by a screen

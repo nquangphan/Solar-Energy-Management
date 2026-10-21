@@ -8,6 +8,7 @@
 // prop, because Story 1.10 gates it per-permission — the sidebar renders exactly
 // what the caller hands it, nothing more (no gating here). SIDEBAR_NAV is the
 // canonical default set for callers/Story 1.10 to filter.
+import { createContext, useContext } from 'react';
 import type { MouseEvent } from 'react';
 
 import { Icon } from '../icons/Icon';
@@ -52,6 +53,20 @@ export interface SidebarProps {
   /** Brand mark. Defaults to the canonical `ic-sun` + "Phương Nam". */
   brand?: { icon?: IconName; label: string };
 }
+
+/**
+ * Navigation the app layer provides to every Sidebar below it, without each
+ * screen threading a prop through. Still presentation only: the shell knows
+ * nothing about routes — the app maps an emitted key to a path.
+ */
+export interface SidebarNavValue {
+  /** Emits the clicked key; the app layer maps it to a route. */
+  onNavigate?: (key: string) => void;
+  /** Keys the app can open. Absent = every key (Story 1.9 behaviour, tests/demo). */
+  availableKeys?: ReadonlySet<string>;
+}
+
+export const SidebarNavContext = createContext<SidebarNavValue>({});
 
 /**
  * Canonical default nav (mockup 601-610). Callers (and the Story 1.10 gating
@@ -102,7 +117,20 @@ export const SIDEBAR_NAV: NavSection[] = [
   },
 ];
 
-export function Sidebar({ sections, activeKey, onNavigate, brand }: SidebarProps) {
+export function Sidebar({ sections, activeKey, onNavigate: onNavigateProp, brand }: SidebarProps) {
+  const nav = useContext(SidebarNavContext);
+  // A prop handed in by the caller wins over the app-wide context.
+  const onNavigate = onNavigateProp ?? nav.onNavigate;
+  // Permission gating already happened in the caller's `filterNav`; this only drops
+  // keys the app has no screen for, and the sections they leave empty.
+  const visibleSections = nav.availableKeys
+    ? sections
+        .map((section) => ({
+          ...section,
+          links: section.links.filter((link) => nav.availableKeys!.has(link.key)),
+        }))
+        .filter((section) => section.links.length > 0)
+    : sections;
   const brandIcon = brand?.icon ?? 'ic-sun';
   const brandLabel = brand?.label ?? 'Phương Nam';
 
@@ -119,7 +147,7 @@ export function Sidebar({ sections, activeKey, onNavigate, brand }: SidebarProps
         </div>
         <div className="t">{brandLabel}</div>
       </div>
-      {sections.map((section, i) => (
+      {visibleSections.map((section, i) => (
         <div key={section.title ?? `sec-${i}`}>
           {section.title && <div className="navsec">{section.title}</div>}
           {section.links.map((link) => (

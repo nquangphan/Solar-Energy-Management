@@ -86,6 +86,8 @@ export class WarrantyOrderDto {
   status!: string;
 
   @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
     nullable: true,
     description:
       'Ngày chốt của bản hiệu lực (ISO-8601 UTC); `null` nếu bản đó chưa chốt.',

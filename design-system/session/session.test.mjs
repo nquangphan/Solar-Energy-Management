@@ -33,11 +33,18 @@ const stripTs = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '
 // /me contract, and a pure `toPermissionSet` mapping permissions[] → Set.
 test('(a) session module ships MePort + MeResponse + toPermissionSet(perms[] → Set)', () => {
   assert.match(mePort, /interface MePort\s*\{[\s\S]*fetchMe\(\)\s*:\s*Promise<MeResponse>/, 'MePort must declare fetchMe(): Promise<MeResponse>');
-  // MeResponse mirrors MeResponseDto { id, email, displayName, permissions: string[] }.
+  // MeResponse IS the generated MeResponseDto (AD-12, Story 10.4) — no hand-written mirror.
+  assert.match(
+    stripTs(mePort),
+    /export type MeResponse = components\['schemas'\]\['MeResponseDto'\];/,
+    'MeResponse must alias the generated MeResponseDto',
+  );
+  const generated = readFileSync(resolve(repoRoot, 'web/src/api/generated/schema.d.ts'), 'utf8');
+  const meDto = /\n {8}MeResponseDto: \{[\s\S]*?\n {8}\};/.exec(generated)?.[0] ?? '';
   for (const field of ['id', 'email', 'displayName', 'permissions']) {
-    assert.ok(mePort.includes(field), `MeResponse must carry the ${field} field (/me contract)`);
+    assert.match(meDto, new RegExp(`\\b${field}: `), `MeResponseDto must carry the ${field} field (/me contract)`);
   }
-  assert.match(mePort, /permissions:\s*string\[\]/, 'MeResponse.permissions must be string[]');
+  assert.match(meDto, /permissions: string\[\]/, 'MeResponseDto.permissions must be string[]');
   assert.match(sessionTs, /toPermissionSet\([^)]*\)\s*:\s*PermissionSet/, 'toPermissionSet must return a PermissionSet');
   assert.match(sessionTs, /new Set<PermissionKey>\(me\.permissions\)/, 'toPermissionSet must map me.permissions into a Set');
 });

@@ -11,70 +11,35 @@
 // The backend enforces every rule behind these calls (AD-4): permission, phone
 // validity, duplicate blocking, the source/`sourceNote` rule. Nothing here is a
 // security boundary.
+//
+// Every data type below is the GENERATED contract type (AD-12) — no hand-written
+// mirror that can drift from the backend.
 
-/** Mirrors the backend `CustomerResponseDto`. `sdt` is ALWAYS the normalised E.164 key. */
-export interface Customer {
-  sdt: string;
-  custType: string;
-  name: string;
-  cccd: string | null;
-  taxCode: string | null;
-  address: string | null;
-  bankAccount: string | null;
-  sourceId: string;
-  sourceNote: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { components, paths } from '../../api/generated/schema';
 
-/** Mirrors the backend `CustomerSourceResponseDto`. */
-export interface CustomerSource {
-  id: string;
-  name: string;
-  description: string | null;
-  isOther: boolean;
-  sortOrder: number;
-}
+type Schemas = components['schemas'];
+
+/** The backend `CustomerResponseDto`. `phone` is ALWAYS the normalised E.164 key. */
+export type Customer = Schemas['CustomerResponseDto'];
+
+/** The backend `CustomerSourceResponseDto`. */
+export type CustomerSource = Schemas['CustomerSourceResponseDto'];
 
 /**
- * Mirrors `CustomerLookupResponseDto`. `found: false` is a NORMAL 200 result, not
- * an error — it is the half of the feature that opens "Tạo khách hàng mới".
- * `sdt` carries the normalised key back even when nothing was found.
+ * `CustomerLookupResponseDto`. `found: false` is a NORMAL 200 result, not an
+ * error — it is the half of the feature that opens "Tạo khách hàng mới".
+ * `phone` carries the normalised key back even when nothing was found.
  */
-export interface CustomerLookup {
-  found: boolean;
-  sdt: string;
-  customer: Customer | null;
-}
+export type CustomerLookup = Schemas['CustomerLookupResponseDto'];
 
-/** Mirrors `CustomerListResponseDto`. `total` counts the WHOLE filtered set, not this page. */
-export interface CustomerPage {
-  items: Customer[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
+/** `CustomerListResponseDto`. `total` counts the WHOLE filtered set, not this page. */
+export type CustomerPage = Schemas['CustomerListResponseDto'];
 
 /** Query for the list screen. `q` is what the user typed — the backend builds the phone needle. */
-export interface CustomerListQuery {
-  q?: string;
-  custType?: string;
-  page?: number;
-  pageSize?: number;
-}
+export type CustomerListQuery = NonNullable<paths['/customers']['get']['parameters']['query']>;
 
-/** Body of `POST /customers`. Contract owned by Story 3.3 — unchanged here. */
-export interface CreateCustomerInput {
-  sdt: string;
-  custType: string;
-  name: string;
-  cccd?: string | null;
-  taxCode?: string | null;
-  address?: string | null;
-  bankAccount?: string | null;
-  sourceId: string;
-  sourceNote?: string | null;
-}
+/** Body of `POST /customers` (`CreateCustomerRequestDto`). */
+export type CreateCustomerInput = Schemas['CreateCustomerRequestDto'];
 
 /**
  * The AD-5 error envelope a `CustomersPort` rejects with when the backend refuses a
@@ -98,10 +63,8 @@ export interface CustomerPortError {
  * `orders`): `Order` does not exist until Story 4.1, and a UI cannot honestly
  * render a number no table can back.
  *
- * TODO(app-runtime/login-network): the real implementation attaches
- * `Authorization: Bearer <accessToken>` (Story 2.3) and parses the AD-5 error
- * envelope into the screens' Banner + fieldErrors. Until then `FakeCustomersPort`
- * drives the guards/demo.
+ * The real adapter is `web/src/api/http-customers-port.ts` (wired in main.tsx);
+ * `FakeCustomersPort` drives the guards and demos.
  */
 export interface CustomersPort {
   /** Look a customer up by RAW phone. Rejects only on invalid phone (400) — not on "not found". */
@@ -116,6 +79,10 @@ export interface CustomersPort {
   /** Create a customer. Rejects on 400 (validation) / 409 (phone already taken). */
   create(input: CreateCustomerInput): Promise<Customer>;
 
-  /** The customer-source catalogue that fills the `Nguồn khách` select. */
+  /**
+   * The whole customer-source catalogue, switched-off sources included (`active: false`):
+   * a customer keeps showing the source they came from after an admin turns it off. The
+   * `Nguồn khách` select of the create form offers only the active ones.
+   */
   listSources(): Promise<CustomerSource[]>;
 }
