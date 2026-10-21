@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { stripComments } from './util/strip-comments';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -22,7 +23,15 @@ describe('source-guard: chỉ applyTransition ghi Order.status (AD-11)', () => {
   const SRC_DIR = resolve(__dirname, '../src');
 
   /** Lệnh ghi Prisma có thể mang `data` — `create` cũng nằm đây rồi lọc bằng allowlist. */
-  const LENH_GHI = ['create', 'createMany', 'update', 'updateMany', 'upsert'];
+  const LENH_GHI = [
+    'create',
+    'createMany',
+    'createManyAndReturn',
+    'update',
+    'updateMany',
+    'updateManyAndReturn',
+    'upsert',
+  ];
 
   /**
    * Hai chỗ ĐƯỢC PHÉP mang `status` trong `data` của một lệnh ghi trên `order` — khoá theo
@@ -99,7 +108,11 @@ describe('source-guard: chỉ applyTransition ghi Order.status (AD-11)', () => {
     code: string,
   ): { method: string; lenhGhi: string }[] {
     const ket: { method: string; lenhGhi: string }[] = [];
-    const re = new RegExp(`\\.order\\.(${LENH_GHI.join('|')})\\s*\\(`, 'g');
+    // Whitespace (a prettier line break) is allowed around the dots.
+    const re = new RegExp(
+      `\\.\\s*order\\s*\\.\\s*(${LENH_GHI.join('|')})\\s*\\(`,
+      'g',
+    );
     let m: RegExpExecArray | null;
     while ((m = re.exec(code)) !== null) {
       const moNgoac = m.index + m[0].length - 1;
@@ -110,12 +123,28 @@ describe('source-guard: chỉ applyTransition ghi Order.status (AD-11)', () => {
     return ket;
   }
 
+  /**
+   * Raw SQL `UPDATE orders … SET …` whose SET list names `status` (a `status` in the WHERE is a
+   * read). Raw SQL lives in literals that `stripToCode` empties: matched on comment-stripped
+   * source, so a docstring stating the rule does not count.
+   */
+  function rawStatusWrite(source: string): boolean {
+    const re =
+      /\bUPDATE\s+(?:ONLY\s+)?"?orders"?(?:\s+(?:AS\s+)?(?!SET\b)\w+)?\s+SET\b((?:(?!\b(?:WHERE|RETURNING|FROM)\b)[^;`])*)/gi;
+    const code = stripComments(source);
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(code)) !== null) {
+      if (/(^|[\s,"])status"?\s*=/i.test(m[1])) return true;
+    }
+    return false;
+  }
+
   it('không file src/ nào ghi Order.status ngoài applyTransition (ngoại lệ: create lúc INSERT)', () => {
     const offenders: string[] = [];
     for (const file of collectTsFiles(SRC_DIR)) {
-      for (const diem of timDiemGhiStatus(
-        stripToCode(readFileSync(file, 'utf8')),
-      )) {
+      const source = readFileSync(file, 'utf8');
+      if (rawStatusWrite(source)) offenders.push(`${file} → raw SQL`);
+      for (const diem of timDiemGhiStatus(stripToCode(source))) {
         if (!duocPhep(diem.method, diem.lenhGhi)) {
           offenders.push(`${file} → ${diem.method}() : order.${diem.lenhGhi}`);
         }
@@ -221,6 +250,57 @@ describe('source-guard: chỉ applyTransition ghi Order.status (AD-11)', () => {
         '}',
       ].join('\n');
       expect(timDiemGhiStatus(stripToCode(mau))).toEqual([]);
+    });
+
+    it('catches a write broken across lines around the dots (prettier chain)', () => {
+      const mau = [
+        'class X {',
+        '  async lachLuat(id: string) {',
+        '    await this.prisma',
+        '      .order',
+        '      .update({',
+        '        where: { id },',
+        '        data: { status: moi },',
+        '      });',
+        '  }',
+        '}',
+      ].join('\n');
+      expect(timDiemGhiStatus(stripToCode(mau))).toEqual([
+        { method: 'lachLuat', lenhGhi: 'update' },
+      ]);
+    });
+
+    it('catches the *AndReturn write forms', () => {
+      for (const lenhGhi of ['updateManyAndReturn', 'createManyAndReturn']) {
+        const mau = [
+          'class X {',
+          '  async lachLuat(id: string) {',
+          `    await tx.order.${lenhGhi}({ data: { status: moi } });`,
+          '  }',
+          '}',
+        ].join('\n');
+        expect(timDiemGhiStatus(stripToCode(mau))).toEqual([
+          { method: 'lachLuat', lenhGhi },
+        ]);
+      }
+    });
+
+    it('catches a raw SQL status write; ignores a raw write of another column and a comment', () => {
+      for (const mau of [
+        'await tx.$executeRaw`UPDATE orders SET status = ${moi} WHERE id = ${id}`;',
+        'await tx.$executeRawUnsafe(\'UPDATE "orders" SET updated_at = now(), "status" = $1\', moi);',
+        'await tx.$executeRaw`UPDATE orders o SET status = ${moi}`;',
+        "await tx.$executeRaw`UPDATE orders SET cancel_reason = 'x', status = 'huy'`;",
+      ]) {
+        expect(rawStatusWrite(mau)).toBe(true);
+      }
+      for (const mau of [
+        "await tx.$executeRaw`UPDATE orders SET current_version_id = ${v} WHERE status = 'baogia'`;",
+        'await tx.$queryRaw`SELECT id FROM orders WHERE id = ${id} FOR UPDATE`;',
+        '// never UPDATE orders SET status = ${x} outside applyTransition',
+      ]) {
+        expect(rawStatusWrite(mau)).toBe(false);
+      }
     });
 
     it('KHÔNG bắt thứ nằm trong COMMENT (stripToCode đã xoá)', () => {

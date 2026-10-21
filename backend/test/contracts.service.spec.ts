@@ -462,6 +462,20 @@ describe('ContractsService (unit, hermetic)', () => {
       expect(create).not.toHaveBeenCalled();
     });
 
+    it('confirmed between the scoped read and the lock (same version) ⇒ 409 "Đơn vừa thay đổi", the quote-time lines never printed', async () => {
+      view = { ...view, status: 'baogia' };
+      fresh = { status: 'dachot', currentVersionId: VERSION_ID };
+
+      const error = await rejection(generate());
+
+      expect(error.getStatus()).toBe(409);
+      expect(error.message).toBe(ORDER_CHANGED_MESSAGE);
+      expect(log).toEqual(['scope', 'lock', 'fresh']);
+      expect(queryRaw).toHaveBeenCalledTimes(1);
+      expect(renderPdf).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    });
+
     it('a payment advanced the status meanwhile (dacoc) ⇒ still generated', async () => {
       fresh = { status: 'dacoc', currentVersionId: VERSION_ID };
 

@@ -1,5 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { rawSqlWritePattern } from './util/raw-sql-write';
+import { stripComments } from './util/strip-comments';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -28,6 +30,16 @@ describe('source-guard: KHÔNG BAO GIỜ hard-delete customerSource (AC-3)', () 
    */
   const HARD_DELETE = /\bcustomerSource\s*\.\s*(?:delete|deleteMany)\s*\(/;
 
+  /** Raw SQL lives in literals that `stripToCode` empties: matched on comment-stripped source. */
+  const RAW_HARD_DELETE = rawSqlWritePattern(['customer_sources'], ['delete']);
+
+  function isHardDelete(source: string): boolean {
+    return (
+      HARD_DELETE.test(stripToCode(source)) ||
+      RAW_HARD_DELETE.test(stripComments(source))
+    );
+  }
+
   function collectTsFiles(dir: string): string[] {
     const files: string[] = [];
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -54,7 +66,7 @@ describe('source-guard: KHÔNG BAO GIỜ hard-delete customerSource (AC-3)', () 
 
   it('KHÔNG file nào trong src/ gọi customerSource.delete()/deleteMany()', () => {
     const viPham = allFiles.filter((file) =>
-      HARD_DELETE.test(stripToCode(readFileSync(file, 'utf8'))),
+      isHardDelete(readFileSync(file, 'utf8')),
     );
 
     expect(viPham.map((f) => f.slice(SRC_DIR.length + 1))).toEqual([]);
@@ -75,6 +87,23 @@ describe('source-guard: KHÔNG BAO GIỜ hard-delete customerSource (AC-3)', () 
       'await this.prisma.customer.delete({ where: { sdt } });',
     ]) {
       expect(HARD_DELETE.test(lanhTinh)).toBe(false);
+    }
+  });
+
+  it('catches a raw SQL hard delete, ignores raw deactivation and a comment', () => {
+    for (const code of [
+      'await tx.$executeRaw`DELETE FROM customer_sources WHERE id = ${id}`;',
+      'await tx.$executeRawUnsafe(\'DELETE FROM "customer_sources" WHERE id = $1\', id);',
+      'await this.prisma.$executeRaw`TRUNCATE TABLE customer_sources`;',
+    ]) {
+      expect(isHardDelete(code)).toBe(true);
+    }
+    for (const code of [
+      'await tx.$executeRaw`UPDATE customer_sources SET active = false WHERE id = ${id}`;',
+      '// never DELETE FROM customer_sources: deactivate instead',
+      'await tx.$executeRaw`DELETE FROM customers WHERE sdt = ${sdt}`;',
+    ]) {
+      expect(isHardDelete(code)).toBe(false);
     }
   });
 });

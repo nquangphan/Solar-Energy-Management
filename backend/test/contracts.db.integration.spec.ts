@@ -4,7 +4,10 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import { PERM } from '../src/accounts/domain/permission-registry';
 import { AuditService } from '../src/audit/audit.service';
 import { AuditSubscriber } from '../src/audit/audit.subscriber';
-import { ContractsService } from '../src/contracts/contracts.service';
+import {
+  ContractsService,
+  ORDER_CHANGED_MESSAGE,
+} from '../src/contracts/contracts.service';
 import { CONTRACT_BLOCKED_MESSAGE } from '../src/contracts/domain/contract-eligibility';
 import type { AppException } from '../src/common/errors/app.exception';
 import { InProcessEventBus } from '../src/events/in-process-event-bus';
@@ -22,8 +25,9 @@ import { fakeStorage, type FakeStorage } from './util/fake-storage';
  *  - the migration's CHECK constraints stand on their own (a direct insert violating them fails);
  *  - the number comes from the `contracts.seq` sequence: two concurrent generations get two
  *    different numbers and both rows commit (no P2002, no 500);
- *  - generation runs under the order row lock: a holder that changes the schedule or reopens the
- *    order under that lock makes the generation WAIT, then see the committed change and refuse;
+ *  - generation runs under the order row lock: a holder that changes the schedule, reopens the
+ *    order, or edits a quote line and confirms under that lock makes the generation WAIT, then
+ *    see the committed change and refuse;
  *  - a real generation writes the row and one `ContractGenerated` audit row;
  *  - a revised + re-confirmed order prints its new version number, the old contract keeps its own.
  *
@@ -373,6 +377,43 @@ describeDb('Contract generation on REAL Postgres', () => {
       const error = (await running) as AppException;
       expect(error.getStatus()).toBe(409);
       expect(error.message).toBe(CONTRACT_BLOCKED_MESSAGE.scheduleMismatch);
+      expect(await prisma.contract.count({ where: { orderId } })).toBe(0);
+    });
+
+    it('a holder that edits a quote line and confirms under the lock (same version) ⇒ generation waits, then 409 "Đơn vừa thay đổi"; no row from the quote-time lines', async () => {
+      // A quote that already carries a schedule matching its quote-time lines (it was confirmed
+      // with that schedule, then reopened): the scoped read sees status baogia and qty 1.
+      const orderId = await confirmedOrderWithSchedule();
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { status: 'baogia' },
+      });
+      const line = await prisma.orderLineItem.findFirstOrThrow({
+        where: { orderVersion: { orderId } },
+      });
+      const lock = holdOrderLock(orderId, async (t) => {
+        await t.orderLineItem.update({
+          where: { id: line.id },
+          data: { qty: 2 },
+        });
+        await t.order.update({
+          where: { id: orderId },
+          data: { status: 'dachot' },
+        });
+      });
+      await wait(150);
+      let settled = false;
+      const running = rejection(generate(orderId)).finally(() => {
+        settled = true;
+      });
+      await wait(300);
+      expect(settled).toBe(false);
+      lock.release();
+      await lock.tx;
+
+      const error = (await running) as AppException;
+      expect(error.getStatus()).toBe(409);
+      expect(error.message).toBe(ORDER_CHANGED_MESSAGE);
       expect(await prisma.contract.count({ where: { orderId } })).toBe(0);
     });
 

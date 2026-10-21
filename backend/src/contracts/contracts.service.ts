@@ -14,6 +14,7 @@ import { SettingsService } from '../settings/settings.service';
 import { StoragePort } from '../storage/storage.port';
 import { buildContractHtml } from './contract-template';
 import {
+  CONTRACT_ORDER_STATUSES,
   contractBlocker,
   scheduleLabelOf,
 } from './domain/contract-eligibility';
@@ -153,7 +154,8 @@ export class ContractsService {
         await tx.$queryRaw`SELECT id FROM orders WHERE id = ${orderId} FOR UPDATE`;
         // Committed state under the lock: a payment may have advanced the status (still
         // eligible), a reopen moved it out of the set (blocker), a revise replaced the version
-        // whose lines `view` carries (stale ⇒ 409).
+        // whose lines `view` carries (stale ⇒ 409), a confirm froze lines `view` read as a quote
+        // (stale ⇒ 409, below).
         const fresh = await tx.order.findUnique({
           where: { id: orderId },
           select: { status: true, currentVersionId: true },
@@ -161,6 +163,19 @@ export class ContractsService {
         if (
           fresh === null ||
           fresh.currentVersionId !== view.currentVersionId
+        ) {
+          throw new AppException(
+            ErrorCode.CONFLICT,
+            409,
+            ORDER_CHANGED_MESSAGE,
+          );
+        }
+        // Confirming keeps the version, so the pointer check above cannot see it: a scoped read
+        // taken while the order was still a quote carries live lines and prices that may have
+        // been edited before the confirm. Only a read of an already-frozen order is printed.
+        if (
+          fresh.status !== view.status &&
+          !CONTRACT_ORDER_STATUSES.has(view.status)
         ) {
           throw new AppException(
             ErrorCode.CONFLICT,

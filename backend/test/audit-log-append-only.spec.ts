@@ -1,5 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { rawSqlWritePattern } from './util/raw-sql-write';
+import { stripComments } from './util/strip-comments';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -18,9 +20,22 @@ import { stripToCode } from './util/strip-to-code';
 describe('source-guard: AuditLog append-only (AD-8)', () => {
   const SRC_DIR = resolve(__dirname, '../src');
 
-  /** Mọi API Prisma sửa/xoá một bản ghi đã ghi. `create`/`createMany` KHÔNG bị cấm. */
+  /**
+   * Mọi API Prisma sửa/xoá một bản ghi đã ghi, `updateManyAndReturn` included (a bare
+   * `updateMany\b` alternative cannot match it). `create`/`createMany` KHÔNG bị cấm.
+   */
   const MUTATING_AUDIT_CALL =
-    /\bauditLog\s*\.\s*(update|updateMany|delete|deleteMany|upsert)\b/;
+    /\bauditLog\s*\.\s*(?:update(?:Many(?:AndReturn)?)?|delete(?:Many)?|upsert)\b/;
+
+  /** Raw SQL lives in literals that `stripToCode` empties: matched on comment-stripped source. */
+  const RAW_MUTATION = rawSqlWritePattern(['audit_logs'], ['update', 'delete']);
+
+  function isMutation(source: string): boolean {
+    return (
+      MUTATING_AUDIT_CALL.test(stripToCode(source)) ||
+      RAW_MUTATION.test(stripComments(source))
+    );
+  }
 
   function collectTsFiles(dir: string): string[] {
     const files: string[] = [];
@@ -49,6 +64,8 @@ describe('source-guard: AuditLog append-only (AD-8)', () => {
       `await prisma.auditLog.deleteMany({ where: { targetId } });`,
       `await prisma.auditLog.upsert({ where: { id } });`,
       `await prisma.auditLog . delete({ where: { id } });`,
+      `await this.prisma.auditLog\n      .deleteMany({ where: { targetId } });`,
+      `await tx.auditLog.updateManyAndReturn({ where: {}, data: {} });`,
     ];
     for (const source of violations) {
       expect(MUTATING_AUDIT_CALL.test(stripToCode(source))).toBe(true);
@@ -63,9 +80,26 @@ describe('source-guard: AuditLog append-only (AD-8)', () => {
     }
   });
 
+  it('catches a raw SQL update/delete, ignores a raw insert, a read and a comment', () => {
+    for (const source of [
+      'await tx.$executeRaw`UPDATE audit_logs SET payload = ${p} WHERE id = ${id}`;',
+      'await tx.$executeRawUnsafe(\'DELETE FROM "audit_logs" WHERE id = $1\', id);',
+      'await this.prisma.$executeRaw`TRUNCATE audit_logs`;',
+    ]) {
+      expect(isMutation(source)).toBe(true);
+    }
+    for (const source of [
+      'await tx.$executeRaw`INSERT INTO audit_logs (id) VALUES (${id})`;',
+      'await tx.$queryRaw`SELECT id FROM audit_logs WHERE id = ${id}`;',
+      '// never UPDATE audit_logs after the insert',
+    ]) {
+      expect(isMutation(source)).toBe(false);
+    }
+  });
+
   it('không có lối sửa/xoá AuditLog nào trong src/ (chỉ được `create`)', () => {
     const offenders = allFiles.filter((file) =>
-      MUTATING_AUDIT_CALL.test(stripToCode(readFileSync(file, 'utf8'))),
+      isMutation(readFileSync(file, 'utf8')),
     );
     expect(offenders).toEqual([]);
   });

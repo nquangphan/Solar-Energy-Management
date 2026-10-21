@@ -184,13 +184,13 @@ Mọi hành động nghiệp vụ **có hệ quả** (E4+) phát tín hiệu qua
 - **`FOR UPDATE` chỉ đo được ở lane DB** — lane hermetic mock Prisma luôn xanh khi gỡ khoá. Mỗi khoá mới cần một ca `*.db.integration.spec.ts` ép interleaving.
 - **Tx giữ khoá trong test phải GHI đúng thứ primitive đọc** (vd `onHand + 3` dưới khoá, rồi assert kết quả cuối). Tx chỉ giữ khoá "trần" có thể bị một lệnh khác chặn hộ (FK lấy KEY SHARE, UPDATE cùng dòng) ⇒ ca "CHỜ khoá" vẫn xanh khi gỡ `FOR UPDATE`.
 - **Tập khoá có nhiều nguồn** (vd dòng version mới + sản phẩm chỉ còn giữ ở version cũ): mỗi nguồn cần một ca interleaving riêng; mutate từng nguồn và đòi ĐỎ.
-- **Chứng từ đánh số (hợp đồng, hoá đơn — Epic 7):** số cấp bằng `nextval(pg_get_serial_sequence(…))` **trong** tx dưới khoá đơn; không `count() + 1`. Dưới khoá phải đọc lại **cả** `status` và `currentVersionId`: `confirm` giữ nguyên version nên chỉ kiểm con trỏ version là mù với "sửa báo giá rồi chốt" giữa `getScoped` và `FOR UPDATE` (fix ở `invoices.service.ts`; `contracts.service.ts` còn mở). Render PDF + upload nằm trong tx ⇒ đặt `timeout` tx (30 s) và có unit assert nó.
+- **Chứng từ đánh số (hợp đồng, hoá đơn — Epic 7):** số cấp bằng `nextval(pg_get_serial_sequence(…))` **trong** tx dưới khoá đơn; không `count() + 1`. Dưới khoá phải đọc lại **cả** `status` và `currentVersionId`: `confirm` giữ nguyên version nên chỉ kiểm con trỏ version là mù với "sửa báo giá rồi chốt" giữa `getScoped` và `FOR UPDATE` (khuôn ở `invoices.service.ts` và `contracts.service.ts`, mỗi nơi có ca DB holder sửa qty + chốt ⇒ 409). Render PDF + upload nằm trong tx ⇒ đặt `timeout` tx (30 s) và có unit assert nó.
 - **Barrier race test:** barrier "cả hai cùng tới" trên **cùng** đơn sẽ deadlock khi đường đó khoá `orders` — barrier trên 2 đơn khác nhau, cộng một ca cùng đơn tuần tự hoá bởi khoá, cộng ca holder.
 - **Tiền INT4:** cột `Int` tràn ở 2.147.483.647. Số do server tự tính (đợt theo %, tổng) không đi qua `@Max` của DTO ⇒ domain tự chặn (`MAX_INSTALLMENT_AMOUNT`) và trả 400 field error; có ca lane DB với đơn > INT4.
 
 ## Source-guard regex — biến thể phải bắt (Epic 7)
 
-Guard soi lời gọi Prisma bằng regex phải chịu được: khoảng trắng/xuống dòng quanh dấu chấm (`tx.payment\n.create(` sau prettier), hậu tố `*OrThrow` / `*AndReturn`, SQL thô trong template literal (`stripToCode` xoá literal ⇒ quét thêm nguồn RAW), nhãn lồng trong nhãn dài hơn (`'MST'` trong `'MST khách'`). Mỗi biến thể áp dụng được cần một ca mẫu "catches…" trong chính file guard, cạnh assert chống-guard-rỗng.
+Guard soi lời gọi Prisma bằng regex phải chịu được: khoảng trắng/xuống dòng quanh dấu chấm (`tx.payment\n.create(` sau prettier), hậu tố `*OrThrow` / `*AndReturn`, SQL thô trong template literal (`stripToCode` xoá literal ⇒ quét thêm nguồn RAW), nhãn lồng trong nhãn dài hơn (`'MST'` trong `'MST khách'`). Mỗi biến thể áp dụng được cần một ca mẫu "catches…" trong chính file guard, cạnh assert chống-guard-rỗng. SQL thô: dùng `test/util/raw-sql-write.ts` trên nguồn đã `stripComments` (giữ string, bỏ comment ⇒ nhãn trong comment không đỏ oan).
 
 ## Lint / format (bắt buộc)
 

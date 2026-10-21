@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { rawSqlWritePattern } from './util/raw-sql-write';
+import { stripComments } from './util/strip-comments';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -72,26 +74,27 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     // Đọc bytes R2 / hồ sơ xuất của một đơn cũng là chạm đơn: proxy tải file ngoài phạm vi là
     // rò y như sửa ngoài phạm vi.
     /this\.storage\.getObject\s*\(/,
-    /\.quoteExport\.find(?:Unique|First)\s*\(/,
+    /\.quoteExport\.find(?:Unique|First)(?:OrThrow)?\s*\(/,
     // Order-bound stock (read or write) also touches the order: previewing the stock-out of an
     // out-of-scope order leaks just like issuing it.
     /this\.stockVouchers\.\w+\s*\(/,
     // The quote stock warning is read per order too: out of scope must be refused before it.
     /this\.stockItems\.\w+\s*\(/,
-    /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+    /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?)\s*\(/,
     // The payment schedule belongs to one order: reading or writing it, or taking a raw row
     // lock, touches that order.
-    /\.(?:paymentSchedule|installment)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
-    /\.paymentSchedule\.find(?:Unique|First)\s*\(/,
+    /\.(?:paymentSchedule|installment)\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?)\s*\(/,
+    /\.paymentSchedule\.find(?:Unique|First)(?:OrThrow)?\s*\(/,
     // A payment belongs to one order: reading or writing payments touches that order, and so
     // do the in-tx transition door and the shared schedule view.
-    /\.payment\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count|groupBy|aggregate)\s*\(/,
+    /\.payment\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?|find(?:Unique|First|Many)(?:OrThrow)?|count|groupBy|aggregate)\s*\(/,
     /this\.orders\.autoTransitionInTx\s*\(/,
     /this\.(?:schedules\.)?viewFor\s*\(/,
-    /\.\$queryRaw\b/,
+    // Raw SQL, tagged or `*Unsafe` (a bare `queryRaw\b` misses `queryRawUnsafe`).
+    /\.\$(?:queryRaw|executeRaw)(?:Unsafe)?\b/,
     // A contract belongs to one order: reading or writing contract rows, rendering its PDF, or
     // reading the inputs it is built from (customer, version, schedule) touches that order.
-    /\.contract\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany|find(?:Unique|First|Many)|count)\s*\(/,
+    /\.contract\.(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?|find(?:Unique|First|Many)(?:OrThrow)?|count)\s*\(/,
     /this\.renderer\.\w+\s*\(/,
     /this\.loadInputs\s*\(/,
     // An invoice belongs to one order: reading or writing invoice rows (the replay lookup
@@ -169,14 +172,24 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     return dau;
   }
 
+  /**
+   * Prettier breaks long chains before a dot (`this.prisma\n      .order\n      .update(`); the
+   * patterns above are written on the joined form, so whitespace around every dot is dropped
+   * first. Scope and touch are both searched in this one normalised body.
+   */
+  function noiDauCham(than: string): string {
+    return than.replace(/\s*\.\s*/g, '.');
+  }
+
   /** Method công khai chạm đơn mà phạm vi KHÔNG đứng trước thao tác chạm đầu tiên. */
   function viPham(code: string, goiPhamVi: RegExp): string[] {
     const ket: string[] = [];
     for (const method of trichMethod(code)) {
       if (!method.congKhai) continue;
-      const cham = viTriChamDau(method.than);
+      const than = noiDauCham(method.than);
+      const cham = viTriChamDau(than);
       if (cham === -1) continue;
-      const phamVi = goiPhamVi.exec(method.than);
+      const phamVi = goiPhamVi.exec(than);
       if (phamVi === null || phamVi.index > cham) ket.push(method.ten);
     }
     return ket;
@@ -357,6 +370,53 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
       }
     });
 
+    it('catches an order touch placed before the scoped read in every syntax variant', () => {
+      for (const touch of [
+        // prettier chain: whitespace and line breaks around the dots
+        'this.prisma\n      .orderLineItem\n      .delete({ where: {} })',
+        'this\n      .findOrThrow(id)',
+        'this.storage\n      .putObject(key, body, type)',
+        // *AndReturn / *OrThrow
+        'tx.order.updateManyAndReturn({ where: {}, data: {} })',
+        'tx.orderLineItem.createManyAndReturn({ data: [] })',
+        'this.prisma.paymentSchedule.findUniqueOrThrow({ where: {} })',
+        'this.prisma.contract.findFirstOrThrow({ where: {} })',
+        'this.prisma.quoteExport.findUniqueOrThrow({ where: {} })',
+        // raw SQL, tagged or unsafe
+        'tx.$executeRaw`UPDATE orders SET kwp = 1`',
+        "this.prisma.$queryRawUnsafe('SELECT id FROM orders')",
+        "this.prisma.$executeRawUnsafe('DELETE FROM order_line_items')",
+      ]) {
+        const mau = [
+          'class X {',
+          '  async suaMuon(actor: string, q: Set<string>, id: string) {',
+          `    await ${touch};`,
+          '    await this.findScopedOrThrow(actor, q, id);',
+          '  }',
+          '}',
+          '',
+        ].join('\n');
+        expect(
+          viPham(stripToCode(mau), /this\.findScopedOrThrow\s*\(/),
+        ).toEqual(['suaMuon']);
+      }
+    });
+
+    it('accepts a scoped read broken across lines before the touch', () => {
+      const mau = [
+        'class X {',
+        '  async dung(actor: string, q: Set<string>, id: string) {',
+        '    await this\n      .findScopedOrThrow(actor, q, id);',
+        '    await this.prisma.$transaction(async (tx) => {});',
+        '  }',
+        '}',
+        '',
+      ].join('\n');
+      expect(viPham(stripToCode(mau), /this\.findScopedOrThrow\s*\(/)).toEqual(
+        [],
+      );
+    });
+
     it('BẮT an invoice read placed before the scoped read', () => {
       const mau = [
         'class X {',
@@ -476,9 +536,12 @@ describe('source-guard: invoices and their lines are never updated or deleted', 
   // line break) is allowed around the dots.
   const MUTATION =
     /\.\s*(?:invoice|invoiceLine)\s*\.\s*(?:update\w*|upsert|delete\w*)\s*\(/;
-  // Raw SQL lives inside template literals, which `stripToCode` empties: matched on RAW source.
-  const RAW_MUTATION =
-    /\b(?:UPDATE|DELETE\s+FROM)\s+"?invoice(?:s|_lines)"?(?![\w])/i;
+  // Raw SQL lives inside template literals, which `stripToCode` empties: matched on source with
+  // only the comments stripped, so a docstring stating the rule does not count.
+  const RAW_MUTATION = rawSqlWritePattern(
+    ['invoices', 'invoice_lines'],
+    ['update', 'delete'],
+  );
 
   function sourceFiles(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -492,7 +555,8 @@ describe('source-guard: invoices and their lines are never updated or deleted', 
     return files
       .filter(
         ({ code }) =>
-          MUTATION.test(stripToCode(code)) || RAW_MUTATION.test(code),
+          MUTATION.test(stripToCode(code)) ||
+          RAW_MUTATION.test(stripComments(code)),
       )
       .map(({ name }) => name);
   }
@@ -526,10 +590,20 @@ describe('source-guard: invoices and their lines are never updated or deleted', 
       'await tx.$executeRaw`UPDATE invoices SET total = 0 WHERE id = ${id}`;',
       "await tx.$executeRawUnsafe('DELETE FROM invoice_lines WHERE invoice_id = $1', id);",
       'await tx.$executeRaw`UPDATE "invoices" SET total = 0`;',
+      'await tx.$executeRaw`TRUNCATE invoice_lines`;',
     ];
     for (const code of caught) {
       expect(offenders([{ name: 'x.ts', code }])).toEqual(['x.ts']);
     }
+    // A comment stating the rule is not a write.
+    expect(
+      offenders([
+        {
+          name: 'x.ts',
+          code: '// never UPDATE invoices: the row is a frozen snapshot\nconst a = 1;',
+        },
+      ]),
+    ).toEqual([]);
     const allowed = [
       'await tx.invoice.findUnique({ where: { id } });',
       'await tx.invoice.create({ data });',

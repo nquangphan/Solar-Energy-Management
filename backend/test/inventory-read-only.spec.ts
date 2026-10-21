@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { rawSqlWritePattern } from './util/raw-sql-write';
+import { stripComments } from './util/strip-comments';
 import { stripToCode } from './util/strip-to-code';
 
 /**
@@ -44,8 +46,9 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
   /** Dòng khai trường có tên chứa `reserved` (mọi biến thể: `reserved`, `reservedQty`…). */
   const TRUONG_RESERVED = /^\s*\w*reserved\w*\s/im;
 
+  /** Every Prisma write form (`*AndReturn` included); whitespace allowed after the dot. */
   const LENH_GHI =
-    /\.(?:create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw|\$queryRaw|\$transaction/;
+    /\.\s*(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?)\s*\(|\$executeRaw|\$queryRaw|\$transaction/;
 
   function fileTs(dir: string): string[] {
     return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
@@ -106,7 +109,7 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
     const TX_INTERACTIVE = /\$transaction\(\s*async\b/;
     /** Ghi thẳng trên client gốc — tức là ngoài transaction đang giữ khoá. */
     const GHI_NGOAI_TX =
-      /this\.prisma\.\w+\.(?:create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(|this\.prisma\.\$(?:executeRaw|queryRaw)/;
+      /this\s*\.\s*prisma\s*\.\s*\w+\s*\.\s*(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?)\s*\(|this\s*\.\s*prisma\s*\.\s*\$(?:executeRaw|queryRaw)/;
 
     it('chống guard rỗng: tập quét gồm cả đường đọc và mọi file được phép ghi', () => {
       const files = fileTs(INVENTORY);
@@ -166,6 +169,26 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
       expect(
         GHI_NGOAI_TX.test('await this.prisma.$transaction(async (tx) =>'),
       ).toBe(false);
+    });
+
+    it('catches the syntax variants: *AndReturn writes, a prettier chain outside the tx', () => {
+      for (const code of [
+        'await tx.stockItem.updateManyAndReturn({ where: {}, data: {} });',
+        'await tx.stockMovement.createManyAndReturn({ data: [] });',
+      ]) {
+        expect(LENH_GHI.test(stripToCode(code))).toBe(true);
+      }
+      for (const code of [
+        'await this.prisma\n      .stockItem\n      .update({ where: {} });',
+        'await this.prisma.stockItem.updateManyAndReturn({ where: {} });',
+        'await this.prisma\n      .$executeRaw`UPDATE stock_items SET on_hand = 0`;',
+      ]) {
+        expect(GHI_NGOAI_TX.test(stripToCode(code))).toBe(true);
+      }
+      // A method merely named like a write is not a Prisma write.
+      expect(LENH_GHI.test(stripToCode('this.createVoucherView(v);'))).toBe(
+        false,
+      );
     });
 
     it('read-path detector: excuses the RepeatableRead array tx, catches every other variant', () => {
@@ -236,7 +259,24 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
 
   describe('(c) src/inventory không ghi aggregate đơn', () => {
     const GHI_DON =
-      /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(/;
+      /\.\s*(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\s*\.\s*(?:create(?:Many(?:AndReturn)?)?|update(?:Many(?:AndReturn)?)?|upsert|delete(?:Many)?)\s*\(/;
+
+    /** Raw SQL lives in literals that `stripToCode` empties: matched on comment-stripped source. */
+    const RAW_GHI_DON = rawSqlWritePattern([
+      'orders',
+      'order_versions',
+      'order_line_items',
+      'discount_approvals',
+      'attachments',
+      'quote_exports',
+    ]);
+
+    function ghiDon(source: string): boolean {
+      return (
+        GHI_DON.test(stripToCode(source)) ||
+        RAW_GHI_DON.test(stripComments(source))
+      );
+    }
 
     it('chống guard rỗng: quét được file ghi tồn', () => {
       expect(
@@ -253,9 +293,27 @@ describe('source-guard: tồn kho chỉ ghi dưới khoá, không cột reserved
       expect(GHI_DON.test('await tx.stockVoucher.create({})')).toBe(false);
     });
 
+    it('catches the syntax variants: prettier chain, *AndReturn, raw SQL; ignores a comment', () => {
+      for (const code of [
+        'await tx\n      .order\n      .update({ where: {}, data: {} });',
+        'await tx.orderLineItem.updateManyAndReturn({ data: {} });',
+        'await tx.$executeRaw`UPDATE orders SET status = ${s} WHERE id = ${id}`;',
+        'await tx.$executeRawUnsafe(\'DELETE FROM "order_line_items" WHERE id = $1\', id);',
+      ]) {
+        expect(ghiDon(code)).toBe(true);
+      }
+      for (const code of [
+        'await tx.$queryRaw`SELECT id FROM orders WHERE id = ${id} FOR UPDATE`;',
+        '// never UPDATE orders from inventory',
+        'await tx.$executeRaw`UPDATE stock_items SET on_hand = 0`;',
+      ]) {
+        expect(ghiDon(code)).toBe(false);
+      }
+    });
+
     it('mọi file src/inventory: không lệnh ghi đơn', () => {
       const viPham = fileTs(INVENTORY).filter((f) =>
-        GHI_DON.test(stripToCode(readFileSync(f, 'utf8'))),
+        ghiDon(readFileSync(f, 'utf8')),
       );
       expect(viPham).toEqual([]);
     });

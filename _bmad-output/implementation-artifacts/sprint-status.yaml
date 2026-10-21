@@ -337,13 +337,13 @@ action_items:
   - epic: 7
     action: "G-3: Sửa TD-50 — ContractsService.generate 409 khi trạng thái đổi dưới khoá từ trạng thái chưa đóng băng (khuôn invoices.service.ts 7.4)"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Căn cứ: 7.4 review #1; contracts.service.ts chỉ kiểm currentVersionId và in view.lineItems đọc trước khoá. Tiêu chí: ca DB forced-interleaving (holder sửa qty + chốt dưới khoá ⇒ 409, 0 dòng contracts); mutant gỡ kiểm ⇒ lane DB ĐỎ. || 2026-10-22 (correct-course): xếp LÔ CHUẨN BỊ Epic 10, trước commit đầu story 10.1 — không thành story."
+    status: done
+    resolution: "Căn cứ: 7.4 review #1; contracts.service.ts chỉ kiểm currentVersionId và in view.lineItems đọc trước khoá. Tiêu chí: ca DB forced-interleaving (holder sửa qty + chốt dưới khoá ⇒ 409, 0 dòng contracts); mutant gỡ kiểm ⇒ lane DB ĐỎ. || 2026-10-22 (correct-course): xếp LÔ CHUẨN BỊ Epic 10, trước commit đầu story 10.1 — không thành story. || 2026-10-22 DONE: generate 409 ORDER_CHANGED_MESSAGE khi status đổi dưới khoá từ trạng thái chưa đóng băng (khuôn invoices); +1 ca unit, +1 ca DB holder sửa qty + chốt ⇒ 409, 0 dòng; mutant gỡ khối kiểm ⇒ đúng ca DB đó ĐỎ, khôi phục cmp sạch."
   - epic: 7
     action: "G-4: Rà 10 guard no-* theo danh sách biến thể (khoảng trắng/xuống dòng quanh dấu chấm, *OrThrow, *AndReturn, SQL thô trong template literal)"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Căn cứ: 4 memory guard-mù trong Epic 7 (7.2 prettier chain, 7.3 money-fields /đồng/, 7.4 nhãn trong comment, 7.5 OrThrow/AndReturn/raw/nhãn lồng). Tiêu chí: mỗi guard chạm lời gọi Prisma có ca 'catches…' cho từng biến thể áp dụng được; ưu tiên guard chạm accounts."
+    status: done
+    resolution: "Căn cứ: 4 memory guard-mù trong Epic 7 (7.2 prettier chain, 7.3 money-fields /đồng/, 7.4 nhãn trong comment, 7.5 OrThrow/AndReturn/raw/nhãn lồng). Tiêu chí: mỗi guard chạm lời gọi Prisma có ca 'catches…' cho từng biến thể áp dụng được; ưu tiên guard chạm accounts. || 2026-10-22 DONE: 7 guard chạm Prisma có ca catches… (xuống dòng quanh dấu chấm, *AndReturn/*OrThrow, SQL thô qua helper test/util/raw-sql-write.ts trên stripComments, nhãn trong comment); matcher lọt đã sửa ở audit-log (updateManyAndReturn), order-status (chain/AndReturn/raw), unscoped-order-write (chain/AndReturn/OrThrow/queryRawUnsafe), inventory (chain/AndReturn/raw); mutant mỗi nửa mới ⇒ ĐỎ. Không lời gọi thật nào trong src bị lộ. Chưa có guard nào canh ghi accounts — đề xuất guard mới ở Epic 8."
   - epic: 7
     action: "G-5: Luật — quyết định tuyên bố giữa story phải cập nhật epics.md/spine trong CÙNG commit story"
     owner: "Amelia (Dev) + Trợ Lý"

@@ -39,6 +39,15 @@ describe('source-guard: chỉ PrismaService chạm DB (AD-1)', () => {
     expect(FORBIDDEN.test('const c = new PrismaClient({});')).toBe(true);
   });
 
+  it('catches a construction broken across lines, ignores one mentioned in a comment', () => {
+    expect(
+      FORBIDDEN.test(stripToCode('const c = new\n  PrismaClient(\n  {},\n);')),
+    ).toBe(true);
+    expect(
+      FORBIDDEN.test(stripToCode('// never call new PrismaClient() here')),
+    ).toBe(false);
+  });
+
   it('không có `new PrismaClient(` trong src/ (Prisma là điểm truy cập DUY NHẤT)', () => {
     const offenders = collectTsFiles(SRC_DIR).filter((file) =>
       FORBIDDEN.test(stripToCode(readFileSync(file, 'utf8'))),
