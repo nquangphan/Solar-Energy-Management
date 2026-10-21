@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-22 (dev-story 7.5 → review)
+# last_updated: 2026-10-22 (retrospective epic 7)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-22 (dev-story 7.5 → review)
+last_updated: 2026-10-22 (retrospective epic 7)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -95,7 +95,7 @@ development_status:
   7-3-sinh-hop-dong-thi-cong-mua-ban-pdf: done
   7-4-tao-hoa-don-tu-don-luu-db: done
   7-5-xem-xuat-hoa-don-pdf: done
-  epic-7-retrospective: optional
+  epic-7-retrospective: done
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
@@ -279,8 +279,8 @@ action_items:
   - epic: 6
     action: "F-2: Correct-course chèn epic 'Nối dây client' (TD-38: 0 adapter HTTP, 0 client sinh từ OpenAPI, web không router, mobile không app shell) + thống nhất contract tiếng Anh (TD-39)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Mặc định tuyên bố trước: chạy bmad-correct-course SAU Epic 7, TRƯỚC Epic 8; đổi route tiếng Việt sang tiếng Anh trước khi client thật dùng chúng. Im lặng ⇒ mặc định thành quyết định."
+    status: in-progress
+    resolution: "Mặc định tuyên bố trước: chạy bmad-correct-course SAU Epic 7, TRƯỚC Epic 8; đổi route tiếng Việt sang tiếng Anh trước khi client thật dùng chúng. Im lặng ⇒ mặc định thành quyết định. || 2026-10-22 (retro Epic 7): đến hạn đúng lịch; chuyển thành G-1 trong lô chuẩn bị Epic 8. Epic 7 thêm 3 port (web nay 13 port, 0 fetch)."
   - epic: 6
     action: "F-3: Quyết thứ tự Payment ↔ transition cho 7.2 (TD-40: D12 chặn →hoanthanh ở mọi lane kể cả auto tất toán)"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
@@ -311,3 +311,45 @@ action_items:
     owner: "Đại Ca (Project Lead)"
     status: decided
     resolution: "Mặc định tuyên bố trước = hành vi code hiện tại: giữ dachot→hoanthanh; cho hai nhánh song song; trừ kho ở xong_giao; giữ nút khoá (Epic 9 de-dupe); mo_lai không release; một phiếu trả mỗi phiếu xuất; chưa có lối vào từ màn Đơn. Im lặng ⇒ mặc định thành quyết định. || 2026-10-21: default became decision (= current code behaviour); no code change"
+  # --- Retro Epic 7 (2026-10-22). Cùng cơ chế hai vế: dòng có chủ + trả trong LÔ CHUẨN BỊ
+  # trước commit đầu của story 8.1 (Epic 4: 12/12 · Epic 5 không lô 5,5/8 · Epic 6: 9/9 · Epic 7: 6/8 + 2 hoãn có lịch).
+  - epic: 7
+    action: "G-1: Chạy bmad-correct-course (= F-2): chèn epic 'Nối dây client' (router/composition root web, app shell mobile + android/ios, gen client từ openapi.json thay fake, nối callback theo quyền cho nút Thanh toán/Hợp đồng/Hoá đơn) + đổi route tiếng Việt sang tiếng Anh"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "Tiêu chí: epics.md có epic mới với story đánh số + key trong sprint-status; thứ tự so với Epic 8/9 được ghi. ĐÃ QUYẾT (Đại Ca, 2026-10-21 22:33): chèn TRƯỚC Epic 8; correct-course chạy ngay sau retro Epic 7."
+  - epic: 7
+    action: "G-2: Quyết TD-9 — access token cũ sống ≤15 phút sau đổi mật khẩu/đăng xuất"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "Deactivate đã tức thời (JwtAuthGuard kiểm isActive mỗi request). Mặc định tuyên bố trước: chấp nhận cửa sổ ≤15 phút ở Phase 1, ghi vào CONVENTIONS#Auth. Phải chốt trước 8.3. Im lặng ⇒ mặc định thành quyết định."
+  - epic: 7
+    action: "G-3: Sửa TD-50 — ContractsService.generate 409 khi trạng thái đổi dưới khoá từ trạng thái chưa đóng băng (khuôn invoices.service.ts 7.4)"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: 7.4 review #1; contracts.service.ts chỉ kiểm currentVersionId và in view.lineItems đọc trước khoá. Tiêu chí: ca DB forced-interleaving (holder sửa qty + chốt dưới khoá ⇒ 409, 0 dòng contracts); mutant gỡ kiểm ⇒ lane DB ĐỎ."
+  - epic: 7
+    action: "G-4: Rà 10 guard no-* theo danh sách biến thể (khoảng trắng/xuống dòng quanh dấu chấm, *OrThrow, *AndReturn, SQL thô trong template literal)"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: 4 memory guard-mù trong Epic 7 (7.2 prettier chain, 7.3 money-fields /đồng/, 7.4 nhãn trong comment, 7.5 OrThrow/AndReturn/raw/nhãn lồng). Tiêu chí: mỗi guard chạm lời gọi Prisma có ca 'catches…' cho từng biến thể áp dụng được; ưu tiên guard chạm accounts."
+  - epic: 7
+    action: "G-5: Luật — quyết định tuyên bố giữa story phải cập nhật epics.md/spine trong CÙNG commit story"
+    owner: "Amelia (Dev) + Trợ Lý"
+    status: open
+    resolution: "Căn cứ: 3 quyết định Epic 7 (luật tất toán 7.2, snapshot người bán 7.4, số tiền bằng chữ 7.5) chỉ nằm trong story record tới retro. Tiêu chí: một dòng trong checklist review story-automator hoặc file chỉ dẫn dev Epic 8. Ba quyết định Epic 7 đã đồng bộ trong retro."
+  - epic: 7
+    action: "G-6: 9 câu hỏi sản phẩm Epic 7 (Bên A/B, mở lại khi đã có tiền, khoản điều chỉnh âm, mốc skipped, MST, reset số HĐ theo năm, 1 hoá đơn/bản, COMPANY_INFO báo giá, định nghĩa doanh thu 8.1)"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Mặc định tuyên bố trước = hành vi code: công ty Bên B theo 2 mẫu; lịch khoá + HĐ chặn khi mở lại có tiền; không điều chỉnh âm ở Phase 1 (đưa vào backlog qua G-1); mốc skipped đóng tay; MST không bắt buộc; không reset số theo năm; 1 hoá đơn/bản đơn; báo giá giữ COMPANY_INFO (gộp qua G-1); doanh thu 8.1 = Σ Payment.amount theo paidOn. Im lặng ⇒ mặc định thành quyết định."
+  - epic: 7
+    action: "G-7: Tài liệu vận hành go-live — cấu hình pháp nhân trước chứng từ đầu tiên + Chrome cho Puppeteer"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 7: docs/van-hanh-go-live.md."
+  - epic: 7
+    action: "G-8: Đồng bộ sổ sách + tài liệu lệch code (spine ERD/AD-10/AD-11/module tree, epics.md 7.2–7.5, project-context, backend README, CONVENTIONS)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 7, xem §12 của epic-7-retro-2026-10-22.md."

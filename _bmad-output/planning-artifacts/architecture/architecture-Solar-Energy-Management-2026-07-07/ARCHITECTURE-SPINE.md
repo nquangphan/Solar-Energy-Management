@@ -105,6 +105,7 @@ flowchart TD
 - **Binds:** FR-3, FR-5, FR-11, FR-12, FR-27
 - **Prevents:** sai số float; lệch tổng tiền/VAT/đợt thanh toán.
 - **Rule:** mọi giá trị tiền là **integer đồng** (không thập phân, không float). Tính VAT/tổng bằng số nguyên; làm tròn theo quy tắc cố định ở Domain.
+- **Kiểu cột (ghi lại Epic 7, 2026-10-22):** phần lớn cột tiền là `Int` (INT4, trần ~2,147 tỉ): dòng đơn, `installments.amount`, `payments.amount`. Số do **server tự tính** (đợt theo %) không đi qua DTO nên domain phải tự chặn: `MAX_INSTALLMENT_AMOUNT` = 2.000.000.000 ⇒ 400 `amountTooLarge`, không bao giờ để driver ném 500 (Story 7.1). Tổng và thành tiền dòng của **hoá đơn** là `BigInt` (`invoices.subtotal/discount_amount/vat_amount/total`, `invoice_lines.amount`); mỗi service đổi `bigint → number` ở **một** điểm (`toView`/`toDetail`).
 
 ### AD-11 — State machine tường minh: enum + bảng transition `[ADOPTED]`
 
@@ -113,6 +114,8 @@ flowchart TD
 - **Rule:** trạng thái là enum tường minh; transition hợp lệ khai báo trong một **allowed-transition table** gate theo cờ phạm vi + permission. Engine là **một cặp hai nửa, một hợp đồng**: `evaluateTransition()` — hàm **thuần** ở `orders/domain/allowed-transition.ts`, **nơi duy nhất** đánh giá guard permission + cờ phạm vi — và executor `OrdersService.applyTransition(tx, {order, event, actorPermissions, actorAccountId, sentinel, occurredAt}) → StatusChanged` ở tầng Application (Domain không được phụ thuộc Infrastructure nên một hàm ở `domain/` không thể tự ghi DB). Cặp này là **con đường code DUY NHẤT** ghi `Order.status`; `payments/` và `inventory/` **gọi vào đây** qua `OrdersService.chuyenTrangThaiTuDong()` (không bao giờ ghi status trực tiếp). Từ chối ném `AppException` 403 (thiếu quyền) / 409 (ngoài bảng hoặc sai cờ), không trả rejection object. Engine **KHÔNG** gọi Audit trực tiếp — nó phát `StatusChanged` và `AuditSubscriber` ghi log (AD-18). Auto-transition và manual transition dùng **chung một entry point**; auto-transition là hệ quả của sự kiện nghiệp vụ, đi qua cùng bảng này.
 - **Thi hành:** source-guard `backend/test/no-order-status-write-outside-transition.spec.ts` quét toàn `src/` — không call-site nào ngoài executor được ghi `Order.status` (Story 5.1).
 - **Payment ↔ transition (quyết 2026-10-21, F-3 / TD-40):** `Payment` insert và transition tự động (`chuyenTrangThaiTuDong` / `applyTransition`) chạy trong **MỘT transaction** dưới khoá dòng đơn (`SELECT ... FOR UPDATE` trên `orders` trước tiên). Nếu transition bị chặn 409 (vd đóng đơn khi chưa xuất đủ kho — D12/AD-19), `Payment` **VẪN được commit**; transition bị bỏ qua, ghi log và publish event nghiệp vụ. Tiền khách đã trả không bao giờ bị rollback vì một gate vận hành.
+  - **Hiện thực (Story 7.2):** cửa vào là `OrdersService.autoTransitionInTx(tx, …)`: chạy trong tx của caller, không mở tx, không publish, không bắt lỗi. `PaymentsService` nuốt **403 và 409** thành `skipped` (log warn + ghi trong event); mọi lỗi khác rollback cả khoản thu. Idempotency key được tra **trước** cổng trạng thái, dưới khoá.
+  - **Luật mốc (quyết khi review 7.2, 2026-10-22):** `du_coc` bắn khi lần ghi làm đợt cọc đủ tiền. `hoan_thanh` bắn khi lần ghi làm **mọi** đợt đủ tiền **và** Σ đã thu ≥ tổng đơn, bất kể đợt vừa ghi là đợt nào (cạnh lên: không lần ghi nào sau đó bắn lại). Lịch 1 đợt chỉ bắn `du_coc`. Nếu cả hai mốc đạt trong một lần ghi thì thử `du_coc` rồi `hoan_thanh` trong cùng tx, và `hoan_thanh` chỉ được thử khi `du_coc` đã `applied`. Mốc `skipped` không tự bắn lại; người vận hành đóng đơn tay.
 
 ### AD-12 — API REST + OpenAPI, Auth JWT access+refresh `[ASSUMPTION]`
 
@@ -233,11 +236,16 @@ erDiagram
     ORDER ||--o| ORDER_VERSION : "current version"
     ORDER ||--o| CUSTOMER_SOURCE : "sourceId snapshot"
     ORDER_VERSION ||--o{ ORDER_LINE_ITEM : owns
-    ORDER ||--|| PAYMENT_SCHEDULE : has
+    ORDER ||--o| PAYMENT_SCHEDULE : has
     PAYMENT_SCHEDULE ||--o{ INSTALLMENT : "split into"
     INSTALLMENT ||--o{ PAYMENT : "recorded by"
+    ORDER ||--o{ PAYMENT : "paid by"
     ORDER ||--o{ CONTRACT : generates
+    ORDER_VERSION ||--o{ CONTRACT : "printed from"
     ORDER ||--o{ INVOICE : generates
+    ORDER_VERSION ||--o| INVOICE : "invoiced once"
+    INVOICE ||--o{ INVOICE_LINE : "snapshots"
+    INVOICE ||--o| INVOICE_PDF : "rendered once"
     ORDER ||--o{ DISCOUNT_APPROVAL : requests
     ORDER ||--o{ ATTACHMENT : has
     ORDER ||--o{ STOCK_VOUCHER : "issue for"
@@ -376,6 +384,72 @@ erDiagram
         string type "reserve | release | xuat; UNIQUE (orderVersionId, stockItemId, type)"
         datetime createdAt
     }
+    PAYMENT_SCHEDULE {
+        uuid id PK
+        uuid orderId FK "UNIQUE - một đơn một lịch"
+    }
+    INSTALLMENT {
+        uuid id PK
+        uuid scheduleId FK
+        int seq "UNIQUE (scheduleId, seq)"
+        int percent "nullable, 1..100 - XOR với số tiền gõ tay"
+        int amount "đã phân giải, integer đồng; đợt đầu > 0"
+        string conditionNote
+        string milestone "nullable - coc | tat_toan"
+    }
+    PAYMENT {
+        uuid id PK
+        uuid orderId FK
+        uuid installmentId FK
+        int amount "> 0 (CHECK)"
+        date paidOn "ngày VN"
+        string method "bank_transfer | cash (CHECK)"
+        string idempotencyKey "UNIQUE - khoá client"
+        uuid recordedByAccountId FK
+        datetime createdAt "append-only"
+    }
+    CONTRACT {
+        uuid id PK
+        int seq "UNIQUE SERIAL - nextval dưới khoá đơn"
+        uuid orderId FK
+        uuid orderVersionId FK
+        string type "construction | sale (suy từ scopeThiCong, CHECK)"
+        string contractNo "UNIQUE - HĐTC/HĐMB-{seq}/{yyyy}"
+        string pdfKey "R2, mỗi bản một key"
+        int pdfSize
+        uuid createdByAccountId FK
+        datetime createdAt "append-only"
+    }
+    INVOICE {
+        uuid id PK
+        int seq "UNIQUE SERIAL"
+        string invoiceNo "UNIQUE - HD-{yyyy}-{NNNN}, seq toàn cục"
+        uuid orderId FK
+        uuid orderVersionId FK "UNIQUE - một bản đơn một hoá đơn"
+        string customerSdt "snapshot khách: tên, MST, địa chỉ"
+        string sellerLegalName "snapshot 7 trường pháp nhân company.* lúc lập"
+        int vatRate
+        bigint subtotal
+        bigint discountAmount
+        bigint vatAmount
+        bigint total
+        datetime issuedAt
+    }
+    INVOICE_LINE {
+        uuid id PK
+        uuid invoiceId FK
+        int displayOrder "UNIQUE (invoiceId, displayOrder)"
+        string name
+        int qty "> 0 (CHECK)"
+        int unitPrice
+        bigint amount
+    }
+    INVOICE_PDF {
+        uuid id PK
+        uuid invoiceId FK "UNIQUE - render một lần"
+        string pdfKey "invoices/{orderId}/{invoiceId}.pdf"
+        int pdfSize "> 0 (CHECK)"
+    }
 ```
 
 ### Order state machine (gate theo cờ phạm vi)
@@ -440,7 +514,7 @@ flowchart LR
 ```text
 backend/
   src/
-    common/         # error envelope, exception filter, interceptors, ValidationPipe (AD-5)
+    common/         # error envelope, exception filter, interceptors, ValidationPipe (AD-5); money/amount-in-words (dùng chung HĐ + hoá đơn)
     events/         # EventBus port (abstract kiêm DI token) + InProcessEventBus, @Global (AD-18)
     auth/           # JWT access+refresh, /me, guard quyền + decorator, reset/đổi mật khẩu (AD-4, AD-12)
     accounts/       # Account, Permission registry (SSOT), Role preset, quyền per-account (AD-8, AD-17)
@@ -448,10 +522,10 @@ backend/
     catalog/        # Product + tiered price (FR-14, FR-15)
     orders/         # Order hợp nhất, line items, versions, state machine, snapshot, chiết khấu (DiscountApproval), ảnh đính kèm (AD-6, AD-7, AD-11, AD-3, FR-18, FR-24)
     payments/       # PaymentSchedule, Installment, Payment; auto-transition trigger (FR-11, FR-12, FR-8)
-    contracts/      # sinh HĐ Thi công / Mua bán → PDF (FR-13)
-    invoices/       # Invoice (DB + PDF) (FR-27, FR-28)
+    contracts/      # sinh HĐ Thi công / Mua bán → PDF (FR-13); render qua QuoteRendererPort do orders/ export
+    invoices/       # Invoice + InvoiceLine (snapshot) + InvoicePdf (FR-27, FR-28); render qua QuoteRendererPort
     inventory/      # StockItem, StockVoucher(+lines), chặn xuất quá tồn (FR-25, FR-26)
-    settings/       # SystemSetting — VAT mặc định, thông tin công ty
+    settings/       # SystemSetting — VAT mặc định, pháp nhân công ty `company.*` (7 key, seed rỗng; in trên HĐ, snapshot vào hoá đơn)
     feature-flags/  # FeatureFlag — bấm cờ, gate bởi `system.feature_flags` (AD-14)
     health/         # health check
     openapi/        # openapi-document.ts — spec là build artifact sinh từ code (AD-12)
@@ -491,7 +565,7 @@ backend/
 
 ## Deferred
 
-- ~~**Danh sách tên trạng thái cuối cùng**~~ — **ĐÃ CHỐT ở Epic 4/5:** 10 khoá chính tắc trong `backend/src/orders/domain/order-status.ts` (khoá thi công là `thicong`, KHÔNG phải `dangthicong`); nhãn verbatim trong `web/src/design-system/components/StatusChip.tsx`. Bước **"Lên lịch thi công" đã bị BỎ** khỏi vòng đời (Story 5.8) — chuỗi thật là Đang thi công → Nghiệm thu. Mapping "đợt thanh toán → trạng thái" là cạnh `du_coc` (`dachot → dacoc`) trong `orders/domain/allowed-transition.ts` (bảng 17 dòng — Story 6.1 thêm cạnh khách tự lấy `dacoc → dagiao`), hình dạng khai ở `orders/domain/auto-transition-map.ts`; **giá trị** cấu hình lịch thanh toán vẫn thuộc Story 7.1.
+- ~~**Danh sách tên trạng thái cuối cùng**~~ — **ĐÃ CHỐT ở Epic 4/5:** 10 khoá chính tắc trong `backend/src/orders/domain/order-status.ts` (khoá thi công là `thicong`, KHÔNG phải `dangthicong`); nhãn verbatim trong `web/src/design-system/components/StatusChip.tsx`. Bước **"Lên lịch thi công" đã bị BỎ** khỏi vòng đời (Story 5.8) — chuỗi thật là Đang thi công → Nghiệm thu. Mapping "đợt thanh toán → trạng thái" là cạnh `du_coc` (`dachot → dacoc`) trong `orders/domain/allowed-transition.ts` (bảng 17 dòng — Story 6.1 thêm cạnh khách tự lấy `dacoc → dagiao`), hình dạng khai ở `orders/domain/auto-transition-map.ts`; lịch thanh toán gán mốc cho đợt (Story 7.1) và luật bắn mốc ở AD-11 (Story 7.2).
 - **Giới hạn định dạng/dung lượng ảnh** — nơi lưu đã chốt (R2, AD-3); giới hạn kích thước/định dạng + nén để lại cho implementation (FR-24).
 - **CI/CD & môi trường triển khai** — VPS provider, pipeline, container/orchestration cụ thể chưa quyết (solo dev, ưu tiên đơn giản).
 - **Monitoring / backup** — chiến lược backup Postgres, retention R2, alerting để lại cho vận hành.

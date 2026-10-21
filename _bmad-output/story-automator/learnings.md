@@ -18,3 +18,13 @@
 - Epics 2+ include backend (NestJS/Prisma), auth, pricing, state machine — higher real complexity. Consider Codex/opus for the genuinely Medium/High stories, and keep tests mandatory on financial/permission paths per project-context.md.
 - Keep the `/ck:code-review`-before-done gate; it caught and fixed issues especially on 1.6 and 1.10 (multi-cycle).
 - `all-claude` preset is saved — reuse via `[L]oad saved` to skip agent config next run.
+
+## Epic 7 — Thanh toán, Hợp đồng & Hoá đơn (2026-10-21 → 2026-10-22)
+
+**Result:** 5/5 stories done + retro, ~4h40m, 0 retries. Orchestrator re-ran 5 lanes + lock/scope mutations after each review (all red as expected).
+
+### Patterns
+- `build-cmd ... [extra_instruction]` reaches only the review prompt; decisions for dev must be written into the story's Dev Notes after create (done for 7.4 seller snapshot, 7.5 amount in words).
+- Waiting by `tmux capture-pane -S -15 | grep "done HH:MM"` is reliable; checking only the visible pane can miss the line.
+- Commit pathspec: a staged rename (`R  a -> b`) must be split and the source path dropped, or `git add --pathspec-from-file` fails.
+- Retro agent may silently overwrite an owner decision with its own default (G-1 "before Epic 9" vs decided "before Epic 8") — diff retro action items against BOND/decisions before committing.

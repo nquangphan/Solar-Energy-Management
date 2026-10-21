@@ -624,13 +624,14 @@ As a người có quyền ghi nhận thanh toán, I want ghi tiền theo từng 
 - **Given** ghi đủ đợt cọc đầu, **When** xử lý, **Then** gọi `applyTransition()` để Đơn tự sang "Đã cọc" (không ghi status trực tiếp) (FR-8, FR-12, AD-11).
 - **Given** thao tác tiền, **When** retry, **Then** idempotent, không ghi trùng; publish event `DepositRecorded`/`PaymentRecorded` qua EventBus (NFR-1, AD-18).
 - **Given** `Payment` được ghi và transition tự động bị chặn 409 (vd đóng đơn khi chưa xuất đủ kho), **When** xử lý, **Then** `Payment` insert + `chuyenTrangThaiTuDong()`/`applyTransition()` chạy trong MỘT transaction dưới khoá dòng đơn (`SELECT ... FOR UPDATE` trên `orders` trước); `Payment` VẪN commit, transition bị bỏ qua + log + publish event nghiệp vụ, không rollback tiền (F-3, TD-40; [Source: ARCHITECTURE-SPINE AD-11]). Test khoá theo luật F-5 trong `backend/CONVENTIONS.md`.
+- **Given** lần ghi làm **mọi** đợt đủ tiền **và** tổng đã thu ≥ tổng đơn, **When** xử lý, **Then** thử `hoan_thanh` trong cùng tx, bất kể đợt vừa ghi là đợt nào; lịch 1 đợt chỉ bắn `du_coc`; mốc bị từ chối 403/409 thì `skipped`, không tự bắn lại (quyết khi review 7.2, 2026-10-22; [Source: ARCHITECTURE-SPINE AD-11]).
 
 ### Story 7.3: Sinh Hợp đồng Thi công / Mua bán (PDF)
 As a người có quyền sinh hợp đồng, I want sinh HĐ từ Đơn theo loại phù hợp, So that có văn bản ký kết điền sẵn dữ liệu đơn.
 **Acceptance Criteria:**
 - **Given** cờ phạm vi của Đơn, **When** sinh hợp đồng, **Then** Đơn có cờ Thi công → HĐ Thi công; Đơn chỉ Thiết bị → HĐ Mua bán (FR-13).
 - **Given** template tĩnh, **When** sinh, **Then** chỉ điền dữ liệu động (hai bên, danh mục/giá, tổng, lịch thanh toán, tham chiếu số báo giá); điều khoản cố định không sửa theo đơn (FR-13).
-- **Given** thông tin pháp nhân bên A (tên công ty, MST, địa chỉ, người đại diện, chức danh), **When** sinh hợp đồng, **Then** đọc từ `system_settings` (cùng khuôn VAT ở story 4.4), seed rỗng; hợp đồng vẫn xuất được, ô chưa cấu hình hiện "Chưa cấu hình", không bao giờ chặn (F-4).
+- **Given** thông tin pháp nhân công ty (tên công ty, MST, địa chỉ, người đại diện, chức danh; in ở **Bên B**, khách là Bên A, theo đúng hai mẫu thật — Story 7.3), **When** sinh hợp đồng, **Then** đọc từ `system_settings` (cùng khuôn VAT ở story 4.4), seed rỗng; hợp đồng vẫn xuất được, ô chưa cấu hình hiện "Chưa cấu hình", không bao giờ chặn (F-4).
 - **Given** điều khoản tĩnh, **When** dựng template, **Then** trích từ hai mẫu có sẵn: HĐ Thi công [Source: `docs/1. Khảo sát lắp đặt/HĐ THI CÔNG CT .docx`], HĐ Mua bán [Source: `docs/2. Thương mại/HDMB CT QTS l2.pdf`].
 - **Given** file PDF, **When** lưu, **Then** binary ở R2, DB lưu metadata + object key; entity `Contract` gắn `orderId`; sinh hợp đồng ghi Audit (FR-13, AD-3).
 
@@ -639,12 +640,14 @@ As a người có quyền tạo hoá đơn, I want tạo Hoá đơn từ Đơn, 
 **Acceptance Criteria:**
 - **Given** một Đơn, **When** tạo Hoá đơn, **Then** entity `Invoice` lấy khách hàng (MST), các Dòng, VAT, tổng tiền từ Đơn; lưu số hoá đơn nội bộ + ngày + link Đơn (FR-27).
 - **Given** hoá đơn tạo, **When** lưu, **Then** ghi Audit qua event; tiền là integer đồng (FR-27, AD-10, AD-18).
+- **Given** thông tin pháp nhân công ty trong `system_settings`, **When** lập hoá đơn, **Then** chép 7 trường người bán vào hoá đơn (snapshot) trong cùng tx dưới khoá dòng đơn; sửa settings sau đó không đổi hoá đơn đã lập; trường trống chép trống, không chặn (quyết 2026-10-22, Story 7.4).
 
 ### Story 7.5: Xem & xuất Hoá đơn PDF
 As a người có quyền, I want xem lại và xuất PDF Hoá đơn, So that in/gửi hoá đơn khi cần.
 **Acceptance Criteria:**
 - **Given** một Hoá đơn đã tạo, **When** xem, **Then** hiển thị số, ngày, tổng tiền, gắn đúng Đơn (FR-28).
 - **Given** hoá đơn, **When** xuất, **Then** tạo PDF, binary ở R2, chia sẻ/download tương tự báo giá (FR-28, AD-3).
+- **Given** PDF hoá đơn, **When** render, **Then** in "Số tiền viết bằng chữ" dưới Tổng cộng (helper dùng chung `backend/src/common/money/amount-in-words.ts`); PDF render **một lần** dưới khoá dòng hoá đơn, lần xuất sau trả file đã lưu (quyết 2026-10-22, Story 7.5).
 
 ## Epic 8: Quản trị — Dashboard, Phân quyền & Audit
 _Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role) + form account; màn xem Audit log (chỉ Super Admin). Ghi audit là cross-cutting, đã emit ở E3–E7. FR-16,17,18,19,20._
