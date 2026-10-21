@@ -82,7 +82,8 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 ### Development Workflow
 
 - Theo `epics.md` + `sprint-status.yaml`. **Build-order:** Design System (Epic 1) → Nền tảng + EventBus port (Epic 2) → feature (E3+). Mỗi story tạo/sửa **CHỈ** entity/file nó cần; **không phụ thuộc story sau**.
-- Commit **conventional**, không tham chiếu AI. **Không commit secret/.env/khoá**.
+- Commit **conventional, viết bằng tiếng Anh**, không tham chiếu AI. **Không commit secret/.env/khoá**.
+- **Ngôn ngữ (Đại Ca chốt 2026-10-21):** mọi thứ thuộc về code viết bằng **tiếng Anh**: tên biến/hàm/class/file, comment, docstring, tên test (`describe`/`it`), log, commit message. **Chỉ chuỗi hiển thị cho người dùng** (nhãn UI, thông báo lỗi trả về client, nội dung thông báo) dùng **tiếng Việt**. **Contract API mới** (route, field DTO/OpenAPI, tên method port web/mobile, mã lỗi field) cũng tiếng Anh; contract cũ tiếng Việt giữ tới khi refactor riêng. Áp dụng cho code MỚI và code đang sửa; KHÔNG đổi tên hàng loạt symbol tiếng Việt có sẵn trong lúc làm story (đổi tên cũ là một việc refactor riêng). Tài liệu dự án (story, plan, docs/) vẫn tiếng Việt.
 
 ### Critical Don't-Miss (gotchas)
 
