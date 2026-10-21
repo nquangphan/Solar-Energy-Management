@@ -22,6 +22,9 @@ export 'inventory_port.dart';
 // Stock-voucher seam (Story 6.3): the only write path for `onHand`. The backend
 // owns the voucher code, the weighted-average cost and the stock-out refusal.
 export 'stock_vouchers_port.dart';
+// Payment-schedule seam (Story 7.1): the backend owns every amount and the
+// totals verdict; the client sends only what the user typed.
+export 'payments_port.dart';
 export 'app_session.dart';
 export 'app_session_gating_example.dart';
 
@@ -35,3 +38,4 @@ export 'fake_catalog_port.dart';
 export 'fake_warranty_port.dart';
 export 'fake_inventory_port.dart';
 export 'fake_stock_vouchers_port.dart';
+export 'fake_payments_port.dart';

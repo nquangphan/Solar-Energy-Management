@@ -12,6 +12,7 @@ import { FeatureFlagsModule } from './feature-flags/feature-flags.module';
 import { OrdersModule } from './orders/orders.module';
 import { SettingsModule } from './settings/settings.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { PaymentsModule } from './payments/payments.module';
 
 /**
  * Root module.
@@ -45,6 +46,9 @@ import { InventoryModule } from './inventory/inventory.module';
  * suất VAT. `OrdersModule` import nó để resolve rate cho `preview-total`.
  *
  * Story 6.2 — `InventoryModule`: tồn kho hai con số `onHand` + `reserved` (AD-19), đường đọc.
+ *
+ * Story 7.1 — `PaymentsModule`: payment schedule of an order (FR-11), served as
+ * `/orders/{id}/payment-schedule`; it imports `OrdersModule`, never the other way round.
  */
 @Module({
   imports: [
@@ -61,6 +65,7 @@ import { InventoryModule } from './inventory/inventory.module';
     OrdersModule,
     SettingsModule,
     InventoryModule,
+    PaymentsModule,
   ],
 })
 export class AppModule {}

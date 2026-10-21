@@ -252,15 +252,28 @@ test('the not-found state is distinct from the load-error state (AC-13, UX-DR-19
   );
 });
 
-// (e.3) EXACTLY THREE TABS. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — an empty
-// tab promises the user something nobody built. Ảnh LEFT the forbidden list in
-// Story 5.6: that story shipped the panel the tab opens, so the tab is now real.
-// The rule did not weaken — the set of shipped surfaces grew.
+// (e.3) EXACTLY THREE TABS. Hợp đồng/Hoá đơn are Epic 7 — an empty tab promises
+// the user something nobody built. Ảnh LEFT the forbidden list in Story 5.6: that
+// story shipped the panel the tab opens, so the tab is now real.
+// "Thanh toán" left the RAW-TEXT list in Story 7.1: the payment schedule shipped
+// as its own screen reached by an action button — but a Thanh toán TAB is still
+// forbidden (the full tab needs payment recording too), so the tab list itself
+// is checked for it. The rule did not weaken — the set of shipped surfaces grew.
 test('exactly the three owned tabs render — no placeholder tabs for future stories', () => {
   // Stripped code, not raw text: both screens explain in a comment WHICH tabs
   // they deliberately do not render, and that explanation is worth keeping.
+  const tabLists = [
+    ['web:detail', webCode, /const TABS = \[([\s\S]*?)\];/],
+    ['mobile:detail', mobileCode, /_kTabs = <AppTabItem>\[([\s\S]*?)\];/],
+  ];
+  for (const [name, src, re] of tabLists) {
+    const m = re.exec(src);
+    assert.ok(m !== null && m[1].includes('Ảnh'), `${name}: the tab list must be found (guard not blind)`);
+    assert.ok(!m[1].includes('Thanh toán'), `${name} must not render a "Thanh toán" tab — payment recording owns it`);
+    assert.equal((m[1].match(/label:/g) ?? []).length, 3, `${name} must render exactly three tabs`);
+  }
   for (const [name, src] of allCode) {
-    for (const notYet of ['Thanh toán', 'Hợp đồng', 'Hoá đơn', 'HĐ & HĐơn']) {
+    for (const notYet of ['Hợp đồng', 'Hoá đơn', 'HĐ & HĐơn']) {
       assert.ok(!src.includes(notYet), `${name} must not render a "${notYet}" tab — that story owns it`);
     }
     // Positive assertion: the Ảnh tab must ACTUALLY be there on both platforms.
@@ -337,8 +350,23 @@ test('the cancel button is gated on coTheHuy, NOT nested in a buocKeTiep conditi
   );
   assert.match(
     mobileCode,
-    /\|\|\s*_coTheHuy\)\s*\.\.\.<Widget>\[/,
+    /\|\|\s*_coTheHuy\s*(?:\)\s*\.\.\.<Widget>\[|\|\|)/,
     'the mobile action block must also open on _coTheHuy',
+  );
+});
+
+// (e.6) THE "Thanh toán" BUTTON (Story 7.1) renders ONLY when the caller passes
+// the callback — same rule as "Chuyển trạng thái": no button to nowhere.
+test('the "Thanh toán" button is gated on the onOpenPaymentSchedule callback', () => {
+  const webBtn = webCode.slice(0, webCode.indexOf('>Thanh toán<'));
+  assert.ok(webCode.includes('>Thanh toán<'), 'the web detail must render the "Thanh toán" button');
+  assert.match(webBtn.slice(-200), /onOpenPaymentSchedule\s*&&/, 'web: directly under `onOpenPaymentSchedule &&`');
+  const mobBtn = mobileCode.slice(0, mobileCode.indexOf("'Thanh toán'"));
+  assert.ok(mobileCode.includes("'Thanh toán'"), 'the mobile detail must render the "Thanh toán" button');
+  assert.match(
+    mobBtn.slice(-250),
+    /if\s*\(widget\.onOpenPaymentSchedule != null\)/,
+    'mobile: directly under `if (widget.onOpenPaymentSchedule != null)`',
   );
 });
 

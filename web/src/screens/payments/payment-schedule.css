@@ -1,0 +1,72 @@
+/* hand-authored — screen-local layout for Lịch thanh toán (Story 7.1).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class — this file invents no palette (AD-13). */
+
+.ps-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.ps-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.ps-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-22);
+}
+
+.ps-total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.ps-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.ps-templates,
+.ps-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.ps-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 1.5px solid var(--line);
+  background: var(--surface);
+}
+
+.ps-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.ps-spacer {
+  flex: 1;
+}
+
+.ps-row-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 2fr;
+  gap: var(--space-8);
+}
+
+.ps-error {
+  color: var(--danger);
+}

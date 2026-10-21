@@ -66,8 +66,9 @@ const String _kTabThongTin = 'thong-tin';
 const String _kTabLichSu = 'lich-su';
 const String _kTabAnh = 'anh';
 
-/// Exactly three tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — an empty tab
-/// promises the user something nobody built. Ảnh shipped in Story 5.6.
+/// Exactly three tabs. A full Thanh toán tab needs recording payments too
+/// (story 7.2); until then the payment schedule is one optional action button
+/// ("Thanh toán"), not an empty tab promising something nobody built. Ảnh shipped in Story 5.6.
 const List<AppTabItem> _kTabs = <AppTabItem>[
   AppTabItem(key: _kTabThongTin, label: 'Thông tin'),
   AppTabItem(key: _kTabLichSu, label: 'Lịch sử update'),
@@ -85,6 +86,7 @@ class OrderDetailScreen extends StatefulWidget {
     required this.orderId,
     this.onBack,
     this.onChangeStatus,
+    this.onOpenPaymentSchedule,
     this.pick,
     this.perms = const <PermissionKey>{},
   });
@@ -95,6 +97,9 @@ class OrderDetailScreen extends StatefulWidget {
 
   /// Opens the status-change screen (Story 5.5). Null = the button never renders.
   final VoidCallback? onChangeStatus;
+
+  /// Opens the payment-schedule screen (Story 7.1). Null = the button never renders.
+  final VoidCallback? onOpenPaymentSchedule;
 
   /// Injectable picker for the Ảnh tab (Story 5.6) — widget tests run without a
   /// platform channel, so the seam has to reach the shipped picker.
@@ -381,7 +386,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           children: <Widget>[
             _stepper(),
             if ((_buocKeTiep.isNotEmpty && widget.onChangeStatus != null) ||
-                _coTheHuy) ...<Widget>[
+                _coTheHuy ||
+                widget.onOpenPaymentSchedule != null) ...<Widget>[
               const SizedBox(height: AppTokens.space12),
               // `Wrap`, not `Row`: the two labels together overflow the phone
               // frame at large text scales, and a RenderFlex overflow is the
@@ -395,6 +401,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       label: 'Chuyển trạng thái',
                       variant: AppButtonVariant.primary,
                       onPressed: widget.onChangeStatus,
+                    ),
+                  if (widget.onOpenPaymentSchedule != null)
+                    AppButton(
+                      label: 'Thanh toán',
+                      onPressed: widget.onOpenPaymentSchedule,
                     ),
                   if (_coTheHuy)
                     AppButton(

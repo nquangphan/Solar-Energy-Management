@@ -4301,6 +4301,154 @@
           "inventory"
         ]
       }
+    },
+    "/orders/{id}/payment-schedule": {
+      "get": {
+        "operationId": "PaymentSchedulesController_get",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lịch thanh toán của đơn (mọi trạng thái). Chưa cấu hình ⇒ configured=false, installments rỗng. Độ lệch tính lại với tổng đơn sau VAT HIỆN TẠI.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu CẢ orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "payments"
+        ]
+      },
+      "put": {
+        "operationId": "PaymentSchedulesController_replace",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacePaymentScheduleRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lịch đã lưu (thay toàn bộ các đợt). Tổng các đợt lệch tổng đơn sau VAT vẫn lưu được — totalMatches=false là cảnh báo, không chặn. Gửi lại y hệt ⇒ không ghi gì.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentScheduleResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR + fieldErrors `installments.{i}.(percent|amount|conditionNote)`: đợt đầu bằng 0 (firstInstallmentZero), đợt tính ra 0 đồng (resolvedZero), đợt vượt 2.000.000.000 đồng (amountTooLarge), không đúng một trong percent/amount (exactlyOneOf), 0 hoặc quá 12 đợt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu payments.record, hoặc thiếu cả orders.view_all lẫn orders.view_own (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Đơn chưa chốt hoặc đã đóng, hoặc đơn vừa đổi trong lúc lưu (CONFLICT).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "payments"
+        ]
+      }
     }
   },
   "info": {
@@ -7205,6 +7353,143 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "InstallmentResponseDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "number",
+            "description": "Thứ tự đợt, bắt đầu từ 1.",
+            "example": 1
+          },
+          "percent": {
+            "type": "number",
+            "nullable": true,
+            "description": "Phần trăm người dùng nhập; null nếu đợt nhập theo số tiền.",
+            "example": 20
+          },
+          "amount": {
+            "type": "number",
+            "description": "Số tiền của đợt — số nguyên đồng, server phân giải lúc lưu.",
+            "example": 16602192
+          },
+          "conditionNote": {
+            "type": "string",
+            "example": "Cọc khi ký hợp đồng"
+          },
+          "milestone": {
+            "type": "string",
+            "enum": [
+              "coc",
+              "tat_toan"
+            ],
+            "nullable": true,
+            "description": "Mốc tự động do server gán theo vị trí: đợt 1 = coc, đợt cuối (khi ≥ 2 đợt) = tat_toan, còn lại null."
+          }
+        },
+        "required": [
+          "seq",
+          "percent",
+          "amount",
+          "conditionNote",
+          "milestone"
+        ]
+      },
+      "PaymentScheduleResponseDto": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string"
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "false ⇒ đơn chưa có lịch (installments rỗng)."
+          },
+          "editable": {
+            "type": "boolean",
+            "description": "Server quyết: đơn đã chốt và chưa đóng thì được cấu hình lịch. Nút Sửa còn cần quyền payments.record."
+          },
+          "orderTotal": {
+            "type": "number",
+            "description": "Tổng đơn sau VAT hiện tại — số nguyên đồng.",
+            "example": 83010960
+          },
+          "scheduledTotal": {
+            "type": "number",
+            "description": "Tổng các đợt — số nguyên đồng.",
+            "example": 83010960
+          },
+          "difference": {
+            "type": "number",
+            "description": "orderTotal − scheduledTotal — số nguyên đồng, có thể âm khi các đợt vượt tổng đơn.",
+            "example": 0
+          },
+          "totalMatches": {
+            "type": "boolean",
+            "description": "true khi tổng các đợt khớp tổng đơn sau VAT; false ⇒ hiện cảnh báo."
+          },
+          "installments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallmentResponseDto"
+            }
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Lần lưu lịch gần nhất (ISO-8601 UTC); null khi chưa cấu hình."
+          }
+        },
+        "required": [
+          "orderId",
+          "configured",
+          "editable",
+          "orderTotal",
+          "scheduledTotal",
+          "difference",
+          "totalMatches",
+          "installments",
+          "updatedAt"
+        ]
+      },
+      "InstallmentInputDto": {
+        "type": "object",
+        "properties": {
+          "percent": {
+            "type": "number",
+            "description": "Phần trăm của tổng đơn sau VAT, số nguyên 1..100. Gửi ĐÚNG MỘT trong `percent`/`amount`.",
+            "example": 20
+          },
+          "amount": {
+            "type": "number",
+            "description": "Số tiền của đợt — số nguyên đồng, 1..2000000000. Gửi ĐÚNG MỘT trong `percent`/`amount`.",
+            "example": 16602192
+          },
+          "conditionNote": {
+            "type": "string",
+            "description": "Mô tả điều kiện thu (vd \"Cọc khi ký hợp đồng\"), 1..200 ký tự sau khi bỏ khoảng trắng hai đầu.",
+            "example": "Cọc khi ký hợp đồng"
+          }
+        },
+        "required": [
+          "conditionNote"
+        ]
+      },
+      "ReplacePaymentScheduleRequestDto": {
+        "type": "object",
+        "properties": {
+          "installments": {
+            "description": "Các đợt theo thứ tự thu, từ 1 đến 12 đợt. Đợt 1 là cọc; mốc tự động do server gán theo vị trí.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InstallmentInputDto"
+            }
+          }
+        },
+        "required": [
+          "installments"
         ]
       }
     }

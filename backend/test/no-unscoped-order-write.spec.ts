@@ -18,17 +18,26 @@ import { stripToCode } from './util/strip-to-code';
  * chống-guard-rỗng ở dưới.
  */
 describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', () => {
-  const ORDERS_DIR = resolve(__dirname, '../src/orders');
+  const SRC_DIR = resolve(__dirname, '../src');
 
   /**
    * Mỗi file được canh + lời gọi "đọc có phạm vi" của file đó. `QuoteExportService` không có
    * `findScopedOrThrow` riêng — nó đi qua `OrdersService.getScoped()` / `assertScoped()`.
+   * `PaymentSchedulesService` (outside `orders/`) goes through `OrdersService.getScopedTotal()`.
+   * Paths are relative to `src/`.
    */
   const FILE_CANH: readonly { file: string; goiPhamVi: RegExp }[] = [
-    { file: 'orders.service.ts', goiPhamVi: /this\.findScopedOrThrow\s*\(/ },
     {
-      file: 'quote-export.service.ts',
+      file: 'orders/orders.service.ts',
+      goiPhamVi: /this\.findScopedOrThrow\s*\(/,
+    },
+    {
+      file: 'orders/quote-export.service.ts',
       goiPhamVi: /this\.orders\.(?:getScoped|assertScoped)\s*\(/,
+    },
+    {
+      file: 'payments/payment-schedules.service.ts',
+      goiPhamVi: /this\.orders\.(?:getScopedTotal|getScoped|assertScoped)\s*\(/,
     },
   ];
 
@@ -53,6 +62,11 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     // The quote stock warning is read per order too: out of scope must be refused before it.
     /this\.stockItems\.\w+\s*\(/,
     /\.(?:order|orderVersion|orderLineItem|discountApproval|attachment|quoteExport)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+    // The payment schedule belongs to one order: reading or writing it, or taking a raw row
+    // lock, touches that order.
+    /\.(?:paymentSchedule|installment)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/,
+    /\.paymentSchedule\.find(?:Unique|First)\s*\(/,
+    /\.\$queryRaw\b/,
   ];
 
   /**
@@ -64,10 +78,10 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
    *    phạm vi danh sách tự nằm trong `where` của nó (canh bởi `orders-list-scope.spec.ts`).
    */
   const CHO_PHEP: Readonly<Record<string, string>> = {
-    'orders.service.ts#create': 'tạo đơn mới — chưa có đơn để scope',
-    'orders.service.ts#chuyenTrangThaiTuDong':
+    'orders/orders.service.ts#create': 'tạo đơn mới — chưa có đơn để scope',
+    'orders/orders.service.ts#chuyenTrangThaiTuDong':
       'đường hệ thống từ event, không có caller người dùng',
-    'orders.service.ts#list':
+    'orders/orders.service.ts#list':
       'chỉ đọc (tx mảng count+findMany), phạm vi nằm trong where của list',
   };
 
@@ -127,7 +141,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
   }
 
   function docFile(file: string): string {
-    return stripToCode(readFileSync(resolve(ORDERS_DIR, file), 'utf8'));
+    return stripToCode(readFileSync(resolve(SRC_DIR, file), 'utf8'));
   }
 
   it('không method công khai nào chạm đơn trước khi đi qua phạm vi (ngoài allowlist)', () => {
@@ -156,7 +170,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
 
   describe('chống guard rỗng — máy quét THẤY đúng thứ nó canh', () => {
     it('trích được đủ method công khai của OrdersService, thân không bị cắt cụt', () => {
-      const methods = trichMethod(docFile('orders.service.ts'));
+      const methods = trichMethod(docFile('orders/orders.service.ts'));
       const congKhai = methods.filter((m) => m.congKhai);
       expect(congKhai.length).toBeGreaterThan(20);
       // Method có kiểu trả về `Promise<{ … }>` (khuôn từng làm guard khác cắt cụt): thân
@@ -167,7 +181,7 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
     });
 
     it('nhận diện ĐỦ các đường ghi đơn là "chạm đơn" — kể cả 8 đường vừa được scope', () => {
-      const chamDon = trichMethod(docFile('orders.service.ts'))
+      const chamDon = trichMethod(docFile('orders/orders.service.ts'))
         .filter((m) => m.congKhai && viTriChamDau(m.than) !== -1)
         .map((m) => m.ten);
       expect(chamDon.length).toBeGreaterThanOrEqual(16);
@@ -192,12 +206,44 @@ describe('source-guard: đường ghi đơn phải đi qua phạm vi trước', 
           'getStockCheck',
         ]),
       );
-      const xuat = trichMethod(docFile('quote-export.service.ts'))
+      const xuat = trichMethod(docFile('orders/quote-export.service.ts'))
         .filter((m) => m.congKhai && viTriChamDau(m.than) !== -1)
         .map((m) => m.ten);
       expect(xuat).toEqual(
         expect.arrayContaining(['exportQuote', 'getExportFile']),
       );
+    });
+
+    it('extracts both public methods of PaymentSchedulesService with full bodies, both touching the order', () => {
+      const methods = trichMethod(
+        docFile('payments/payment-schedules.service.ts'),
+      ).filter((m) => m.congKhai);
+      const replace = methods.find((m) => m.ten === 'replace');
+      const get = methods.find((m) => m.ten === 'get');
+      expect(replace?.than).toMatch(/this\.orders\.getScopedTotal\s*\(/);
+      expect(replace?.than).toMatch(/\.\$transaction\s*\(/);
+      expect(replace?.than).toMatch(/\.installment\.createMany\s*\(/);
+      expect(viTriChamDau(replace?.than ?? '')).toBeGreaterThan(-1);
+      expect(get?.than).toMatch(/\.paymentSchedule\.findUnique\s*\(/);
+      expect(viTriChamDau(get?.than ?? '')).toBeGreaterThan(-1);
+    });
+
+    it('BẮT a schedule write placed before the scoped read', () => {
+      const mau = [
+        'class X {',
+        '  async replace(actor: string, q: Set<string>, id: string) {',
+        '    await this.prisma.installment.deleteMany({ where: {} });',
+        '    await this.orders.getScopedTotal(actor, q, id, 8, false);',
+        '  }',
+        '}',
+        '',
+      ].join('\n');
+      expect(
+        viPham(
+          mau,
+          /this\.orders\.(?:getScopedTotal|getScoped|assertScoped)\s*\(/,
+        ),
+      ).toEqual(['replace']);
     });
 
     it('BẮT method ghi dùng findOrThrow trần', () => {

@@ -58,7 +58,11 @@ import {
   trangThaiBaoHanh,
   type TrangThaiBaoHanh,
 } from './domain/warranty';
-import { computeOrderTotals, type OrderTotals } from './domain/order-totals';
+import {
+  computeOrderTotals,
+  resolveOrderTotals,
+  type OrderTotals,
+} from './domain/order-totals';
 import {
   AttachmentAdded,
   AttachmentRemoved,
@@ -1834,6 +1838,39 @@ export class OrdersService {
   ): Promise<OrderView> {
     const order = await this.findScopedOrThrow(callerAccountId, quyen, id);
     return this.viewOf(order, tieredPricingEnabled);
+  }
+
+  /**
+   * Scoped read of an order plus its after-VAT total, for services outside this module
+   * (`payments/`). Same 404 as `getScoped()`; the total goes through `resolveOrderTotals`, the
+   * same rule the printed quote uses — no second resolver. An order without lines totals 0.
+   */
+  async getScopedTotal(
+    callerAccountId: string,
+    quyen: ReadonlySet<string>,
+    orderId: string,
+    vatRatePercent: number,
+    tieredPricingEnabled: boolean,
+  ): Promise<{ order: Order; total: number }> {
+    const order = await this.findScopedOrThrow(callerAccountId, quyen, orderId);
+    const [view, version] = await Promise.all([
+      this.viewOf(order, tieredPricingEnabled),
+      order.currentVersionId === null
+        ? Promise.resolve(null)
+        : this.prisma.orderVersion.findUnique({
+            where: { id: order.currentVersionId },
+          }),
+    ]);
+    const { totals } = resolveOrderTotals({
+      lines: view.lineItems.map((line) => ({
+        unitPrice: line.unitPrice,
+        qty: line.qty,
+      })),
+      version,
+      order: view,
+      fallbackVatRate: vatRatePercent,
+    });
+    return { order, total: totals.total };
   }
 
   /**

@@ -24,6 +24,8 @@ import {
   FakeMePort,
   FakeOrdersPort,
   FakePasswordPort,
+  FakePaymentsPort,
+  DEMO_PAYMENT_SCHEDULE,
   FakeSettingsPort,
   FakeStockVouchersPort,
   FakeWarrantyPort,
@@ -42,6 +44,7 @@ import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { OrderStatusChangeScreen } from '../screens/orders/OrderStatusChangeScreen';
 import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
+import { PaymentScheduleScreen } from '../screens/payments/PaymentScheduleScreen';
 import { CustomerSourceConfigScreen } from '../screens/settings/CustomerSourceConfigScreen';
 import { WarrantyLookupScreen } from '../screens/warranty/WarrantyLookupScreen';
 
@@ -216,7 +219,17 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(await screen.findByText('06/07/2026 · 08:05')).toBeTruthy();
     expect(screen.getByText('+40')).toBeTruthy();
   });
+
+  it('PaymentScheduleScreen — lịch 20/70/10 đã tải từ port', async () => {
+    renderScreen(
+      <PaymentScheduleScreen port={new FakePaymentsPort(DEMO_PAYMENT_SCHEDULE)} orderId="DH-2048" />,
+    );
+    expect(await screen.findByText('Các đợt thanh toán')).toBeTruthy();
+    expect(screen.getByText('Đợt 1 · Cọc')).toBeTruthy();
+    expect(screen.getByText('Đợt 3 · Tất toán')).toBeTruthy();
+    expect(screen.getByText('Tổng đơn (sau VAT)')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 15;
+const SCREEN_COUNT = 16;

@@ -4,14 +4,8 @@ import { ErrorCode } from '../common/errors/error-code';
 import { EventBus } from '../events/event-bus';
 import { PrismaService } from '../prisma/prisma.service';
 import { StoragePort } from '../storage/storage.port';
-import {
-  CHIET_KHAU_CHO_DUYET,
-  CHIET_KHAU_DONG_Y,
-} from './domain/discount-approval-status';
 import { QuoteExported } from './domain/order-events';
-import { TRANG_THAI_BAO_GIA } from './domain/order-status';
-import { computeOrderTotals } from './domain/order-totals';
-import { vatApplies } from './domain/vat-mode';
+import { resolveOrderTotals } from './domain/order-totals';
 import { OrdersService } from './orders.service';
 import { QuoteRendererPort } from './quote/quote-renderer.port';
 import { buildQuoteHtml } from './quote/quote-template';
@@ -77,25 +71,15 @@ export class QuoteExportService {
       throw new AppException(ErrorCode.NOT_FOUND, 404, 'Không tìm thấy đơn.');
     }
 
-    // Resolution rule totals — xem doc đầu file.
-    const vatRate = version.vatRate ?? vatRatePercent;
-    const applyVat = vatApplies(version.vatMode ?? order.vatMode);
-    const discountAmount =
-      version.discountAmount ??
-      (order.status !== TRANG_THAI_BAO_GIA &&
-      order.discount !== null &&
-      (order.discount.status === CHIET_KHAU_CHO_DUYET ||
-        order.discount.status === CHIET_KHAU_DONG_Y)
-        ? order.discount.amount
-        : 0);
-    const totals = computeOrderTotals({
+    // Resolution rule totals — xem doc đầu file (shared with the payment schedule).
+    const { totals, vatRate, applyVat } = resolveOrderTotals({
       lines: order.lineItems.map((line) => ({
         unitPrice: line.unitPrice,
         qty: line.qty,
       })),
-      vatRate,
-      applyVat,
-      discountAmount,
+      version,
+      order,
+      fallbackVatRate: vatRatePercent,
     });
 
     const orderId8 = orderId.slice(0, 8);

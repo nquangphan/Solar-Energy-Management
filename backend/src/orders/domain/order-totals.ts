@@ -1,4 +1,10 @@
+import {
+  CHIET_KHAU_CHO_DUYET,
+  CHIET_KHAU_DONG_Y,
+} from './discount-approval-status';
 import { lineAmount } from './line-amount';
+import { TRANG_THAI_BAO_GIA } from './order-status';
+import { vatApplies } from './vat-mode';
 
 /**
  * Hàm pricing DUY NHẤT của Đơn (AD-10/AD-16) — DOMAIN THUẦN (không Nest/Prisma/EventBus).
@@ -47,4 +53,63 @@ export function computeOrderTotals(input: OrderTotalsInput): OrderTotals {
     ? Math.floor((vatBase * input.vatRate + 50) / 100)
     : 0;
   return { subtotal, discountAmount, vatAmount, total: vatBase + vatAmount };
+}
+
+export interface OrderTotalsResolutionInput {
+  readonly lines: ReadonlyArray<{ unitPrice: number; qty: number }>;
+  /** Effective version snapshot fields; `null` when the order has no effective version. */
+  readonly version: {
+    readonly vatRate: number | null;
+    readonly vatMode: string | null;
+    readonly discountAmount: number | null;
+  } | null;
+  readonly order: {
+    readonly status: string;
+    readonly vatMode: string | null;
+    /** Latest discount approval of the order, if any. */
+    readonly discount: {
+      readonly status: string;
+      readonly amount: number;
+    } | null;
+  };
+  /** Configured VAT rate, used only when the version has no snapshotted rate. */
+  readonly fallbackVatRate: number;
+}
+
+export interface ResolvedOrderTotals {
+  readonly totals: OrderTotals;
+  readonly vatRate: number;
+  readonly applyVat: boolean;
+}
+
+/**
+ * The ONE place that decides the inputs of an order's after-VAT total, then calls
+ * `computeOrderTotals` (still one pricing function, AD-16). Shared by the printed quote and the
+ * payment schedule so both show the same number for the same order.
+ *
+ *  - vatRate/applyVat: version snapshot once confirmed, else `Order.vatMode` + configured rate.
+ *  - discountAmount: version snapshot; without a snapshot, the latest approval counts when the
+ *    order is past `baogia` and the approval is pending or approved; otherwise 0.
+ */
+export function resolveOrderTotals(
+  input: OrderTotalsResolutionInput,
+): ResolvedOrderTotals {
+  const { version, order } = input;
+  const vatRate = version?.vatRate ?? input.fallbackVatRate;
+  const applyVat = vatApplies(version?.vatMode ?? order.vatMode);
+  const discountAmount =
+    version?.discountAmount ??
+    (order.status !== TRANG_THAI_BAO_GIA &&
+    order.discount !== null &&
+    (order.discount.status === CHIET_KHAU_CHO_DUYET ||
+      order.discount.status === CHIET_KHAU_DONG_Y)
+      ? order.discount.amount
+      : 0);
+  const totals = computeOrderTotals({
+    lines: input.lines,
+    vatRate,
+    applyVat,
+    discountAmount,
+  });
+  return { totals, vatRate, applyVat };
 }

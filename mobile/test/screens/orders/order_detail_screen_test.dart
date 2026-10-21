@@ -335,7 +335,8 @@ void main() {
     await tester.pump(); // the batch is in flight; the skeleton is up
 
     // The user backs out before the network answers.
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox())));
+    await tester
+        .pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox())));
     chuaTraLoi.complete(_order());
     await tester.pumpAndSettle();
 
@@ -349,7 +350,8 @@ void main() {
     await tester.pumpWidget(_host(_HangingPort(chuaTraLoi)));
     await tester.pump();
 
-    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox())));
+    await tester
+        .pumpWidget(const MaterialApp(home: Scaffold(body: SizedBox())));
     chuaTraLoi.completeError(StateError('network down'));
     await tester.pumpAndSettle();
 
@@ -391,7 +393,8 @@ void main() {
     expect(daBam, isTrue);
   });
 
-  testWidgets('AC-11: an EMPTY buocKeTiep hides the button outright, not greyed',
+  testWidgets(
+      'AC-11: an EMPTY buocKeTiep hides the button outright, not greyed',
       (WidgetTester tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -434,5 +437,42 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Chuyển trạng thái'), findsNothing);
+  });
+
+  testWidgets(
+      'onOpenPaymentSchedule wired ⇒ "Thanh toán" renders and taps through',
+      (WidgetTester tester) async {
+    bool opened = false;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onOpenPaymentSchedule: () => opened = true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thanh toán'), findsOneWidget);
+    await tester.tap(find.text('Thanh toán'));
+    await tester.pumpAndSettle();
+    expect(opened, isTrue);
+  });
+
+  testWidgets('no onOpenPaymentSchedule ⇒ no "Thanh toán" button',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: OrderDetailScreen(
+          port: _StubPort(steps: const <String>['baogia', 'dachot']),
+          orderId: _kOrderId,
+          onChangeStatus: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Thanh toán'), findsNothing);
   });
 }

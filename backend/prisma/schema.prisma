@@ -498,6 +498,7 @@ model Order {
   attachments       Attachment[]
   stockMovements    StockMovement[]
   stockVouchers     StockVoucher[]
+  paymentSchedule   PaymentSchedule?
 
   @@index([customerSdt])
   @@index([ownerAccountId])
@@ -644,6 +645,39 @@ model QuoteExport {
 
   @@index([orderVersionId])
   @@map("quote_exports")
+}
+
+/// Payment schedule of ONE order (FR-11) — at most one per order (`orderId` unique).
+/// No stored basis total: the mismatch against the order total is recomputed on every read,
+/// so a reopened/re-confirmed order with a new total shows the warning by itself.
+model PaymentSchedule {
+  id           String        @id @default(uuid())
+  orderId      String        @unique @map("order_id")
+  order        Order         @relation(fields: [orderId], references: [id])
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  installments Installment[]
+
+  @@map("payment_schedules")
+}
+
+/// One installment. `amount` = integer dong RESOLVED at save time (AD-10). `percent` = what the
+/// user typed (null when they typed an amount). `milestone` = auto-transition milestone
+/// (`MOC_TU_DONG`) assigned by the SERVER by position — payment recording reads this column.
+/// CHECK constraints (amount > 0, percent 1..100, seq >= 1, known milestone) live in the migration.
+model Installment {
+  id            String          @id @default(uuid())
+  scheduleId    String          @map("schedule_id")
+  schedule      PaymentSchedule @relation(fields: [scheduleId], references: [id])
+  seq           Int
+  percent       Int?
+  amount        Int
+  conditionNote String          @map("condition_note")
+  milestone     String?
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  @@unique([scheduleId, seq])
+  @@map("installments")
 }
 
 /// Ảnh đính kèm của Đơn (FR-23, AD-3) — DB chỉ giữ METADATA + object key; bytes sống ở R2

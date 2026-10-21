@@ -79,6 +79,16 @@ export type {
   CreateReturnVoucherInput,
   LoaiPhieu,
 } from './stock-vouchers-port';
+// Payments seam (Story 7.1): the payment schedule of an order. The backend
+// resolves every amount, the totals and the mismatch; the screen only renders them.
+export type {
+  PaymentsPort,
+  PaymentSchedule,
+  Installment,
+  InstallmentInput,
+  ReplacePaymentScheduleInput,
+  PaymentsPortError,
+} from './payments-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -117,6 +127,12 @@ export {
   FAKE_OUT_OF_STOCK_PRODUCT_ID,
   FAKE_INSUFFICIENT_STOCK_ERROR,
 } from './fake-stock-vouchers-port';
+export {
+  FakePaymentsPort,
+  DEMO_PAYMENT_SCHEDULE,
+  DEMO_PAYMENT_SCHEDULE_EMPTY,
+  DEMO_PAYMENT_SCHEDULE_MISMATCH,
+} from './fake-payments-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

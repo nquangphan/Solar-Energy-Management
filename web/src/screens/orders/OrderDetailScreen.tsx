@@ -83,6 +83,8 @@ export interface OrderDetailScreenProps {
   onBack?: () => void;
   /** Opens the status-change screen (Story 5.5). Absent = the button never renders. */
   onChangeStatus?: () => void;
+  /** Opens the payment-schedule screen (Story 7.1). Absent = the button never renders. */
+  onOpenPaymentSchedule?: () => void;
 }
 
 // 'notfound' is its own state, NOT a flavour of 'error': "this order does not
@@ -94,9 +96,11 @@ const TAB_THONG_TIN = 'thong-tin';
 const TAB_LICH_SU = 'lich-su';
 const TAB_ANH = 'anh';
 
-// Exactly three tabs. Thanh toán + Hợp đồng/Hoá đơn are Epic 7 — rendering an
-// empty tab for a feature that does not exist promises the user something nobody
-// built. Ảnh shipped in Story 5.6.
+// Exactly three tabs. A full Thanh toán tab (schedule + recorded payments) and
+// Hợp đồng/Hoá đơn are still Epic 7 work — rendering a tab for a feature that is
+// only half built promises the user something nobody built. The payment schedule
+// (Story 7.1) is its own screen, reached by the "Thanh toán" action button.
+// Ảnh shipped in Story 5.6.
 const TABS = [
   { key: TAB_THONG_TIN, label: 'Thông tin' },
   { key: TAB_LICH_SU, label: 'Lịch sử update' },
@@ -163,6 +167,7 @@ export function OrderDetailScreen({
   orderId,
   onBack,
   onChangeStatus,
+  onOpenPaymentSchedule,
 }: OrderDetailScreenProps) {
   const { perms } = usePermissions();
 
@@ -471,12 +476,17 @@ export function OrderDetailScreen({
           <>
             <Frame label="Vòng đời đơn" onBg>
               <Stepper steps={toStepItems(steps)} />
-              {((buocKeTiep.length > 0 && onChangeStatus) || coTheHuy) && (
+              {((buocKeTiep.length > 0 && onChangeStatus) ||
+                coTheHuy ||
+                onOpenPaymentSchedule) && (
                 <div className="od-actions">
                   {buocKeTiep.length > 0 && onChangeStatus && (
                     <Button variant="primary" onClick={onChangeStatus}>
                       Chuyển trạng thái
                     </Button>
+                  )}
+                  {onOpenPaymentSchedule && (
+                    <Button onClick={onOpenPaymentSchedule}>Thanh toán</Button>
                   )}
                   {coTheHuy && (
                     <Button variant="danger" onClick={moDialogHuy}>
