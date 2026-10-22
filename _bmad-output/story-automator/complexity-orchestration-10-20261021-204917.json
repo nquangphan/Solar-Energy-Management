@@ -1,1 +1,121 @@
-{"stories":[{"storyId":"10.1","title":"Đổi route và tham số tiếng Việt sang tiếng Anh","complexity":{"score":6,"level":"Medium","reasons":["Real-time communication","Authorization/permissions","Breaking/migration change"]}},{"storyId":"10.2","title":"Đổi field DTO tiếng Việt sang tiếng Anh","complexity":{"score":5,"level":"Medium","reasons":["Real-time communication","Database schema changes","Authorization/permissions"]}},{"storyId":"10.3","title":"Web: client sinh từ OpenAPI, phiên đăng nhập và xử lý lỗi một chỗ","complexity":{"score":3,"level":"Low","reasons":["Authorization/permissions","Integration testing required"]}},{"storyId":"10.4","title":"Web: composition root, router và adapter danh mục, khách, cài đặt","complexity":{"score":3,"level":"Low","reasons":["Authorization/permissions","Integration testing required"]}},{"storyId":"10.5","title":"Web: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền","complexity":{"score":7,"level":"Medium","reasons":["External API integration","Authorization/permissions","Complex error handling","Integration testing required","Configuration/feature flags"]}},{"storyId":"10.6","title":"Mobile: app shell, android/ios, client Dart sinh từ OpenAPI và phiên đăng nhập","complexity":{"score":5,"level":"Medium","reasons":["Authorization/permissions","Backend + Frontend combined","Integration testing required"]}},{"storyId":"10.7","title":"Mobile: điều hướng và adapter danh mục, khách, tài khoản","complexity":{"score":3,"level":"Low","reasons":["Authorization/permissions","Configuration/feature flags"]}},{"storyId":"10.8","title":"Mobile: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền","complexity":{"score":5,"level":"Medium","reasons":["External API integration","Complex error handling","Integration testing required","Configuration/feature flags"]}}]}
+{
+  "stories": [
+    {
+      "storyId": "10.1",
+      "title": "Đổi route và tham số tiếng Việt sang tiếng Anh",
+      "complexity": {
+        "score": 6,
+        "level": "Medium",
+        "reasons": [
+          "Real-time communication",
+          "Authorization/permissions",
+          "Breaking/migration change"
+        ]
+      }
+    },
+    {
+      "storyId": "10.2",
+      "title": "Đổi field DTO tiếng Việt sang tiếng Anh",
+      "complexity": {
+        "score": 5,
+        "level": "Medium",
+        "reasons": [
+          "Real-time communication",
+          "Database schema changes",
+          "Authorization/permissions"
+        ]
+      }
+    },
+    {
+      "storyId": "10.3",
+      "title": "Web: client sinh từ OpenAPI, phiên đăng nhập và xử lý lỗi một chỗ",
+      "complexity": {
+        "score": 3,
+        "level": "Low",
+        "reasons": [
+          "Authorization/permissions",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "10.4",
+      "title": "Web: composition root, router và adapter danh mục, khách, cài đặt",
+      "complexity": {
+        "score": 3,
+        "level": "Low",
+        "reasons": [
+          "Authorization/permissions",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "10.5",
+      "title": "Web: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền",
+      "complexity": {
+        "score": 7,
+        "level": "Medium",
+        "reasons": [
+          "External API integration",
+          "Authorization/permissions",
+          "Complex error handling",
+          "Integration testing required",
+          "Configuration/feature flags"
+        ]
+      }
+    },
+    {
+      "storyId": "10.6",
+      "title": "Mobile: app shell, android/ios, client Dart sinh từ OpenAPI và phiên đăng nhập",
+      "complexity": {
+        "score": 5,
+        "level": "Medium",
+        "reasons": [
+          "Authorization/permissions",
+          "Backend + Frontend combined",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "10.7",
+      "title": "Mobile: điều hướng và adapter danh mục, khách, tài khoản",
+      "complexity": {
+        "score": 3,
+        "level": "Low",
+        "reasons": [
+          "Authorization/permissions",
+          "Configuration/feature flags"
+        ]
+      }
+    },
+    {
+      "storyId": "10.8",
+      "title": "Mobile: adapter đơn, kho, tiền, chứng từ và nút chi tiết đơn theo quyền",
+      "complexity": {
+        "score": 5,
+        "level": "Medium",
+        "reasons": [
+          "External API integration",
+          "Complex error handling",
+          "Integration testing required",
+          "Configuration/feature flags"
+        ]
+      }
+    },
+    {
+      "storyId": "10.9",
+      "title": "Đăng nhập bằng số điện thoại (thay email)",
+      "complexity": {
+        "score": 6,
+        "level": "Medium",
+        "reasons": [
+          "Authorization/permissions",
+          "Database schema changes",
+          "Backend + Frontend combined"
+        ]
+      }
+    }
+  ]
+}
