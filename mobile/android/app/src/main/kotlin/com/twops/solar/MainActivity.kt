@@ -1,4 +1,4 @@
-package vn.phuongnamsolar.pns_mobile
+package com.twops.solar
 
 import io.flutter.embedding.android.FlutterActivity
 
