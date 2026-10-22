@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-22 (dev-story 10.9 → review)
+# last_updated: 2026-10-23 (retrospective epic 10)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-22 (dev-story 10.9 → review)
+last_updated: 2026-10-23 (retrospective epic 10)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -107,7 +107,7 @@ development_status:
   10-7-mobile-dieu-huong-va-adapter-danh-muc-khach-tai-khoan: done
   10-8-mobile-adapter-don-kho-tien-chung-tu-va-nut-chi-tiet-don-theo-quyen: done
   10-9-dang-nhap-bang-so-dien-thoai: done
-  epic-10-retrospective: optional
+  epic-10-retrospective: done
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
@@ -147,7 +147,8 @@ action_items:
   - epic: 1
     action: "Lên scaffold android/ios cho mobile khi Epic 2/9 cần app chạy thật (camera/share)"
     owner: "Amelia (Dev)"
-    status: open
+    status: done
+    resolution: "2026-10-23 (retro Epic 10): Story 10.6 dựng android/ + ios/ (flutter create), APK debug build được; applicationId com.twops.solar (0f72d22). iOS chưa build/ký, ngoài tiêu chí Phase 1."
   - epic: 2
     action: "Dựng Postgres + chạy prisma migrate deploy 5 migration trên DB rỗng + prisma db seed; /health ping DB thật"
     owner: "Amelia (Dev)"
@@ -188,6 +189,7 @@ action_items:
     action: "Đánh giá rate-limit IP cho 3 endpoint công khai (login, forgot-password, reset-password)"
     owner: "Amelia (Dev)"
     status: open
+    resolution: "2026-10-23 (retro Epic 10): gộp vào H-2 — rủi ro tăng vì đăng nhập bằng SĐT từ 10.9 (SĐT dễ đoán hơn email)."
   - epic: 3
     action: "Nối phân trang vào 2 màn Danh sách khách (backend đã có page/total); chuỗi VN cho điều khiển trang + search-empty riêng"
     owner: "Amelia (Dev) + Đại Ca (copy)"
@@ -348,13 +350,13 @@ action_items:
   - epic: 7
     action: "G-5: Luật — quyết định tuyên bố giữa story phải cập nhật epics.md/spine trong CÙNG commit story"
     owner: "Amelia (Dev) + Trợ Lý"
-    status: open
-    resolution: "Căn cứ: 3 quyết định Epic 7 (luật tất toán 7.2, snapshot người bán 7.4, số tiền bằng chữ 7.5) chỉ nằm trong story record tới retro. Tiêu chí: một dòng trong checklist review story-automator hoặc file chỉ dẫn dev Epic 8. Ba quyết định Epic 7 đã đồng bộ trong retro."
+    status: done
+    resolution: "Căn cứ: 3 quyết định Epic 7 (luật tất toán 7.2, snapshot người bán 7.4, số tiền bằng chữ 7.5) chỉ nằm trong story record tới retro. Tiêu chí: một dòng trong checklist review story-automator hoặc file chỉ dẫn dev Epic 8. Ba quyết định Epic 7 đã đồng bộ trong retro. || 2026-10-23 DONE (retro Epic 10): áp 9/9 story Epic 10 — mỗi story có khối 'Tinh chỉnh khi làm story' trong epics.md cùng commit."
   - epic: 7
     action: "G-6: 9 câu hỏi sản phẩm Epic 7 (Bên A/B, mở lại khi đã có tiền, khoản điều chỉnh âm, mốc skipped, MST, reset số HĐ theo năm, 1 hoá đơn/bản, COMPANY_INFO báo giá, định nghĩa doanh thu 8.1)"
     owner: "Đại Ca (Project Lead)"
-    status: open
-    resolution: "Mặc định tuyên bố trước = hành vi code: công ty Bên B theo 2 mẫu; lịch khoá + HĐ chặn khi mở lại có tiền; không điều chỉnh âm ở Phase 1 (đưa vào backlog qua G-1); mốc skipped đóng tay; MST không bắt buộc; không reset số theo năm; 1 hoá đơn/bản đơn; báo giá giữ COMPANY_INFO (gộp qua G-1); doanh thu 8.1 = Σ Payment.amount theo paidOn. Im lặng ⇒ mặc định thành quyết định."
+    status: done
+    resolution: "Mặc định tuyên bố trước = hành vi code: công ty Bên B theo 2 mẫu; lịch khoá + HĐ chặn khi mở lại có tiền; không điều chỉnh âm ở Phase 1 (đưa vào backlog qua G-1); mốc skipped đóng tay; MST không bắt buộc; không reset số theo năm; 1 hoá đơn/bản đơn; báo giá giữ COMPANY_INFO (gộp qua G-1); doanh thu 8.1 = Σ Payment.amount theo paidOn. Im lặng ⇒ mặc định thành quyết định. || 2026-10-23 DONE (retro Epic 10): im lặng tới hạn ⇒ mặc định thành quyết định; (b)(c)(h) vào backlog chưa xếp epic (sprint-change-proposal-2026-10-22 §7); (i) doanh thu 8.1 = Σ Payment.amount theo paidOn."
   - epic: 7
     action: "G-7: Tài liệu vận hành go-live — cấu hình pháp nhân trước chứng từ đầu tiên + Chrome cho Puppeteer"
     owner: "Amelia (Dev)"
@@ -365,3 +367,43 @@ action_items:
     owner: "Amelia (Dev)"
     status: done
     resolution: "Làm trong retro Epic 7, xem §12 của epic-7-retro-2026-10-22.md."
+  - epic: 10
+    action: "H-1: Push 22 commit (Epic 7 + Epic 10) sau 5 lane xanh"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Tiêu chí: git status -sb không còn ahead. Retro 2026-10-23: 4 lane hermetic xanh (2547 + 506 + 447 + 747), lane DB 325 xanh ở 10.9."
+  - epic: 10
+    action: "H-2: Rate-limit 3 route công khai /auth/login, /auth/forgot-password, /auth/reset-password (TD-62, gộp item epic 2)"
+    owner: "Đại Ca (quyết) + Amelia (Dev)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: throttle theo IP + theo SĐT, trước go-live, không chặn Epic 8. Tiêu chí: e2e quá ngưỡng ⇒ 429 envelope AD-5; mutant gỡ throttle ⇒ ĐỎ. Im lặng ⇒ mặc định thành quyết định."
+  - epic: 10
+    action: "H-3: Gán SĐT cho mọi account trước khi đăng nhập (TD-63)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 10: docs/van-hanh-go-live.md mục 'Gán số điện thoại cho mọi account'; form 8.3 bắt buộc SĐT (epics.md 8.3)."
+  - epic: 10
+    action: "H-4: Quyết kiến trúc state mobile trước Epic 9 — áp BLoC hay giữ StatefulWidget + InheritedWidget + port"
+    owner: "Đại Ca (Project Lead) + Winston (Architect)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: giữ khuôn hiện tại (747 test trên nó, 0 dependency bloc). project-context.md đã ghi đúng thực tế. Im lặng tới bmad-create-story 9.1 ⇒ mặc định thành quyết định."
+  - epic: 10
+    action: "H-5: Luật guard mới — ship kèm mutant xoá thứ thật cần bảo vệ + danh sách biến thể theo nền tảng (TS alias/intersection/Pick/Omit/globalThis/.call; Dart Image.network/NetworkImage; parity literal đứng riêng)"
+    owner: "Amelia (Dev) + Trợ Lý"
+    status: open
+    resolution: "Căn cứ: 7/9 story Epic 10 có finding 'guard mù' ở review (retro §3.1). Tiêu chí: một dòng trong file chỉ dẫn dev của story-automator hoặc CONVENTIONS.md mục guard, trước commit đầu 8.1."
+  - epic: 10
+    action: "H-6: Refresh lỗi 5xx/mạng không xoá phiên (TD-64) trên web + mobile"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: chỉ xoá phiên khi /auth/refresh trả 401; 5xx/mạng ⇒ báo lỗi kết nối, giữ refresh token. Trước go-live. Tiêu chí: ca test 2 nền tảng; mutant xoá phiên ở 5xx ⇒ ĐỎ."
+  - epic: 10
+    action: "H-7: Đưa TD-65 (tổ hợp quyền gây 403 giữa luồng: settings.manage hoặc quotes.create_edit thiếu customers.manage) vào bmad-create-story 8.2/8.4"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Tiêu chí: story 8.2 có AC hoặc ghi chú về các tổ hợp này."
+  - epic: 10
+    action: "H-8: Đồng bộ sổ sách + tài liệu lệch code (spine Deferred codegen + Auth, project-context, backend README, van-hanh-go-live)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 10, xem §12 của epic-10-retro-2026-10-23.md."

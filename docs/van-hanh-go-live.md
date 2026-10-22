@@ -2,6 +2,16 @@
 
 Các việc phải làm một lần khi đưa app vào dùng thật.
 
+## Gán số điện thoại cho mọi account
+
+**Ai làm:** người quản trị có quyền chạy SQL trên DB production (tới khi có form tạo/sửa account của Story 8.3).
+
+**Khi nào:** ngay lúc go-live, **trước** khi phát tài khoản cho nhân viên.
+
+**Làm gì:** đăng nhập dùng **số điện thoại** (không dùng email). Account admin đầu tiên lấy SĐT từ `SEED_ADMIN_PHONE` lúc `npx prisma db seed` (thiếu biến này thì seed bỏ qua admin). Mọi account khác phải có `accounts.phone` dạng E.164 (`+84…`, không trùng nhau) — backend chuẩn hoá số người dùng gõ (`0912…`, `+84 912…`) rồi tra đúng chuỗi E.164 này.
+
+**Quên bước này thì sao:** account không có SĐT **không đăng nhập được** (báo sai thông tin đăng nhập như mọi trường hợp sai khác) và cũng không dùng được Quên mật khẩu.
+
 ## Gõ phiếu nhập tồn đầu kỳ
 
 **Ai làm:** người có quyền `inventory.manage` (preset Kho/Giao hàng, Quản lý, Admin, Super Admin).
