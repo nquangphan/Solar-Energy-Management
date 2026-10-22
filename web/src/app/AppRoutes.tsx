@@ -6,14 +6,22 @@ import type { ReactElement } from 'react';
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router';
 
 import { Button, Card, ErrorState, Skeleton } from '../design-system/components';
+import { can, PERMISSION_KEYS } from '../design-system/gating';
+import type { PermissionKey } from '../design-system/gating';
 import type {
   AuthPort,
   CatalogPort,
+  ContractsPort,
   CustomerSourcesPort,
   CustomersPort,
+  InventoryPort,
+  InvoicesPort,
   MePort,
+  OrdersPort,
   PasswordPort,
+  PaymentsPort,
   SettingsPort,
+  StockVouchersPort,
   WarrantyPort,
 } from '../design-system/session';
 import { usePermissions } from '../design-system/session';
@@ -22,20 +30,40 @@ import type { SidebarNavValue } from '../design-system/shell';
 import { ProfileScreen } from '../screens/account/ProfileScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
+import { ContractsScreen } from '../screens/contracts/ContractsScreen';
 import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen';
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
+import { InventoryScreen } from '../screens/inventory/InventoryScreen';
+import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
+import { InvoiceDetailScreen } from '../screens/invoices/InvoiceDetailScreen';
+import { InvoicesScreen } from '../screens/invoices/InvoicesScreen';
+import { CreateQuoteScreen } from '../screens/orders/CreateQuoteScreen';
+import { DiscountApprovalScreen } from '../screens/orders/DiscountApprovalScreen';
+import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
+import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
+import { OrderStatusChangeScreen } from '../screens/orders/OrderStatusChangeScreen';
+import { PaymentScheduleScreen } from '../screens/payments/PaymentScheduleScreen';
 import { CustomerSourceConfigScreen } from '../screens/settings/CustomerSourceConfigScreen';
 import { WarrantyLookupScreen } from '../screens/warranty/WarrantyLookupScreen';
 import {
   AVAILABLE_NAV_KEYS,
   CUSTOMER_LOOKUP_PATH,
+  DISCOUNT_APPROVALS_PATH,
   FORGOT_PASSWORD_PATH,
   LOGIN_PATH,
   NAV_ROUTES,
+  ORDER_NEW_PATH,
+  STOCK_VOUCHERS_PATH,
   customerPath,
   landingPath,
   openableKeys,
+  orderContractsPath,
+  orderInvoicePath,
+  orderInvoicesPath,
+  orderPath,
+  orderPaymentsPath,
+  orderTransitionPath,
   pathOfKey,
 } from './routes';
 import type { NavRouteKey } from './routes';
@@ -47,10 +75,15 @@ export interface AppPorts {
   password: PasswordPort;
   customers: CustomersPort;
   customerSources: CustomerSourcesPort;
-  /** Built for the quote pickers, which are wired with the order screens (Story 10.5). */
   catalog: CatalogPort;
   settings: SettingsPort;
   warranty: WarrantyPort;
+  orders: OrdersPort;
+  inventory: InventoryPort;
+  stockVouchers: StockVouchersPort;
+  payments: PaymentsPort;
+  contracts: ContractsPort;
+  invoices: InvoicesPort;
 }
 
 export interface SignedOutRoutesProps {
@@ -136,10 +169,160 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
   // A path the account may not open does not render; it lands where `/` lands (UX-DR-22, AD-4).
   const gate = (key: NavRouteKey, element: ReactElement) =>
     openable.has(key) ? element : <Navigate to={landing} replace />;
+  // A child route that needs one more permission than its parent: the key of the
+  // endpoint its screen is built on (registry constant, AD-17).
+  const gateWith = (key: NavRouteKey, permission: PermissionKey, element: ReactElement) =>
+    gate(key, can(perms, permission) ? element : <Navigate to={landing} replace />);
+  const mayCreateQuote = can(perms, PERMISSION_KEYS.quotesCreateEdit);
+  const mayApproveDiscounts = can(perms, PERMISSION_KEYS.discountsApprove);
+  const mayGenerateContracts = can(perms, PERMISSION_KEYS.contractsGenerate);
+  const mayManageInvoices = can(perms, PERMISSION_KEYS.invoicesManage);
 
   return (
     <SidebarNavContext.Provider value={nav}>
       <Routes>
+        <Route
+          path={NAV_ROUTES.orders}
+          element={gate(
+            'orders',
+            <OrdersListScreen
+              port={ports.orders}
+              onOpen={(id) => navigate(orderPath(id))}
+              onAdd={mayCreateQuote ? () => navigate(ORDER_NEW_PATH) : undefined}
+              onOpenDiscountApprovals={mayApproveDiscounts ? () => navigate(DISCOUNT_APPROVALS_PATH) : undefined}
+            />,
+          )}
+        />
+        <Route
+          path={ORDER_NEW_PATH}
+          element={gateWith(
+            'orders',
+            PERMISSION_KEYS.quotesCreateEdit,
+            <CreateQuoteScreen
+              ordersPort={ports.orders}
+              catalogPort={ports.catalog}
+              customersPort={ports.customers}
+              onDone={(order) => navigate(orderPath(order.id))}
+            />,
+          )}
+        />
+        <Route
+          path={DISCOUNT_APPROVALS_PATH}
+          element={gateWith('orders', PERMISSION_KEYS.discountsApprove, <DiscountApprovalScreen ordersPort={ports.orders} />)}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id`}
+          element={gate(
+            'orders',
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <OrderDetailScreen
+                  port={ports.orders}
+                  orderId={id}
+                  onBack={() => navigate(NAV_ROUTES.orders)}
+                  // The screen hides it when the backend returns no next step.
+                  onChangeStatus={() => navigate(orderTransitionPath(id))}
+                  // Every account that sees the order reads its schedule; writing is gated in the screen.
+                  onOpenPaymentSchedule={() => navigate(orderPaymentsPath(id))}
+                  onOpenContracts={mayGenerateContracts ? () => navigate(orderContractsPath(id)) : undefined}
+                  onOpenInvoices={mayManageInvoices ? () => navigate(orderInvoicesPath(id)) : undefined}
+                />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id/transition`}
+          element={gate(
+            'orders',
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <OrderStatusChangeScreen
+                  port={ports.orders}
+                  orderId={id}
+                  onBack={() => navigate(orderPath(id))}
+                  onDone={() => navigate(orderPath(id))}
+                />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id/payments`}
+          element={gate(
+            'orders',
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <PaymentScheduleScreen port={ports.payments} orderId={id} onBack={() => navigate(orderPath(id))} />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id/contracts`}
+          element={gateWith(
+            'orders',
+            PERMISSION_KEYS.contractsGenerate,
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <ContractsScreen port={ports.contracts} orderId={id} onBack={() => navigate(orderPath(id))} />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id/invoices`}
+          element={gateWith(
+            'orders',
+            PERMISSION_KEYS.invoicesManage,
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <InvoicesScreen
+                  port={ports.invoices}
+                  orderId={id}
+                  onBack={() => navigate(orderPath(id))}
+                  onOpenInvoice={(invoiceId) => navigate(orderInvoicePath(id, invoiceId))}
+                />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.orders}/:id/invoices/:invoiceId`}
+          element={gateWith(
+            'orders',
+            PERMISSION_KEYS.invoicesManage,
+            <ParamsRoute
+              render={({ id = '', invoiceId = '' }) => (
+                <InvoiceDetailScreen
+                  port={ports.invoices}
+                  orderId={id}
+                  invoiceId={invoiceId}
+                  onBack={() => navigate(orderInvoicesPath(id))}
+                />
+              )}
+            />,
+          )}
+        />
+        <Route
+          path={NAV_ROUTES.inventory}
+          element={gate(
+            'inventory',
+            <InventoryScreen port={ports.inventory} onOpenVouchers={() => navigate(STOCK_VOUCHERS_PATH)} />,
+          )}
+        />
+        <Route
+          path={STOCK_VOUCHERS_PATH}
+          element={gateWith(
+            'inventory',
+            PERMISSION_KEYS.inventoryManage,
+            <StockVouchersScreen
+              port={ports.stockVouchers}
+              inventoryPort={ports.inventory}
+              onBack={() => navigate(NAV_ROUTES.inventory)}
+            />,
+          )}
+        />
         <Route
           path={NAV_ROUTES.customers}
           element={gate(
@@ -178,6 +361,11 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
       </Routes>
     </SidebarNavContext.Provider>
   );
+}
+
+/** Hands the route's (decoded) params to `render` — the order screens take their ids as props. */
+function ParamsRoute({ render }: { render: (params: Readonly<Partial<Record<string, string>>>) => ReactElement }) {
+  return render(useParams());
 }
 
 /** The router hands back the decoded segment, so `%2B84…` arrives as `+84…`. */

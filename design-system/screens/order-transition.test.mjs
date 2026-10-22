@@ -26,6 +26,8 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
+import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -166,7 +168,8 @@ test('neither screen contains a transition-event literal', () => {
 
 test('neither screen derives the step list from scope flags (AD-2)', () => {
   for (const [name, src] of allCode) {
-    for (const flag of ['scopeThiCong', 'scopeVanChuyen', 'scopeThietBi']) {
+    // Contract names (web, Story 10.5) and the mobile twin's names (until 10.8).
+    for (const flag of ['scopeConstruction', 'scopeDelivery', 'scopeEquipment', 'scopeThiCong', 'scopeVanChuyen', 'scopeThietBi']) {
       assert.ok(!src.includes(flag), `${name} must not read ${flag} — the backend already gated buocKeTiep`);
     }
   }
@@ -211,15 +214,21 @@ test('both status-change screens render the empty answer, not an error', () => {
 });
 
 // (g) PORT PARITY (AD-12) — both ports declare the same new surface.
-test('both ports declare chuyenTrangThai and the 5.5 types (parity)', () => {
+test('both ports declare the transition method and the 5.5 types (parity)', () => {
   const webPort = stripTsx(read(WEB_PORT));
   const dartPort = stripDart(read(MOBILE_PORT));
+  // Web follows the contract name (Story 10.5); mobile keeps its twin's until 10.8.
+  const mobTransition = mobileMethod('transition');
 
-  assert.match(webPort, /chuyenTrangThai\(\s*orderId: string,\s*event: string,\s*anh: File\[\],\s*\): Promise<StatusChangeResult>/, 'web port must declare chuyenTrangThai');
-  assert.match(dartPort, /Future<StatusChangeResult> chuyenTrangThai\(/, 'mobile port must declare chuyenTrangThai');
+  assert.match(webPort, /transition\(\s*orderId: string,\s*event: string,\s*files: File\[\],\s*\): Promise<StatusChangeResult>/, 'web port must declare transition');
+  assert.match(dartPort, new RegExp(`Future<StatusChangeResult> ${mobTransition}\\(`), `mobile port must declare ${mobTransition}`);
 
-  for (const type of ['OrderNextStep', 'OrderLifecycle', 'StatusChangeResult']) {
-    assert.ok(webPort.includes(`interface ${type}`), `web port must declare ${type}`);
+  for (const [type, dto] of [
+    ['OrderNextStep', 'OrderNextStepDto'],
+    ['OrderLifecycle', 'OrderLifecycleResponseDto'],
+    ['StatusChangeResult', 'StatusChangeResponseDto'],
+  ]) {
+    assert.equal(webAliasDto(webPort, type), dto, `web port must declare ${type} as the generated ${dto}`);
     assert.ok(dartPort.includes(`class ${type}`), `mobile port must declare ${type}`);
   }
 });
@@ -229,8 +238,7 @@ test('the OrderNextStep contract carries EXACTLY the backend fields (AD-12)', ()
   const dartPort = stripDart(read(MOBILE_PORT));
   const FIELDS = ['event', 'to', 'requires'];
 
-  const webBody = webPort.match(/interface OrderNextStep \{([\s\S]*?)\n\}/)?.[1] ?? '';
-  const webFields = [...webBody.matchAll(/^\s*(\w+)\??:/gm)].map((m) => m[1]);
+  const webFields = Object.keys(generatedFields(webAliasDto(webPort, 'OrderNextStep')));
   assert.deepEqual(webFields.sort(), [...FIELDS].sort(), 'the web type must carry EXACTLY the backend fields');
 
   const dartBody = dartPort.match(/class OrderNextStep \{([\s\S]*?)\n\}/)?.[1] ?? '';

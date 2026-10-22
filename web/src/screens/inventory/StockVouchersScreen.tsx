@@ -39,7 +39,7 @@ import { Icon } from '../../design-system/icons/Icon';
 import type { InventoryPort, StockItemView } from '../../design-system/session/inventory-port';
 import type {
   CreateReturnVoucherInput,
-  LoaiPhieu,
+  VoucherType,
   StockVoucherDetail,
   StockVoucherPortError,
   StockVouchersPort,
@@ -104,11 +104,11 @@ function listQuery(filter: string) {
   if (filter === ALL) return {};
   if (filter === RETURNS) return { isReturn: true };
   if (filter === 'nhap') return { type: 'nhap' as const, isReturn: false };
-  return { type: filter as LoaiPhieu };
+  return { type: filter as VoucherType };
 }
 
 /** Chip label + colour token per type. TWIN of `_chipLoai()` in the Flutter screen. */
-function nhanLoai(type: LoaiPhieu, isReturn: boolean): { label: string; mau: string } {
+function nhanLoai(type: VoucherType, isReturn: boolean): { label: string; mau: string } {
   if (isReturn) return { label: 'Nhập trả', mau: 'var(--info)' };
   return type === 'nhap'
     ? { label: 'Nhập', mau: 'var(--ok)' }
@@ -116,11 +116,11 @@ function nhanLoai(type: LoaiPhieu, isReturn: boolean): { label: string; mau: str
 }
 
 /** `+40` / `−14` — a sign glued on as text from the type. TWIN of `_soLuongCoDau()`. */
-function soLuongCoDau(type: LoaiPhieu, qty: number): string {
+function soLuongCoDau(type: VoucherType, qty: number): string {
   return `${type === 'nhap' ? '+' : '−'}${qty}`;
 }
 
-function moTaLoai(type: LoaiPhieu, orderBound: boolean): string {
+function moTaLoai(type: VoucherType, orderBound: boolean): string {
   if (type === 'nhap') return 'Nhập kho';
   return orderBound ? 'Xuất kho · gắn đơn' : 'Xuất kho · không gắn đơn';
 }
@@ -132,8 +132,8 @@ function chiChuSo(text: string): string {
 
 interface DongForm {
   productId: string;
-  ten: string;
-  donVi: string;
+  name: string;
+  unit: string;
   onHand: number;
   qty: string;
   unitCost: string;
@@ -141,14 +141,14 @@ interface DongForm {
 
 interface ReturnRow {
   productId: string;
-  ten: string;
-  donVi: string;
+  name: string;
+  unit: string;
   issued: number;
   /** Digits as typed; '' = blank (an error, never 0). */
   qty: string;
 }
 
-function ChipLoai({ type, isReturn = false }: { type: LoaiPhieu; isReturn?: boolean }) {
+function ChipLoai({ type, isReturn = false }: { type: VoucherType; isReturn?: boolean }) {
   const nhan = nhanLoai(type, isReturn);
   return (
     <span className="chip pk-chip" style={{ color: nhan.mau }}>
@@ -211,7 +211,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
 
   // ---- Form tạo phiếu ----
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [loai, setLoai] = useState<LoaiPhieu>('nhap');
+  const [loai, setLoai] = useState<VoucherType>('nhap');
   const [note, setNote] = useState('');
   const [dong, setDong] = useState<DongForm[]>([]);
   const [q, setQ] = useState('');
@@ -248,8 +248,8 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
       ...dong,
       {
         productId: sp.productId,
-        ten: sp.ten,
-        donVi: sp.donVi,
+        name: sp.name,
+        unit: sp.unit,
         onHand: sp.onHand,
         qty: '',
         unitCost: '',
@@ -304,8 +304,8 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
     setReturnRows(
       origin.lines.map((l) => ({
         productId: l.productId,
-        ten: l.ten,
-        donVi: l.donVi,
+        name: l.name,
+        unit: l.unit,
         issued: l.qty,
         qty: String(l.qty),
       })),
@@ -440,12 +440,12 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                       className={p.id === selectedId ? 'pk-row pk-row--active' : 'pk-row'}
                       onClick={() => setSelectedId(p.id)}
                     >
-                      <td className="strong mono">{p.ma}</td>
+                      <td className="strong mono">{p.code}</td>
                       <td>
                         <ChipLoai type={p.type} isReturn={p.returnOfVoucherId !== undefined} />
                       </td>
                       <td className="mono">{ngayNgan(p.createdAt)}</td>
-                      <td>{p.nguoiTao.displayName}</td>
+                      <td>{p.createdBy.displayName}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -468,7 +468,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                 <Card variant={detail.type === 'nhap' ? 'teal' : 'default'} className="pk-detail">
                   <div className="pk-detail-head">
                     <span className="micro">Chi tiết phiếu</span>
-                    <span className="strong mono">{detail.ma}</span>
+                    <span className="strong mono">{detail.code}</span>
                     <span className="pk-sp" />
                     <ChipLoai type={detail.type} isReturn={isReturnVoucher} />
                   </div>
@@ -491,7 +491,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                           <dt>Gắn đơn</dt>
                           <dd className="mono">{detail.returnOf.orderId}</dd>
                           <dt>Phiếu xuất gốc</dt>
-                          <dd className="mono">{detail.returnOf.ma}</dd>
+                          <dd className="mono">{detail.returnOf.code}</dd>
                         </>
                       )}
                       {detail.returnVoucher !== undefined && (
@@ -504,7 +504,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                               variant="ghost"
                               onClick={() => setSelectedId(detail.returnVoucher!.id)}
                             >
-                              {detail.returnVoucher.ma}
+                              {detail.returnVoucher.code}
                             </Button>
                           </dd>
                         </>
@@ -518,7 +518,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                             ? 'Người xác nhận'
                             : 'Người tạo'}
                       </dt>
-                      <dd>{detail.nguoiTao.displayName}</dd>
+                      <dd>{detail.createdBy.displayName}</dd>
                       <dt>Ghi chú</dt>
                       <dd>{detail.note ?? '—'}</dd>
                     </dl>
@@ -533,7 +533,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                       <tbody>
                         {detail.lines.map((l) => (
                           <tr key={l.productId}>
-                            <td>{l.ten}</td>
+                            <td>{l.name}</td>
                             <td className="num mono">{soLuongCoDau(detail.type, l.qty)}</td>
                             {coGiaVon && (
                               <td className="num mono strong">
@@ -572,7 +572,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
           <Seg
             options={LOAI_OPTIONS}
             activeKey={loai}
-            onSelect={(k) => setLoai(k as LoaiPhieu)}
+            onSelect={(k) => setLoai(k as VoucherType)}
           />
           <Banner tone="info">{loai === 'nhap' ? NOTE_NHAP : NOTE_XUAT}</Banner>
 
@@ -604,7 +604,7 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
                   variant="ghost"
                   onClick={() => themDong(sp)}
                 >
-                  {sp.ten} · Còn {sp.onHand} {sp.donVi}
+                  {sp.name} · Còn {sp.onHand} {sp.unit}
                 </Button>
               ))}
             </div>
@@ -613,16 +613,16 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
           {dong.map((d, i) => (
             <div key={d.productId} className="pk-dong">
               <div className="pk-dong-head">
-                <span className="strong">{d.ten}</span>
+                <span className="strong">{d.name}</span>
                 <span className="micro muted">
-                  Còn {d.onHand} {d.donVi}
+                  Còn {d.onHand} {d.unit}
                 </span>
                 <span className="pk-sp" />
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  aria-label={`Bỏ dòng ${d.ten}`}
+                  aria-label={`Bỏ dòng ${d.name}`}
                   onClick={() => {
                     setDong(dong.filter((_, j) => j !== i));
                     // Field errors are keyed by line index (`lines.N.*`): once a line goes,
@@ -691,13 +691,13 @@ export function StockVouchersScreen({ port, inventoryPort, onBack }: StockVouche
             <tbody>
               {returnRows.map((d) => (
                 <tr key={d.productId} className="pk-return-row">
-                  <td>{d.ten}</td>
+                  <td>{d.name}</td>
                   <td className="num mono">
-                    {d.issued} {d.donVi}
+                    {d.issued} {d.unit}
                   </td>
                   <td className="num">
                     <Field
-                      aria-label={`Nhận lại ${d.ten}`}
+                      aria-label={`Nhận lại ${d.name}`}
                       inputMode="numeric"
                       value={d.qty}
                       onChange={(e) => editReturnRow(d.productId, chiChuSo(e.target.value))}

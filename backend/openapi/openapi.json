@@ -6401,6 +6401,10 @@
           },
           "vatMode": {
             "type": "string",
+            "enum": [
+              "co_vat",
+              "khong_vat"
+            ],
             "nullable": true,
             "description": "Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT)."
           },
@@ -6824,7 +6828,7 @@
             "description": "Người tạo/sở hữu đơn."
           },
           "assigneeAccountId": {
-            "type": "object",
+            "type": "string",
             "description": "Người được giao chăm đơn; null nếu chưa giao.",
             "nullable": true
           },
@@ -7049,16 +7053,17 @@
             "description": "ISO-8601 UTC."
           },
           "confirmedAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "description": "Thời điểm bản này được Chốt; null nếu chưa chốt.",
             "nullable": true
           },
           "createdByAccountId": {
-            "type": "object",
+            "type": "string",
             "nullable": true
           },
           "createdByDisplayName": {
-            "type": "object",
+            "type": "string",
             "description": "Tên hiển thị người tạo bản; null với bản cũ không có actor.",
             "nullable": true
           },
@@ -7781,12 +7786,12 @@
             "description": "Tên hiển thị người tải ảnh lên."
           },
           "statusFrom": {
-            "type": "object",
+            "type": "string",
             "description": "Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung.",
             "nullable": true
           },
           "statusTo": {
-            "type": "object",
+            "type": "string",
             "description": "Trạng thái SAU bước ảnh này thuộc về; null với ảnh bổ sung.",
             "nullable": true
           },

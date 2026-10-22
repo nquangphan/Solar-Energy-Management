@@ -45,12 +45,12 @@ function renderScreen(node: ReactNode, permissions: string[] = ALL_PERMS) {
 class InDeliveryPort extends FakeOrdersPort {
   override getLifecycle(): Promise<OrderLifecycle> {
     return Promise.resolve({
-      buoc: [
-        { status: 'danggiao', trangThai: 'current' },
-        { status: 'dagiao', trangThai: 'upcoming' },
+      steps: [
+        { status: 'danggiao', progress: 'current' },
+        { status: 'dagiao', progress: 'upcoming' },
       ],
-      buocKeTiep: [{ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' }],
-      coTheHuy: false,
+      nextSteps: [{ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' }],
+      canCancel: false,
     });
   }
 }
@@ -99,7 +99,7 @@ describe('Status change — "Đã giao" issues stock', () => {
 
   it('preview blocked ⇒ the CHẶN banner (one sentence per short line), "Thiếu N unit" under that row only, the confirm button LOCKED and never reaching the port', async () => {
     const port = new InDeliveryPort();
-    const transition = vi.spyOn(port, 'chuyenTrangThai');
+    const transition = vi.spyOn(port, 'transition');
     renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
 
     const button = (await screen.findByRole('button', {
@@ -130,7 +130,7 @@ describe('Status change — "Đã giao" issues stock', () => {
   it('409 short stock ⇒ banner with the backend message + error right under row `lines.0`', async () => {
     const port = new InDeliveryPort();
     await stalePreviewThenReal(port, FAKE_ORDER_SHORT_STOCK);
-    vi.spyOn(port, 'chuyenTrangThai').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
+    vi.spyOn(port, 'transition').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
     renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
 
     fireEvent.click(
@@ -146,11 +146,11 @@ describe('Status change — "Đã giao" issues stock', () => {
     expect(otherRow.nextElementSibling?.textContent).not.toContain('không xuất được');
   });
 
-  it('a successful confirm goes through chuyenTrangThai — the screen never calls issueStock itself', async () => {
+  it('a successful confirm goes through transition — the screen never calls issueStock itself', async () => {
     const port = new InDeliveryPort();
     const transition = vi
-      .spyOn(port, 'chuyenTrangThai')
-      .mockResolvedValue({ status: 'dagiao', occurredAt: '', soAnhDaLuu: 0 } as StatusChangeResult);
+      .spyOn(port, 'transition')
+      .mockResolvedValue({ status: 'dagiao', occurredAt: '', savedAttachmentCount: 0 } as StatusChangeResult);
     const issue = vi.spyOn(port, 'issueStock');
     const onDone = vi.fn();
     renderScreen(<OrderStatusChangeScreen port={port} orderId="ord-x" onDone={onDone} />);
@@ -169,12 +169,12 @@ describe('Status change — "Đã giao" issues stock', () => {
 class TwoStepPort extends FakeOrdersPort {
   override getLifecycle(): Promise<OrderLifecycle> {
     return Promise.resolve({
-      buoc: [],
-      buocKeTiep: [
+      steps: [],
+      nextSteps: [
         { event: 'bat_dau_thi_cong', to: 'thicong', requires: 'construction.transition' },
         { event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' },
       ],
-      coTheHuy: false,
+      canCancel: false,
     });
   }
 }
@@ -252,7 +252,7 @@ describe('Status change — the "Đã giao" preview gates the button', () => {
 
   it('a 409 re-reads the preview (current numbers next to the row messages); a new step clears the banner', async () => {
     const port = new TwoStepPort();
-    vi.spyOn(port, 'chuyenTrangThai').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
+    vi.spyOn(port, 'transition').mockRejectedValue(FAKE_STOCK_ISSUE_SHORT_ERROR);
     const read = await stalePreviewThenReal(port, FAKE_ORDER_SHORT_STOCK);
     renderScreen(<OrderStatusChangeScreen port={port} orderId={FAKE_ORDER_SHORT_STOCK} />);
 
@@ -273,7 +273,7 @@ describe('Status change — the "Đã giao" preview gates the button', () => {
 describe('Order detail — Phiếu xuất', () => {
   /** A confirmed order — a status the backend issues stock from. */
   async function seeded(port: FakeOrdersPort) {
-    const order = await port.create({ customerSdt: '+84903176968' });
+    const order = await port.create({ customerPhone: '+84903176968' });
     await port.addLine(order.id, { productId: 'prod-pin-580', qty: 2 });
     await port.confirmOrder(order.id);
     return order;
@@ -412,7 +412,7 @@ describe('Order detail — Phiếu xuất', () => {
 
 describe('Equipment-only order at dachot — issue before the direct close', () => {
   async function confirmed(port: FakeOrdersPort) {
-    const order = await port.create({ customerSdt: '+84903176968' });
+    const order = await port.create({ customerPhone: '+84903176968' });
     await port.addLine(order.id, { productId: 'prod-pin-580', qty: 2 });
     await port.confirmOrder(order.id);
     return order;

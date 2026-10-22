@@ -68,7 +68,7 @@ function renderScreen(node: ReactNode) {
 
 /** Đơn baogia của khách demo — có một dòng danh mục để các nhánh có dữ liệu render. */
 async function seededOrder(port: FakeOrdersPort) {
-  const order = await port.create({ customerSdt: SDT_KHACH_DEMO });
+  const order = await port.create({ customerPhone: SDT_KHACH_DEMO });
   await port.addLine(order.id, { productId: 'prod-pin-580', qty: 2 });
   return order;
 }

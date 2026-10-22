@@ -25,7 +25,11 @@ import {
 } from '../../design-system/components';
 import { STATUS_LABELS, type StatusKey } from '../../design-system/components/StatusChip';
 import { filterNav } from '../../design-system/gating/permissions';
-import type { OrderListItem, OrdersPort } from '../../design-system/session/orders-port';
+import type {
+  OrderListItem,
+  OrderListQuery,
+  OrdersPort,
+} from '../../design-system/session/orders-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Seg, Sidebar, SIDEBAR_NAV, Toolbar, Topbar, WebShell } from '../../design-system/shell';
 
@@ -34,7 +38,10 @@ import './orders-list.css';
 export interface OrdersListScreenProps {
   port: OrdersPort;
   onOpen?: (id: string) => void;
+  /** Absent for an account that cannot create quotes: the button is then absent too (UX-DR-22). */
   onAdd?: () => void;
+  /** The way into Duyệt chiết khấu; given only to an account that may approve discounts. */
+  onOpenDiscountApprovals?: () => void;
 }
 
 const ALL = 'ALL';
@@ -64,7 +71,7 @@ function isStatusKey(value: string): value is StatusKey {
   return Object.prototype.hasOwnProperty.call(STATUS_LABELS, value);
 }
 
-export function OrdersListScreen({ port, onOpen, onAdd }: OrdersListScreenProps) {
+export function OrdersListScreen({ port, onOpen, onAdd, onOpenDiscountApprovals }: OrdersListScreenProps) {
   const { perms } = usePermissions();
 
   const [filter, setFilter] = useState<string>(ALL);
@@ -90,7 +97,11 @@ export function OrdersListScreen({ port, onOpen, onAdd }: OrdersListScreenProps)
       // one of the three shapes, so the two never travel together.
       const result = await port.list({
         followUp: filter === FOLLOW_UP ? true : undefined,
-        status: filter === ALL || filter === FOLLOW_UP ? undefined : filter,
+        // Every other Seg key is a STATUS_LABELS key — a status of the contract enum.
+        status:
+          filter === ALL || filter === FOLLOW_UP
+            ? undefined
+            : (filter as OrderListQuery['status']),
         page,
       });
       if (ticket !== latest.current) return;
@@ -127,9 +138,16 @@ export function OrdersListScreen({ port, onOpen, onAdd }: OrdersListScreenProps)
       <div className="ord-wrap">
         <Toolbar>
           <Seg options={FILTER_OPTIONS} activeKey={filter} onSelect={onFilter} />
-          <Button variant="primary" type="button" onClick={onAdd}>
-            + Tạo đơn
-          </Button>
+          {onOpenDiscountApprovals && (
+            <Button variant="ghost" type="button" onClick={onOpenDiscountApprovals}>
+              Duyệt chiết khấu
+            </Button>
+          )}
+          {onAdd && (
+            <Button variant="primary" type="button" onClick={onAdd}>
+              + Tạo đơn
+            </Button>
+          )}
         </Toolbar>
 
         {state === 'loading' && (
@@ -155,11 +173,13 @@ export function OrdersListScreen({ port, onOpen, onAdd }: OrdersListScreenProps)
         {state === 'ready' && items.length === 0 && !filtering && (
           <EmptyState
             title="Chưa có đơn nào"
-            message="Bấm ➕Tạo để bắt đầu."
+            message={onAdd ? 'Bấm ➕Tạo để bắt đầu.' : undefined}
             action={
-              <Button variant="primary" type="button" onClick={onAdd}>
-                + Tạo đơn
-              </Button>
+              onAdd && (
+                <Button variant="primary" type="button" onClick={onAdd}>
+                  + Tạo đơn
+                </Button>
+              )
             }
           />
         )}
@@ -178,7 +198,7 @@ export function OrdersListScreen({ port, onOpen, onAdd }: OrdersListScreenProps)
               {items.map((order) => (
                 <tr key={order.id}>
                   <td>{order.customerName}</td>
-                  <td className="ord-mono">{order.customerSdt}</td>
+                  <td className="ord-mono">{order.customerPhone}</td>
                   <td>
                     {isStatusKey(order.status) ? (
                       <StatusChip status={order.status} />

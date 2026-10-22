@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  Param,
-  ParseUUIDPipe,
-  Post,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, Param, Post } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -30,6 +23,7 @@ import { SettingsService } from '../settings/settings.service';
 import { RecordPaymentRequestDto } from './dto/record-payment-request.dto';
 import { RecordPaymentResponseDto } from './dto/record-payment-response.dto';
 import { PaymentsService } from './payments.service';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Payments of an order (FR-12), served as a sub-resource of the order: `/orders/{id}/payments`.
@@ -81,7 +75,7 @@ export class PaymentsController {
   })
   async record(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
     @Body() body: RecordPaymentRequestDto,
   ): Promise<RecordPaymentResponseDto> {
     return (await this.payments.record(

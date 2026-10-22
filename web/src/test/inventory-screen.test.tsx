@@ -60,7 +60,7 @@ class ManualInventoryPort implements InventoryPort {
   }
 }
 
-const EMPTY: StockList = { items: [], danhSachCanMua: [] };
+const EMPTY: StockList = { items: [], purchaseList: [] };
 const PIN = DEMO_STOCK_LIST.items.find(
   (i) => i.productId === "prod-pin-ae-630",
 )!;
@@ -142,20 +142,20 @@ describe("InventoryScreen — hành vi", () => {
     const moi = port.calls.at(-1)!;
     expect(moi).not.toBe(cu);
 
-    await act(async () => moi.resolve({ items: [DAY], danhSachCanMua: [] }));
-    await act(async () => cu.resolve({ items: [PIN], danhSachCanMua: [] }));
+    await act(async () => moi.resolve({ items: [DAY], purchaseList: [] }));
+    await act(async () => cu.resolve({ items: [PIN], purchaseList: [] }));
 
-    expect(screen.getByText(DAY.ten)).toBeTruthy();
-    expect(screen.queryByText(PIN.ten)).toBeNull();
+    expect(screen.getByText(DAY.name)).toBeTruthy();
+    expect(screen.queryByText(PIN.name)).toBeNull();
   });
 
   it('có sản phẩm nhưng không món nào âm ⇒ ẩn danh sách cần mua; "het"/"du" hiện số khả dụng', async () => {
-    const khongAm = DEMO_STOCK_LIST.items.filter((i) => i.tinhTrang !== "am");
+    const khongAm = DEMO_STOCK_LIST.items.filter((i) => i.stockStatus !== "am");
     const port = new ManualInventoryPort();
     renderScreen(<InventoryScreen port={port} />);
 
     await act(async () =>
-      port.calls[0].resolve({ items: khongAm, danhSachCanMua: [] }),
+      port.calls[0].resolve({ items: khongAm, purchaseList: [] }),
     );
 
     expect(
@@ -168,7 +168,7 @@ describe("InventoryScreen — hành vi", () => {
     expect(screen.getAllByText("Đủ").length).toBeGreaterThan(0);
     expect(
       screen.getByText(
-        `Còn ${PIN.onHand} · Đã hứa ${PIN.reserved} · Khả dụng ${PIN.khaDung} ${PIN.donVi}`,
+        `Còn ${PIN.onHand} · Đã hứa ${PIN.reserved} · Khả dụng ${PIN.available} ${PIN.unit}`,
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/Cần nhập/)).toBeNull();

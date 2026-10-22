@@ -19,12 +19,12 @@
 // nowhere is worse than no button — it stays absent.
 //
 // THE TWO BUTTONS ARE GATED SEPARATELY. Cancelling is not part of the manual
-// lane, so `buocKeTiep` is EMPTY at 'baogia' — the status orders are cancelled
-// from most often. Wrapping both in one `buocKeTiep.length > 0` would make the
+// lane, so `nextSteps` is EMPTY at 'baogia' — the status orders are cancelled
+// from most often. Wrapping both in one `nextSteps.length > 0` would make the
 // cancel button invisible exactly where it is needed.
 //
 // THE BUTTON'S VISIBILITY IS NOT A PERMISSION CALCULATION. It shows exactly when
-// the backend returned a non-empty `buocKeTiep`, and is ABSENT otherwise — not
+// the backend returned a non-empty `nextSteps`, and is ABSENT otherwise — not
 // greyed (UX-DR-22). The branches need DIFFERENT permission keys, so an any-of
 // expression here would be a third copy of the rule and it would drift
 // (AD-2/AD-4).
@@ -149,7 +149,7 @@ function nhanTrangThai(value: string): string {
 function toStepItems(steps: OrderLifecycleStep[]): StepItem[] {
   return steps.map((step) => ({
     label: isStatusKey(step.status) ? STATUS_LABELS[step.status] : step.status,
-    state: step.trangThai === 'done' || step.trangThai === 'current' ? step.trangThai : undefined,
+    state: step.progress === 'done' || step.progress === 'current' ? step.progress : undefined,
   }));
 }
 
@@ -157,10 +157,10 @@ function toStepItems(steps: OrderLifecycleStep[]): StepItem[] {
 function summarise(version: OrderVersionItem): string {
   if (version.versionNo === 1) return 'Bản gốc';
   const parts: string[] = [];
-  if (version.thayDoi.them.length > 0) parts.push(`thêm ${version.thayDoi.them.length} dòng`);
-  if (version.thayDoi.xoa.length > 0) parts.push(`xoá ${version.thayDoi.xoa.length} dòng`);
-  if (version.thayDoi.doiSoLuong.length > 0) {
-    parts.push(`đổi SL ${version.thayDoi.doiSoLuong.length} dòng`);
+  if (version.changes.added.length > 0) parts.push(`thêm ${version.changes.added.length} dòng`);
+  if (version.changes.removed.length > 0) parts.push(`xoá ${version.changes.removed.length} dòng`);
+  if (version.changes.qtyChanged.length > 0) {
+    parts.push(`đổi SL ${version.changes.qtyChanged.length} dòng`);
   }
   return parts.length === 0 ? 'Không đổi dòng nào' : parts.join(' · ');
 }
@@ -203,9 +203,9 @@ export function OrderDetailScreen({
       ]);
       if (ticket !== latest.current) return;
       setOrder(don);
-      setSteps(buoc.buoc);
-      setBuocKeTiep(buoc.buocKeTiep);
-      setCoTheHuy(buoc.coTheHuy);
+      setSteps(buoc.steps);
+      setBuocKeTiep(buoc.nextSteps);
+      setCoTheHuy(buoc.canCancel);
       setVersions(banUpdate);
       setState('ready');
     } catch (err) {
@@ -253,7 +253,7 @@ export function OrderDetailScreen({
     thuHoiAnhUrls();
     setAnhPreviews({});
     try {
-      const danhSach = await port.listAnh(orderId);
+      const danhSach = await port.listAttachments(orderId);
       if (ticket !== anhLatest.current) return;
       setAnhItems(danhSach);
       setAnhState('ready');
@@ -262,7 +262,7 @@ export function OrderDetailScreen({
       // keeps the placeholder glyph — one broken image must not blank the tab.
       for (const item of danhSach) {
         try {
-          const blob = await port.anhBytes(orderId, item.id);
+          const blob = await port.attachmentBytes(orderId, item.id);
           const url = URL.createObjectURL(blob);
           // A newer load already revoked this batch — hand the URL straight
           // back instead of parking it in state nothing reads.
@@ -319,7 +319,7 @@ export function OrderDetailScreen({
   const guiAnh = useCallback(async () => {
     if (anhDaChon.length === 0) return;
     try {
-      await port.themAnh(orderId, anhDaChon.map((a) => a.file));
+      await port.addAttachments(orderId, anhDaChon.map((a) => a.file));
       // Previews are revoked only after the post succeeded — a failed attempt
       // keeps its thumbnails so the user can retry without re-picking.
       for (const a of anhDaChon) if (a.item.url) URL.revokeObjectURL(a.item.url);
@@ -335,7 +335,7 @@ export function OrderDetailScreen({
     const id = xoaId;
     setXoaId(null);
     try {
-      await port.xoaAnh(orderId, id);
+      await port.removeAttachment(orderId, id);
       await loadAnh();
     } catch {
       setAnhState('error');
@@ -417,7 +417,7 @@ export function OrderDetailScreen({
     setDangHuy(true);
     setLoiHuy(null);
     try {
-      await port.huyDon(orderId, lyDoHuy);
+      await port.cancel(orderId, lyDoHuy);
       setMoHuy(false);
       // Status, `cancelReason` and the lifecycle all changed — reload rather
       // than patch local state, so the screen keeps showing one truth.
@@ -438,16 +438,16 @@ export function OrderDetailScreen({
   const galleryItems: AttachmentGalleryItem[] = anhItems.map((item) => ({
     id: item.id,
     fileName: item.fileName,
-    nguoiTaiLen: item.nguoiTaiLen,
+    uploadedBy: item.uploadedBy,
     createdAt: item.createdAt,
     statusTo: item.statusTo,
     buocLabel:
-      item.statusFrom !== null && item.statusTo !== null
+      item.statusFrom != null && item.statusTo != null
         ? `Bước: ${nhanTrangThai(item.statusFrom)} → ${nhanTrangThai(item.statusTo)}`
         : undefined,
     previewSrc: anhPreviews[item.id],
     // Backend-computed (AD-2) — the screen renders it, never rebuilds it.
-    coTheXoa: item.coTheXoa,
+    canDelete: item.canDelete,
   }));
 
   return (
@@ -511,9 +511,9 @@ export function OrderDetailScreen({
                 {stockIssue.issued && stockIssue.voucher !== undefined && (
                   <div className="si-preview">
                     <p className="si-status">
-                      <span className="mono strong">{stockIssue.voucher.ma}</span> ·{' '}
+                      <span className="mono strong">{stockIssue.voucher.code}</span> ·{' '}
                       <span className="mono">{ngayGio(stockIssue.voucher.createdAt)}</span> ·{' '}
-                      {stockIssue.voucher.nguoiTao.displayName}
+                      {stockIssue.voucher.createdBy.displayName}
                     </p>
                     <Table>
                       <thead>
@@ -528,7 +528,7 @@ export function OrderDetailScreen({
                       <tbody>
                         {stockIssue.voucher.lines.map((l) => (
                           <tr key={l.productId}>
-                            <td>{l.ten}</td>
+                            <td>{l.name}</td>
                             <td className="num mono">{l.qty}</td>
                             {stockIssue.voucher!.lines.some((x) => x.unitCost !== undefined) && (
                               <td className="num mono">
@@ -569,7 +569,7 @@ export function OrderDetailScreen({
                 </div>
                 <div className="od-kv">
                   <span className="od-k">SĐT khách</span>
-                  <span className="od-v od-mono">{order.customerSdt}</span>
+                  <span className="od-v od-mono">{order.customerPhone}</span>
                 </div>
                 <div className="od-kv">
                   <span className="od-k">Trạng thái</span>
@@ -581,7 +581,7 @@ export function OrderDetailScreen({
                     )}
                   </span>
                 </div>
-                {order.cancelReason !== null && (
+                {order.cancelReason != null && (
                   <div className="od-kv">
                     <span className="od-k">Lý do huỷ</span>
                     <span className="od-v">{order.cancelReason}</span>
@@ -589,7 +589,7 @@ export function OrderDetailScreen({
                 )}
                 <div className="od-kv">
                   <span className="od-k">Công suất</span>
-                  <span className="od-v">{order.kWp === null ? '—' : `${order.kWp} kWp`}</span>
+                  <span className="od-v">{order.kWp == null ? '—' : `${order.kWp} kWp`}</span>
                 </div>
                 <div className="od-kv">
                   <span className="od-k">Người phụ trách</span>
@@ -601,9 +601,9 @@ export function OrderDetailScreen({
                       the off ones through, so "Thi công is off" reads differently
                       from "the screen forgot to draw it". */}
                   <span className="od-v od-scope">
-                    <ScopeFlag on={order.scopeThietBi}>Thiết bị</ScopeFlag>
-                    <ScopeFlag on={order.scopeThiCong}>Thi công</ScopeFlag>
-                    <ScopeFlag on={order.scopeVanChuyen}>Vận chuyển</ScopeFlag>
+                    <ScopeFlag on={order.scopeEquipment}>Thiết bị</ScopeFlag>
+                    <ScopeFlag on={order.scopeConstruction}>Thi công</ScopeFlag>
+                    <ScopeFlag on={order.scopeDelivery}>Vận chuyển</ScopeFlag>
                   </span>
                 </div>
 
@@ -643,14 +643,14 @@ export function OrderDetailScreen({
                   <li className="od-version" key={version.id}>
                     <div className="od-version-head">
                       <span className="od-version-no">Bản {version.versionNo}</span>
-                      {version.laBanHienLuc && <span className="od-badge">Bản hiệu lực</span>}
+                      {version.isCurrent && <span className="od-badge">Bản hiệu lực</span>}
                     </div>
                     <div className="od-version-meta">
                       {/* No invented name: a version created before the actor
                           column existed simply has no author. */}
                       <span>{version.createdByDisplayName ?? '—'}</span>
                       <span className="od-mono">{version.createdAt}</span>
-                      <span>{version.soDong} dòng</span>
+                      <span>{version.lineCount} dòng</span>
                     </div>
                     <div className="od-version-diff">{summarise(version)}</div>
                   </li>

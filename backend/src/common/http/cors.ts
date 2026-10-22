@@ -9,7 +9,8 @@ import type { CorsOptions } from '@nestjs/common/interfaces/external/cors-option
  * Exact string match only — no wildcard, no regex — so `https://x.evil` can never
  * slip through a pattern. Bearer auth, no cookies ⇒ `credentials: false`. The only
  * request headers the clients send are Authorization and Content-Type (the payment
- * idempotency key travels in the body).
+ * idempotency key travels in the body). `Content-Disposition` is exposed so a cross-origin
+ * client can read the file name of a contract/invoice PDF download.
  */
 export function corsOptionsFromEnv(
   raw: string | undefined,
@@ -27,6 +28,7 @@ export function corsOptionsFromEnv(
     origin: origins,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type'],
+    exposedHeaders: ['Content-Disposition'],
     credentials: false,
     maxAge: 600,
   };

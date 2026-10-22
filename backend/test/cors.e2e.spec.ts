@@ -75,6 +75,26 @@ describe('CORS (e2e)', () => {
       expect(res.status).toBe(400);
       expect(res.headers['access-control-allow-origin']).toBe(ALLOWED);
     });
+
+    it('an actual request from the allowed origin exposes Content-Disposition (PDF file name)', async () => {
+      const res = await request(app.getHttpServer() as Server)
+        .post('/auth/login')
+        .set('Origin', ALLOWED)
+        .send({});
+      expect(res.headers['access-control-expose-headers']).toContain(
+        'Content-Disposition',
+      );
+    });
+
+    it('a request from any other origin still gets no allow-origin header', async () => {
+      // The `cors` middleware writes the expose list on every response; without an
+      // allow-origin the browser refuses the response anyway, so nothing is readable there.
+      const res = await request(app.getHttpServer() as Server)
+        .post('/auth/login')
+        .set('Origin', EVIL)
+        .send({});
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    });
   });
 
   describe('with CORS_ORIGINS empty', () => {
@@ -114,6 +134,7 @@ describe('corsOptionsFromEnv', () => {
       origin: ['https://app.example.vn'],
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE'],
       allowedHeaders: ['Authorization', 'Content-Type'],
+      exposedHeaders: ['Content-Disposition'],
       credentials: false,
       maxAge: 600,
     });

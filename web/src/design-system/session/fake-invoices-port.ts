@@ -77,7 +77,7 @@ export const DEMO_INVOICE_DETAIL: InvoiceDetail = {
   ...DEMO_INVOICE_SUMMARY,
   orderId: "DH-2048",
   quoteNo: "BG-2048",
-  customerSdt: "+84901234567",
+  customerPhone: "+84901234567",
   customerAddress: "122 Trần Não, TP. Thủ Đức",
   seller: {
     legalName: "CÔNG TY NLMT PHƯƠNG NAM",

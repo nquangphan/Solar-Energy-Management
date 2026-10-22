@@ -6,96 +6,57 @@
 // and its port carries no write verb. Vouchers are the one thing that moves
 // `onHand`, so the write lives here.
 //
-// THE CLIENT COMPUTES NOTHING (AD-2). The voucher code (`ma`), `soDong`,
-// `tongSoLuong`, the weighted-average cost and the "not enough stock" decision are
+// THE CLIENT COMPUTES NOTHING (AD-2). The voucher `code`, `lineCount`,
+// `totalQty`, the weighted-average cost and the "not enough stock" decision are
 // all the backend's. `unitCost` is ABSENT (not 0, not null) when the caller lacks
 // `costs.view` — the screen renders a cost column only when the field is there.
+//
+// Every data type below is the GENERATED contract type (AD-12).
+
+import type { components, paths } from '../../api/generated/schema';
+
+type Schemas = components['schemas'];
+
+/** `StockVoucherCreatorDto`. */
+export type StockVoucherCreator = Schemas['StockVoucherCreatorDto'];
+
+/**
+ * `StockVoucherSummaryDto`. `code` is the display code built by the backend
+ * (`PK-N-0119`). `orderId` is ABSENT (not null) on a free-standing voucher;
+ * `returnOfVoucherId` is set ONLY on a return voucher (`PK-NT-…`). `totalQty` is
+ * always positive — the direction comes from `type`.
+ */
+export type StockVoucherSummary = Schemas['StockVoucherSummaryDto'];
 
 /** `nhap` = stock in · `xuat` = stock out (free-standing, or bound to an order via `orderId`). */
-export type LoaiPhieu = 'nhap' | 'xuat';
+export type VoucherType = StockVoucherSummary['type'];
 
-/** Mirrors `StockVoucherCreatorDto`. */
-export interface StockVoucherCreator {
-  id: string;
-  displayName: string;
-}
+/** `StockVoucherLineResponseDto`. `unitCost` (đồng) is ABSENT when the caller lacks `costs.view`. */
+export type StockVoucherLine = Schemas['StockVoucherLineResponseDto'];
 
-/** Mirrors `StockVoucherSummaryDto` field for field. */
-export interface StockVoucherSummary {
-  id: string;
-  /** Display code, e.g. `PK-N-0119` — built by the backend. */
-  ma: string;
-  type: LoaiPhieu;
-  /**
-   * The order this stock-out belongs to (one order, one stock-out).
-   * ABSENT on a free-standing voucher, not null.
-   */
-  orderId?: string;
-  /** ISO-8601 UTC. */
-  createdAt: string;
-  nguoiTao: StockVoucherCreator;
-  /** Set ONLY on a return voucher (`PK-NT-…`) — the stock-out it returns. ABSENT otherwise. */
-  returnOfVoucherId?: string;
-  soDong: number;
-  /** Sum of line quantities — always positive; the direction comes from `type`. */
-  tongSoLuong: number;
-}
+/**
+ * `StockVoucherDetailDto`. `returnOf` (return voucher only) names the origin
+ * stock-out; `returnVoucher` is set on an order-bound stock-out that already has
+ * one. `canReturn` is decided by the backend and ALWAYS present.
+ */
+export type StockVoucherDetail = Schemas['StockVoucherDetailDto'];
 
-/** Mirrors `StockVoucherLineResponseDto`. */
-export interface StockVoucherLine {
-  productId: string;
-  ten: string;
-  sku: string;
-  donVi: string;
-  /** Always positive; the direction comes from the voucher `type`. */
-  qty: number;
-  /** Unit cost in đồng. ABSENT when the caller lacks `costs.view`. */
-  unitCost?: number;
-}
+/** `StockVoucherListResponseDto`. */
+export type StockVoucherList = Schemas['StockVoucherListResponseDto'];
 
-/** Mirrors `StockVoucherDetailDto`. */
-export interface StockVoucherDetail extends StockVoucherSummary {
-  note: string | null;
-  lines: StockVoucherLine[];
-  /** Return voucher only: the origin stock-out and the cancelled order it belongs to. */
-  returnOf?: { id: string; ma: string; orderId: string };
-  /** Order-bound stock-out that already has a return voucher. */
-  returnVoucher?: { id: string; ma: string };
-  /** Decided by the backend — the client never derives it. ALWAYS present. */
-  canReturn: boolean;
-}
+/** `isReturn`: `true` = return vouchers only; `false` = everything except them. */
+export type StockVoucherListQuery = NonNullable<
+  paths['/stock-vouchers']['get']['parameters']['query']
+>;
 
-/** Mirrors `StockVoucherListResponseDto`. */
-export interface StockVoucherList {
-  items: StockVoucherSummary[];
-}
+/** One line of `CreateStockVoucherRequestDto`: `unitCost` REQUIRED on `nhap`, OMITTED on `xuat`. */
+export type CreateStockVoucherLineInput = Schemas['StockVoucherLineRequestDto'];
 
-export interface StockVoucherListQuery {
-  type?: LoaiPhieu;
-  /** `true` = return vouchers only; `false` = everything except them. */
-  isReturn?: boolean;
-}
+/** `CreateStockVoucherRequestDto`. */
+export type CreateStockVoucherInput = Schemas['CreateStockVoucherRequestDto'];
 
-/** One line of `CreateStockVoucherRequestDto`. */
-export interface CreateStockVoucherLineInput {
-  productId: string;
-  qty: number;
-  /** REQUIRED on `nhap`; must be OMITTED on `xuat` (the server snapshots it). */
-  unitCost?: number;
-}
-
-/** Mirrors `CreateStockVoucherRequestDto`. */
-export interface CreateStockVoucherInput {
-  type: LoaiPhieu;
-  note?: string;
-  lines: CreateStockVoucherLineInput[];
-}
-
-/** Mirrors `CreateReturnVoucherRequestDto`. Cost is never sent — the origin line's cost is reused. */
-export interface CreateReturnVoucherInput {
-  note?: string;
-  lines: { productId: string; qty: number }[];
-}
+/** `CreateReturnVoucherRequestDto`. Cost is never sent — the origin line's cost is reused. */
+export type CreateReturnVoucherInput = Schemas['CreateReturnVoucherRequestDto'];
 
 /**
  * The AD-5 error envelope this port rejects with (400 validation, 404 unknown
@@ -110,8 +71,8 @@ export interface StockVoucherPortError {
 /**
  * Injectable transport for the Phiếu kho screen. A PORT, NOT an HTTP client.
  *
- * TODO(app-runtime/login-network): the real implementation attaches the bearer
- * token and parses the AD-5 envelope into `StockVoucherPortError`.
+ * The real implementation is `web/src/api/http-stock-vouchers-port.ts` (the
+ * transport attaches the Bearer token and parses the AD-5 envelope).
  */
 export interface StockVouchersPort {
   listVouchers(query?: StockVoucherListQuery): Promise<StockVoucherList>;

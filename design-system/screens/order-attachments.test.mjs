@@ -29,6 +29,7 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -149,10 +150,11 @@ test('neither screen rebuilds the coTheXoa rule — it only renders the flag', (
       !/nguoiTaiLen\s*===|nguoiTaiLen\s*==|uploadedBy\w*\s*===|uploadedBy\w*\s*==/.test(src),
       `${name} must not compare the uploader against the current account`,
     );
-    // It DOES render the backend's answer.
+    // It DOES render the backend's answer (contract name on web, the twin's on mobile).
+    const flag = name.startsWith('web') ? 'canDelete' : mobileField('AttachmentItemDto', 'canDelete');
     assert.ok(
-      /coTheXoa/.test(src),
-      `${name} must pass the backend-computed coTheXoa through to the gallery`,
+      src.includes(flag),
+      `${name} must pass the backend-computed ${flag} through to the gallery`,
     );
   }
 });
@@ -183,8 +185,10 @@ test('both order ports expose the four Story 5.6 methods', () => {
     ['mobile:port', read(MOBILE_PORT)],
   ];
   for (const [name, src] of ports) {
-    for (const method of ['listAnh', 'themAnh', 'xoaAnh', 'anhBytes']) {
-      assert.ok(src.includes(method), `${name} must declare ${method}()`);
+    // Web follows the contract names (Story 10.5); mobile keeps its twin's until 10.8.
+    for (const method of ['listAttachments', 'addAttachments', 'removeAttachment', 'attachmentBytes']) {
+      const declared = name.startsWith('web') ? method : mobileMethod(method);
+      assert.ok(src.includes(`${declared}(`), `${name} must declare ${declared}()`);
     }
     assert.ok(src.includes('AttachmentItem'), `${name} must declare the AttachmentItem type`);
     // The R2 object key never leaves the backend (AD-3).

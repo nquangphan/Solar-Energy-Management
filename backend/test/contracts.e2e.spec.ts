@@ -795,6 +795,7 @@ describe('/orders/:id/contracts (e2e)', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.message).toBe('Mã định danh không hợp lệ.');
     });
   });
 

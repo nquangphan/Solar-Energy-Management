@@ -5,7 +5,7 @@ import { Icon } from '../icons/Icon';
 export interface AttachmentGalleryItem {
   id: string;
   fileName: string;
-  nguoiTaiLen: string;
+  uploadedBy: string;
   createdAt: string;
   /** Both step coordinates null ⇒ supplementary photo. */
   statusTo?: string | null;
@@ -13,7 +13,7 @@ export interface AttachmentGalleryItem {
   buocLabel?: string;
   /** Object URL the SCREEN created from the bytes it fetched. */
   previewSrc?: string;
-  coTheXoa: boolean;
+  canDelete: boolean;
 }
 
 export interface AttachmentGalleryProps {
@@ -33,7 +33,7 @@ export interface AttachmentGalleryProps {
  *
  * Deleting goes through the screen's confirm dialog — this component only
  * reports the intent through `onDelete`. The delete button is HIDDEN outright
- * when `coTheXoa` is false, never greyed out (UX-DR-22): a disabled control
+ * when `canDelete` is false, never greyed out (UX-DR-22): a disabled control
  * still advertises a capability the caller does not have.
  */
 export function AttachmentGallery({
@@ -58,7 +58,7 @@ export function AttachmentGallery({
             ) : (
               <Icon name="ic-image" />
             )}
-            {item.coTheXoa && (
+            {item.canDelete && (
               <button
                 type="button"
                 aria-label="Xoá ảnh"
@@ -73,7 +73,7 @@ export function AttachmentGallery({
             <span className="attachment-badge">
               {item.statusTo == null ? 'Bổ sung' : (item.buocLabel ?? 'Bổ sung')}
             </span>
-            <span className="attachment-meta">{item.nguoiTaiLen}</span>
+            <span className="attachment-meta">{item.uploadedBy}</span>
             <span className="attachment-meta">{item.createdAt}</span>
           </figcaption>
         </figure>

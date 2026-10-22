@@ -1122,12 +1122,12 @@ export interface components {
              * @description Có theo dõi tồn kho không (pin/inverter = true; công lắp, phí vận chuyển = false).
              * @default true
              */
-            tracksStock: boolean;
+            tracksStock?: boolean;
             /**
              * @description Cho phép sửa giá tại chỗ lúc lập báo giá (phí lắp đặt = true; tấm pin = false).
              * @default false
              */
-            priceEditable: boolean;
+            priceEditable?: boolean;
             /**
              * @description Bảo hành mặc định, tính bằng THÁNG. Bỏ trống/null = không bảo hành (công lắp, phí lắp đặt) — đây là giá trị hợp lệ, KHÔNG phải thiếu dữ liệu.
              * @example 144
@@ -1540,8 +1540,11 @@ export interface components {
             scopeDelivery: boolean;
             /** @description Công suất hệ (kWp) — Float tối đa 2 chữ số lẻ (vd 8.82), nhập qua PATCH (Story 4.4). null = chưa nhập. */
             kWp?: number | null;
-            /** @description Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT). */
-            vatMode?: string | null;
+            /**
+             * @description Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT).
+             * @enum {string|null}
+             */
+            vatMode?: "co_vat" | "khong_vat" | null;
             /** @description Hạn hiệu lực báo giá — chuỗi tự do ≤ 200 ký tự, Phase 1 chỉ hiển thị (Story 4.4). null = chưa nhập. */
             validityNote?: string | null;
             /** @description Lý do huỷ đơn (Story 5.7) — null khi đơn chưa huỷ. KHÔNG rào theo quyền: ai xem được đơn thì xem được lý do huỷ của nó. */
@@ -1726,7 +1729,7 @@ export interface components {
             /** @description Người tạo/sở hữu đơn. */
             ownerAccountId: string;
             /** @description Người được giao chăm đơn; null nếu chưa giao. */
-            assigneeAccountId?: Record<string, never> | null;
+            assigneeAccountId?: string | null;
             /**
              * Format: date-time
              * @description ISO-8601 UTC.
@@ -1815,11 +1818,14 @@ export interface components {
              * @description ISO-8601 UTC.
              */
             createdAt: string;
-            /** @description Thời điểm bản này được Chốt; null nếu chưa chốt. */
-            confirmedAt?: Record<string, never> | null;
-            createdByAccountId?: Record<string, never> | null;
+            /**
+             * Format: date-time
+             * @description Thời điểm bản này được Chốt; null nếu chưa chốt.
+             */
+            confirmedAt?: string | null;
+            createdByAccountId?: string | null;
             /** @description Tên hiển thị người tạo bản; null với bản cũ không có actor. */
-            createdByDisplayName?: Record<string, never> | null;
+            createdByDisplayName?: string | null;
             /** @description Số dòng của chính bản này. */
             lineCount: number;
             changes: components["schemas"]["VersionChangesDto"];
@@ -1887,7 +1893,7 @@ export interface components {
              * @description Cờ "linh động/dự kiến" — CHỈ hiển thị, không đổi hành vi giá.
              * @default false
              */
-            isFlexible: boolean;
+            isFlexible?: boolean;
         };
         UpdateLineItemRequestDto: {
             /** @description Số lượng — nguyên, tối thiểu 1. */
@@ -2145,9 +2151,9 @@ export interface components {
             /** @description Tên hiển thị người tải ảnh lên. */
             uploadedBy: string;
             /** @description Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung. */
-            statusFrom?: Record<string, never> | null;
+            statusFrom?: string | null;
             /** @description Trạng thái SAU bước ảnh này thuộc về; null với ảnh bổ sung. */
-            statusTo?: Record<string, never> | null;
+            statusTo?: string | null;
             /** @description Người gọi có xoá được ảnh này không — tính Ở BACKEND (người tải lên HOẶC có quyền chỉnh sửa đơn). Client CHỈ hiển thị, không dựng lại luật. */
             canDelete: boolean;
         };

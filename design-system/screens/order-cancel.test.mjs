@@ -23,6 +23,8 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
+import { generatedBody, webAliasDto } from '../lib/web-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -126,12 +128,14 @@ test('neither screen talks to the network directly', () => {
   }
 });
 
-// (e) BOTH PORTS DECLARE huyDon, AND SO DO BOTH FAKES (parity, AD-12).
-test('huyDon ships on all FOUR port files', () => {
-  assert.match(read(WEB_PORT), /huyDon\(orderId: string, lyDo: string\): Promise<void>/, 'web OrdersPort missing huyDon');
-  assert.match(read(MOBILE_PORT), /Future<void> huyDon\(String orderId, String lyDo\)/, 'mobile OrdersPort missing huyDon');
-  assert.match(read(WEB_FAKE), /huyDon\(/, 'web FakeOrdersPort missing huyDon');
-  assert.match(read(MOBILE_FAKE), /huyDon\(/, 'mobile FakeOrdersPort missing huyDon');
+// (e) BOTH PORTS DECLARE THE CANCEL METHOD, AND SO DO BOTH FAKES (parity, AD-12).
+// Web follows the contract name (Story 10.5); mobile keeps its twin's until 10.8.
+const MOBILE_CANCEL = mobileMethod('cancel');
+test('the cancel method ships on all FOUR port files', () => {
+  assert.match(read(WEB_PORT), /\bcancel\(orderId: string, reason: string\): Promise<void>/, 'web OrdersPort missing cancel');
+  assert.match(read(MOBILE_PORT), new RegExp(`Future<void> ${MOBILE_CANCEL}\\(String orderId, String lyDo\\)`), `mobile OrdersPort missing ${MOBILE_CANCEL}`);
+  assert.match(read(WEB_FAKE), /\bcancel\(/, 'web FakeOrdersPort missing cancel');
+  assert.match(read(MOBILE_FAKE), new RegExp(`${MOBILE_CANCEL}\\(`), `mobile FakeOrdersPort missing ${MOBILE_CANCEL}`);
 });
 
 // (e.2) THE REASON IS NOT OPTIONAL ANYWHERE IN THE CONTRACT. A nullable `lyDo`
@@ -139,8 +143,8 @@ test('huyDon ships on all FOUR port files', () => {
 // prevent.
 test('the reason parameter is required on both ports', () => {
   assert.ok(
-    !/huyDon\(orderId: string, lyDo\?: string/.test(read(WEB_PORT)),
-    'the web port must not make lyDo optional',
+    !/\bcancel\(orderId: string, reason\?: string/.test(read(WEB_PORT)),
+    'the web port must not make reason optional',
   );
   assert.ok(
     !/Future<void> huyDon\(String orderId, \[?String\? lyDo/.test(read(MOBILE_PORT)),
@@ -149,8 +153,9 @@ test('the reason parameter is required on both ports', () => {
 });
 
 // (f) coTheHuy IS PART OF THE LIFECYCLE CONTRACT ON BOTH PLATFORMS (AD-12).
-test('the lifecycle type carries coTheHuy on both platforms', () => {
-  assert.match(read(WEB_PORT), /coTheHuy: boolean/, 'web OrderLifecycle missing coTheHuy');
+test('the lifecycle type carries the cancel flag on both platforms', () => {
+  assert.equal(webAliasDto(read(WEB_PORT), 'OrderLifecycle'), 'OrderLifecycleResponseDto', 'web OrderLifecycle must be the generated contract type');
+  assert.match(generatedBody('OrderLifecycleResponseDto'), /canCancel: boolean/, 'web OrderLifecycle missing canCancel');
   assert.match(read(MOBILE_PORT), /final bool coTheHuy/, 'mobile OrderLifecycle missing coTheHuy');
 });
 

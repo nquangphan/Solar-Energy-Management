@@ -66,8 +66,8 @@ export type {
   StockList,
   StockListQuery,
   StockItemView,
-  CanMuaView,
-  TinhTrangTon,
+  PurchaseNeedView,
+  StockStatus,
 } from './inventory-port';
 // Stock-voucher seam (Story 6.3): the only write path for `onHand`. The backend
 // owns the voucher code, the weighted-average cost and the stock-out refusal.
@@ -83,7 +83,7 @@ export type {
   CreateStockVoucherInput,
   CreateStockVoucherLineInput,
   CreateReturnVoucherInput,
-  LoaiPhieu,
+  VoucherType,
 } from './stock-vouchers-port';
 // Payments seam (Stories 7.1–7.2): the payment schedule of an order and payment
 // recording. The backend resolves every amount, the totals, the mismatch and what

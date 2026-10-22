@@ -35,6 +35,7 @@ export class OrderListItemDto {
   ownerAccountId!: string;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Người được giao chăm đơn; null nếu chưa giao.',
     nullable: true,
   })

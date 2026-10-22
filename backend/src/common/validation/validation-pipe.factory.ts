@@ -2,6 +2,7 @@ import { ValidationError, ValidationPipe } from '@nestjs/common';
 import { ErrorCode } from '../errors/error-code';
 import { AppException } from '../errors/app.exception';
 import { FieldErrorDto } from '../errors/dto/field-error.dto';
+import { INVALID_UUID_MESSAGE } from './uuid-param';
 
 /**
  * ValidationPipe dùng CHUNG cho runtime (`main.ts` qua APP_PIPE) và mọi app-context test
@@ -76,7 +77,7 @@ const BUILT_IN_MESSAGES: Readonly<Record<string, (limit: string) => string>> = {
   max: (limit) => `Không được lớn hơn ${limit}.`,
   isBoolean: () => 'Phải là đúng hoặc sai.',
   isIn: () => 'Giá trị không nằm trong danh sách cho phép.',
-  isUuid: () => 'Mã định danh không hợp lệ.',
+  isUuid: () => INVALID_UUID_MESSAGE,
   isIso8601: () => 'Ngày giờ không hợp lệ.',
   isArray: () => 'Phải là danh sách.',
   arrayNotEmpty: () => 'Danh sách không được rỗng.',

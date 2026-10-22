@@ -3,7 +3,6 @@ import {
   Get,
   HttpCode,
   Param,
-  ParseUUIDPipe,
   Post,
   StreamableFile,
 } from '@nestjs/common';
@@ -38,6 +37,7 @@ import { InvoiceResponseDto } from './dto/invoice-response.dto';
 import { InvoicesOverviewResponseDto } from './dto/invoices-overview-response.dto';
 import { InvoiceDocumentService } from './invoice-document.service';
 import { InvoicesService } from './invoices.service';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Invoices of an order (FR-27), served as a sub-resource of the order: `/orders/{id}/invoices`.
@@ -85,7 +85,7 @@ export class InvoicesController {
   })
   async overview(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<InvoicesOverviewResponseDto> {
     return this.invoices.overview(
       account.id,
@@ -128,7 +128,7 @@ export class InvoicesController {
   })
   async create(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<InvoiceResponseDto> {
     return this.invoices.create(
       account.id,
@@ -163,8 +163,8 @@ export class InvoicesController {
   })
   async detail(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+    @Param('id', UUID_PARAM) id: string,
+    @Param('invoiceId', UUID_PARAM) invoiceId: string,
   ): Promise<InvoiceDetailResponseDto> {
     return toInvoiceDetailResponseDto(
       await this.documents.detail(
@@ -203,8 +203,8 @@ export class InvoicesController {
   })
   async exportPdf(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+    @Param('id', UUID_PARAM) id: string,
+    @Param('invoiceId', UUID_PARAM) invoiceId: string,
   ): Promise<InvoicePdfResponseDto> {
     return this.documents.exportPdf(
       account.id,
@@ -240,8 +240,8 @@ export class InvoicesController {
   })
   async downloadPdf(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
+    @Param('id', UUID_PARAM) id: string,
+    @Param('invoiceId', UUID_PARAM) invoiceId: string,
   ): Promise<StreamableFile> {
     const file = await this.documents.getPdf(
       account.id,

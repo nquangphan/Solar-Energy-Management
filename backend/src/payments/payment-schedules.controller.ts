@@ -1,11 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Put,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -30,6 +23,7 @@ import { SettingsService } from '../settings/settings.service';
 import { PaymentScheduleResponseDto } from './dto/payment-schedule-response.dto';
 import { ReplacePaymentScheduleRequestDto } from './dto/replace-payment-schedule-request.dto';
 import { PaymentSchedulesService } from './payment-schedules.service';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Payment schedule of an order (FR-11), served as a sub-resource of the order:
@@ -72,7 +66,7 @@ export class PaymentSchedulesController {
   })
   async get(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<PaymentScheduleResponseDto> {
     return (await this.schedules.get(
       account.id,
@@ -112,7 +106,7 @@ export class PaymentSchedulesController {
   })
   async replace(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
     @Body() body: ReplacePaymentScheduleRequestDto,
   ): Promise<PaymentScheduleResponseDto> {
     return (await this.schedules.replace(

@@ -196,7 +196,7 @@ export function CreateQuoteScreen({
     // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc sau
     // mở-lại, bản đang sửa không mang chiết khấu (muốn giảm phải áp + duyệt lại).
     const discountActive =
-      fetched.discount !== null &&
+      fetched.discount != null &&
       fetched.status !== 'baogia' &&
       (fetched.discount.status === DISCOUNT_CHO_DUYET ||
         fetched.discount.status === DISCOUNT_DONG_Y);
@@ -243,7 +243,7 @@ export function CreateQuoteScreen({
           port={customersPort}
           onSelect={async (picked) => {
             try {
-              const created = await ordersPort.create({ customerSdt: picked.phone });
+              const created = await ordersPort.create({ customerPhone: picked.phone });
               setCustomer(picked);
               setOrder(created);
               syncMetaTexts(created);
@@ -348,7 +348,7 @@ export function CreateQuoteScreen({
 
   /** Đồng bộ text 2 input metadata từ Đơn — lúc tạo đơn, sau commit, và khi revert lỗi. */
   function syncMetaTexts(source: Order) {
-    setKWpText(source.kWp === null ? '' : String(source.kWp));
+    setKWpText(source.kWp == null ? '' : String(source.kWp));
     setValidityText(source.validityNote ?? '');
   }
 
@@ -566,7 +566,7 @@ export function CreateQuoteScreen({
   // Wording picked from the backend's `status`; the numbers are its numbers.
   const stockLines = stockCheck?.lines ?? [];
   const shortStock = stockLines.filter((s) => s.status === 'short');
-  const stockHintOf = (productId: string | null) => {
+  const stockHintOf = (productId: string | null | undefined) => {
     const s = stockLines.find((x) => x.productId === productId);
     if (s === undefined) return undefined;
     return s.status === 'short'
@@ -586,8 +586,8 @@ export function CreateQuoteScreen({
           <div className="quote-customer-row">
             <div>
               <div className="micro muted">Khách hàng</div>
-              <div className="quote-customer-name">{customer?.name ?? order.customerSdt}</div>
-              <div className="micro muted quote-mono">{order.customerSdt}</div>
+              <div className="quote-customer-name">{customer?.name ?? order.customerPhone}</div>
+              <div className="micro muted quote-mono">{order.customerPhone}</div>
             </div>
             <CustomerTypeChip>{typeLabel(order.custType)}</CustomerTypeChip>
           </div>
@@ -597,22 +597,22 @@ export function CreateQuoteScreen({
           <div className="quote-scope-row">
             <div className="micro muted">Phạm vi</div>
             <div className="quote-scope-flags">
-              <ScopeFlag on={order.scopeThietBi}>Thiết bị</ScopeFlag>
-              <ScopeFlag on={order.scopeThiCong}>Thi công</ScopeFlag>
-              <ScopeFlag on={order.scopeVanChuyen}>Vận chuyển</ScopeFlag>
+              <ScopeFlag on={order.scopeEquipment}>Thiết bị</ScopeFlag>
+              <ScopeFlag on={order.scopeConstruction}>Thi công</ScopeFlag>
+              <ScopeFlag on={order.scopeDelivery}>Vận chuyển</ScopeFlag>
             </div>
             <div className="quote-scope-toggles">
               <Checkbox
                 label="Thi công"
-                checked={order.scopeThiCong}
+                checked={order.scopeConstruction}
                 disabled={!editable || scopeBusy}
-                onChange={(checked) => void handleScopeToggle({ scopeThiCong: checked })}
+                onChange={(checked) => void handleScopeToggle({ scopeConstruction: checked })}
               />
               <Checkbox
                 label="Vận chuyển"
-                checked={order.scopeVanChuyen}
+                checked={order.scopeDelivery}
                 disabled={!editable || scopeBusy}
-                onChange={(checked) => void handleScopeToggle({ scopeVanChuyen: checked })}
+                onChange={(checked) => void handleScopeToggle({ scopeDelivery: checked })}
               />
             </div>
           </div>
@@ -705,11 +705,11 @@ export function CreateQuoteScreen({
                     // Install/labour catalogue line (productId set + priceEditable) → no
                     // warranty; free line without one yet → the "+ Thêm bảo hành" link;
                     // everything else → the input. Free lines carry priceEditable=true too,
-                    // so the 'none' test MUST also require productId !== null.
+                    // so the 'none' test MUST also require productId != null.
                     warrantyMode={
-                      line.productId !== null && line.priceEditable
+                      line.productId != null && line.priceEditable
                         ? 'none'
-                        : line.productId === null && line.warrantyMonths === null
+                        : line.productId == null && line.warrantyMonths == null
                           ? 'link'
                           : 'input'
                     }

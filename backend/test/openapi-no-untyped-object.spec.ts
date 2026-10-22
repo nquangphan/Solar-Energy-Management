@@ -21,17 +21,10 @@ interface PropertySchema {
 }
 
 /**
- * Bare objects still owned by the order/payment module wiring of Story 10.5. Each entry must
- * still be bare (asserted below), so a fixed field cannot linger here and hide a regression.
+ * Bare objects tolerated in the spec. Empty: every `X | null` field now declares its `type`.
+ * Adding an entry is a contract regression to fix at the DTO, not a place to park it.
  */
-const KNOWN_UNTYPED: readonly string[] = [
-  'OrderListItemDto.assigneeAccountId', // Story 10.5
-  'OrderVersionItemDto.confirmedAt', // Story 10.5
-  'OrderVersionItemDto.createdByAccountId', // Story 10.5
-  'OrderVersionItemDto.createdByDisplayName', // Story 10.5
-  'AttachmentItemDto.statusFrom', // Story 10.5
-  'AttachmentItemDto.statusTo', // Story 10.5
-];
+const KNOWN_UNTYPED: readonly string[] = [];
 
 /** A node Swagger emitted as `type: "object"` with nothing that says WHICH object. */
 function isBareObject(node: PropertySchema): boolean {
@@ -95,8 +88,8 @@ describe('OpenAPI has no untyped object property (AD-12 generated client types)'
     expect(scanned).toBeGreaterThanOrEqual(500);
   });
 
-  it('every bare `type: "object"` property is on the Story 10.5 allowlist', () => {
-    expect(untyped.filter((name) => !KNOWN_UNTYPED.includes(name))).toEqual([]);
+  it('no property is a bare `type: "object"`', () => {
+    expect(untyped).toEqual([]);
   });
 
   it('sees a bare object nested in array items and in a query parameter (walk not blind)', () => {
@@ -134,10 +127,7 @@ describe('OpenAPI has no untyped object property (AD-12 generated client types)'
     });
   });
 
-  it('every allowlist entry is still bare (the allowlist cannot keep a fixed field)', () => {
-    expect(KNOWN_UNTYPED.length).toBeGreaterThan(0);
-    for (const name of KNOWN_UNTYPED) {
-      expect(untyped).toContain(name);
-    }
+  it('the allowlist stays empty (nothing may be parked as bare)', () => {
+    expect(KNOWN_UNTYPED).toEqual([]);
   });
 });

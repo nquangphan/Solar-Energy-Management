@@ -21,6 +21,7 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -58,7 +59,8 @@ const allCode = [
 // Any stock number compared against a constant or another stock number is the
 // status re-derived client-side — `canNhap > 0` is `tinhTrang === 'am'` in
 // disguise, and no behaviour test can tell the two apart.
-const STOCK_NUM = '(?:khaDung|canNhap|onHand|reserved)';
+// Contract names (web, Story 10.5) and the mobile twin's names (until 10.8).
+const STOCK_NUM = '(?:available|toPurchase|khaDung|canNhap|onHand|reserved)';
 const CMP = '(?:<=|>=|<|>|===?|!==?)';
 
 /** The computations only the backend may do — each pattern with why. */
@@ -86,6 +88,8 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
     'if (item.khaDung < 0) {}',
     'if (0 > item.khaDung) {}',
     'item.canNhap > 0 ? a : b',
+    'if (item.available < 0) {}',
+    'item.toPurchase > 0 ? a : b',
     'if (item.onHand <= 0) {}',
     'item.reserved > item.onHand',
     'Math.max(0, x)',
@@ -101,9 +105,10 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
 });
 
 // (b) THE STATUS IS READ, NOT DERIVED.
-test('both screens branch on tinhTrang, naming all three statuses', () => {
-  for (const [name, code] of [['web', webCode], ['mobile', mobileCode]]) {
-    assert.ok(code.includes('tinhTrang'), `${name} screen must branch on tinhTrang`);
+test('both screens branch on the stock status, naming all three statuses', () => {
+  const status = mobileField('StockItemViewDto', 'stockStatus');
+  for (const [name, code, field] of [['web', webCode, 'stockStatus'], ['mobile', mobileCode, status]]) {
+    assert.ok(code.includes(field), `${name} screen must branch on ${field}`);
     for (const status of ["'du'", "'het'", "'am'"]) {
       assert.ok(code.includes(status), `${name} screen missing the ${status} branch`);
     }

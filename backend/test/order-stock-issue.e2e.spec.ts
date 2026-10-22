@@ -423,6 +423,7 @@ describe('/orders/:id/stock-issue (e2e)', () => {
       const res = await post('not-a-uuid');
       expect(res.status).toBe(400);
       expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.message).toBe('Mã định danh không hợp lệ.');
     });
 
     it('status `dachot` (equipment-only order before its direct close) ⇒ 201', async () => {

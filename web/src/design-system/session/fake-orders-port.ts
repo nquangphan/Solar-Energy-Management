@@ -27,6 +27,7 @@ import type {
   DiscountPendingItem,
   Order,
   OrderLifecycle,
+  OrderLifecycleStep,
   OrderLine,
   OrderNextStep,
   OrderPortError,
@@ -66,7 +67,7 @@ const DEMO_ORDER_ROWS = [
   {
     id: 'ord-demo-1',
     status: 'baogia',
-    customerSdt: '+84903176968',
+    customerPhone: '+84903176968',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: null,
     createdAt: '2026-07-17T09:00:00.000Z',
@@ -75,7 +76,7 @@ const DEMO_ORDER_ROWS = [
   {
     id: 'ord-demo-2',
     status: 'baogia',
-    customerSdt: '+84912345678',
+    customerPhone: '+84912345678',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: 'acc-demo',
     createdAt: '2026-07-16T08:00:00.000Z',
@@ -84,7 +85,7 @@ const DEMO_ORDER_ROWS = [
   {
     id: 'ord-demo-3',
     status: 'dachot',
-    customerSdt: '+84903176968',
+    customerPhone: '+84903176968',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: null,
     createdAt: '2026-07-15T07:00:00.000Z',
@@ -93,7 +94,7 @@ const DEMO_ORDER_ROWS = [
   {
     id: 'ord-demo-4',
     status: 'thicong',
-    customerSdt: '+84912345678',
+    customerPhone: '+84912345678',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: 'acc-demo',
     createdAt: '2026-07-14T06:00:00.000Z',
@@ -256,12 +257,12 @@ function digits(raw: string): string {
  * THUONG_MAI → equipment only.
  */
 function presetFor(custType: string): {
-  scopeThietBi: boolean;
-  scopeThiCong: boolean;
-  scopeVanChuyen: boolean;
+  scopeEquipment: boolean;
+  scopeConstruction: boolean;
+  scopeDelivery: boolean;
 } {
   const caNhan = custType === 'CA_NHAN';
-  return { scopeThietBi: true, scopeThiCong: caNhan, scopeVanChuyen: caNhan };
+  return { scopeEquipment: true, scopeConstruction: caNhan, scopeDelivery: caNhan };
 }
 
 /** An `OrdersPort` backed by an in-memory store — TEST/DEMO ONLY. */
@@ -283,7 +284,7 @@ export class FakeOrdersPort implements OrdersPort {
     // The backend snapshots custType from the Customer and applies the scope
     // preset explicitly (Story 4.3) — the fake plays that role for its demo
     // customers; an unknown phone falls back to CA_NHAN.
-    const needle = digits(input.customerSdt);
+    const needle = digits(input.customerPhone);
     const customer = this.customers.find(
       (c) => needle !== '' && digits(c.phone).endsWith(needle),
     );
@@ -291,7 +292,7 @@ export class FakeOrdersPort implements OrdersPort {
     const order: Order = {
       id: `ord-demo-${this.seq}`,
       status: 'baogia',
-      customerSdt: input.customerSdt,
+      customerPhone: input.customerPhone,
       currentVersionId: `ver-demo-${this.seq}`,
       ownerAccountId: 'acc-demo',
       assigneeAccountId: null,
@@ -322,9 +323,9 @@ export class FakeOrdersPort implements OrdersPort {
     if (order === undefined) {
       return Promise.reject(new Error(`Không tìm thấy đơn hàng: ${orderId}`));
     }
-    if (input.scopeThiCong !== undefined) order.scopeThiCong = input.scopeThiCong;
-    if (input.scopeVanChuyen !== undefined) {
-      order.scopeVanChuyen = input.scopeVanChuyen;
+    if (input.scopeConstruction !== undefined) order.scopeConstruction = input.scopeConstruction;
+    if (input.scopeDelivery !== undefined) {
+      order.scopeDelivery = input.scopeDelivery;
     }
     return Promise.resolve({ ...order, lineItems: [...order.lineItems] });
   }
@@ -548,7 +549,7 @@ export class FakeOrdersPort implements OrdersPort {
       }
       items.push({
         orderId: order.id,
-        customerSdt: order.customerSdt,
+        customerPhone: order.customerPhone,
         amount: order.discount.amount,
         requestNote: order.discount.requestNote,
         requestedByAccountId: order.ownerAccountId,
@@ -636,10 +637,11 @@ export class FakeOrdersPort implements OrdersPort {
     const rows = seeded.map(
       (order): OrderListItem => ({
         id: order.id,
-        status: order.status,
-        customerSdt: order.customerSdt,
+        // The fake stores `Order` (status: string); the list row narrows it to the contract enum.
+        status: order.status as OrderListItem['status'],
+        customerPhone: order.customerPhone,
         customerName:
-          this.customers.find((c) => c.phone === order.customerSdt)?.name ??
+          this.customers.find((c) => c.phone === order.customerPhone)?.name ??
           'Khách lẻ',
         ownerAccountId: order.ownerAccountId,
         assigneeAccountId: order.assigneeAccountId,
@@ -681,34 +683,34 @@ export class FakeOrdersPort implements OrdersPort {
     // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
     // full-length stepper (that is also the case that overflows on mobile).
     const status = order?.status ?? DEMO_ORDER_ROWS[0].status;
-    const thiCong = order?.scopeThiCong ?? true;
-    const vanChuyen = order?.scopeVanChuyen ?? true;
-    const chuoi = [
+    const thiCong = order?.scopeConstruction ?? true;
+    const vanChuyen = order?.scopeDelivery ?? true;
+    const chuoi: OrderLifecycleStep['status'][] = [
       'baogia',
       'dachot',
       'dacoc',
-      ...(thiCong ? ['thicong', 'nghiemthu'] : []),
-      ...(vanChuyen ? ['danggiao'] : []),
+      ...(thiCong ? (['thicong', 'nghiemthu'] as const) : []),
+      ...(vanChuyen ? (['danggiao'] as const) : []),
       'dagiao',
       'hoanthanh',
     ];
-    const dangO = chuoi.indexOf(status);
+    const dangO = chuoi.findIndex((s) => s === status);
     return Promise.resolve({
-      buoc: chuoi.map((status, i) => ({
+      steps: chuoi.map((status, i) => ({
         status,
-        trangThai:
+        progress:
           dangO === -1 || i > dangO
             ? ('upcoming' as const)
             : i === dangO
               ? ('current' as const)
               : ('done' as const),
       })),
-      buocKeTiep: this.buocKeTiepDemo(status, thiCong, vanChuyen),
+      nextSteps: this.buocKeTiepDemo(status, thiCong, vanChuyen),
       // The demo "server" answers this the way the real one does — from the same
       // three statuses the transition table gives a `huy` edge. It lives HERE and
       // never in a screen (AD-2), which is also why the fake, not the screen,
       // knows that a cancelled order can no longer be cancelled.
-      coTheHuy: ['baogia', 'dachot', 'dacoc'].includes(status),
+      canCancel: ['baogia', 'dachot', 'dacoc'].includes(status),
     });
   }
 
@@ -719,7 +721,7 @@ export class FakeOrdersPort implements OrdersPort {
    * (including one already cancelled) → 409, reason too short → 400 with
    * `fieldErrors`.
    */
-  huyDon(orderId: string, lyDo: string): Promise<void> {
+  cancel(orderId: string, reason: string): Promise<void> {
     const order = this.orders.get(orderId);
     if (order === undefined) {
       return Promise.reject(
@@ -731,12 +733,12 @@ export class FakeOrdersPort implements OrdersPort {
         this.loi('CONFLICT', 'Không huỷ được đơn ở trạng thái hiện tại.'),
       );
     }
-    const sach = lyDo.trim();
+    const sach = reason.trim();
     if (sach.length < DEMO_LY_DO_TOI_THIEU) {
       return Promise.reject(
         this.loi('VALIDATION_ERROR', 'Cần lý do khi huỷ đơn.', [
           {
-            field: 'lyDo',
+            field: 'reason',
             message: `Lý do huỷ là bắt buộc, tối thiểu ${DEMO_LY_DO_TOI_THIEU} ký tự.`,
           },
         ]),
@@ -752,7 +754,7 @@ export class FakeOrdersPort implements OrdersPort {
   }
 
   /**
-   * Demo stand-in for the backend's `buocKeTiep()`. Like `getLifecycle` above it
+   * Demo stand-in for the backend's `nextSteps`. Like `getLifecycle` above it
    * lives in the FAKE (the demo "server"), NEVER in a screen — the real one
    * reads ALLOWED_TRANSITIONS and filters by the caller's real permissions
    * (AD-2/AD-11).
@@ -770,49 +772,49 @@ export class FakeOrdersPort implements OrdersPort {
     thiCong: boolean,
     vanChuyen: boolean,
   ): OrderNextStep[] {
-    const buoc: OrderNextStep[] = [];
+    const steps: OrderNextStep[] = [];
     // Thiết bị is always on in the demo ⇒ a confirmed order may close directly.
     if (status === 'dachot') {
-      buoc.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'payments.record' });
+      steps.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'payments.record' });
     }
     if (status === 'dacoc' && thiCong) {
-      buoc.push({
+      steps.push({
         event: 'bat_dau_thi_cong',
         to: 'thicong',
         requires: 'construction.transition',
       });
     }
     if (status === 'dacoc' && vanChuyen) {
-      buoc.push({
+      steps.push({
         event: 'bat_dau_giao',
         to: 'danggiao',
         requires: 'delivery.confirm',
       });
     }
     if (status === 'dacoc' && !vanChuyen) {
-      buoc.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
+      steps.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
     }
     if (status === 'thicong') {
-      buoc.push({
+      steps.push({
         event: 'xong_thi_cong',
         to: 'nghiemthu',
         requires: 'construction.transition',
       });
     }
     if (status === 'danggiao') {
-      buoc.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
+      steps.push({ event: 'xong_giao', to: 'dagiao', requires: 'delivery.confirm' });
     }
     if (status === 'nghiemthu') {
-      buoc.push({
+      steps.push({
         event: 'hoan_thanh',
         to: 'hoanthanh',
         requires: 'construction.transition',
       });
     }
     if (status === 'dagiao') {
-      buoc.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'delivery.confirm' });
+      steps.push({ event: 'hoan_thanh', to: 'hoanthanh', requires: 'delivery.confirm' });
     }
-    return buoc;
+    return steps;
   }
 
   /**
@@ -825,10 +827,10 @@ export class FakeOrdersPort implements OrdersPort {
    * Photos are COUNTED, not stored: the demo has no R2 and inventing a fake
    * object key would teach the screen a shape the real port does not return.
    */
-  chuyenTrangThai(
+  transition(
     orderId: string,
     event: string,
-    anh: File[],
+    files: File[],
   ): Promise<StatusChangeResult> {
     const order = this.orders.get(orderId);
     if (order === undefined) {
@@ -838,8 +840,8 @@ export class FakeOrdersPort implements OrdersPort {
     }
     const buoc = this.buocKeTiepDemo(
       order.status,
-      order.scopeThiCong ?? true,
-      order.scopeVanChuyen ?? true,
+      order.scopeConstruction ?? true,
+      order.scopeDelivery ?? true,
     ).find((b) => b.event === event);
     if (buoc === undefined) {
       return Promise.reject(
@@ -858,11 +860,11 @@ export class FakeOrdersPort implements OrdersPort {
     ) {
       return Promise.reject(FAKE_CLOSE_BEFORE_ISSUE_ERROR);
     }
-    if (anh.length > DEMO_SO_ANH_TOI_DA) {
+    if (files.length > DEMO_SO_ANH_TOI_DA) {
       return Promise.reject(
         this.loi('VALIDATION_ERROR', 'Ảnh đính kèm không hợp lệ.', [
           {
-            field: 'anh',
+            field: 'files',
             message: `Tối đa ${DEMO_SO_ANH_TOI_DA} ảnh cho một lần chuyển trạng thái.`,
           },
         ]),
@@ -879,7 +881,7 @@ export class FakeOrdersPort implements OrdersPort {
     return Promise.resolve({
       status: buoc.to,
       occurredAt: NOW,
-      soAnhDaLuu: anh.length,
+      savedAttachmentCount: files.length,
     });
   }
 
@@ -888,7 +890,7 @@ export class FakeOrdersPort implements OrdersPort {
    * data: one step photo (both coordinates set), one supplementary photo (both
    * null), and one the caller cannot delete.
    *
-   * `coTheXoa` arrives PRE-COMPUTED here exactly as it does from the real
+   * `canDelete` arrives PRE-COMPUTED here exactly as it does from the real
    * backend — the fake plays the server's role, so the rule lives here and never
    * in a screen or component (AD-2).
    */
@@ -904,10 +906,10 @@ export class FakeOrdersPort implements OrdersPort {
         contentType: 'image/png',
         size: 204800,
         createdAt: NOW,
-        nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+        uploadedBy: 'Nguyễn Văn Quản Lý',
         statusFrom: null,
         statusTo: null,
-        coTheXoa: true,
+        canDelete: true,
       },
       {
         id: `${orderId}-anh-buoc`,
@@ -915,10 +917,10 @@ export class FakeOrdersPort implements OrdersPort {
         contentType: 'image/jpeg',
         size: 512000,
         createdAt: NOW,
-        nguoiTaiLen: 'Trần Thợ Thi Công',
+        uploadedBy: 'Trần Thợ Thi Công',
         statusFrom: 'dacoc',
         statusTo: 'thicong',
-        coTheXoa: true,
+        canDelete: true,
       },
       {
         id: `${orderId}-anh-nguoi-khac`,
@@ -926,17 +928,17 @@ export class FakeOrdersPort implements OrdersPort {
         contentType: 'image/jpeg',
         size: 348160,
         createdAt: NOW,
-        nguoiTaiLen: 'Lê Kho Giao',
+        uploadedBy: 'Lê Kho Giao',
         statusFrom: 'thicong',
         statusTo: 'danggiao',
-        coTheXoa: false,
+        canDelete: false,
       },
     ];
     this.anhDemo.set(orderId, khoiTao);
     return khoiTao;
   }
 
-  listAnh(orderId: string): Promise<AttachmentItem[]> {
+  listAttachments(orderId: string): Promise<AttachmentItem[]> {
     if (!this.orders.has(orderId)) {
       return Promise.reject(
         this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
@@ -945,7 +947,7 @@ export class FakeOrdersPort implements OrdersPort {
     return Promise.resolve([...this.anhCuaDon(orderId)]);
   }
 
-  themAnh(orderId: string, files: File[]): Promise<void> {
+  addAttachments(orderId: string, files: File[]): Promise<void> {
     if (!this.orders.has(orderId)) {
       return Promise.reject(
         this.loi('NOT_FOUND', `Không tìm thấy đơn hàng: ${orderId}`),
@@ -955,7 +957,7 @@ export class FakeOrdersPort implements OrdersPort {
       return Promise.reject(
         this.loi('VALIDATION_ERROR', 'Ảnh đính kèm không hợp lệ.', [
           {
-            field: 'anh',
+            field: 'files',
             message: `Tối đa ${DEMO_SO_ANH_TOI_DA} ảnh cho một lần tải lên.`,
           },
         ]),
@@ -970,16 +972,16 @@ export class FakeOrdersPort implements OrdersPort {
         contentType: file.type,
         size: file.size,
         createdAt: NOW,
-        nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+        uploadedBy: 'Nguyễn Văn Quản Lý',
         statusFrom: null,
         statusTo: null,
-        coTheXoa: true,
+        canDelete: true,
       });
     });
     return Promise.resolve();
   }
 
-  xoaAnh(orderId: string, attachmentId: string): Promise<void> {
+  removeAttachment(orderId: string, attachmentId: string): Promise<void> {
     const danhSach = this.anhCuaDon(orderId);
     const viTri = danhSach.findIndex((a) => a.id === attachmentId);
     if (viTri === -1) {
@@ -987,7 +989,7 @@ export class FakeOrdersPort implements OrdersPort {
         this.loi('NOT_FOUND', 'Không tìm thấy ảnh đính kèm.'),
       );
     }
-    if (!danhSach[viTri].coTheXoa) {
+    if (!danhSach[viTri].canDelete) {
       return Promise.reject(
         this.loi('FORBIDDEN', 'Bạn không có quyền xoá ảnh này.'),
       );
@@ -996,7 +998,7 @@ export class FakeOrdersPort implements OrdersPort {
     return Promise.resolve();
   }
 
-  anhBytes(orderId: string, attachmentId: string): Promise<Blob> {
+  attachmentBytes(orderId: string, attachmentId: string): Promise<Blob> {
     const found = this.anhCuaDon(orderId).find((a) => a.id === attachmentId);
     if (found === undefined) {
       return Promise.reject(
@@ -1075,11 +1077,13 @@ export class FakeOrdersPort implements OrdersPort {
     }
     const merged = new Map<string, OrderStockCheckLine>();
     for (const line of order.lineItems) {
-      const stock = line.productId === null ? undefined : DEMO_STOCK_BY_PRODUCT[line.productId];
-      if (line.productId === null || stock === undefined) continue;
-      const seen = merged.get(line.productId);
-      merged.set(line.productId, {
-        productId: line.productId,
+      const productId = line.productId;
+      if (!productId) continue;
+      const stock = DEMO_STOCK_BY_PRODUCT[productId];
+      if (stock === undefined) continue;
+      const seen = merged.get(productId);
+      merged.set(productId, {
+        productId,
         name: line.name,
         unit: line.unit,
         qty: (seen?.qty ?? 0) + line.qty,
@@ -1095,20 +1099,20 @@ export class FakeOrdersPort implements OrdersPort {
   private recordIssue(orderId: string): StockVoucherDetail {
     const voucher: StockVoucherDetail = {
       id: `pk-xuat-${orderId}`,
-      ma: 'PK-X-0097',
+      code: 'PK-X-0097',
       type: 'xuat',
       orderId,
       createdAt: NOW,
-      nguoiTao: { id: 'acc-kho-binh', displayName: 'Kho/Giao hàng (Bình)' },
-      soDong: DEMO_ISSUE_LINES.length,
-      tongSoLuong: 15,
+      createdBy: { id: 'acc-kho-binh', displayName: 'Kho/Giao hàng (Bình)' },
+      lineCount: DEMO_ISSUE_LINES.length,
+      totalQty: 15,
       canReturn: false,
       note: null,
       lines: DEMO_ISSUE_LINES.map(({ productId, name, sku, unit, qty }) => ({
         productId,
-        ten: name,
+        name,
         sku,
-        donVi: unit,
+        unit,
         qty,
       })),
     };
@@ -1125,13 +1129,13 @@ export class FakeOrdersPort implements OrdersPort {
     const goc: OrderVersionItem = {
       id: `${orderId}-v1`,
       versionNo: 1,
-      laBanHienLuc: !orderId.endsWith('-1'),
+      isCurrent: !orderId.endsWith('-1'),
       createdAt: NOW,
-      chotAt: null,
+      confirmedAt: null,
       createdByAccountId: 'acc-demo',
       createdByDisplayName: 'Nguyễn Văn Quản Lý',
-      soDong: 3,
-      thayDoi: { them: [], xoa: [], doiSoLuong: [] },
+      lineCount: 3,
+      changes: { added: [], removed: [], qtyChanged: [] },
     };
     if (!orderId.endsWith('-1')) return Promise.resolve([goc]);
     return Promise.resolve([
@@ -1139,17 +1143,17 @@ export class FakeOrdersPort implements OrdersPort {
       {
         id: `${orderId}-v2`,
         versionNo: 2,
-        laBanHienLuc: true,
+        isCurrent: true,
         createdAt: NOW,
-        chotAt: null,
+        confirmedAt: null,
         // Bản cũ không có actor ⇒ null; màn hiện `—`, không bịa tên.
         createdByAccountId: null,
         createdByDisplayName: null,
-        soDong: 4,
-        thayDoi: {
-          them: ['Tủ điện DC 2 string'],
-          xoa: [],
-          doiSoLuong: [{ ten: 'Tấm pin JA Solar 580W', tu: 8, den: 12 }],
+        lineCount: 4,
+        changes: {
+          added: ['Tủ điện DC 2 string'],
+          removed: [],
+          qtyChanged: [{ name: 'Tấm pin JA Solar 580W', from: 8, to: 12 }],
         },
       },
     ]);

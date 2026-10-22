@@ -3,7 +3,7 @@
    LAYOUT ONLY. Every colour comes from the token layer or a shipped
    design-system class — this file invents no palette (AD-13). The status pill
    reuses the shipped `.chip`; its colour arrives as an inline token reference
-   (`--ok` / `--warn` / `--danger`) chosen from the backend's `tinhTrang`. */
+   (`--ok` / `--warn` / `--danger`) chosen from the backend's `stockStatus`. */
 
 .tk-wrap {
   display: flex;

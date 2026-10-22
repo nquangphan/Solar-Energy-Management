@@ -54,15 +54,18 @@ export class OrderVersionItemDto {
   createdAt!: Date;
 
   @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
     description: 'Thời điểm bản này được Chốt; null nếu chưa chốt.',
     nullable: true,
   })
   confirmedAt!: Date | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   createdByAccountId!: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Tên hiển thị người tạo bản; null với bản cũ không có actor.',
     nullable: true,
   })

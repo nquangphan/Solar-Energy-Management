@@ -382,21 +382,21 @@ describe("StockVouchersScreen — lọc và picker", () => {
     expect(cu).toBeDefined();
     expect(moi).toBeDefined();
 
-    const sp = (ten: string, productId: string) => ({
+    const sp = (name: string, productId: string) => ({
       items: [
         {
           productId,
-          ten,
+          name,
           sku: productId,
-          donVi: "cái",
+          unit: "cái",
           onHand: 1,
           reserved: 0,
-          khaDung: 1,
-          canNhap: 0,
-          tinhTrang: "du" as const,
+          available: 1,
+          toPurchase: 0,
+          stockStatus: "du" as const,
         },
       ],
-      danhSachCanMua: [],
+      purchaseList: [],
     });
     await act(async () => moi!.resolve(sp("Battery mới", "p-moi")));
     await act(async () => cu!.resolve(sp("Pin cũ", "p-cu")));
@@ -413,18 +413,18 @@ const KHO = { id: "acc-kho-binh", displayName: "Kho/Giao hàng (Bình)" };
 /** A cancelled order's stock-out with two lines, returnable. */
 const ORIGIN: StockVoucherDetail = {
   id: "pk-x-origin",
-  ma: "PK-X-0200",
+  code: "PK-X-0200",
   type: "xuat",
   orderId: "ord-huy-1",
   createdAt: "2026-07-04T02:30:00.000Z",
-  nguoiTao: KHO,
-  soDong: 2,
-  tongSoLuong: 8,
+  createdBy: KHO,
+  lineCount: 2,
+  totalQty: 8,
   canReturn: true,
   note: null,
   lines: [
-    { productId: "p-a", ten: "Sản phẩm A", sku: "A", donVi: "tấm", qty: 5 },
-    { productId: "p-b", ten: "Sản phẩm B", sku: "B", donVi: "bộ", qty: 3 },
+    { productId: "p-a", name: "Sản phẩm A", sku: "A", unit: "tấm", qty: 5 },
+    { productId: "p-b", name: "Sản phẩm B", sku: "B", unit: "bộ", qty: 3 },
   ],
 };
 
@@ -447,7 +447,7 @@ describe("StockVouchersScreen — return vouchers", () => {
   });
 
   it("canReturn ⇒ Tạo phiếu nhập trả button; canReturn=false ⇒ none", async () => {
-    renderVouchers(new FakeStockVouchersPort([ORIGIN, { ...ORIGIN, id: "x2", ma: "PK-X-0201", canReturn: false }]));
+    renderVouchers(new FakeStockVouchersPort([ORIGIN, { ...ORIGIN, id: "x2", code: "PK-X-0201", canReturn: false }]));
     fireEvent.click(await screen.findByText("PK-X-0200"));
     expect(await screen.findByRole("button", { name: "Tạo phiếu nhập trả" })).toBeTruthy();
     fireEvent.click(screen.getByText("PK-X-0201"));

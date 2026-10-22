@@ -4,88 +4,37 @@
 //
 // THE CLIENT COMPUTES NOTHING (AD-2/AD-10/AD-16). Whether the order can be invoiced,
 // the totals and the invoice number are the backend's; the screen only renders them.
+//
+// Every data type below is the GENERATED contract type (AD-12).
 
-/** Mirrors `InvoiceSummary` field for field. */
-export interface InvoiceSummary {
-  id: string;
-  invoiceNo: string;
-  versionNo: number;
-  /** ISO-8601 UTC. */
-  issuedAt: string;
-  customerName: string;
-  customerTaxCode: string | null;
-  vatRate: number;
-  applyVat: boolean;
-  /** Integer đồng, computed by the backend. */
-  subtotal: number;
-  discountAmount: number;
-  vatAmount: number;
-  total: number;
-  lineCount: number;
-}
+import type { components } from '../../api/generated/schema';
 
-/** Mirrors `InvoicesOverview` field for field. */
-export interface InvoicesOverview {
-  /** Decided by the backend. false ⇒ `blockedReason` may say why. */
-  creatable: boolean;
-  blockedReason: string | null;
-  /** Id of the invoice already issued for the current order version, if any. */
-  currentInvoiceId: string | null;
-  versionNo: number;
-  customerName: string;
-  customerTaxCode: string | null;
-  lineCount: number;
-  /** Integer đồng, computed by the backend. */
-  orderTotal: number;
-  /** Newest first. */
-  invoices: InvoiceSummary[];
-}
+type Schemas = components['schemas'];
 
-/** Mirrors `InvoiceSeller`: the seller copied at issue time. `''` = not configured then. */
-export interface InvoiceSeller {
-  legalName: string;
-  taxCode: string;
-  address: string;
-  representative: string;
-  representativeTitle: string;
-  phone: string;
-  bankAccount: string;
-}
+/** `InvoiceResponseDto` — every amount integer đồng, computed by the backend. */
+export type InvoiceSummary = Schemas['InvoiceResponseDto'];
 
-/** Mirrors `InvoiceLine` field for field. */
-export interface InvoiceLine {
-  displayOrder: number;
-  name: string;
-  unit: string;
-  qty: number;
-  /** Integer đồng. */
-  unitPrice: number;
-  /** Integer đồng, stored by the backend. */
-  amount: number;
-}
+/**
+ * `InvoicesOverviewResponseDto`. `creatable` is decided by the backend (false ⇒
+ * `blockedReason` may say why); `currentInvoiceId` is the invoice already issued
+ * for the current order version, if any; `invoices` newest first.
+ */
+export type InvoicesOverview = Schemas['InvoicesOverviewResponseDto'];
 
-/** Mirrors `InvoicePdfResponse`: the stored PDF, rendered once by the backend. */
-export interface InvoicePdfInfo {
-  /** ASCII, with the `.pdf` extension. */
-  fileName: string;
-  pdfSize: number;
-  /** ISO-8601 UTC. */
-  exportedAt: string;
-}
+/** `InvoiceSellerDto`: the seller copied at issue time. `''` = not configured then. */
+export type InvoiceSeller = Schemas['InvoiceSellerDto'];
 
-/** Mirrors `InvoiceDetailResponse`: one invoice read from its stored snapshot. */
-export interface InvoiceDetail extends InvoiceSummary {
-  orderId: string;
-  /** "Gắn đơn" — the order's quote number. */
-  quoteNo: string;
-  customerSdt: string;
-  customerAddress: string | null;
-  seller: InvoiceSeller;
-  /** In display order. */
-  lines: InvoiceLine[];
-  /** null until exported. */
-  pdf: InvoicePdfInfo | null;
-}
+/** `InvoiceLineDto` — `unitPrice`/`amount` integer đồng, stored by the backend. */
+export type InvoiceLine = Schemas['InvoiceLineDto'];
+
+/** `InvoicePdfResponseDto`: the stored PDF (ASCII `fileName` with `.pdf`), rendered once by the backend. */
+export type InvoicePdfInfo = Schemas['InvoicePdfResponseDto'];
+
+/**
+ * `InvoiceDetailResponseDto`: one invoice read from its stored snapshot.
+ * `quoteNo` is "Gắn đơn"; `lines` in display order; `pdf` null until exported.
+ */
+export type InvoiceDetail = Schemas['InvoiceDetailResponseDto'];
 
 /** The AD-5 error envelope this port rejects with (400 / 403 / 404 / 409). `message` is shown verbatim. */
 export interface InvoicesPortError {
@@ -97,8 +46,8 @@ export interface InvoicesPortError {
 /**
  * Injectable transport for the Hoá đơn bán hàng screen. A PORT, NOT an HTTP client.
  *
- * TODO(app-runtime/login-network): the real implementation attaches the bearer
- * token and parses the AD-5 envelope into `InvoicesPortError`.
+ * The real implementation is `web/src/api/http-invoices-port.ts` (the transport
+ * attaches the Bearer token and parses the AD-5 envelope).
  */
 export interface InvoicesPort {
   getOverview(orderId: string): Promise<InvoicesOverview>;

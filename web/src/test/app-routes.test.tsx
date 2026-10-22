@@ -10,11 +10,17 @@ import { AVAILABLE_NAV_KEYS, NAV_ROUTES } from '../app/routes';
 import {
   FakeAuthPort,
   FakeCatalogPort,
+  FakeContractsPort,
   FakeCustomerSourcesPort,
   FakeCustomersPort,
+  FakeInventoryPort,
+  FakeInvoicesPort,
   FakeMePort,
+  FakeOrdersPort,
   FakePasswordPort,
+  FakePaymentsPort,
   FakeSettingsPort,
+  FakeStockVouchersPort,
   FakeWarrantyPort,
   PermissionsProvider,
 } from '../design-system/session';
@@ -43,6 +49,12 @@ function ports(permissions: string[]): AppPorts {
     catalog: new FakeCatalogPort(),
     settings: new FakeSettingsPort(),
     warranty: new FakeWarrantyPort(),
+    orders: new FakeOrdersPort(),
+    inventory: new FakeInventoryPort(),
+    stockVouchers: new FakeStockVouchersPort(),
+    payments: new FakePaymentsPort(),
+    contracts: new FakeContractsPort(),
+    invoices: new FakeInvoicesPort(),
   };
 }
 
@@ -70,15 +82,15 @@ function navLabels(): string[] {
 }
 
 describe('AppRoutes', () => {
-  it('an orders.view_own account sees only Tra cứu bảo hành + Hồ sơ, and /customers lands on /warranty', async () => {
+  it('an orders.view_own account sees Đơn hàng + Tra cứu bảo hành + Hồ sơ, and /customers lands on /orders', async () => {
     renderAt('/customers', ports(['orders.view_own']));
     expect(await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' })).toBeTruthy();
-    expect(screen.getByTestId('path').textContent).toBe('/warranty');
-    // The warranty screen rendered instead of the customer list.
-    expect(topbarTitle()).toContain('Tra cứu bảo hành');
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    // The order list rendered instead of the customer list.
+    expect(topbarTitle()).toContain('Đơn hàng');
     expect(topbarTitle()).not.toContain('Khách hàng');
-    expect(navLabels()).toEqual(['Tra cứu bảo hành', 'Hồ sơ']);
-    for (const hidden of ['Khách hàng', 'Cấu hình', 'Đơn hàng', 'Kho', 'Trang chủ', 'Danh mục', 'Phân quyền', 'Audit']) {
+    expect(navLabels()).toEqual(['Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
+    for (const hidden of ['Khách hàng', 'Cấu hình', 'Kho', 'Trang chủ', 'Danh mục', 'Phân quyền', 'Audit']) {
       expect(navLabels()).not.toContain(hidden);
     }
   });
@@ -86,7 +98,7 @@ describe('AppRoutes', () => {
   it('/settings without settings.manage does not render the config screen', async () => {
     renderAt('/settings', ports(['orders.view_own']));
     await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/warranty');
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
     expect(screen.queryByText('Nguồn khách hàng')).toBeNull();
   });
 
@@ -114,13 +126,19 @@ describe('AppRoutes', () => {
   it('"/" lands on the first openable route in sidebar order', async () => {
     renderAt('/', ports(ALL_PERMISSIONS));
     await screen.findByText('Khách hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/customers');
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
   });
 
-  it('"/" for an orders.view_own account lands on /warranty', async () => {
+  it('"/" for an orders.view_own account lands on /orders (Đơn hàng comes first in the sidebar)', async () => {
     renderAt('/', ports(['orders.view_own']));
     await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/warranty');
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+  });
+
+  it('"/" for an account without any order key still lands on its first route (/customers)', async () => {
+    renderAt('/', ports(['customers.manage', 'settings.manage']));
+    await screen.findByText('Khách hàng', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/customers');
   });
 
   it('an account with no business permission lands on /profile from "/" and from an unknown path', async () => {
@@ -139,7 +157,7 @@ describe('AppRoutes', () => {
       const get = vi.spyOn(appPorts.customers, 'get');
       renderAt(path, appPorts);
       await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' });
-      expect(screen.getByTestId('path').textContent).toBe('/warranty');
+      expect(screen.getByTestId('path').textContent).toBe('/orders');
       expect(topbarTitle()).not.toContain('Tra cứu theo số điện thoại');
       expect(get).toHaveBeenCalledTimes(0);
       cleanup();
@@ -185,6 +203,252 @@ describe('AppRoutes', () => {
       .map((link) => link.label);
     expect(expected.length).toBe(Object.keys(NAV_ROUTES).length);
     expect(navLabels()).toEqual(expected);
+  });
+});
+
+describe('AppRoutes — orders and inventory (Story 10.5)', () => {
+  const DOCS = ['orders.view_all', 'contracts.generate', 'invoices.manage'];
+  /** Step 1 of CreateQuoteScreen is the Story 3.4 pick screen rendered whole. */
+  const QUOTE_STEP_1 = 'Tra cứu theo số điện thoại';
+
+  /** A real order in the fake, so the detail screen reaches `ready` and draws its actions. */
+  async function withOrder(permissions: string[]) {
+    const appPorts = ports(permissions);
+    const order = await appPorts.orders.create({ customerPhone: '+84903176968' });
+    return { appPorts, id: order.id };
+  }
+
+  async function openDetail(permissions: string[]) {
+    const { appPorts, id } = await withOrder(permissions);
+    renderAt(`/orders/${id}`, appPorts);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Chi tiết đơn'));
+    await screen.findByRole('button', { name: 'Thanh toán' });
+    return { appPorts, id };
+  }
+
+  it('AVAILABLE_NAV_KEYS carries orders and inventory (read from NAV_ROUTES)', () => {
+    expect(Object.keys(NAV_ROUTES)).toEqual(expect.arrayContaining(['orders', 'inventory']));
+    expect(AVAILABLE_NAV_KEYS.has('orders')).toBe(true);
+    expect(AVAILABLE_NAV_KEYS.has('inventory')).toBe(true);
+  });
+
+  it('contracts.generate + invoices.manage: the detail shows all three buttons, each opens its screen for this order', async () => {
+    const { appPorts, id } = await openDetail(DOCS);
+    expect(navLabels()).toContain('Đơn hàng');
+    for (const name of ['Thanh toán', 'Hợp đồng', 'Hoá đơn']) {
+      expect(screen.getByRole('button', { name }), name).toBeTruthy();
+    }
+    const overview = vi.spyOn(appPorts.contracts, 'getOverview');
+    fireEvent.click(screen.getByRole('button', { name: 'Hợp đồng' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${id}/contracts`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Sinh hợp đồng'));
+    expect(overview).toHaveBeenCalledWith(id);
+    cleanup();
+
+    const second = await openDetail(DOCS);
+    const invoices = vi.spyOn(second.appPorts.invoices, 'getOverview');
+    fireEvent.click(screen.getByRole('button', { name: 'Hoá đơn' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${second.id}/invoices`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Hoá đơn bán hàng'));
+    expect(invoices).toHaveBeenCalledWith(second.id);
+    cleanup();
+
+    const third = await openDetail(DOCS);
+    const schedule = vi.spyOn(third.appPorts.payments, 'getSchedule');
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${third.id}/payments`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Lịch thanh toán'));
+    expect(schedule).toHaveBeenCalledWith(third.id);
+  });
+
+  it('orders.view_own only: Thanh toán but no Hợp đồng / Hoá đơn, and typing their URL lands on /orders', async () => {
+    const { id } = await openDetail(['orders.view_own']);
+    expect(screen.queryByRole('button', { name: 'Hợp đồng' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Hoá đơn' })).toBeNull();
+    cleanup();
+
+    for (const path of [`/orders/${id}/contracts`, `/orders/${id}/invoices`, `/orders/${id}/invoices/inv-1`]) {
+      const appPorts = ports(['orders.view_own']);
+      const contracts = vi.spyOn(appPorts.contracts, 'getOverview');
+      const invoices = vi.spyOn(appPorts.invoices, 'getOverview');
+      const invoice = vi.spyOn(appPorts.invoices, 'getInvoice');
+      renderAt(path, appPorts);
+      await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
+      expect(screen.getByTestId('path').textContent, path).toBe('/orders');
+      expect(topbarTitle()).not.toContain('Sinh hợp đồng');
+      expect(topbarTitle()).not.toContain('Hoá đơn bán hàng');
+      expect(contracts).toHaveBeenCalledTimes(0);
+      expect(invoices).toHaveBeenCalledTimes(0);
+      expect(invoice).toHaveBeenCalledTimes(0);
+      cleanup();
+    }
+  });
+
+  it('/orders/new needs quotes.create_edit; with it the quote builder opens, never a detail of order "new"', async () => {
+    const without = ports(['orders.view_own']);
+    renderAt('/orders/new', without);
+    await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(topbarTitle()).not.toContain(QUOTE_STEP_1);
+    cleanup();
+
+    const withPerm = ports(['orders.view_own', 'quotes.create_edit']);
+    const get = vi.spyOn(withPerm.orders, 'get');
+    renderAt('/orders/new', withPerm);
+    await vi.waitFor(() => expect(topbarTitle()).toContain(QUOTE_STEP_1));
+    expect(screen.getByTestId('path').textContent).toBe('/orders/new');
+    expect(topbarTitle()).not.toContain('Chi tiết đơn');
+    expect(get).toHaveBeenCalledTimes(0);
+  });
+
+  it('"+ Tạo đơn" is there with quotes.create_edit and absent without it — on a list with rows and on an empty one', async () => {
+    const empty = { items: [], total: 0, page: 1, pageSize: 20 };
+    for (const [permissions, expected] of [
+      [['orders.view_all', 'quotes.create_edit'], 1],
+      [['orders.view_all'], 0],
+    ] as const) {
+      renderAt('/orders', ports([...permissions]));
+      await vi.waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem' }).length).toBeGreaterThan(0));
+      expect(screen.queryAllByRole('button', { name: '+ Tạo đơn' }), `rows ${permissions}`).toHaveLength(expected);
+      cleanup();
+
+      const appPorts = ports([...permissions]);
+      vi.spyOn(appPorts.orders, 'list').mockResolvedValue(empty);
+      renderAt('/orders', appPorts);
+      await screen.findByText('Chưa có đơn nào');
+      // Toolbar + empty state each carry the button when it may be used.
+      expect(screen.queryAllByRole('button', { name: '+ Tạo đơn' }), `empty ${permissions}`).toHaveLength(expected * 2);
+      expect(screen.queryByText('Bấm ➕Tạo để bắt đầu.') !== null).toBe(expected === 1);
+      cleanup();
+    }
+  });
+
+  it('"+ Tạo đơn" opens /orders/new', async () => {
+    renderAt('/orders', ports(['orders.view_all', 'quotes.create_edit']));
+    fireEvent.click(await screen.findByRole('button', { name: '+ Tạo đơn' }));
+    expect(screen.getByTestId('path').textContent).toBe('/orders/new');
+    await vi.waitFor(() => expect(topbarTitle()).toContain(QUOTE_STEP_1));
+  });
+
+  it('Duyệt chiết khấu: the list button and the route both need discounts.approve', async () => {
+    renderAt('/orders', ports(['orders.view_all', 'discounts.approve']));
+    fireEvent.click(await screen.findByRole('button', { name: 'Duyệt chiết khấu' }));
+    expect(screen.getByTestId('path').textContent).toBe('/orders/discount-approvals');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Duyệt chiết khấu'));
+    cleanup();
+
+    const without = ports(['orders.view_all']);
+    const pending = vi.spyOn(without.orders, 'listPendingDiscounts');
+    renderAt('/orders', without);
+    await vi.waitFor(() => expect(screen.getAllByRole('button', { name: 'Xem' }).length).toBeGreaterThan(0));
+    expect(screen.queryByRole('button', { name: 'Duyệt chiết khấu' })).toBeNull();
+    cleanup();
+
+    renderAt('/orders/discount-approvals', without);
+    await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(pending).toHaveBeenCalledTimes(0);
+  });
+
+  it('Kho: quotes.create_edit sees the stock but not Phiếu kho, and /inventory/vouchers lands back on /inventory', async () => {
+    renderAt('/inventory', ports(['quotes.create_edit']));
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Tồn kho'));
+    expect(navLabels()).toContain('Kho');
+    expect(screen.queryByRole('button', { name: 'Phiếu kho' })).toBeNull();
+    cleanup();
+
+    const appPorts = ports(['quotes.create_edit']);
+    const vouchers = vi.spyOn(appPorts.stockVouchers, 'listVouchers');
+    renderAt('/inventory/vouchers', appPorts);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Tồn kho'));
+    expect(screen.getByTestId('path').textContent).toBe('/inventory');
+    expect(vouchers).toHaveBeenCalledTimes(0);
+  });
+
+  it('Kho: inventory.manage opens Phiếu kho from the stock screen', async () => {
+    renderAt('/inventory', ports(['inventory.manage']));
+    fireEvent.click(await screen.findByRole('button', { name: 'Phiếu kho' }));
+    expect(screen.getByTestId('path').textContent).toBe('/inventory/vouchers');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Phiếu kho'));
+  });
+
+  it('a KE_TOAN-like account (orders + payments + invoices, no customers.manage) lands on /orders', async () => {
+    renderAt('/', ports(['orders.view_all', 'payments.record', 'invoices.manage']));
+    await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(navLabels()).not.toContain('Khách hàng');
+  });
+});
+
+describe('AppRoutes — order navigation wiring', () => {
+  const DOCS = ['orders.view_all', 'contracts.generate', 'invoices.manage'];
+
+  function back() {
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+  }
+
+  it('the list row "Xem" opens that order’s detail; the detail’s back returns to /orders', async () => {
+    const appPorts = ports(['orders.view_all']);
+    const order = await appPorts.orders.create({ customerPhone: '+84903176968' });
+    const get = vi.spyOn(appPorts.orders, 'get');
+    renderAt('/orders', appPorts);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Xem' }))[0]);
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${order.id}`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Chi tiết đơn'));
+    expect(get).toHaveBeenCalledWith(order.id);
+
+    back();
+    expect(screen.getByTestId('path').textContent).toBe('/orders');
+  });
+
+  it('Chuyển trạng thái opens /orders/:id/transition for this order; its back returns to the detail', async () => {
+    const appPorts = ports(['orders.view_all']);
+    const order = await appPorts.orders.create({ customerPhone: '+84903176968' });
+    // A confirmed order has a manual next step, so the button is drawn.
+    await appPorts.orders.confirmOrder(order.id);
+    renderAt(`/orders/${order.id}`, appPorts);
+    const lifecycle = vi.spyOn(appPorts.orders, 'getLifecycle');
+    fireEvent.click(await screen.findByRole('button', { name: 'Chuyển trạng thái' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${order.id}/transition`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Chuyển trạng thái'));
+    expect(lifecycle).toHaveBeenCalledWith(order.id);
+
+    back();
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${order.id}`);
+  });
+
+  it('back from Thanh toán and from Hợp đồng returns to the order detail', async () => {
+    const appPorts = ports(DOCS);
+    const order = await appPorts.orders.create({ customerPhone: '+84903176968' });
+    for (const path of [`/orders/${order.id}/payments`, `/orders/${order.id}/contracts`]) {
+      renderAt(path, appPorts);
+      await screen.findByRole('button', { name: 'Quay lại' });
+      back();
+      expect(screen.getByTestId('path').textContent, path).toBe(`/orders/${order.id}`);
+      cleanup();
+    }
+  });
+
+  it('invoices.manage: "Xem" on an invoice opens its detail; back returns to the invoice list', async () => {
+    const appPorts = ports(DOCS);
+    const order = await appPorts.orders.create({ customerPhone: '+84903176968' });
+    const invoice = await appPorts.invoices.createInvoice(order.id);
+    const getInvoice = vi.spyOn(appPorts.invoices, 'getInvoice');
+    renderAt(`/orders/${order.id}/invoices`, appPorts);
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${order.id}/invoices/${invoice.id}`);
+    await vi.waitFor(() => expect(getInvoice).toHaveBeenCalledWith(order.id, invoice.id));
+
+    back();
+    expect(screen.getByTestId('path').textContent).toBe(`/orders/${order.id}/invoices`);
+  });
+
+  it('back from Phiếu kho returns to /inventory', async () => {
+    // With orders.view_all the landing is /orders, so a wrong back target cannot fall through the gate to /inventory.
+    renderAt('/inventory/vouchers', ports(['orders.view_all', 'inventory.manage']));
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Phiếu kho'));
+    back();
+    expect(screen.getByTestId('path').textContent).toBe('/inventory');
   });
 });
 

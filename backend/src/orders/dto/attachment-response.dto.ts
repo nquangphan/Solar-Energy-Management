@@ -32,6 +32,7 @@ export class AttachmentItemDto {
   uploadedBy!: string;
 
   @ApiPropertyOptional({
+    type: String,
     description:
       'Trạng thái TRƯỚC bước ảnh này thuộc về; null với ảnh bổ sung.',
     nullable: true,
@@ -39,6 +40,7 @@ export class AttachmentItemDto {
   statusFrom!: string | null;
 
   @ApiPropertyOptional({
+    type: String,
     description: 'Trạng thái SAU bước ảnh này thuộc về; null với ảnh bổ sung.',
     nullable: true,
   })

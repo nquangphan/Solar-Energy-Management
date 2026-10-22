@@ -11,8 +11,13 @@
 // The backend enforces every rule behind these calls (AD-4): permission, the
 // `'baogia'`-only mutation window, the `priceEditable` gate on unit prices, the
 // `Order.sourceId` snapshot. Nothing here is a security boundary.
+//
+// Every data type below is the GENERATED contract type (AD-12) — no hand-written
+// mirror that can drift from the backend.
 
-import type { StockVoucherDetail } from './stock-vouchers-port';
+import type { components, paths } from '../../api/generated/schema';
+
+type Schemas = components['schemas'];
 
 /**
  * The confirmed order status — the ONE status literal screens compare against
@@ -46,56 +51,18 @@ export const DISCOUNT_CHO_DUYET = 'cho_duyet';
 export const DISCOUNT_DONG_Y = 'dong_y';
 export const DISCOUNT_TU_CHOI = 'tu_choi';
 
-/** Mirrors the backend `OrderLineItemResponseDto` — `unitPrice`/`amount` are backend numbers. */
-export interface OrderLine {
-  id: string;
-  productId: string | null;
-  name: string;
-  unit: string;
-  qty: number;
-  unitPrice: number;
-  priceEditable: boolean;
-  isFlexible: boolean;
-  note: string | null;
-  warrantyMonths: number | null;
-  displayOrder: number;
-  amount: number;
-}
+/** The backend `OrderLineItemResponseDto` — `unitPrice`/`amount` are backend numbers. */
+export type OrderLine = Schemas['OrderLineItemResponseDto'];
 
 /**
- * Mirrors the backend `OrderResponseDto`. `lineItems` are the lines of the
- * CURRENT version (AD-6) — the client never sees the version concept in 4.1.
- * Totals are deliberately NOT on `Order`: they travel through `previewTotal`
- * (stateless `POST /orders/preview-total`) so there is exactly ONE computer
- * of money — the backend (AD-16).
+ * The backend `OrderResponseDto`. `lineItems` are the lines of the CURRENT
+ * version (AD-6). Totals are deliberately NOT on `Order`: they travel through
+ * `previewTotal` (stateless `POST /orders/preview-total`) so there is exactly ONE
+ * computer of money — the backend (AD-16). `cancelReason`/`cancelledAt` (Story
+ * 5.7) stay null until the order is cancelled; whoever can read the order can
+ * read why it was cancelled.
  */
-export interface Order {
-  id: string;
-  status: string;
-  customerSdt: string;
-  currentVersionId: string | null;
-  ownerAccountId: string;
-  assigneeAccountId: string | null;
-  sourceId: string;
-  custType: string;
-  scopeThietBi: boolean;
-  scopeThiCong: boolean;
-  scopeVanChuyen: boolean;
-  kWp: number | null;
-  vatMode: string | null;
-  validityNote: string | null;
-  /**
-   * Why the order was cancelled, and when (Story 5.7). Both null until it is
-   * cancelled. Not permission-fenced: whoever can read the order can read why it
-   * was cancelled.
-   */
-  cancelReason: string | null;
-  cancelledAt: string | null;
-  lineItems: OrderLine[];
-  discount: OrderDiscount | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type Order = Schemas['OrderResponseDto'];
 
 /**
  * The LATEST discount-approval record of the order (Story 4.7) — null when the
@@ -103,37 +70,20 @@ export interface Order {
  * `'baogia'` but still carries `status: 'tu_choi'` + `resolveNote` so the screen
  * can show the reason banner.
  */
-export interface OrderDiscount {
-  amount: number;
-  status: string;
-  requestNote: string | null;
-  resolveNote: string | null;
-  requestedAt: string;
-  resolvedAt: string | null;
-}
+export type OrderDiscount = Schemas['OrderDiscountDto'];
 
 /**
- * One row of `GET /orders` (Story 5.3) — mirrors the backend `OrderListItemDto`
- * field-for-field (AD-12: the contract comes FROM the backend).
+ * One row of `GET /orders` (Story 5.3) — the backend `OrderListItemDto`.
  *
  * Deliberately carries NO money: a list total would need the version + pricing
  * join, and a wrong number on a list row is a money regression. No `costPrice`
  * either (the `costs.view` fence, AD-4).
  */
-export interface OrderListItem {
-  id: string;
-  status: string;
-  customerSdt: string;
-  customerName: string;
-  ownerAccountId: string;
-  assigneeAccountId: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type OrderListItem = Schemas['OrderListItemDto'];
 
 /**
- * One step of the order lifecycle stepper (Story 5.4) — mirrors the backend
- * `OrderLifecycleStepDto` field-for-field (AD-12).
+ * One step of the order lifecycle stepper (Story 5.4) — the backend
+ * `OrderLifecycleStepDto`.
  *
  * The BACKEND decides which steps exist for this order (it gates them by the
  * order's scope flags, FR-7) and which one the order is standing on. The screen
@@ -144,14 +94,11 @@ export interface OrderListItem {
  * No Vietnamese label here: labels live in `STATUS_LABELS` and are parity-guarded
  * byte-for-byte against mobile.
  */
-export interface OrderLifecycleStep {
-  status: string;
-  trangThai: 'done' | 'current' | 'upcoming';
-}
+export type OrderLifecycleStep = Schemas['OrderLifecycleStepDto'];
 
 /**
- * One step the CALLER can actually take right now (Story 5.5) — mirrors the
- * backend `OrderNextStepDto` field-for-field (AD-12).
+ * One step the CALLER can actually take right now (Story 5.5) — the backend
+ * `OrderNextStepDto`.
  *
  * The BACKEND filters this by the order's current status, its scope flags and
  * the caller's REAL permissions. The client never recomputes it: the branches
@@ -161,184 +108,102 @@ export interface OrderLifecycleStep {
  * No Vietnamese label here either — the destination's label comes from
  * `STATUS_LABELS`, which is parity-guarded against mobile byte-for-byte.
  */
-export interface OrderNextStep {
-  event: string;
-  to: string;
-  requires: string;
-}
+export type OrderNextStep = Schemas['OrderNextStepDto'];
 
 /**
  * The whole `GET /orders/:id/lifecycle` reply (Story 5.4 + 5.5): what the stepper
- * draws, and what this caller can do next.
+ * draws (`steps`), and what this caller can do next (`nextSteps`). Both come from
+ * ONE read of the order.
  *
- * Both come from ONE read of the order. A second route for `buocKeTiep` would be
- * a second request asking the same question.
- *
- * `buocKeTiep` EMPTY means this caller has no legal step — the "Chuyển trạng
+ * `nextSteps` EMPTY means this caller has no legal step — the "Chuyển trạng
  * thái" button is then hidden outright, not greyed (UX-DR-22).
- */
-export interface OrderLifecycle {
-  buoc: OrderLifecycleStep[];
-  buocKeTiep: OrderNextStep[];
-  /**
-   * Whether THIS caller can cancel THIS order (Story 5.7) — the backend read it
-   * off the transition table against the caller's real permissions.
-   *
-   * It cannot be derived from `buocKeTiep`: cancelling is not part of the manual
-   * lane, so `huy` never appears there. And the client must not derive it from
-   * `status` either — that is business logic (AD-2). `false` ⇒ the button is
-   * ABSENT, not greyed (UX-DR-22).
-   */
-  coTheHuy: boolean;
-}
-
-/** One row of the stock-out preview — mirrors `OrderStockIssueLineDto` field for field. */
-export interface OrderStockIssueLine {
-  productId: string;
-  name: string;
-  sku: string;
-  unit: string;
-  /** What the order needs — the backend already summed same-product lines. */
-  qty: number;
-  /**
-   * Real on-hand right now, for counting against. The go/no-go WARNING is
-   * `shortfall` / the view's `blocked` — never a client-side comparison.
-   */
-  onHand: number;
-  /**
-   * Units of `qty` beyond `onHand` right now (≥ 0), computed by the backend.
-   * A warning: the server re-checks under the lock when issuing.
-   */
-  shortfall: number;
-}
-
-/**
- * `GET /orders/:id/stock-issue` — mirrors `OrderStockIssueViewDto`.
  *
- * ONE ORDER, ONE STOCK-OUT. `issued` + `voucher` once issued; before that,
- * `lines` (in the backend's canonical order — a 409's `lines.{i}.qty` indexes
- * into it) and `untrackedItems` (line names that never go on the voucher).
- * `canIssue` is computed by the BACKEND (status, stock lines, permission) — the
- * screen does not re-derive it, and never compares `qty` with `onHand` (AD-2).
- * `blocked` (some line short right now) is the backend's warning; it is kept
- * apart from `canIssue` so the screen can tell "may not issue" from "may issue,
- * but goods are missing".
+ * `canCancel` (Story 5.7) is whether THIS caller can cancel THIS order — the
+ * backend read it off the transition table against the caller's real
+ * permissions. It cannot be derived from `nextSteps` (cancelling is not part of
+ * the manual lane) nor from `status` (business logic, AD-2). `false` ⇒ the
+ * button is ABSENT, not greyed (UX-DR-22).
  */
-export interface OrderStockIssueView {
-  issued: boolean;
-  /** ABSENT until issued. Its `unitCost` is absent without `costs.view`. */
-  voucher?: StockVoucherDetail;
-  canIssue: boolean;
-  blocked: boolean;
-  lines: OrderStockIssueLine[];
-  untrackedItems: string[];
-}
+export type OrderLifecycle = Schemas['OrderLifecycleResponseDto'];
 
 /**
- * One product of the quote's early stock warning — mirrors
- * `OrderStockCheckLineDto` field for field. Every figure and `status` are the
- * backend's; the screen picks its wording from `status` only.
+ * One row of the stock-out preview — `OrderStockIssueLineDto`. `qty` is what the
+ * order needs (same-product lines already summed); `onHand` is for counting
+ * against. The go/no-go WARNING is `shortfall` / the view's `blocked` — never a
+ * client-side comparison; the server re-checks under the lock when issuing.
  */
-export interface OrderStockCheckLine {
-  productId: string;
-  name: string;
-  unit: string;
-  /** What the quote needs — the backend already summed same-product lines. */
-  qty: number;
-  onHand: number;
-  /** Promised to OTHER orders. */
-  reserved: number;
-  /** `onHand − reserved`, may be negative. */
-  available: number;
-  /** What to bring in (≥ 0). */
-  shortfall: number;
-  status: 'enough' | 'short';
-}
+export type OrderStockIssueLine = Schemas['OrderStockIssueLineDto'];
 
 /**
- * `GET /orders/:id/stock-check` — mirrors `OrderStockCheckDto`. One entry per
+ * `GET /orders/:id/stock-issue` — `OrderStockIssueViewDto`.
+ *
+ * ONE ORDER, ONE STOCK-OUT. `issued` + `voucher` once issued (ABSENT until then;
+ * its `unitCost` is absent without `costs.view`); before that, `lines` (in the
+ * backend's canonical order — a 409's `lines.{i}.qty` indexes into it) and
+ * `untrackedItems` (line names that never go on the voucher). `canIssue` is
+ * computed by the BACKEND (status, stock lines, permission) — the screen does
+ * not re-derive it, and never compares `qty` with `onHand` (AD-2). `blocked`
+ * (some line short right now) is the backend's warning; it is kept apart from
+ * `canIssue` so the screen can tell "may not issue" from "may issue, but goods
+ * are missing".
+ */
+export type OrderStockIssueView = Schemas['OrderStockIssueViewDto'];
+
+/**
+ * One product of the quote's early stock warning — `OrderStockCheckLineDto`.
+ * Every figure (`reserved` = promised to OTHER orders, `available` may be
+ * negative, `shortfall` ≥ 0) and `status` are the backend's; the screen picks
+ * its wording from `status` only.
+ */
+export type OrderStockCheckLine = Schemas['OrderStockCheckLineDto'];
+
+/**
+ * `GET /orders/:id/stock-check` — `OrderStockCheckDto`. One entry per
  * stock-tracked product of the current version, ordered by name; free-text and
  * non-tracked lines are absent. A warning only — confirming is never blocked.
  */
-export interface OrderStockCheck {
-  lines: OrderStockCheckLine[];
-}
+export type OrderStockCheck = Schemas['OrderStockCheckDto'];
 
-/** `POST /orders/:id/stock-issue` — mirrors `OrderStockIssueResultDto`. */
-export interface OrderStockIssueResult {
-  voucher: StockVoucherDetail;
-}
+/** `POST /orders/:id/stock-issue` — `OrderStockIssueResultDto`. */
+export type OrderStockIssueResult = Schemas['OrderStockIssueResultDto'];
 
-/** What one manual transition did — mirrors the backend `StatusChangeResponseDto`. */
-export interface StatusChangeResult {
-  status: string;
-  occurredAt: string;
-  soAnhDaLuu: number;
-}
+/** What one manual transition did — the backend `StatusChangeResponseDto`. */
+export type StatusChangeResult = Schemas['StatusChangeResponseDto'];
 
 /**
- * One photo attached to an order (Story 5.6, FR-24) — mirrors the backend
- * `AttachmentItemDto` field for field.
+ * One photo attached to an order (Story 5.6, FR-24) — the backend
+ * `AttachmentItemDto`.
  *
  * `statusFrom`/`statusTo` are the step coordinates: BOTH null means this is a
  * supplementary photo that belongs to no transition. The screen reads that pair
  * to pick the badge; it does not infer the kind from anywhere else.
  *
- * `coTheXoa` is computed by the BACKEND (uploader OR order-edit permission,
+ * `canDelete` is computed by the BACKEND (uploader OR order-edit permission,
  * AD-2/AD-4). The client ONLY renders it — rebuilding that expression here would
  * be a second copy of the rule, and it would drift.
  *
  * There is NO object key here: R2 keys never leave the backend (AD-3). Bytes come
- * from `anhBytes()`, which goes through the authenticated proxy route.
+ * from `attachmentBytes()`, which goes through the authenticated proxy route.
  */
-export interface AttachmentItem {
-  id: string;
-  fileName: string;
-  contentType: string;
-  size: number;
-  createdAt: string;
-  nguoiTaiLen: string;
-  statusFrom: string | null;
-  statusTo: string | null;
-  coTheXoa: boolean;
-}
+export type AttachmentItem = Schemas['AttachmentItemDto'];
 
 /** What changed between version N-1 and version N — lines and quantities only. */
-export interface OrderVersionChange {
-  them: string[];
-  xoa: string[];
-  doiSoLuong: { ten: string; tu: number; den: number }[];
-}
+export type OrderVersionChange = Schemas['VersionChangesDto'];
 
 /**
- * One update version in the order history (Story 5.4, FR-6) — mirrors the backend
+ * One update version in the order history (Story 5.4, FR-6) — the backend
  * `OrderVersionItemDto`.
  *
- * `laBanHienLuc` is resolved by the backend through `Order.currentVersionId`
+ * `isCurrent` is resolved by the backend through `Order.currentVersionId`
  * (AD-6) — the screen must NOT re-derive it from the highest `versionNo`.
  *
  * Carries NO money: history answers which/who/when/what-changed, and money only
  * ever travels through `previewTotal` (AD-10).
  */
-export interface OrderVersionItem {
-  id: string;
-  versionNo: number;
-  laBanHienLuc: boolean;
-  createdAt: string;
-  chotAt: string | null;
-  createdByAccountId: string | null;
-  createdByDisplayName: string | null;
-  soDong: number;
-  thayDoi: OrderVersionChange;
-}
+export type OrderVersionItem = Schemas['OrderVersionItemDto'];
 
 /** Paged envelope of `GET /orders` — `total` counts the whole scoped+filtered set. */
-export interface OrderPage {
-  items: OrderListItem[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
+export type OrderPage = Schemas['OrderListResponseDto'];
 
 /**
  * Query of `GET /orders` (Story 5.3). There is deliberately NO scope field:
@@ -348,17 +213,10 @@ export interface OrderPage {
  * `followUp` and `status` are mutually exclusive; sending both is a 400 from the
  * backend, not a silently-empty list.
  */
-export interface OrderListQuery {
-  status?: string;
-  followUp?: boolean;
-  page?: number;
-  pageSize?: number;
-}
+export type OrderListQuery = NonNullable<paths['/orders']['get']['parameters']['query']>;
 
 /** Body of `POST /orders` — the customer phone, RAW or E.164 (backend normalises, AD-9). */
-export interface CreateOrderInput {
-  customerSdt: string;
-}
+export type CreateOrderInput = Schemas['CreateOrderRequestDto'];
 
 /**
  * Body of `POST /orders/:id/line-items` — two shapes in one input (UX-DR-24):
@@ -366,77 +224,51 @@ export interface CreateOrderInput {
  * auto-fills the price; `unitPrice` allowed ONLY when the product permits) or
  * free line (`productId` absent — `name`/`unit`/`unitPrice` required).
  */
-export interface AddOrderLineInput {
-  productId?: string;
-  name?: string;
-  unit?: string;
-  qty: number;
-  unitPrice?: number;
-  note?: string | null;
-  isFlexible?: boolean;
-}
+export type AddOrderLineInput = Schemas['AddLineItemRequestDto'];
 
-/** Body of `PATCH /orders/:id/line-items/:lineId` — `unitPrice` only on `priceEditable` lines. */
-export interface UpdateOrderLineInput {
-  qty?: number;
-  unitPrice?: number;
-  note?: string | null;
-  isFlexible?: boolean;
-  // Absent = keep; a number (≥ 1) = set; `null` = clear warranty (a valid business value,
-  // NOT "keep"). Catalogue install lines (productId set + priceEditable) are ignored backend-side.
-  warrantyMonths?: number | null;
-}
+/**
+ * Body of `PATCH /orders/:id/line-items/:lineId` — `unitPrice` only on
+ * `priceEditable` lines. `warrantyMonths`: absent = keep; a number (≥ 1) = set;
+ * `null` = clear warranty (a valid business value, NOT "keep"). Catalogue install
+ * lines (productId set + priceEditable) are ignored backend-side.
+ */
+export type UpdateOrderLineInput = Schemas['UpdateLineItemRequestDto'];
 
 /**
  * Body of `PATCH /orders/:id` (Story 4.3) — partial toggle of the two MUTABLE
- * scope flags. `scopeThietBi` is deliberately absent: every order carries
+ * scope flags. `scopeEquipment` is deliberately absent: every order carries
  * equipment, the backend keeps it `true` and accepts no write for it.
  */
-export interface UpdateScopeFlagsInput {
-  scopeThiCong?: boolean;
-  scopeVanChuyen?: boolean;
-}
+export type UpdateScopeFlagsInput = Pick<
+  Schemas['UpdateOrderRequestDto'],
+  'scopeConstruction' | 'scopeDelivery'
+>;
 
 /**
  * Body of `PATCH /orders/:id` (Story 4.4) — the order-metadata group of the same
  * endpoint: the VAT tick, the system capacity and the quote validity note.
  * `kWp`/`validityNote` accept `null` = clear the value; `vatMode` is always one
- * of the backend registry values (`'co_vat' | 'khong_vat'`) echoed, never
- * invented here.
+ * of the backend registry values echoed, never invented here.
  */
-export interface UpdateOrderMetaInput {
-  vatMode?: string;
-  kWp?: number | null;
-  validityNote?: string | null;
-}
+export type UpdateOrderMetaInput = Pick<
+  Schemas['UpdateOrderRequestDto'],
+  'vatMode' | 'kWp' | 'validityNote'
+>;
 
 /**
- * Mirrors the backend `PreviewTotalResponseDto` — three BACKEND-computed integer
- * đồng numbers (AD-16) plus the applied `vatRate`/`applyVat` (Story 4.4) so the
- * screen can label the VAT row ("VAT 8%") with a backend value, never a static
- * label. The screen renders them as-is, "—" until the first response (or after
- * a failed preview).
+ * The backend `PreviewTotalResponseDto` — BACKEND-computed integer đồng numbers
+ * (AD-16) plus the applied `vatRate`/`applyVat` (Story 4.4) so the screen can
+ * label the VAT row ("VAT 8%") with a backend value, never a static label. The
+ * screen renders them as-is, "—" until the first response (or after a failed
+ * preview).
  */
-export interface OrderTotals {
-  subtotal: number;
-  discountAmount: number;
-  vatAmount: number;
-  total: number;
-  vatRate: number;
-  applyVat: boolean;
-}
+export type OrderTotals = Schemas['PreviewTotalResponseDto'];
 
 /** Body of `POST /orders/:id/apply-discount` (Story 4.7) — one integer đồng amount on the ORDER. */
-export interface ApplyDiscountInput {
-  amount: number;
-  note?: string;
-}
+export type ApplyDiscountInput = Schemas['ApplyDiscountRequestDto'];
 
 /** Body of `POST /orders/:id/resolve-discount` (Story 4.7) — `reason` REQUIRED when rejecting. */
-export interface ResolveDiscountInput {
-  approve: boolean;
-  reason?: string;
-}
+export type ResolveDiscountInput = Schemas['ResolveDiscountRequestDto'];
 
 /**
  * One exported quote file (Story 4.8, FR-21) — `bytes` are the BACKEND-rendered
@@ -462,43 +294,23 @@ export interface QuoteExportFiles {
  * integer percent (or null: free line, zero price, or caller lacks `costs.view`,
  * FR-37). The screen renders it verbatim ("X%" / "—"), never computes it.
  */
-export interface DiscountPendingLine {
-  name: string;
-  qty: number;
-  unitPrice: number;
-  estimatedMarginPct: number | null;
-}
+export type DiscountPendingLine = Schemas['DiscountPendingLineDto'];
 
 /**
  * One item of `GET /orders/pending-discount-approvals` (Story 4.7, FR-18/FR-37) —
  * `subtotal`/`afterDiscount` are BACKEND numbers (AD-16), the screen displays
  * them as-is.
  */
-export interface DiscountPendingItem {
-  orderId: string;
-  customerSdt: string;
-  amount: number;
-  requestNote: string | null;
-  requestedByAccountId: string;
-  requestedByDisplayName: string;
-  requestedAt: string;
-  subtotal: number;
-  afterDiscount: number;
-  lines: DiscountPendingLine[];
-}
+export type DiscountPendingItem = Schemas['DiscountPendingItemDto'];
 
 /**
  * Body of `POST /orders/preview-total` — the lines the screen is DISPLAYING,
  * echoed back (every `unitPrice` is a number the backend already returned).
- * `vatMode` (Story 4.4) is echoed from `Order.vatMode` the same way — the
- * client never sends a rate.
+ * `vatMode` (Story 4.4) is echoed from `Order.vatMode` and `discountAmount` from
+ * `Order.discount.amount` (Story 4.7) the same way — the client never sends a
+ * rate and never computes a discount.
  */
-export interface PreviewTotalInput {
-  lines: Array<{ unitPrice: number; qty: number }>;
-  vatMode?: string;
-  /** Echoed from `Order.discount.amount` (Story 4.7) — never computed client-side. */
-  discountAmount?: number;
-}
+export type PreviewTotalInput = Schemas['PreviewTotalRequestDto'];
 
 /**
  * The AD-5 error envelope an `OrdersPort` rejects with when the backend refuses a
@@ -526,9 +338,9 @@ export interface OrderPortError {
  * the seam that lets the screen exist before the app owns a bundler/router/token
  * store.
  *
- * TODO(app-runtime): the real implementation attaches `Authorization: Bearer
- * <accessToken>` (Story 2.3) and parses the AD-5 envelope into `OrderPortError`.
- * Until then `FakeOrdersPort` drives the guards/demo.
+ * The real implementation is `web/src/api/http-orders-port.ts` (the transport
+ * attaches the Bearer token and parses the AD-5 envelope into `ApiError`);
+ * `FakeOrdersPort` drives the tests/demo.
  */
 export interface OrdersPort {
   /** Create a draft order for a customer. Rejects 400 (bad phone) / 404 (no such customer). */
@@ -549,7 +361,7 @@ export interface OrdersPort {
   /**
    * Lifecycle of one order — `GET /orders/:id/lifecycle` (Story 5.4 + 5.5, FR-7).
    * Steps already gated by the order's scope flags: those that do not apply are
-   * ABSENT from the array, not dimmed (UX-DR-11). `buocKeTiep` is already
+   * ABSENT from the array, not dimmed (UX-DR-11). `nextSteps` is already
    * filtered by the caller's real permissions. Rejects 404 (absent or out of the
    * caller's scope — the two are indistinguishable by design), 403.
    */
@@ -557,7 +369,7 @@ export interface OrdersPort {
 
   /**
    * Update history of one order — `GET /orders/:id/versions` (Story 5.4, FR-6).
-   * Every version, `versionNo` ascending; exactly one carries `laBanHienLuc`.
+   * Every version, `versionNo` ascending; exactly one carries `isCurrent`.
    * Rejects 404 / 403 like `getLifecycle`.
    */
   listVersions(orderId: string): Promise<OrderVersionItem[]>;
@@ -656,11 +468,11 @@ export interface OrdersPort {
    * Move the order one step and attach evidence photos (Story 5.5, FR-9/FR-23) —
    * `POST /orders/:id/transition` as `multipart/form-data`.
    *
-   * `event` is one of the events `getLifecycle().buocKeTiep` handed back. The
+   * `event` is one of the events `getLifecycle().nextSteps` handed back. The
    * caller does NOT name a destination: the destination belongs to the backend's
    * transition table, not to the client (AD-11).
    *
-   * `anh` is ALWAYS optional — an empty array is the ordinary path, not an edge
+   * `files` is ALWAYS optional — an empty array is the ordinary path, not an edge
    * case (FR-23, UX-DR-25). Limits are the backend's: 10 photos, 10 MB each,
    * jpeg/png/webp/heic.
    *
@@ -669,26 +481,26 @@ export interface OrdersPort {
    * outside the order's scope, or not reachable from the current status —
    * including pressing twice), 404.
    */
-  chuyenTrangThai(
+  transition(
     orderId: string,
     event: string,
-    anh: File[],
+    files: File[],
   ): Promise<StatusChangeResult>;
 
   /**
    * Cancel the order with a REASON — `POST /orders/:id/cancel` (Story 5.7, FR-9).
    *
-   * Its own endpoint, not an `event` of `chuyenTrangThai`: the reason is
+   * Its own endpoint, not an `event` of `transition`: the reason is
    * mandatory and only this path enforces it.
    *
-   * `lyDo` is required, 3–500 characters after trimming. Call this only when
-   * `getLifecycle().coTheHuy` is true — the backend enforces the same rule anyway
+   * `reason` is required, 3–500 characters after trimming. Call this only when
+   * `getLifecycle().canCancel` is true — the backend enforces the same rule anyway
    * and answers 403/409 otherwise (AD-4: hiding the button is UX, not security).
    *
-   * Rejects 400 (`fieldErrors` carries `lyDo`), 403, 409 (current status has no
+   * Rejects 400 (`fieldErrors` carries `reason`), 403, 409 (current status has no
    * cancel edge — including an order already cancelled), 404.
    */
-  huyDon(orderId: string, lyDo: string): Promise<void>;
+  cancel(orderId: string, reason: string): Promise<void>;
 
   /**
    * Every photo of the order — step photos AND supplementary ones, in ONE flat
@@ -698,7 +510,7 @@ export interface OrdersPort {
    * re-sort. Rejects 403 (neither `orders.view_all` nor `orders.view_own`), 404
    * (order out of scope or missing).
    */
-  listAnh(orderId: string): Promise<AttachmentItem[]>;
+  listAttachments(orderId: string): Promise<AttachmentItem[]>;
 
   /**
    * Attach supplementary photos OUTSIDE the transition flow (Story 5.6, FR-24) —
@@ -708,17 +520,17 @@ export interface OrdersPort {
    * Limits are the backend's: 10 photos per upload, 10 MB each,
    * jpeg/png/webp/heic. Rejects 400 (`fieldErrors` says which photo), 403, 404.
    */
-  themAnh(orderId: string, files: File[]): Promise<void>;
+  addAttachments(orderId: string, files: File[]): Promise<void>;
 
   /**
    * Delete ONE photo — `DELETE /orders/:id/attachments/:attachmentId` (Story 5.6, FR-24).
    * Hard delete; the trail lives in the audit log.
    *
-   * Call this only for items whose `coTheXoa` is true — the backend enforces the
+   * Call this only for items whose `canDelete` is true — the backend enforces the
    * same rule anyway and answers 403 otherwise (AD-4: hiding the button is UX,
    * not security). Rejects 403, 404.
    */
-  xoaAnh(orderId: string, attachmentId: string): Promise<void>;
+  removeAttachment(orderId: string, attachmentId: string): Promise<void>;
 
   /**
    * Bytes of ONE photo for preview — `GET /orders/:id/attachments/:attachmentId`
@@ -728,7 +540,7 @@ export interface OrdersPort {
    * The SCREEN calls this and hands the result to the gallery component; the
    * gallery itself never touches the network. Rejects 403, 404.
    */
-  anhBytes(orderId: string, attachmentId: string): Promise<Blob>;
+  attachmentBytes(orderId: string, attachmentId: string): Promise<Blob>;
 
   /**
    * Stock-out preview of the order (FR-26) — `GET /orders/:id/stock-issue`.

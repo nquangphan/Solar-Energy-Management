@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { OrderView } from '../orders.service';
 import { OrderLineItemResponseDto } from './order-line-item-response.dto';
+import { VAT_MODES } from '../domain/vat-mode';
 
 /**
  * Trạng thái chiết khấu của Đơn — approval MỚI NHẤT (Story 4.7, FR-18). Client cần nó để
@@ -106,6 +107,7 @@ export class OrderResponseDto {
 
   @ApiPropertyOptional({
     type: String,
+    enum: [...VAT_MODES],
     nullable: true,
     description:
       "Tick áp VAT: 'co_vat' | 'khong_vat' — đơn mới luôn 'co_vat'; null chỉ ở đơn tạo trước 4.4 (tính như có VAT).",

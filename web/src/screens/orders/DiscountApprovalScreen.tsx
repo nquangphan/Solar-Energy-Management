@@ -162,7 +162,7 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
                   >
                     <td>
                       <span className="strong">{item.orderId}</span>{' '}
-                      <span className="micro muted mono">{item.customerSdt}</span>
+                      <span className="micro muted mono">{item.customerPhone}</span>
                     </td>
                     <td className="num mono">
                       <Money value={item.amount} />
@@ -215,7 +215,7 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
                     </td>
                     {/* Biên là SỐ PORT TRẢ (integer %) — null = "—" (FR-37). */}
                     <td className="num mono">
-                      {line.estimatedMarginPct === null
+                      {line.estimatedMarginPct == null
                         ? '—'
                         : `${line.estimatedMarginPct}%`}
                     </td>
@@ -227,7 +227,7 @@ export function DiscountApprovalScreen({ ordersPort }: DiscountApprovalScreenPro
               {'Ước tính theo giá vốn hiện tại — chưa xuất kho.'}
             </p>
 
-            {selected.requestNote !== null && (
+            {selected.requestNote != null && (
               <p className="micro">
                 <span className="muted">Lý do đề xuất</span>{' '}
                 {selected.requestNote}

@@ -20,11 +20,17 @@ import './design-system/a11y/a11y.css';
 import { createApiClient } from './api/client';
 import { HttpAuthPort } from './api/http-auth-port';
 import { HttpCatalogPort } from './api/http-catalog-port';
+import { HttpContractsPort } from './api/http-contracts-port';
 import { HttpCustomerSourcesPort } from './api/http-customer-sources-port';
 import { HttpCustomersPort } from './api/http-customers-port';
+import { HttpInventoryPort } from './api/http-inventory-port';
+import { HttpInvoicesPort } from './api/http-invoices-port';
 import { HttpMePort } from './api/http-me-port';
+import { HttpOrdersPort } from './api/http-orders-port';
 import { HttpPasswordPort } from './api/http-password-port';
+import { HttpPaymentsPort } from './api/http-payments-port';
 import { HttpSettingsPort } from './api/http-settings-port';
+import { HttpStockVouchersPort } from './api/http-stock-vouchers-port';
 import { HttpWarrantyPort } from './api/http-warranty-port';
 import { createSessionStore } from './api/session-store';
 import { createTransport } from './api/transport';
@@ -51,6 +57,12 @@ const ports: AppPorts = {
   catalog: new HttpCatalogPort(client),
   settings: new HttpSettingsPort(client),
   warranty: new HttpWarrantyPort(client),
+  orders: new HttpOrdersPort(client),
+  inventory: new HttpInventoryPort(client),
+  stockVouchers: new HttpStockVouchersPort(client),
+  payments: new HttpPaymentsPort(client),
+  contracts: new HttpContractsPort(client),
+  invoices: new HttpInvoicesPort(client),
 };
 
 type Status = 'restoring' | 'signedOut' | 'signedIn';

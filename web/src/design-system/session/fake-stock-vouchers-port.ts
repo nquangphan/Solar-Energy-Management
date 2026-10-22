@@ -25,28 +25,28 @@ const KHO = { id: 'acc-kho-binh', displayName: 'Kho/Giao hàng (Bình)' };
 export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
   {
     id: 'pk-n-0119',
-    ma: 'PK-N-0119',
+    code: 'PK-N-0119',
     type: 'nhap',
     createdAt: '2026-07-06T01:05:00.000Z',
-    nguoiTao: KHO,
-    soDong: 2,
-    tongSoLuong: 50,
+    createdBy: KHO,
+    lineCount: 2,
+    totalQty: 50,
     canReturn: false,
     note: 'Nhập từ nhà cung cấp',
     lines: [
       {
         productId: 'prod-day-dc-4',
-        ten: 'Dây DC 4mm² (cuộn 100m)',
+        name: 'Dây DC 4mm² (cuộn 100m)',
         sku: 'DC-4-100',
-        donVi: 'cuộn',
+        unit: 'cuộn',
         qty: 10,
         unitCost: 1_480_000,
       },
       {
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 40,
         unitCost: 2_110_000,
       },
@@ -54,27 +54,27 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
   },
   {
     id: 'pk-x-0096',
-    ma: 'PK-X-0096',
+    code: 'PK-X-0096',
     type: 'xuat',
     createdAt: '2026-07-05T23:30:00.000Z',
-    nguoiTao: KHO,
-    soDong: 2,
-    tongSoLuong: 15,
+    createdBy: KHO,
+    lineCount: 2,
+    totalQty: 15,
     canReturn: false,
     note: 'Hàng mẫu cho khách',
     lines: [
       {
         productId: 'prod-inverter-8k',
-        ten: 'Inverter Solplanet ASW8000-S',
+        name: 'Inverter Solplanet ASW8000-S',
         sku: 'INV-ASW8000',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 1,
       },
       {
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 14,
       },
     ],
@@ -82,41 +82,41 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
   {
     // Order-bound stock-out — `createdBy` is the person who CONFIRMED it.
     id: 'pk-x-0095',
-    ma: 'PK-X-0095',
+    code: 'PK-X-0095',
     type: 'xuat',
     orderId: 'ord-demo-4',
     createdAt: '2026-07-04T02:30:00.000Z',
-    nguoiTao: KHO,
-    soDong: 1,
-    tongSoLuong: 1,
+    createdBy: KHO,
+    lineCount: 1,
+    totalQty: 1,
     canReturn: true,
     note: null,
     lines: [
       {
         productId: 'prod-inverter-hybrid-10k',
-        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
         sku: 'INV-ASW10K-H',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 1,
       },
     ],
   },
   {
     id: 'pk-n-0118',
-    ma: 'PK-N-0118',
+    code: 'PK-N-0118',
     type: 'nhap',
     createdAt: '2026-07-02T02:00:00.000Z',
-    nguoiTao: KHO,
-    soDong: 1,
-    tongSoLuong: 5,
+    createdBy: KHO,
+    lineCount: 1,
+    totalQty: 5,
     canReturn: false,
     note: 'Tồn đầu kỳ',
     lines: [
       {
         productId: 'prod-inverter-hybrid-10k',
-        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
         sku: 'INV-ASW10K-H',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 5,
         unitCost: 18_500_000,
       },
@@ -125,22 +125,22 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
   {
     // Order-bound stock-out of a cancelled order that already has its return voucher.
     id: 'pk-x-0090',
-    ma: 'PK-X-0090',
+    code: 'PK-X-0090',
     type: 'xuat',
     orderId: 'ord-demo-cancelled',
     createdAt: '2026-07-01T02:30:00.000Z',
-    nguoiTao: KHO,
-    soDong: 1,
-    tongSoLuong: 4,
+    createdBy: KHO,
+    lineCount: 1,
+    totalQty: 4,
     canReturn: false,
-    returnVoucher: { id: 'pk-nt-0004', ma: 'PK-NT-0004' },
+    returnVoucher: { id: 'pk-nt-0004', code: 'PK-NT-0004' },
     note: null,
     lines: [
       {
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 4,
       },
     ],
@@ -148,22 +148,22 @@ export const DEMO_STOCK_VOUCHERS: StockVoucherDetail[] = [
   {
     // Return voucher: type 'nhap', no top-level orderId.
     id: 'pk-nt-0004',
-    ma: 'PK-NT-0004',
+    code: 'PK-NT-0004',
     type: 'nhap',
     returnOfVoucherId: 'pk-x-0090',
     createdAt: '2026-07-03T02:00:00.000Z',
-    nguoiTao: KHO,
-    soDong: 1,
-    tongSoLuong: 3,
+    createdBy: KHO,
+    lineCount: 1,
+    totalQty: 3,
     canReturn: false,
-    returnOf: { id: 'pk-x-0090', ma: 'PK-X-0090', orderId: 'ord-demo-cancelled' },
+    returnOf: { id: 'pk-x-0090', code: 'PK-X-0090', orderId: 'ord-demo-cancelled' },
     note: 'Đã cắt 1 tấm',
     lines: [
       {
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 3,
         unitCost: 2_110_000,
       },
@@ -186,17 +186,17 @@ export const FAKE_INSUFFICIENT_STOCK_ERROR: StockVoucherPortError = {
 };
 
 function tomTat(d: StockVoucherDetail): StockVoucherSummary {
-  const { id, ma, type, orderId, returnOfVoucherId, createdAt, nguoiTao, soDong, tongSoLuong } = d;
+  const { id, code, type, orderId, returnOfVoucherId, createdAt, createdBy, lineCount, totalQty } = d;
   return {
     id,
-    ma,
+    code,
     type,
     ...(orderId === undefined ? {} : { orderId }),
     ...(returnOfVoucherId === undefined ? {} : { returnOfVoucherId }),
     createdAt,
-    nguoiTao,
-    soDong,
-    tongSoLuong,
+    createdBy,
+    lineCount,
+    totalQty,
   };
 }
 
@@ -236,21 +236,21 @@ export class FakeStockVouchersPort implements StockVouchersPort {
     // A canned answer shaped like the backend's — the demo screen needs a row to select.
     const moi: StockVoucherDetail = {
       id: `pk-demo-${this.data.length + 1}`,
-      ma: input.type === 'nhap' ? 'PK-N-0120' : 'PK-X-0097',
+      code: input.type === 'nhap' ? 'PK-N-0120' : 'PK-X-0097',
       type: input.type,
       createdAt: '2026-10-21T03:15:00.000Z',
-      nguoiTao: KHO,
-      soDong: input.lines.length,
-      tongSoLuong: input.lines.reduce((tong, l) => tong + l.qty, 0),
+      createdBy: KHO,
+      lineCount: input.lines.length,
+      totalQty: input.lines.reduce((tong, l) => tong + l.qty, 0),
       canReturn: false,
       note: input.note ?? null,
       lines: input.lines.map((l) => {
         const sp = DEMO_STOCK_LIST.items.find((i) => i.productId === l.productId);
         return {
           productId: l.productId,
-          ten: sp?.ten ?? l.productId,
+          name: sp?.name ?? l.productId,
           sku: sp?.sku ?? '',
-          donVi: sp?.donVi ?? '',
+          unit: sp?.unit ?? '',
           qty: l.qty,
           ...(l.unitCost === undefined ? {} : { unitCost: l.unitCost }),
         };
@@ -272,23 +272,23 @@ export class FakeStockVouchersPort implements StockVouchersPort {
     // A canned answer shaped like the backend's; stock and cost come from the backend.
     const created: StockVoucherDetail = {
       id: `pk-demo-${this.data.length + 1}`,
-      ma: 'PK-NT-0005',
+      code: 'PK-NT-0005',
       type: 'nhap',
       returnOfVoucherId: origin.id,
       createdAt: '2026-10-21T03:15:00.000Z',
-      nguoiTao: KHO,
-      soDong: input.lines.length,
-      tongSoLuong: input.lines.reduce((sum, l) => sum + l.qty, 0),
+      createdBy: KHO,
+      lineCount: input.lines.length,
+      totalQty: input.lines.reduce((sum, l) => sum + l.qty, 0),
       canReturn: false,
-      returnOf: { id: origin.id, ma: origin.ma, orderId: origin.orderId ?? '' },
+      returnOf: { id: origin.id, code: origin.code, orderId: origin.orderId ?? '' },
       note: input.note ?? null,
       lines: input.lines.map((l) => {
         const originLine = origin.lines.find((x) => x.productId === l.productId);
         return {
           productId: l.productId,
-          ten: originLine?.ten ?? l.productId,
+          name: originLine?.name ?? l.productId,
           sku: originLine?.sku ?? '',
-          donVi: originLine?.donVi ?? '',
+          unit: originLine?.unit ?? '',
           qty: l.qty,
           ...(originLine?.unitCost === undefined ? {} : { unitCost: originLine.unitCost }),
         };
@@ -297,7 +297,7 @@ export class FakeStockVouchersPort implements StockVouchersPort {
     this.data[this.data.indexOf(origin)] = {
       ...origin,
       canReturn: false,
-      returnVoucher: { id: created.id, ma: created.ma },
+      returnVoucher: { id: created.id, code: created.code },
     };
     this.data.unshift(created);
     return Promise.resolve(created);

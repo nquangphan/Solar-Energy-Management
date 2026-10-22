@@ -18,6 +18,8 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { WEB_TO_MOBILE_FIELD, mobileField } from '../lib/web-mobile-contract-map.mjs';
+import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -156,7 +158,8 @@ test('neither screen derives the step sequence from scope flags (AC-7, AD-2/AD-1
   // The screen may not consult a scope flag to decide WHICH STEPS EXIST — the
   // backend already dropped the inapplicable ones. Mentioning a flag at all in
   // step-building code is the shape this rule exists to catch.
-  const flagNames = ['scopeThiCong', 'scopeVanChuyen', 'scopeThietBi'];
+  // Contract names (web, Story 10.5) and the mobile twin's names (until 10.8).
+  const flagNames = ['scopeConstruction', 'scopeDelivery', 'scopeEquipment', 'scopeThiCong', 'scopeVanChuyen', 'scopeThietBi'];
   for (const [name, code] of allCode) {
     // The status KEYS of the branch steps must not be typed into a screen: the
     // only place a screen names a status is the chip narrowing helper.
@@ -505,10 +508,9 @@ test('back navigation goes through the shipped topbar, which names it for a scre
 // silent blank in the history tab — a lie in the audit trail, not a crash. Pin
 // the field list from AC-9 in the one place all three files can be read.
 //
-// The list holds the CONTRACT names (backend DTO). The hand-written client ports still
-// carry their older names; `CONTRACT_TO_CLIENT_FIELD` is the only place a contract name
-// may differ from its client name. Delete it once the ports are replaced by types
-// generated from openapi.json. Every entry must map a field of the list.
+// The list holds the CONTRACT names (backend DTO). The web type IS the generated contract
+// type (Story 10.5); the mobile twin keeps its older names until 10.8, through the shared
+// one-way map — every version-item entry of it must map a field of the list.
 const VERSION_ITEM_FIELDS = [
   'id',
   'versionNo',
@@ -520,13 +522,7 @@ const VERSION_ITEM_FIELDS = [
   'lineCount',
   'changes',
 ];
-const CONTRACT_TO_CLIENT_FIELD = {
-  isCurrent: 'laBanHienLuc',
-  confirmedAt: 'chotAt',
-  lineCount: 'soDong',
-  changes: 'thayDoi',
-};
-const clientField = (field) => CONTRACT_TO_CLIENT_FIELD[field] ?? field;
+const mobileVersionField = (field) => mobileField('OrderVersionItemDto', field);
 
 const BACKEND_DTO = 'backend/src/orders/dto/order-version-item.dto.ts';
 const WEB_PORT = 'web/src/design-system/session/orders-port.ts';
@@ -546,27 +542,26 @@ function typeBody(code, opener) {
 
 test('the version-history contract carries the same fields on backend, web and mobile (AC-9, AD-12)', () => {
   const dto = typeBody(stripTsx(read(BACKEND_DTO)), 'export class OrderVersionItemDto {');
-  const webType = typeBody(stripTsx(read(WEB_PORT)), 'export interface OrderVersionItem {');
+  const webDto = webAliasDto(stripTsx(read(WEB_PORT)), 'OrderVersionItem');
   const dartType = typeBody(stripDart(read(MOBILE_PORT)), 'class OrderVersionItem {');
 
+  assert.equal(webDto, 'OrderVersionItemDto', `${WEB_PORT} OrderVersionItem must be the generated OrderVersionItemDto`);
   assert.deepEqual(
-    Object.keys(CONTRACT_TO_CLIENT_FIELD).filter((f) => !VERSION_ITEM_FIELDS.includes(f)),
+    Object.keys(WEB_TO_MOBILE_FIELD.OrderVersionItemDto).filter((f) => !VERSION_ITEM_FIELDS.includes(f)),
     [],
-    'every CONTRACT_TO_CLIENT_FIELD entry must map a field of the contract',
+    'every OrderVersionItemDto entry of the web→mobile map must map a field of the contract',
   );
   for (const field of VERSION_ITEM_FIELDS) {
     assert.match(dto, new RegExp(`\\b${field}!`), `${BACKEND_DTO} must declare ${field}`);
-    assert.match(webType, new RegExp(`\\b${clientField(field)}:`), `${WEB_PORT} must mirror ${field} as ${clientField(field)}`);
-    assert.match(dartType, new RegExp(`\\b${clientField(field)}\\b`), `${MOBILE_PORT} must mirror ${field} as ${clientField(field)}`);
+    assert.match(dartType, new RegExp(`\\b${mobileVersionField(field)}\\b`), `${MOBILE_PORT} must mirror ${field} as ${mobileVersionField(field)}`);
   }
 
   // No side may carry a field the other two do not — an invented client field is
   // a field nothing ever fills.
-  const webFields = [...webType.matchAll(/^\s{2}(\w+):/gm)].map((m) => m[1]);
+  const webFields = Object.keys(generatedFields(webDto));
   const dartFields = [...dartType.matchAll(/^\s{2}final [\w<>?]+ (\w+);/gm)].map((m) => m[1]);
-  const clientFields = VERSION_ITEM_FIELDS.map(clientField).sort();
-  assert.deepEqual(webFields.sort(), clientFields, 'the web type must carry EXACTLY the AC-9 fields');
-  assert.deepEqual(dartFields.sort(), clientFields, 'the mobile type must carry EXACTLY the AC-9 fields');
+  assert.deepEqual(webFields.sort(), [...VERSION_ITEM_FIELDS].sort(), 'the web type must carry EXACTLY the AC-9 fields');
+  assert.deepEqual(dartFields.sort(), VERSION_ITEM_FIELDS.map(mobileVersionField).sort(), 'the mobile type must carry EXACTLY the AC-9 fields');
 });
 
 // (h.2) Both ports must OFFER both reads. A screen can only be built on a method

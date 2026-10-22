@@ -6,7 +6,7 @@
 // would stack two overlay layers, and UX-DR-20 also caps overlays at one. The UX
 // inventory already lists this as a screen (`s-status-change`).
 //
-// WHICH STEPS EXIST IS NOT COMPUTED HERE. `buocKeTiep` arrives from the backend
+// WHICH STEPS EXIST IS NOT COMPUTED HERE. `nextSteps` arrives from the backend
 // already filtered by the order's status, its scope flags and the caller's real
 // permissions (AD-2/AD-4). The branches require DIFFERENT permission keys, so an
 // any-of expression on the client would be a third copy of the rule and it would
@@ -148,11 +148,11 @@ export function OrderStatusChangeScreen({
     try {
       const vongDoi = await port.getLifecycle(orderId);
       if (ticket !== latest.current) return;
-      setSteps(vongDoi.buocKeTiep);
+      setSteps(vongDoi.nextSteps);
       // Preselect only when there is exactly one choice: with two open branches
       // (thi công / giao hàng) a default would make a consequential decision for
       // the user, and both branches are one click from committing.
-      setChon(vongDoi.buocKeTiep.length === 1 ? vongDoi.buocKeTiep[0].event : null);
+      setChon(vongDoi.nextSteps.length === 1 ? vongDoi.nextSteps[0].event : null);
       setState('ready');
     } catch {
       if (ticket !== latest.current) return;
@@ -164,7 +164,7 @@ export function OrderStatusChangeScreen({
     void load();
   }, [load]);
 
-  const themAnh = useCallback((files: File[]) => {
+  const addAttachments = useCallback((files: File[]) => {
     setAnh((truoc) => [
       ...truoc,
       ...files.map((file) => {
@@ -194,7 +194,7 @@ export function OrderStatusChangeScreen({
     setLoiGui(null);
     setLineErrors({});
     try {
-      const ketQua = await port.chuyenTrangThai(
+      const ketQua = await port.transition(
         orderId,
         chon,
         anh.map((a) => a.file),
@@ -276,14 +276,14 @@ export function OrderStatusChangeScreen({
             <Frame label="Ảnh bằng chứng (không bắt buộc)" onBg>
               <ImageUpload
                 images={anh.map((a) => a.item)}
-                onAdd={themAnh}
+                onAdd={addAttachments}
                 onRemove={boAnh}
                 max={SO_ANH_TOI_DA}
               />
             </Frame>
 
             {stockIssue !== null && stockIssue.issued && stockIssue.voucher !== undefined && (
-              <p className="si-status">Đã xuất kho · {stockIssue.voucher.ma}</p>
+              <p className="si-status">Đã xuất kho · {stockIssue.voucher.code}</p>
             )}
 
             {previewState === 'loading' && stockIssue === null && <Skeleton />}

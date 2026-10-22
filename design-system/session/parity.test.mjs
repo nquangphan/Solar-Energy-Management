@@ -15,6 +15,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { generatedBody, generatedFields, webAliasDto, webTypeFields } from '../lib/web-contract-types.mjs';
+import { WEB_TO_MOBILE_FIELD, mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
+
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/session -> repo root
 const webDir = resolve(repoRoot, 'web/src/design-system/session');
@@ -154,25 +157,34 @@ test('the customers port did NOT grow customer-source write methods (Story 3.5)'
 test('the orders port carries the Story 4.4 surface on BOTH platforms (twin re-check)', () => {
   const webPort = readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8');
   const mobPort = readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8');
-  // The new method + the metadata fields exist on both twins.
+  // The new method + the metadata fields exist on both twins. Web data types are the
+  // generated contract types (Story 10.5), so the web fields are read from those.
   for (const token of ['updateOrderMeta', 'UpdateOrderMetaInput', 'validityNote', 'vatRate', 'applyVat']) {
-    assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 4.4)`);
     assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 4.4)`);
+  }
+  assert.ok(webPort.includes('updateOrderMeta'), 'web OrdersPort missing updateOrderMeta (Story 4.4)');
+  assert.match(webPort, /export type UpdateOrderMetaInput = Pick<[\s\S]*?'validityNote'/, 'web UpdateOrderMetaInput must pick validityNote (Story 4.4)');
+  const webTotals = generatedFields(webAliasDto(webPort, 'OrderTotals'));
+  for (const field of ['vatRate', 'applyVat']) {
+    assert.ok(Object.hasOwn(webTotals, field), `web OrderTotals missing ${field} (Story 4.4)`);
   }
   // kWp is FRACTIONAL by nature ("8,82 kWp") — the mobile twin must carry double,
   // not int (AD-10's integer rule is for money only).
   assert.match(mobPort, /final double\? kWp;/, 'mobile Order.kWp must be double? — capacity is fractional (Story 4.4)');
-  assert.match(webPort, /kWp: number \| null/, 'web Order.kWp must stay number | null');
+  assert.match(generatedBody(webAliasDto(webPort, 'Order')), /kWp\?: number \| null/, 'web Order.kWp must stay number | null');
   // NEITHER twin lets the client send a VAT rate — the rate is config the backend
   // resolves; only the vatMode ECHO travels out (AD-16).
   const stripTs = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const stripDartSrc = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
   // `[\s\S]*?\n\}` — KHÔNG `[^}]*`: PreviewTotalInput lồng `Array<{...}>` nên `[^}]*`
   // dừng ở dấu `}` bên trong và một field lậu thêm SAU đó lọt qua (mutation-check bắt được).
-  const webInputs = stripTs(webPort).match(/interface (?:PreviewTotalInput|UpdateOrderMetaInput) \{[\s\S]*?\n\}/g) ?? [];
-  assert.equal(webInputs.length, 2, 'both web write inputs must be declared');
-  for (const input of webInputs) {
-    assert.ok(!/vatRate|ratePercent/.test(input), 'no web write input may carry a VAT rate — the backend resolves config (AD-16)');
+  // Web: the two write inputs are the generated request types (UpdateOrderMetaInput picks
+  // from UpdateOrderRequestDto) — none of the fields they really have may be a rate.
+  const webInputs = ['PreviewTotalInput', 'UpdateOrderMetaInput'].map((t) => Object.keys(webTypeFields(stripTs(webPort), t)));
+  assert.ok(webInputs[0].includes('lines'), 'web PreviewTotalInput must resolve to the generated request fields');
+  assert.deepEqual([...webInputs[1]].sort(), ['kWp', 'validityNote', 'vatMode'], 'web UpdateOrderMetaInput must pick exactly the meta fields');
+  for (const fields of webInputs) {
+    assert.ok(!/vatRate|ratePercent/.test(fields.join(' ')), 'no web write input may carry a VAT rate — the backend resolves config (AD-16)');
   }
   const dartMetaInput = /class UpdateOrderMetaInput \{[\s\S]*?\n\}/.exec(stripDartSrc(mobPort))?.[0] ?? '';
   assert.ok(dartMetaInput.length > 0, 'mobile UpdateOrderMetaInput must be declared');
@@ -279,18 +291,28 @@ test('the orders port carries the Story 5.5 status-change surface on BOTH platfo
   // The transition method exists on both twins and takes the SAME three things:
   // the order, the EVENT (never a destination — that belongs to the backend's
   // transition table, AD-11), and a photo list that may be empty.
-  assert.match(webPort, /chuyenTrangThai\(/, 'web OrdersPort missing chuyenTrangThai (Story 5.5)');
-  assert.match(mobPort, /Future<StatusChangeResult> chuyenTrangThai\(/, 'mobile OrdersPort missing chuyenTrangThai (Story 5.5)');
-  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+  // Web uses the contract name (Story 10.5); mobile keeps its twin's name until 10.8.
+  const mobTransition = mobileMethod('transition');
+  assert.match(webPort, /\btransition\(/, 'web OrdersPort missing transition (Story 5.5)');
+  assert.match(mobPort, new RegExp(`Future<StatusChangeResult> ${mobTransition}\\(`), `mobile OrdersPort missing ${mobTransition} (Story 5.5)`);
+  for (const [name, src, method] of [['web', webPort, 'transition'], ['mobile', mobPort, mobTransition]]) {
     // No `to`/`status` input: a client that names its destination has an opinion
     // about the lifecycle, and that is the one thing AD-11 reserves.
-    assert.ok(!/chuyenTrangThai\([^)]*\bto\b/.test(src), `${name} chuyenTrangThai must not take a destination`);
+    assert.ok(!new RegExp(`\\b${method}\\([^)]*\\bto\\b`).test(src), `${name} ${method} must not take a destination`);
   }
 
   // Twin type tokens for the widened lifecycle read + the transition reply.
-  for (const token of ['OrderNextStep', 'OrderLifecycle', 'StatusChangeResult', 'buocKeTiep', 'soAnhDaLuu']) {
+  for (const token of ['OrderNextStep', 'OrderLifecycle', 'StatusChangeResult']) {
     assert.ok(webPort.includes(token), `web OrdersPort missing ${token} (Story 5.5)`);
     assert.ok(mobPort.includes(token), `mobile OrdersPort missing ${token} (Story 5.5)`);
+  }
+  for (const [type, dto, field] of [
+    ['OrderLifecycle', 'OrderLifecycleResponseDto', 'nextSteps'],
+    ['StatusChangeResult', 'StatusChangeResponseDto', 'savedAttachmentCount'],
+  ]) {
+    assert.equal(webAliasDto(webPort, type), dto, `web ${type} must be the generated ${dto}`);
+    assert.ok(Object.hasOwn(generatedFields(dto), field), `web ${type} missing ${field} (Story 5.5)`);
+    assert.ok(mobPort.includes(mobileField(dto, field)), `mobile OrdersPort missing ${mobileField(dto, field)} (Story 5.5)`);
   }
 
   // `getLifecycle` returns the WIDENED shape on both — one read answers both
@@ -300,7 +322,7 @@ test('the orders port carries the Story 5.5 status-change surface on BOTH platfo
 
   // The photo payload is each platform's native picked-file type: File[] on web,
   // XFile[] on mobile (what AppImageUpload emits).
-  assert.ok(webPort.includes('anh: File[]'), 'web chuyenTrangThai must take File[]');
+  assert.ok(webPort.includes('files: File[]'), 'web transition must take File[]');
   assert.ok(mobPort.includes('List<XFile> anh'), 'mobile chuyenTrangThai must take List<XFile>');
   assert.ok(mobPort.includes("import 'package:image_picker/image_picker.dart';"), 'mobile orders port must import image_picker for XFile');
 });
@@ -316,10 +338,21 @@ test('huyDon + coTheHuy ship on ALL FOUR orders-port files (Story 5.7)', () => {
     ['web fake', resolve(webDir, 'fake-orders-port.ts')],
     ['mobile fake', resolve(mobDir, 'fake_orders_port.dart')],
   ];
+  // Code only: a doc comment naming the flag is not the flag.
+  const stripCode = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   for (const [name, path] of files) {
-    const src = readFileSync(path, 'utf8');
-    assert.ok(src.includes('huyDon'), `${name} must declare/implement huyDon() (Story 5.7)`);
-    assert.ok(src.includes('coTheHuy'), `${name} must carry coTheHuy (Story 5.7)`);
+    const src = stripCode(readFileSync(path, 'utf8'));
+    // Web follows the contract names (Story 10.5); mobile keeps its twin's until 10.8.
+    const web = name.startsWith('web');
+    const method = web ? 'cancel' : mobileMethod('cancel');
+    const flag = web ? 'canCancel' : mobileField('OrderLifecycleResponseDto', 'canCancel');
+    assert.ok(new RegExp(`\\b${method}\\(`).test(src), `${name} must declare/implement ${method}() (Story 5.7)`);
+    if (name === 'web port') {
+      // The web port's lifecycle IS the generated DTO, so the flag lives in schema.d.ts.
+      assert.ok(Object.hasOwn(webTypeFields(src, 'OrderLifecycle'), flag), `${name} must carry ${flag} (Story 5.7)`);
+    } else {
+      assert.ok(new RegExp(`\\b${flag}\\b`).test(src), `${name} must carry ${flag} (Story 5.7)`);
+    }
   }
 });
 
@@ -332,12 +365,14 @@ test('the orders port carries the Story 4.9 warranty surface on BOTH platforms (
   // twin CANNOT use a plain `int?` — that conflates "not sent" with "clear", so
   // it reuses the sentinel tri-state (kLineFieldAbsent) exactly like kWp's meta
   // input, exposing hasWarrantyMonths so `null` can travel as "bỏ bảo hành".
-  assert.match(webPort, /warrantyMonths\?: number \| null/, 'web UpdateOrderLineInput must carry warrantyMonths?: number | null (Story 4.9)');
+  assert.match(generatedBody(webAliasDto(webPort, 'UpdateOrderLineInput')), /warrantyMonths\?: number \| null/, 'web UpdateOrderLineInput must carry warrantyMonths?: number | null (Story 4.9)');
   assert.ok(mobPort.includes('kLineFieldAbsent'), 'mobile UpdateOrderLineInput must use the sentinel tri-state kLineFieldAbsent for warrantyMonths (Story 4.9)');
   assert.ok(mobPort.includes('hasWarrantyMonths'), 'mobile UpdateOrderLineInput must expose hasWarrantyMonths so null can travel as clear (Story 4.9)');
   // The line-update input carries warrantyMonths on both twins.
-  const webUpdateInput = /interface UpdateOrderLineInput \{[\s\S]*?\n\}/.exec(webPort)?.[0] ?? '';
-  assert.ok(webUpdateInput.includes('warrantyMonths'), 'web UpdateOrderLineInput block must declare warrantyMonths');
+  assert.ok(
+    Object.hasOwn(generatedFields(webAliasDto(webPort, 'UpdateOrderLineInput')), 'warrantyMonths'),
+    'web UpdateOrderLineInput must declare warrantyMonths',
+  );
   const mobUpdateInput = /class UpdateOrderLineInput \{[\s\S]*?\n\}/.exec(mobPort)?.[0] ?? '';
   assert.ok(mobUpdateInput.includes('warrantyMonths'), 'mobile UpdateOrderLineInput block must declare warrantyMonths');
 
@@ -496,9 +531,12 @@ test('Story 5.6 attachment surface exists on BOTH platforms (ports + gallery com
     ['web', readFileSync(resolve(webDir, 'orders-port.ts'), 'utf8')],
     ['mobile', readFileSync(resolve(mobDir, 'orders_port.dart'), 'utf8')],
   ];
+  // Web uses the contract names (Story 10.5); mobile keeps its twin's until 10.8.
+  const methods = ['listAttachments', 'addAttachments', 'removeAttachment', 'attachmentBytes'];
+  const methodOf = (platform, method) => (platform === 'web' ? method : mobileMethod(method));
   for (const [platform, src] of ports) {
-    for (const method of ['listAnh', 'themAnh', 'xoaAnh', 'anhBytes']) {
-      assert.ok(src.includes(method), `${platform} orders port must declare ${method}()`);
+    for (const method of methods.map((m) => methodOf(platform, m))) {
+      assert.ok(src.includes(`${method}(`), `${platform} orders port must declare ${method}()`);
     }
     assert.ok(src.includes('AttachmentItem'), `${platform} orders port must declare AttachmentItem`);
   }
@@ -510,12 +548,13 @@ test('Story 5.6 attachment surface exists on BOTH platforms (ports + gallery com
     ['mobile', readFileSync(resolve(mobDir, 'fake_orders_port.dart'), 'utf8')],
   ];
   for (const [platform, src] of fakes) {
-    for (const method of ['listAnh', 'themAnh', 'xoaAnh', 'anhBytes']) {
-      assert.ok(src.includes(method), `${platform} fake orders port must implement ${method}()`);
+    for (const method of methods.map((m) => methodOf(platform, m))) {
+      assert.ok(src.includes(`${method}(`), `${platform} fake orders port must implement ${method}()`);
     }
     // The demo data must cover the branch the UI treats specially: a photo the
     // caller cannot delete. Without it, "hide the button" is never exercised.
-    assert.ok(/coTheXoa:\s*false/.test(src), `${platform} fake must include a photo with coTheXoa false`);
+    const flag = platform === 'web' ? 'canDelete' : mobileField('AttachmentItemDto', 'canDelete');
+    assert.ok(new RegExp(`${flag}:\\s*false`).test(src), `${platform} fake must include a photo with ${flag} false`);
   }
 
   assert.ok(
@@ -533,15 +572,28 @@ test('the inventory port is the SAME one-method read contract on both platforms 
   const mobPort = readFileSync(resolve(mobDir, 'inventory_port.dart'), 'utf8');
   assert.match(webPort, /listStock\(query\?: StockListQuery\): Promise<StockList>/, 'web InventoryPort must expose listStock(query?) => StockList');
   assert.match(mobPort, /Future<StockList> listStock\(\{String\? q\}\)/, 'mobile InventoryPort must expose listStock({q}) => StockList');
-  assert.match(webPort, /q\?: string/, 'web StockListQuery must carry q');
-  // Field names mirror the client twin; the backend names differ until the ports use
-  // types generated from openapi.json.
-  const fields = ['productId', 'ten', 'sku', 'donVi', 'onHand', 'reserved', 'khaDung', 'canNhap', 'tinhTrang', 'items', 'danhSachCanMua'];
-  for (const field of fields) {
-    assert.ok(new RegExp(`\\b${field}\\b`).test(webPort), `web inventory port missing ${field}`);
-    assert.ok(new RegExp(`\\b${field}\\b`).test(mobPort), `mobile inventory port missing ${field}`);
+  // Web data types are the generated contract types (Story 10.5); mobile keeps its
+  // twin's field names until 10.8, mapped one way through the shared table.
+  assert.match(webPort, /export type StockListQuery = NonNullable<paths\['\/stock-items'\]\['get'\]\['parameters'\]\['query'\]>/, 'web StockListQuery must be the generated /stock-items query');
+  assert.ok(Object.hasOwn(generatedFields('StockItemViewDto'), 'productId'), 'generated reader sees StockItemViewDto');
+  const fields = [
+    ['StockItemViewDto', ['productId', 'name', 'sku', 'unit', 'onHand', 'reserved', 'available', 'toPurchase', 'stockStatus']],
+    ['StockListResponseDto', ['items', 'purchaseList']],
+  ];
+  for (const [dto, names] of fields) {
+    const web = generatedFields(dto);
+    for (const field of names) {
+      assert.ok(Object.hasOwn(web, field), `web ${dto} missing ${field}`);
+      const mob = mobileField(dto, field);
+      assert.ok(new RegExp(`\\b${mob}\\b`).test(mobPort), `mobile inventory port missing ${mob} (contract ${field})`);
+    }
   }
-  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+  assert.equal(webAliasDto(webPort, 'StockItemView'), 'StockItemViewDto', 'web StockItemView must be the generated StockItemViewDto');
+  assert.equal(webAliasDto(webPort, 'StockList'), 'StockListResponseDto', 'web StockList must be the generated StockListResponseDto');
+  for (const [name, src] of [
+    ['web', webPort + generatedBody('StockItemViewDto') + generatedBody('PurchaseNeedViewDto')],
+    ['mobile', mobPort],
+  ]) {
     assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} inventory port must not carry costPrice — sale reads this payload`);
   }
 });
@@ -558,55 +610,58 @@ test('the stock-vouchers port is the SAME four-method contract on both platforms
   assert.match(webPort, /createReturnVoucher\(\s*originVoucherId: string,\s*input: CreateReturnVoucherInput,?\s*\): Promise<StockVoucherDetail>/, 'web createReturnVoucher(originVoucherId, input) => StockVoucherDetail');
   assert.match(mobPort, /Future<StockVoucherDetail> createReturnVoucher\(\s*String originVoucherId,\s*\{\s*String\? note,\s*required List<CreateReturnVoucherLineInput> lines,?\s*\}\)/, 'mobile createReturnVoucher(originVoucherId, {note, lines}) => StockVoucherDetail');
 
-  // Every property of every voucher DTO in the backend's generated spec is named in
-  // BOTH ports — parity with the contract, not only between the twins.
-  //
-  // The hand-written ports still carry the client's older field names; this table is the
-  // ONLY place a contract name may differ from its client name. Delete it once the ports
-  // are replaced by types generated from openapi.json. Every entry must be used, so the
-  // table cannot keep a mapping the contract no longer needs.
-  const CONTRACT_TO_CLIENT_FIELD = {
-    code: 'ma',
-    createdBy: 'nguoiTao',
-    lineCount: 'soDong',
-    totalQty: 'tongSoLuong',
-    name: 'ten',
-    unit: 'donVi',
-  };
+  // Every property of every voucher DTO in the backend's generated spec is in BOTH ports —
+  // parity with the contract, not only between the twins. The web types ARE the generated
+  // ones (Story 10.5): each top DTO is aliased by the web port and the nested ones are
+  // referenced from those. Mobile keeps its twin's names until 10.8: the shared one-way map
+  // is the ONLY place a contract name may differ, and every voucher entry of it is used here.
   const spec = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'));
-  const dtos = [
-    'StockVoucherCreatorDto',
-    'StockVoucherSummaryDto',
-    'StockVoucherListResponseDto',
-    'StockVoucherLineResponseDto',
-    'StockVoucherDetailDto',
-    'StockVoucherLineRequestDto',
-    'CreateStockVoucherRequestDto',
-    'StockVoucherReturnOfDto',
-    'StockVoucherReturnRefDto',
-    'ReturnVoucherLineRequestDto',
-    'CreateReturnVoucherRequestDto',
-  ];
-  const fields = new Set();
-  for (const dto of dtos) {
+  const aliased = {
+    StockVoucherCreatorDto: 'StockVoucherCreator',
+    StockVoucherSummaryDto: 'StockVoucherSummary',
+    StockVoucherListResponseDto: 'StockVoucherList',
+    StockVoucherLineResponseDto: 'StockVoucherLine',
+    StockVoucherDetailDto: 'StockVoucherDetail',
+    StockVoucherLineRequestDto: 'CreateStockVoucherLineInput',
+    CreateStockVoucherRequestDto: 'CreateStockVoucherInput',
+    CreateReturnVoucherRequestDto: 'CreateReturnVoucherInput',
+  };
+  const nested = {
+    StockVoucherReturnOfDto: 'StockVoucherDetailDto',
+    StockVoucherReturnRefDto: 'StockVoucherDetailDto',
+    ReturnVoucherLineRequestDto: 'CreateReturnVoucherRequestDto',
+  };
+  for (const [dto, type] of Object.entries(aliased)) {
+    assert.equal(webAliasDto(webPort, type), dto, `web ${type} must be the generated ${dto}`);
+  }
+  for (const [dto, parent] of Object.entries(nested)) {
+    assert.ok(generatedBody(parent).includes(`components["schemas"]["${dto}"]`), `web ${parent} must reference ${dto}`);
+  }
+  const mapped = new Set();
+  let fields = 0;
+  for (const dto of [...Object.keys(aliased), ...Object.keys(nested)]) {
     const schema = spec.components.schemas[dto];
     assert.ok(schema, `openapi.json missing ${dto}`);
     const props = { ...(schema.properties ?? {}) };
     for (const part of schema.allOf ?? []) Object.assign(props, part.properties ?? {});
-    for (const key of Object.keys(props)) fields.add(key);
+    assert.deepEqual(Object.keys(generatedFields(dto)).sort(), Object.keys(props).sort(), `web ${dto} must carry exactly the contract fields`);
+    for (const field of Object.keys(props)) {
+      const mob = mobileField(dto, field);
+      if (mob !== field) mapped.add(`${dto}.${field}`);
+      assert.ok(new RegExp(`\\b${mob}\\b`).test(mobPort), `mobile stock-vouchers port missing ${mob} (contract ${dto}.${field})`);
+      fields += 1;
+    }
   }
-  assert.ok(fields.size >= 15, `extracted only ${fields.size} DTO fields — the spec reader went blind`);
-  const mapped = new Set();
-  for (const field of fields) {
-    const clientField = Object.hasOwn(CONTRACT_TO_CLIENT_FIELD, field)
-      ? (mapped.add(field), CONTRACT_TO_CLIENT_FIELD[field])
-      : field;
-    assert.ok(new RegExp(`\\b${clientField}\\b`).test(webPort), `web stock-vouchers port missing ${clientField} (contract ${field})`);
-    assert.ok(new RegExp(`\\b${clientField}\\b`).test(mobPort), `mobile stock-vouchers port missing ${clientField} (contract ${field})`);
-  }
-  assert.deepEqual([...mapped].sort(), Object.keys(CONTRACT_TO_CLIENT_FIELD).sort(), 'every CONTRACT_TO_CLIENT_FIELD entry must map a field the contract actually has');
+  assert.ok(fields >= 30, `checked only ${fields} DTO fields — the spec reader went blind`);
+  const voucherEntries = Object.entries(WEB_TO_MOBILE_FIELD)
+    .filter(([dto]) => dto in aliased || dto in nested)
+    .flatMap(([dto, map]) => Object.keys(map).map((f) => `${dto}.${f}`));
+  assert.deepEqual([...mapped].sort(), voucherEntries.sort(), 'every voucher entry of the web→mobile map must be used');
   // The voucher payload never carries the product's current cost price.
-  for (const [name, src] of [['web', webPort], ['mobile', mobPort]]) {
+  for (const [name, src] of [
+    ['web', webPort + Object.keys(aliased).map((dto) => generatedBody(dto)).join('\n')],
+    ['mobile', mobPort],
+  ]) {
     assert.ok(!/costPrice/.test(src.replace(/\/\/.*$/gm, '')), `${name} stock-vouchers port must not carry costPrice`);
   }
 });
@@ -647,9 +702,10 @@ test('the orders port carries the stock-issue surface on BOTH platforms, field f
     assert.ok(schema, `openapi.json missing ${dto}`);
     const required = new Set(schema.required ?? []);
     const expected = Object.fromEntries(Object.keys(schema.properties ?? {}).map((k) => [k, !required.has(k)]));
-    const webBody = typeBody(webCode, `export interface ${type}`);
+    // Web: the port type IS the generated contract type (Story 10.5).
+    assert.equal(webAliasDto(webCode, type), dto, `web ${type} must be the generated ${dto}`);
     const mobBody = typeBody(mobCode, `class ${type}`);
-    assert.deepEqual(webFields(webBody), expected, `web ${type} must declare exactly the ${dto} fields with the same optionality`);
+    assert.deepEqual(generatedFields(dto), expected, `web ${type} must declare exactly the ${dto} fields with the same optionality`);
     assert.deepEqual(dartFields(mobBody), expected, `mobile ${type} must declare exactly the ${dto} fields with the same nullability`);
     checked += Object.keys(expected).length;
   }
@@ -672,11 +728,6 @@ function typeBody(code, head) {
   return match[0];
 }
 
-/** `name: T` / `name?: T` members of a TS interface body ⇒ { name: optional }. */
-function webFields(body) {
-  return Object.fromEntries([...body.matchAll(/^\s+(\w+)(\??):/gm)].map((m) => [m[1], m[2] === '?']));
-}
-
 /** `final T name;` fields of a Dart class body ⇒ { name: nullable }. */
 function dartFields(body) {
   return Object.fromEntries(
@@ -685,9 +736,7 @@ function dartFields(body) {
 }
 
 test('the type-body field readers see a missing or wrongly-optional field (guard is not toothless)', () => {
-  const web = 'export interface X {\n  a: string;\n  b?: number;\n}\n';
-  assert.deepEqual(webFields(typeBody(web, 'export interface X')), { a: false, b: true });
   const dart = 'class X {\n  const X();\n  final String a;\n  final List<int>? b;\n}\n';
   assert.deepEqual(dartFields(typeBody(dart, 'class X')), { a: false, b: true });
-  assert.notDeepEqual(webFields('export interface X {\n  a: string;\n}'), { a: false, b: true });
+  assert.notDeepEqual(dartFields(typeBody('class X {\n  final String a;\n}\n', 'class X')), { a: false, b: true });
 });

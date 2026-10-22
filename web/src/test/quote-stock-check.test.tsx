@@ -25,7 +25,7 @@ afterEach(() => cleanup());
 
 /** A draft quote: one enough product, one short product, one free-text line. */
 async function seeded(port: FakeOrdersPort): Promise<Order> {
-  const order = await port.create({ customerSdt: '+84903176968' });
+  const order = await port.create({ customerPhone: '+84903176968' });
   await port.addLine(order.id, { productId: 'prod-pin-580', qty: 2 });
   await port.addLine(order.id, { productId: 'prod-inverter-8k', qty: 1 });
   await port.addLine(order.id, { name: 'Phí khảo sát', unit: 'lần', qty: 1, unitPrice: 500_000 });

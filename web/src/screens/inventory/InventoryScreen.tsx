@@ -5,7 +5,7 @@
 //
 // EVERY NUMBER ARRIVES COMPUTED (AD-2). Khả dụng, Cần nhập, the status and the
 // purchase list all come from the backend's single `tinhTonKho`. The screen
-// joins them into sentences and branches on `tinhTrang` — it never subtracts,
+// joins them into sentences and branches on `stockStatus` — it never subtracts,
 // never compares a number against zero, never builds the purchase list itself.
 //
 // A negative Khả dụng is never shown bare: it reads "Cần nhập N" — a number to
@@ -45,7 +45,7 @@ type LoadState = 'loading' | 'ready' | 'error';
 
 /** Chip label + colour token per status. TWIN of `_nhanTinhTrang()` in the Flutter screen. */
 function nhanTinhTrang(item: StockItemView): { label: string; mau: string } {
-  switch (item.tinhTrang) {
+  switch (item.stockStatus) {
     case 'am':
       return { label: 'Âm', mau: 'var(--danger)' };
     case 'het':
@@ -59,8 +59,8 @@ function nhanTinhTrang(item: StockItemView): { label: string; mau: string } {
 /** The one-line summary under the product name. TWIN of `_tomTat()` in the Flutter screen. */
 function tomTat(item: StockItemView): string {
   const dau = `Còn ${item.onHand} · Đã hứa ${item.reserved}`;
-  if (item.tinhTrang === 'am') return `${dau} · Cần nhập ${item.canNhap} ${item.donVi}`;
-  return `${dau} · Khả dụng ${item.khaDung} ${item.donVi}`;
+  if (item.stockStatus === 'am') return `${dau} · Cần nhập ${item.toPurchase} ${item.unit}`;
+  return `${dau} · Khả dụng ${item.available} ${item.unit}`;
 }
 
 export function InventoryScreen({ port, onOpenVouchers }: InventoryScreenProps) {
@@ -94,7 +94,7 @@ export function InventoryScreen({ port, onOpenVouchers }: InventoryScreenProps) 
   }, [load]);
 
   const items = data?.items ?? [];
-  const canMua = data?.danhSachCanMua ?? [];
+  const canMua = data?.purchaseList ?? [];
   const dangTim = q.trim() !== '';
 
   return (
@@ -165,17 +165,17 @@ export function InventoryScreen({ port, onOpenVouchers }: InventoryScreenProps) 
                   return (
                     <tr key={item.productId}>
                       <td>
-                        <div className="strong">{item.ten}</div>
+                        <div className="strong">{item.name}</div>
                         <div className="micro muted">{tomTat(item)}</div>
                       </td>
                       <td className="num mono">{item.onHand}</td>
                       <td className="num mono">{item.reserved}</td>
-                      {item.tinhTrang === 'am' ? (
+                      {item.stockStatus === 'am' ? (
                         <td className="num mono strong" style={{ color: 'var(--danger)' }}>
-                          Cần nhập {item.canNhap}
+                          Cần nhập {item.toPurchase}
                         </td>
                       ) : (
-                        <td className="num mono strong">{item.khaDung}</td>
+                        <td className="num mono strong">{item.available}</td>
                       )}
                       <td>
                         <span className="chip tk-chip" style={{ color: nhan.mau }}>
@@ -202,9 +202,9 @@ export function InventoryScreen({ port, onOpenVouchers }: InventoryScreenProps) 
               <tbody>
                 {canMua.map((c) => (
                   <tr key={c.productId}>
-                    <td className="strong">{c.ten}</td>
+                    <td className="strong">{c.name}</td>
                     <td className="num mono strong" style={{ color: 'var(--danger)' }}>
-                      {c.canNhap} {c.donVi}
+                      {c.toPurchase} {c.unit}
                     </td>
                   </tr>
                 ))}

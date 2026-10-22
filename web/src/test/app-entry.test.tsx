@@ -31,7 +31,7 @@ const DEAD_REFRESH = {
 function me(permissions: string[], displayName = 'Tài khoản A') {
   return { id: `acc-${displayName}`, email: 'a@pns.vn', displayName, permissions };
 }
-const WARRANTY_ONLY = me(['orders.view_own']);
+const OWN_ORDERS = me(['orders.view_own']);
 const CUSTOMER_STAFF = me(['customers.manage', 'orders.view_own'], 'Tài khoản B');
 const EMPTY_PAGE = { items: [], total: 0, page: 1, pageSize: 20 };
 
@@ -92,12 +92,13 @@ describe('composition root (main.tsx)', () => {
   it('sign-in loads /me and opens the first screen the permissions allow', async () => {
     const { handlers, localStorage } = await boot({
       'POST /auth/login': () => json(200, TOKENS),
-      'GET /me': () => json(200, WARRANTY_ONLY),
+      'GET /me': () => json(200, OWN_ORDERS),
+      'GET /orders': () => json(200, EMPTY_PAGE),
     });
     await signIn();
-    await waitFor(() => expect(topbarTitle()).toContain('Tra cứu bảo hành'));
-    expect(window.location.pathname).toBe('/warranty');
-    expect(navLabels()).toEqual(['Tra cứu bảo hành', 'Hồ sơ']);
+    await waitFor(() => expect(topbarTitle()).toContain('Đơn hàng'));
+    expect(window.location.pathname).toBe('/orders');
+    expect(navLabels()).toEqual(['Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
     expect(handlers['POST /auth/login']).toHaveBeenCalledTimes(1);
     // Measured: 2. StrictMode mounts the new PermissionsProvider, unmounts and mounts it
     // again in development, so its effect fetches twice; the first answer is discarded
@@ -106,10 +107,35 @@ describe('composition root (main.tsx)', () => {
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-1');
   });
 
+  it('an orders.view_all account lands on /orders and the list comes from GET /orders over fetch', async () => {
+    const row = {
+      id: 'o1',
+      status: 'baogia',
+      customerPhone: '+84903176968',
+      customerName: 'Nguyễn Văn A',
+      ownerAccountId: 'acc-1',
+      assigneeAccountId: null,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    };
+    const { handlers } = await boot({
+      'POST /auth/login': () => json(200, TOKENS),
+      'GET /me': () => json(200, me(['orders.view_all', 'payments.record', 'invoices.manage'])),
+      'GET /orders': () => json(200, { items: [row], total: 1, page: 1, pageSize: 20 }),
+    });
+    await signIn();
+    expect(await screen.findByText('Nguyễn Văn A')).toBeTruthy();
+    expect(window.location.pathname).toBe('/orders');
+    const listed = handlers['GET /orders'].mock.calls.map(([request]) => request as Request);
+    expect(listed.length).toBeGreaterThan(0);
+    expect(listed[0].headers.get('authorization')).toBe('Bearer access-1');
+    expect(new URL(listed[0].url).search).toBe('?page=1');
+  });
+
   it('wrong credentials keep Đăng nhập with the backend message and store nothing', async () => {
     const { handlers, localStorage } = await boot({
       'POST /auth/login': () => json(401, DEAD_REFRESH),
-      'GET /me': () => json(200, WARRANTY_ONLY),
+      'GET /me': () => json(200, OWN_ORDERS),
     });
     await signIn();
     expect((await screen.findByRole('alert')).textContent).toContain('Thông tin đăng nhập không đúng');
@@ -121,7 +147,7 @@ describe('composition root (main.tsx)', () => {
     const { handlers, localStorage } = await boot(
       {
         'POST /auth/refresh': () => json(200, RENEWED),
-        'GET /me': () => json(200, WARRANTY_ONLY),
+        'GET /me': () => json(200, OWN_ORDERS),
       },
       'refresh-1',
       '/profile',
@@ -150,7 +176,8 @@ describe('composition root (main.tsx)', () => {
       {
         'POST /auth/refresh': () => json(200, RENEWED),
         'GET /me': () =>
-          fail ? json(500, { code: 'INTERNAL', message: 'Lỗi máy chủ', traceId: 't' }) : json(200, WARRANTY_ONLY),
+          fail ? json(500, { code: 'INTERNAL', message: 'Lỗi máy chủ', traceId: 't' }) : json(200, OWN_ORDERS),
+        'GET /orders': () => json(200, EMPTY_PAGE),
       },
       'refresh-1',
     );
@@ -159,7 +186,7 @@ describe('composition root (main.tsx)', () => {
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeTruthy();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(topbarTitle()).toContain('Tra cứu bảo hành'));
+    await waitFor(() => expect(topbarTitle()).toContain('Đơn hàng'));
     expect(handlers['GET /me'].mock.calls.length).toBeGreaterThan(failedCalls);
   });
 
@@ -238,7 +265,7 @@ describe('composition root (main.tsx)', () => {
     const { handlers, localStorage } = await boot(
       {
         'POST /auth/refresh': () => json(200, RENEWED),
-        'GET /me': () => json(200, WARRANTY_ONLY),
+        'GET /me': () => json(200, OWN_ORDERS),
         'POST /auth/logout': () => new Response(null, { status: 204 }),
       },
       'refresh-1',
@@ -255,7 +282,7 @@ describe('composition root (main.tsx)', () => {
   });
 
   it('signing out A and in as B fetches /me again and shows B’s sidebar', async () => {
-    let account = WARRANTY_ONLY;
+    let account = OWN_ORDERS;
     const { handlers } = await boot(
       {
         'POST /auth/refresh': () => json(200, RENEWED),
@@ -263,6 +290,7 @@ describe('composition root (main.tsx)', () => {
         'POST /auth/logout': () => new Response(null, { status: 204 }),
         'GET /me': () => json(200, account),
         'GET /customers': () => json(200, EMPTY_PAGE),
+        'GET /orders': () => json(200, EMPTY_PAGE),
       },
       'refresh-1',
       '/profile',
@@ -274,8 +302,8 @@ describe('composition root (main.tsx)', () => {
 
     account = CUSTOMER_STAFF;
     await signIn('b@pns.vn');
-    await waitFor(() => expect(navLabels()).toEqual(['Khách hàng', 'Tra cứu bảo hành', 'Hồ sơ']));
-    expect(window.location.pathname).toBe('/customers');
+    await waitFor(() => expect(navLabels()).toEqual(['Đơn hàng', 'Khách hàng', 'Tra cứu bảo hành', 'Hồ sơ']));
+    expect(window.location.pathname).toBe('/orders');
     expect(handlers['GET /me'].mock.calls.length).toBeGreaterThan(callsForA);
   });
 

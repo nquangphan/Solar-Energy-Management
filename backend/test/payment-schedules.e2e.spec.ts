@@ -682,9 +682,15 @@ describe('/orders/:id/payment-schedule (e2e)', () => {
     expect(installmentRepo.createMany).not.toHaveBeenCalled();
   });
 
-  it('non-UUID id ⇒ 400 on both routes', async () => {
-    expect((await get('not-a-uuid')).status).toBe(400);
-    expect((await put(body20_70_10, 'not-a-uuid')).status).toBe(400);
+  it('non-UUID id ⇒ 400 on both routes, with the Vietnamese id message', async () => {
+    for (const res of [
+      await get('not-a-uuid'),
+      await put(body20_70_10, 'not-a-uuid'),
+    ]) {
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(res.body.message).toBe('Mã định danh không hợp lệ.');
+    }
   });
 
   it('existing order routes still resolve next to the new controller', async () => {

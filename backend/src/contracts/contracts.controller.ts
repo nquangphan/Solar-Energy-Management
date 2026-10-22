@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  StreamableFile,
-} from '@nestjs/common';
+import { Controller, Get, Param, Post, StreamableFile } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -32,6 +25,7 @@ import { SettingsService } from '../settings/settings.service';
 import { ContractsService } from './contracts.service';
 import { ContractResponseDto } from './dto/contract-response.dto';
 import { ContractsOverviewResponseDto } from './dto/contracts-overview-response.dto';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Contracts of an order (FR-13), served as a sub-resource of the order:
@@ -76,7 +70,7 @@ export class ContractsController {
   })
   async overview(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<ContractsOverviewResponseDto> {
     return this.contracts.overview(
       account.id,
@@ -118,7 +112,7 @@ export class ContractsController {
   })
   async generate(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<ContractResponseDto> {
     return this.contracts.generate(
       account.id,
@@ -155,8 +149,8 @@ export class ContractsController {
   })
   async downloadPdf(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('contractId', ParseUUIDPipe) contractId: string,
+    @Param('id', UUID_PARAM) id: string,
+    @Param('contractId', UUID_PARAM) contractId: string,
   ): Promise<StreamableFile> {
     const file = await this.contracts.getPdf(
       account.id,

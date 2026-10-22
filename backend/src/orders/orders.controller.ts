@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   Query,
@@ -101,6 +100,7 @@ import {
 } from './dto/warranty-lookup-response.dto';
 import { OrdersService } from './orders.service';
 import { QuoteExportService } from './quote-export.service';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Tạo Đơn + giỏ hàng dòng báo giá (Story 4.1, FR-1). MỌI handler khai
@@ -1014,7 +1014,7 @@ export class OrdersController {
   })
   async getStockIssue(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<OrderStockIssueViewDto> {
     const permissions = await this.quyenCuaNguoiGoi(account.id);
     const view = await this.orders.getStockIssue(account.id, permissions, id);
@@ -1058,7 +1058,7 @@ export class OrdersController {
   })
   async getStockCheck(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<OrderStockCheckDto> {
     const permissions = await this.quyenCuaNguoiGoi(account.id);
     return (await this.orders.getStockCheck(
@@ -1106,7 +1106,7 @@ export class OrdersController {
   })
   async issueStock(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
     @Res({ passthrough: true }) res: Response,
   ): Promise<OrderStockIssueResultDto> {
     const permissions = await this.quyenCuaNguoiGoi(account.id);

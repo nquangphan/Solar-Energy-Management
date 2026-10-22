@@ -681,8 +681,11 @@ describe('POST /orders/:id/payments (e2e)', () => {
     },
   );
 
-  it('non-UUID order id ⇒ 400', async () => {
-    expect((await post(body(), 'not-a-uuid')).status).toBe(400);
+  it('non-UUID order id ⇒ 400 with the Vietnamese id message', async () => {
+    const res = await post(body(), 'not-a-uuid');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe(ErrorCode.VALIDATION_ERROR);
+    expect(res.body.message).toBe('Mã định danh không hợp lệ.');
   });
 
   it('the schedule routes and the order routes still resolve next to the new controller', async () => {

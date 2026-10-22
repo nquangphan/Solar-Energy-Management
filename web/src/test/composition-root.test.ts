@@ -64,11 +64,32 @@ const GENERATED_TYPE_PORTS = [
   'settings-port.ts',
   'catalog-port.ts',
   'me-port.ts',
+  'orders-port.ts',
+  'inventory-port.ts',
+  'stock-vouchers-port.ts',
+  'payments-port.ts',
+  'contracts-port.ts',
+  'invoices-port.ts',
 ].map((file) => `../design-system/session/${file}`);
 
-/** `type X = { … }` (optionally wrapped, e.g. `Readonly<{ … }>`): a contract shape typed by hand. */
+/** Hand-written on purpose: the quote files are bytes the adapter assembles, not a contract payload. */
+const NON_CONTRACT_INTERFACES = ['QuoteExportFile', 'QuoteExportFiles'];
+
+/**
+ * The one request type widened by hand on purpose: a blank payment amount stays absent so the
+ * server rejects it (400 `fieldErrors.amount`) instead of the client sending 0.
+ */
+const WIDENED_INPUTS = ['RecordPaymentInput'];
+
+/**
+ * `type X = …` whose right-hand side holds an object literal — bare (`{ … }`), wrapped
+ * (`Readonly<{ … }>`) or glued onto a generated type (`Dto & { … }`): a contract shape typed by
+ * hand. Quoted path keys (`paths['/orders/{id}']`) are not literals.
+ */
 function handWrittenTypeAliases(source: string): string[] {
-  return [...source.matchAll(/\btype\s+(\w+)\s*=\s*(?:\w+<\s*)?\{/g)].map((m) => m[1]);
+  return [...source.matchAll(/\btype\s+(\w+)\s*=([^;]*);/g)]
+    .filter((m) => m[2].replace(/'[^']*'/g, "''").includes('{'))
+    .map((m) => m[1]);
 }
 
 describe('composition root (main.tsx)', () => {
@@ -78,11 +99,11 @@ describe('composition root (main.tsx)', () => {
     expect(productionPath.some(([path]) => path.startsWith('../app/'))).toBe(true);
   });
 
-  it('main.tsx really builds the transport, wraps the PermissionsProvider and builds all 8 adapters', () => {
+  it('main.tsx really builds the transport, wraps the PermissionsProvider and builds all 14 adapters', () => {
     const code = codeOnly(sources[MAIN]);
     expect(code).toMatch(/(?<!function\s+)\bcreateTransport\s*\(/);
     expect(code).toMatch(/<PermissionsProvider\b/);
-    expect(code.match(/\bnew\s+Http\w+Port\s*\(/g) ?? []).toHaveLength(8);
+    expect(code.match(/\bnew\s+Http\w+Port\s*\(/g) ?? []).toHaveLength(14);
   });
 
   it('recognises every fake shape (patterns not blind)', () => {
@@ -133,16 +154,23 @@ describe('composition root (main.tsx)', () => {
   });
 
   it('contract data types in the ports alias the generated schema, not a hand-written copy', () => {
-    expect(GENERATED_TYPE_PORTS.length).toBeGreaterThanOrEqual(6);
+    expect(GENERATED_TYPE_PORTS.length).toBeGreaterThanOrEqual(12);
     for (const path of GENERATED_TYPE_PORTS) {
       const raw = withoutComments(sources[path] ?? '');
       expect(raw, path).toMatch(/import type \{[^}]*\bcomponents\b[^}]*\} from '\.\.\/\.\.\/api\/generated\/schema';/);
       // Only the port interface itself and its error shape stay hand-written.
       const interfaces = [...raw.matchAll(/\binterface\s+(\w+)/g)].map((m) => m[1]);
-      for (const name of interfaces) expect(name, `${path} declares interface ${name}`).toMatch(/(?:Port|PortError)$/);
+      for (const name of interfaces.filter((n) => !NON_CONTRACT_INTERFACES.includes(n))) {
+        expect(name, `${path} declares interface ${name}`).toMatch(/(?:Port|PortError)$/);
+      }
       // A type alias spelled as an object literal is the same hand-written contract under another keyword.
-      expect(handWrittenTypeAliases(raw), path).toEqual([]);
+      expect(handWrittenTypeAliases(raw).filter((name) => !WIDENED_INPUTS.includes(name)), path).toEqual([]);
     }
+  });
+
+  it('every widened input is still widened (the exception cannot outlive its reason)', () => {
+    const declared = GENERATED_TYPE_PORTS.flatMap((path) => handWrittenTypeAliases(withoutComments(sources[path] ?? '')));
+    expect(declared).toEqual(WIDENED_INPUTS);
   });
 
   it('recognises a hand-written object type alias but not an alias of the generated schema', () => {
@@ -150,5 +178,7 @@ describe('composition root (main.tsx)', () => {
     expect(handWrittenTypeAliases('type Row = Readonly<{ id: string }>;')).toEqual(['Row']);
     expect(handWrittenTypeAliases("export type Customer = Schemas['CustomerResponseDto'];")).toEqual([]);
     expect(handWrittenTypeAliases("export type P = Pick<Schemas['ProductResponseDto'], 'id' | 'name'>;")).toEqual([]);
+    expect(handWrittenTypeAliases("export type I = Omit<Schemas['XDto'], 'amount'> & {\n  amount?: number;\n};")).toEqual(['I']);
+    expect(handWrittenTypeAliases("export type Q = NonNullable<paths['/orders/{id}']['get']['parameters']['query']>;")).toEqual([]);
   });
 });

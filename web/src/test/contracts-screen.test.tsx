@@ -242,13 +242,13 @@ describe('ContractsScreen — load states', () => {
 describe('OrderDetailScreen — "Hợp đồng" entry', () => {
   async function seeded() {
     const port = new FakeOrdersPort();
-    const order = await port.create({ customerSdt: '+84903176968' });
+    const order = await port.create({ customerPhone: '+84903176968' });
     // Every other condition that opens the actions block is OFF: no next step, not
     // cancellable, no payment-schedule callback — only onOpenContracts can open it.
     vi.spyOn(port, 'getLifecycle').mockResolvedValue({
-      buoc: [],
-      buocKeTiep: [],
-      coTheHuy: false,
+      steps: [],
+      nextSteps: [],
+      canCancel: false,
     });
     return { port, order };
   }

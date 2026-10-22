@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  ParseUUIDPipe,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -36,6 +28,7 @@ import {
   toStockVoucherListResponseDto,
 } from './dto/stock-voucher-response.dto';
 import { StockVouchersService } from './stock-vouchers.service';
+import { UUID_PARAM } from '../common/validation/uuid-param';
 
 /**
  * Phiếu kho nhập/xuất (FR-25). Mọi route gate `inventory.manage` (AND một key).
@@ -124,7 +117,7 @@ export class StockVouchersController {
   })
   async createReturn(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
     @Body() body: CreateReturnVoucherRequestDto,
   ): Promise<StockVoucherDetailDto> {
     const phieu = await this.stockVouchers.createReturnVoucher(
@@ -177,7 +170,7 @@ export class StockVouchersController {
   })
   async findOne(
     @CurrentAccount() account: AuthenticatedAccount,
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param('id', UUID_PARAM) id: string,
   ): Promise<StockVoucherDetailDto> {
     const [phieu, canViewCosts] = await Promise.all([
       this.stockVouchers.chiTietPhieu(id),

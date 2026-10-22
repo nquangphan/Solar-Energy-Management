@@ -27,7 +27,9 @@ const GEN_NOTE = `GENERATED from backend/openapi/openapi.json — do not edit by
 /** The full text of schema.d.ts derived from the current backend spec. */
 export async function buildApiSchema() {
   const spec = JSON.parse(readFileSync(SPEC_PATH, 'utf8'));
-  const ast = await openapiTS(spec);
+  // A request field with a `default` (`isFlexible`, `tracksStock`, `priceEditable`) is one
+  // the backend fills when absent — optional for the client, not required.
+  const ast = await openapiTS(spec, { defaultNonNullable: false });
   return `// ${GEN_NOTE}\n/* eslint-disable */\n\n${astToString(ast)}`;
 }
 

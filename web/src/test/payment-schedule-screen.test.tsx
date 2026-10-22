@@ -333,7 +333,7 @@ describe('PaymentScheduleScreen — edit', () => {
 describe('OrderDetailScreen — "Thanh toán" entry', () => {
   async function seededOrderPort() {
     const port = new FakeOrdersPort();
-    const order = await port.create({ customerSdt: '+84903176968' });
+    const order = await port.create({ customerPhone: '+84903176968' });
     return { port, order };
   }
 
