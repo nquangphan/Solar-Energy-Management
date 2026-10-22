@@ -7,6 +7,7 @@
 // Phiếu kho entry on the Tồn kho screen, gated on `inventory.manage`.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,9 +154,9 @@ const StockVoucherCreator _kActor = StockVoucherCreator(
 StockVoucherLine _line(String ten, int qty, {int? unitCost}) =>
     StockVoucherLine(
       productId: 'prod-${ten.hashCode}',
-      ten: ten,
+      name: ten,
       sku: 'SKU',
-      donVi: 'bộ',
+      unit: 'bộ',
       qty: qty,
       unitCost: unitCost,
     );
@@ -166,7 +167,7 @@ const String _kNameB = 'Biến tần hybrid ba pha 10kW';
 /// Order-bound stock-out of three products; [canReturn] is the backend's call.
 StockVoucherDetail _stockOut({
   required String id,
-  required String ma,
+  required String code,
   required bool canReturn,
   StockVoucherReturnRef? returnVoucher,
   List<StockVoucherLine>? lines,
@@ -179,13 +180,13 @@ StockVoucherDetail _stockOut({
       ];
   return StockVoucherDetail(
     id: id,
-    ma: ma,
-    type: 'xuat',
+    code: code,
+    type: StockVoucherDetailDtoType.xuat,
     orderId: 'ord-huy-1',
-    createdAt: '2026-07-04T02:30:00.000Z',
-    nguoiTao: _kActor,
-    soDong: ds.length,
-    tongSoLuong: ds.fold<int>(0, (int t, StockVoucherLine l) => t + l.qty),
+    createdAt: DateTime.utc(2026, 7, 4, 2, 30),
+    createdBy: _kActor,
+    lineCount: ds.length,
+    totalQty: ds.fold<int>(0, (int t, StockVoucherLine l) => t + l.qty.toInt()),
     note: null,
     canReturn: canReturn,
     returnVoucher: returnVoucher,
@@ -195,26 +196,27 @@ StockVoucherDetail _stockOut({
 
 StockVoucherDetail _returnVoucher() => StockVoucherDetail(
       id: 'pk-nt-0004',
-      ma: 'PK-NT-0004',
-      type: 'nhap',
-      createdAt: '2026-07-06T01:05:00.000Z',
-      nguoiTao: _kActor,
-      soDong: 1,
-      tongSoLuong: 4,
+      code: 'PK-NT-0004',
+      type: StockVoucherDetailDtoType.nhap,
+      createdAt: DateTime.utc(2026, 7, 6, 1, 5),
+      createdBy: _kActor,
+      lineCount: 1,
+      totalQty: 4,
       returnOfVoucherId: 'pk-x-huy',
       returnOf: const StockVoucherReturnOf(
         id: 'pk-x-huy',
-        ma: 'PK-X-0095',
+        code: 'PK-X-0095',
         orderId: 'ord-huy-1',
       ),
       note: 'Hỏng 1 tấm',
+      canReturn: false,
       lines: <StockVoucherLine>[_line(_kNameA, 4, unitCost: 2110000)],
     );
 
 List<StockVoucherDetail> _returnFixture() => <StockVoucherDetail>[
       _returnVoucher(),
-      _stockOut(id: 'pk-x-huy', ma: 'PK-X-0095', canReturn: true),
-      _stockOut(id: 'pk-x-khong', ma: 'PK-X-0090', canReturn: false),
+      _stockOut(id: 'pk-x-huy', code: 'PK-X-0095', canReturn: true),
+      _stockOut(id: 'pk-x-khong', code: 'PK-X-0090', canReturn: false),
     ];
 
 Finder _tab(String label) => find.descendant(
@@ -289,6 +291,29 @@ void main() {
     expect(find.text('Kho/Giao hàng (Bình) · 06/07'), findsNWidgets(2));
   });
 
+  testWidgets('a voucher type this build does not know: neutral chip, no sign, no direction note',
+      (tester) async {
+    _manHinhCao(tester);
+    final Map<String, Object?> json =
+        jsonDecode(jsonEncode(kDemoStockVouchers.first.toJson())) as Map<String, Object?>;
+    final StockVoucherDetail unknown =
+        StockVoucherDetail.fromJson(<String, Object?>{...json, 'type': 'loai_moi', 'returnOfVoucherId': null});
+    await tester.pumpWidget(_host(FakeStockVouchersPort(<StockVoucherDetail>[unknown])));
+    await tester.pumpAndSettle();
+
+    final String qty = '${unknown.totalQty.toInt()}';
+    expect(find.widgetWithText(AppChip, '—'), findsOneWidget);
+    expect(find.widgetWithText(AppChip, 'Nhập'), findsNothing);
+    expect(find.widgetWithText(AppChip, 'Xuất'), findsNothing);
+    expect(find.text(qty), findsOneWidget, reason: 'no guessed + / − sign');
+
+    await _bam(tester, find.text(unknown.code));
+    expect(find.text('+$qty'), findsNothing);
+    expect(find.text('−$qty'), findsNothing);
+    expect(find.byType(AppBanner), findsNothing, reason: 'no stock-in/out note for an unknown type');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('chi tiết phiếu nhập: giờ, ghi chú, +SL, cột giá vốn, notecard',
       (tester) async {
     _manHinhCao(tester);
@@ -335,7 +360,7 @@ void main() {
     await _bam(tester, find.widgetWithText(AppButton, 'Lưu phiếu'));
 
     expect(port.daGui, hasLength(1));
-    expect(port.daGui[0].type, 'nhap');
+    expect(port.daGui[0].type.json, 'nhap');
     expect(port.daGui[0].note, 'Tồn đầu kỳ');
     expect(port.daGui[0].lines[0].qty, 40);
     expect(port.daGui[0].lines[0].unitCost, 2110000);
@@ -353,7 +378,7 @@ void main() {
     await _bam(tester, find.widgetWithText(AppButton, 'Lưu phiếu'));
 
     expect(port.daGui, hasLength(2));
-    expect(port.daGui[1].type, 'xuat');
+    expect(port.daGui[1].type.json, 'xuat');
     expect(port.daGui[1].lines[0].unitCost, isNull);
   });
 
@@ -393,7 +418,7 @@ void main() {
     await _bam(tester, find.widgetWithText(AppButton, 'Lưu phiếu'));
 
     expect(port.daGui, hasLength(1));
-    expect(port.daGui[0].type, 'nhap');
+    expect(port.daGui[0].type.json, 'nhap');
     expect(port.daGui[0].lines[0].unitCost, isNull);
   });
 
@@ -588,10 +613,10 @@ void main() {
         _returnVoucher(),
         _stockOut(
           id: 'pk-x-huy',
-          ma: 'PK-X-0095',
+          code: 'PK-X-0095',
           canReturn: false,
           returnVoucher:
-              const StockVoucherReturnRef(id: 'pk-nt-0004', ma: 'PK-NT-0004'),
+              const StockVoucherReturnRef(id: 'pk-nt-0004', code: 'PK-NT-0004'),
         ),
       ];
       await tester.pumpWidget(_host(FakeStockVouchersPort(data)));
@@ -856,7 +881,7 @@ void main() {
         home: Scaffold(
           body: InventoryScreen(
             port: const FakeInventoryPort(),
-            onOpenVouchers: () => soLanMo++,
+            onOpenVouchers: () async => soLanMo++,
             perms: const <PermissionKey>{AppPermissionKeys.inventoryManage},
           ),
         ),
@@ -873,7 +898,7 @@ void main() {
         home: Scaffold(
           body: InventoryScreen(
             port: const FakeInventoryPort(),
-            onOpenVouchers: () {},
+            onOpenVouchers: () async {},
           ),
         ),
       ));

@@ -2,64 +2,29 @@
 // web/src/design-system/session/inventory-port.ts). The seam between the
 // Tồn kho screen and `GET /stock-items`.
 //
-// THE CLIENT COMPUTES NO STOCK NUMBER (AD-2). `khaDung`, `canNhap`, `tinhTrang`
-// and the whole `danhSachCanMua` arrive computed by the backend's single
-// implementation of "on hand minus promised". The screen only joins those
-// numbers into a sentence and branches on `tinhTrang`.
+// THE CLIENT COMPUTES NO STOCK NUMBER (AD-2). `available`, `toPurchase`,
+// `stockStatus` and the whole `purchaseList` arrive computed by the backend's
+// single implementation of "on hand minus promised". The screen only joins those
+// numbers into a sentence and branches on `stockStatus`.
 
-/// Mirrors the backend `StockItemViewDto` field for field. No cost price, ever.
-class StockItemView {
-  const StockItemView({
-    required this.productId,
-    required this.ten,
-    required this.sku,
-    required this.donVi,
-    required this.onHand,
-    required this.reserved,
-    required this.khaDung,
-    required this.canNhap,
-    required this.tinhTrang,
-  });
+import '../../api/generated/models/purchase_need_view_dto.dart';
+import '../../api/generated/models/stock_item_view_dto.dart';
+import '../../api/generated/models/stock_list_response_dto.dart';
 
-  final String productId;
-  final String ten;
-  final String sku;
-  final String donVi;
-  final int onHand;
-  final int reserved;
+export '../../api/generated/models/stock_item_view_dto_stock_status.dart';
 
-  /// `onHand − reserved` — MAY BE NEGATIVE; the screen never shows it bare when it is.
-  final int khaDung;
+/// The backend `StockItemViewDto` (generated, Story 10.8). No cost price, ever.
+/// `available` = `onHand − reserved` — MAY BE NEGATIVE, the screen never shows
+/// it bare when it is; `toPurchase` is 0 unless `stockStatus` is `am`;
+/// `stockStatus` is `du` (still available) | `het` (exactly 0) | `am` (promised
+/// beyond stock).
+typedef StockItemView = StockItemViewDto;
 
-  /// What must be bought in; 0 unless [tinhTrang] is `am`.
-  final int canNhap;
+/// `PurchaseNeedViewDto` — one line of the purchase list.
+typedef PurchaseNeedView = PurchaseNeedViewDto;
 
-  /// One of `du` (still available) | `het` (exactly 0) | `am` (promised beyond stock).
-  final String tinhTrang;
-}
-
-/// Mirrors `CanMuaViewDto` — one line of the purchase list.
-class CanMuaView {
-  const CanMuaView({
-    required this.productId,
-    required this.ten,
-    required this.donVi,
-    required this.canNhap,
-  });
-
-  final String productId;
-  final String ten;
-  final String donVi;
-  final int canNhap;
-}
-
-/// Mirrors `StockListResponseDto`.
-class StockList {
-  const StockList({required this.items, required this.danhSachCanMua});
-
-  final List<StockItemView> items;
-  final List<CanMuaView> danhSachCanMua;
-}
+/// `StockListResponseDto`.
+typedef StockList = StockListResponseDto;
 
 /// Injectable transport for the Tồn kho screen. READ-ONLY on purpose: stock
 /// vouchers (the only thing allowed to move `onHand`) are a later story, and a

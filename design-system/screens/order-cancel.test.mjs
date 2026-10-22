@@ -23,8 +23,8 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
 import { generatedBody, webAliasDto } from '../lib/web-contract-types.mjs';
+import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -129,16 +129,15 @@ test('neither screen talks to the network directly', () => {
 });
 
 // (e) BOTH PORTS DECLARE THE CANCEL METHOD, AND SO DO BOTH FAKES (parity, AD-12).
-// Web follows the contract name (Story 10.5); mobile keeps its twin's until 10.8.
-const MOBILE_CANCEL = mobileMethod('cancel');
+// Both follow the contract name (web Story 10.5, mobile 10.8).
 test('the cancel method ships on all FOUR port files', () => {
   assert.match(read(WEB_PORT), /\bcancel\(orderId: string, reason: string\): Promise<void>/, 'web OrdersPort missing cancel');
-  assert.match(read(MOBILE_PORT), new RegExp(`Future<void> ${MOBILE_CANCEL}\\(String orderId, String lyDo\\)`), `mobile OrdersPort missing ${MOBILE_CANCEL}`);
+  assert.match(read(MOBILE_PORT), /Future<void> cancel\(String orderId, String reason\)/, 'mobile OrdersPort missing cancel');
   assert.match(read(WEB_FAKE), /\bcancel\(/, 'web FakeOrdersPort missing cancel');
-  assert.match(read(MOBILE_FAKE), new RegExp(`${MOBILE_CANCEL}\\(`), `mobile FakeOrdersPort missing ${MOBILE_CANCEL}`);
+  assert.match(read(MOBILE_FAKE), /\bcancel\(/, 'mobile FakeOrdersPort missing cancel');
 });
 
-// (e.2) THE REASON IS NOT OPTIONAL ANYWHERE IN THE CONTRACT. A nullable `lyDo`
+// (e.2) THE REASON IS NOT OPTIONAL ANYWHERE IN THE CONTRACT. A nullable `reason`
 // would let a caller cancel silently, which is the one thing this story exists to
 // prevent.
 test('the reason parameter is required on both ports', () => {
@@ -147,16 +146,17 @@ test('the reason parameter is required on both ports', () => {
     'the web port must not make reason optional',
   );
   assert.ok(
-    !/Future<void> huyDon\(String orderId, \[?String\? lyDo/.test(read(MOBILE_PORT)),
-    'the mobile port must not make lyDo nullable',
+    !/Future<void> cancel\(String orderId, \[?\{?String\? reason/.test(read(MOBILE_PORT)),
+    'the mobile port must not make reason nullable',
   );
 });
 
-// (f) coTheHuy IS PART OF THE LIFECYCLE CONTRACT ON BOTH PLATFORMS (AD-12).
+// (f) canCancel IS PART OF THE LIFECYCLE CONTRACT ON BOTH PLATFORMS (AD-12).
 test('the lifecycle type carries the cancel flag on both platforms', () => {
   assert.equal(webAliasDto(read(WEB_PORT), 'OrderLifecycle'), 'OrderLifecycleResponseDto', 'web OrderLifecycle must be the generated contract type');
   assert.match(generatedBody('OrderLifecycleResponseDto'), /canCancel: boolean/, 'web OrderLifecycle missing canCancel');
-  assert.match(read(MOBILE_PORT), /final bool coTheHuy/, 'mobile OrderLifecycle missing coTheHuy');
+  assert.equal(mobileAliasDto(read(MOBILE_PORT), 'OrderLifecycle'), 'OrderLifecycleResponseDto', 'mobile OrderLifecycle must be the generated contract type');
+  assert.match(mobileDtoSource('OrderLifecycleResponseDto'), /final bool canCancel;/, 'mobile OrderLifecycle missing canCancel');
 });
 
 // (g) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens

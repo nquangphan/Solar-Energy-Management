@@ -249,7 +249,7 @@ void main() {
       await tester.pumpWidget(_host(
         AppShareButton(
           files: files,
-          shareImpl: (f, {title, text}) async {
+          shareImpl: (f, {title, text, fileNames}) async {
             shared = f;
             return AppShareResult.shared;
           },
@@ -267,7 +267,7 @@ void main() {
       await tester.pumpWidget(_host(
         AppShareButton(
           files: [XFile('/tmp/a.jpg')],
-          shareImpl: (f, {title, text}) async => AppShareResult.dismissed,
+          shareImpl: (f, {title, text, fileNames}) async => AppShareResult.dismissed,
           onResult: (r) => got = r,
         ),
       ));

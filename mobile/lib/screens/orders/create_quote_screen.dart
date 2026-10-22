@@ -174,7 +174,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   List<OrderStockCheckLine> get _shortStock => <OrderStockCheckLine>[
         for (final OrderStockCheckLine s
             in _stockCheck?.lines ?? const <OrderStockCheckLine>[])
-          if (s.status == kStockCheckShort) s,
+          if (s.status.json == kStockCheckShort) s,
       ];
 
   /// Backend stock warning of the lines; a failed read only hides the hints.
@@ -196,7 +196,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     for (final OrderStockCheckLine s
         in _stockCheck?.lines ?? const <OrderStockCheckLine>[]) {
       if (s.productId != productId) continue;
-      return s.status == kStockCheckShort
+      return s.status.json == kStockCheckShort
           ? AppCartLineStockHint(label: 'Cần nhập ${s.shortfall}', short: true)
           : AppCartLineStockHint(label: 'Kho còn ${s.available}', short: false);
     }
@@ -227,8 +227,11 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   PreviewTotalLine(unitPrice: l.unitPrice, qty: l.qty))
               .toList(),
           // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
-          // vatMode null thì bỏ qua field (backend coi như có VAT).
-          vatMode: fetched.vatMode,
+          // vatMode null thì bỏ qua field (backend coi như có VAT). A value this
+          // build does not know is left out too: echoing it would be a 400.
+          vatMode: fetched.vatMode?.json == null
+              ? null
+              : PreviewTotalRequestDtoVatMode.fromJson(fetched.vatMode!.json!),
           // Echo chiết khấu của Đơn (Story 4.7) — con số backend đã trả.
           discountAmount: discountActive ? discount.amount : null,
         ),
@@ -262,7 +265,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   Future<void> _createOrder(Customer picked) async {
     try {
       final Order created = await widget.ordersPort
-          .create(CreateOrderInput(customerSdt: picked.phone));
+          .create(CreateOrderInput(customerPhone: picked.phone));
       if (!mounted) return;
       setState(() {
         _customer = picked;
@@ -514,6 +517,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
           ),
         ],
         title: files.image.fileName,
+        fileNames: <String>[files.image.fileName, files.pdf.fileName],
       );
       if (!mounted) return;
       setState(() => _error = null);
@@ -963,10 +967,10 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                             children: [
                               const Text('Khách hàng', style: _microMuted),
                               Text(
-                                _customer?.name ?? order.customerSdt,
+                                _customer?.name ?? order.customerPhone,
                                 style: _strong,
                               ),
-                              Text(order.customerSdt, style: _microMuted),
+                              Text(order.customerPhone, style: _microMuted),
                             ],
                           ),
                         ),
@@ -985,25 +989,25 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                       spacing: 6.0,
                       runSpacing: 6.0,
                       children: [
-                        AppScopeFlag(label: 'Thiết bị', on: order.scopeThietBi),
-                        AppScopeFlag(label: 'Thi công', on: order.scopeThiCong),
+                        AppScopeFlag(label: 'Thiết bị', on: order.scopeEquipment),
+                        AppScopeFlag(label: 'Thi công', on: order.scopeConstruction),
                         AppScopeFlag(
-                            label: 'Vận chuyển', on: order.scopeVanChuyen),
+                            label: 'Vận chuyển', on: order.scopeDelivery),
                       ],
                     ),
                     AppCheckbox(
                       label: 'Thi công',
-                      checked: order.scopeThiCong,
+                      checked: order.scopeConstruction,
                       disabled: !editable || _scopeBusy,
                       onChanged: (bool checked) => _toggleScope(
-                          UpdateScopeFlagsInput(scopeThiCong: checked)),
+                          UpdateScopeFlagsInput(scopeConstruction: checked)),
                     ),
                     AppCheckbox(
                       label: 'Vận chuyển',
-                      checked: order.scopeVanChuyen,
+                      checked: order.scopeDelivery,
                       disabled: !editable || _scopeBusy,
                       onChanged: (bool checked) => _toggleScope(
-                          UpdateScopeFlagsInput(scopeVanChuyen: checked)),
+                          UpdateScopeFlagsInput(scopeDelivery: checked)),
                     ),
                     const SizedBox(height: AppTokens.space8),
                     // Metadata Đơn (Story 4.4): commit khi mất focus → PATCH;
@@ -1109,11 +1113,11 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                           name: line.name,
                           meta: line.note,
                           qty: line.qty,
-                          unitPrice: line.unitPrice,
-                          amount: line.amount,
+                          unitPrice: line.unitPrice.toInt(),
+                          amount: line.amount.toInt(),
                           editable: editable,
                           priceEditable: editable && line.priceEditable,
-                          warrantyMonths: line.warrantyMonths,
+                          warrantyMonths: line.warrantyMonths?.toInt(),
                           // Install/labour catalogue line (productId set +
                           // priceEditable) → no warranty; free line without one
                           // yet → "+ Thêm bảo hành" link; else → input. Free lines
@@ -1183,7 +1187,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                       Expanded(
                         child: AppCheckbox(
                           label: 'Tính VAT',
-                          checked: order.vatMode != 'khong_vat',
+                          checked: order.vatMode?.json != 'khong_vat',
                           disabled: !editable || _metaBusy,
                           onChanged: (bool checked) => _updateMeta(
                             UpdateOrderMetaInput(
@@ -1199,22 +1203,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   ),
                   _TotalRow(
                     label: 'Tổng trước VAT',
-                    value: _totals == null ? '—' : formatVnd(_totals!.subtotal),
+                    value: _totals == null ? '—' : formatVnd(_totals!.subtotal.toInt()),
                   ),
                   // Dòng chiết khấu (Story 4.7): CHỈ hiện khi có — số backend echo.
                   if (_totals != null && _totals!.discountAmount > 0)
                     _TotalRow(
                       label: 'Chiết khấu',
-                      value: formatVnd(_totals!.discountAmount),
+                      value: formatVnd(_totals!.discountAmount.toInt()),
                     ),
                   _TotalRow(
                     label: 'Tiền VAT',
                     value:
-                        _totals == null ? '—' : formatVnd(_totals!.vatAmount),
+                        _totals == null ? '—' : formatVnd(_totals!.vatAmount.toInt()),
                   ),
                   _TotalRow(
                     label: 'Tổng sau VAT',
-                    value: _totals == null ? '—' : formatVnd(_totals!.total),
+                    value: _totals == null ? '—' : formatVnd(_totals!.total.toInt()),
                     strong: true,
                   ),
                 ],

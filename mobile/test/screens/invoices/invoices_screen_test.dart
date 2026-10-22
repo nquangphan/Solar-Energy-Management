@@ -344,6 +344,7 @@ void main() {
       versionNo: 12,
       issuedAt: DateTime.utc(2026, 10, 21, 18, 30),
       customerName: 'N' * 80,
+      customerTaxCode: null,
       vatRate: 8,
       applyVat: true,
       subtotal: 76862000,

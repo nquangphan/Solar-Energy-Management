@@ -1,15 +1,23 @@
 // The whole app over the real HTTP adapters + transport, with a FakeAdapter as the
-// backend (Story 10.6, signed-in adapters 10.7). Only the socket is fake.
+// backend (Story 10.6, signed-in adapters 10.7 and 10.8). Only the socket is fake.
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/api/generated/pns_api_client.dart';
 import 'package:pns_mobile/api/http_auth_port.dart';
+import 'package:pns_mobile/api/http_catalog_port.dart';
+import 'package:pns_mobile/api/http_contracts_port.dart';
 import 'package:pns_mobile/api/http_customers_port.dart';
+import 'package:pns_mobile/api/http_inventory_port.dart';
+import 'package:pns_mobile/api/http_invoices_port.dart';
 import 'package:pns_mobile/api/http_me_port.dart';
+import 'package:pns_mobile/api/http_orders_port.dart';
 import 'package:pns_mobile/api/http_password_port.dart';
+import 'package:pns_mobile/api/http_payments_port.dart';
+import 'package:pns_mobile/api/http_stock_vouchers_port.dart';
 import 'package:pns_mobile/api/http_warranty_port.dart';
 import 'package:pns_mobile/api/session_store.dart';
 import 'package:pns_mobile/api/transport.dart';
+import 'package:pns_mobile/app/app_ports.dart';
 import 'package:pns_mobile/app/pns_app.dart';
 
 import '../../api/support/fake_http.dart';
@@ -25,10 +33,19 @@ class TestApp {
     client = PnsApiClient(transport.dio);
     widget = PnsApp(
       auth: HttpAuthPort(client, session, transport),
-      me: HttpMePort(client, transport),
-      password: HttpPasswordPort(client, transport),
-      customers: HttpCustomersPort(client, transport),
-      warranty: HttpWarrantyPort(client, transport),
+      ports: AppPorts(
+        me: HttpMePort(client, transport),
+        password: HttpPasswordPort(client, transport),
+        customers: HttpCustomersPort(client, transport),
+        warranty: HttpWarrantyPort(client, transport),
+        catalog: HttpCatalogPort(client, transport),
+        orders: HttpOrdersPort(client, transport),
+        inventory: HttpInventoryPort(client, transport),
+        stockVouchers: HttpStockVouchersPort(client, transport),
+        payments: HttpPaymentsPort(client, transport),
+        contracts: HttpContractsPort(client, transport),
+        invoices: HttpInvoicesPort(client, transport),
+      ),
       sessionExpired: expired,
     );
   }

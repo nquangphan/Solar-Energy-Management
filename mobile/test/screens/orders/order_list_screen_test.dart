@@ -70,13 +70,13 @@ OrderPage _pageOf(String customerName) => OrderPage(
       items: <OrderListItem>[
         OrderListItem(
           id: 'ord-$customerName',
-          status: 'baogia',
-          customerSdt: '+84900000000',
+          status: OrderListItemDtoStatus.baogia,
+          customerPhone: '+84900000000',
           customerName: customerName,
           ownerAccountId: 'acc-1',
           assigneeAccountId: null,
-          createdAt: '2026-07-18T00:00:00.000Z',
-          updatedAt: '2026-07-18T00:00:00.000Z',
+          createdAt: DateTime.utc(2026, 7, 18),
+          updatedAt: DateTime.utc(2026, 7, 18),
         ),
       ],
       total: 1,
@@ -122,6 +122,33 @@ void main() {
     expect(find.text('+84903176968'), findsWidgets);
   });
 
+  testWidgets('a status this build does not know renders a neutral "—", no chip, no crash',
+      (tester) async {
+    // A value the backend adds later parses to `$unknown` (generated enum).
+    final OrderListItem row = OrderListItem.fromJson(<String, Object?>{
+      'id': 'ord-new-status',
+      'status': 'trang_thai_moi',
+      'customerPhone': '+84900000001',
+      'customerName': 'Khách mới',
+      'ownerAccountId': 'acc-1',
+      'assigneeAccountId': null,
+      'createdAt': '2026-07-18T00:00:00.000Z',
+      'updatedAt': '2026-07-18T00:00:00.000Z',
+    });
+    expect(row.status, OrderListItemDtoStatus.$unknown);
+    final _ManualPort port = _ManualPort();
+    await tester.pumpWidget(_host(_screen(port)));
+    port.pending.single.complete(
+      OrderPage(items: <OrderListItem>[row], total: 1, page: 1, pageSize: 20),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('+84900000001'), findsOneWidget);
+    expect(find.byType(AppStatusChip), findsNothing);
+    expect(find.text('—'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('follow-up filter asks the port for the unconfirmed orders only',
       (
     tester,
@@ -144,11 +171,14 @@ void main() {
       'empty + UNFILTERED shows the empty-book copy and the create action', (
     tester,
   ) async {
-    await tester.pumpWidget(_host(_screen(_EmptyPort())));
+    // The create copy and action belong to an account that may create quotes
+    // (the caller passes onAdd only then, like the web).
+    await tester.pumpWidget(_host(OrderListScreen(port: _EmptyPort(), perms: const <String>{}, onAdd: () async {})));
     await tester.pumpAndSettle();
 
     expect(find.text('Chưa có đơn nào'), findsOneWidget);
     expect(find.text('Bấm ➕Tạo để bắt đầu.'), findsOneWidget);
+    expect(find.widgetWithText(AppButton, '+ Tạo đơn'), findsNWidgets(2));
   });
 
   testWidgets('empty + FILTERED shows the change-the-filter copy instead', (

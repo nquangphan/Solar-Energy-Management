@@ -6,7 +6,7 @@
 // from a screen that throws on build. What is asserted here is exactly what
 // reading the source cannot prove:
 //  - the three states of the tab render their exact copy;
-//  - the delete button is ABSENT (not greyed) when the backend says coTheXoa
+//  - the delete button is ABSENT (not greyed) when the backend says canDelete
 //    is false — the ONE place that rule is enforced client-side is the flag,
 //    and the flag comes from the backend;
 //  - deleting goes through the confirm dialog: cancelling calls NOTHING;
@@ -28,40 +28,40 @@ const String _kOrderId = 'ord-anh-1';
 /// a pre-existing Story 5.4 layout bug this story does not touch. Using a long
 /// status here would fail every test in this file for a reason that has nothing
 /// to do with the Ảnh tab.
-Order _order() => const Order(
+Order _order() => Order(
       id: _kOrderId,
       status: 'baogia',
-      customerSdt: '+84903176968',
+      customerPhone: '+84903176968',
       currentVersionId: 'ver-1',
       ownerAccountId: 'acc-1',
       sourceId: 'src-facebook',
       custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: true,
-      scopeVanChuyen: true,
-      vatMode: 'co_vat',
+      scopeEquipment: true,
+      scopeConstruction: true,
+      scopeDelivery: true,
+      vatMode: OrderResponseDtoVatMode.coVat,
       lineItems: <OrderLine>[],
-      createdAt: '2026-07-18T00:00:00.000Z',
-      updatedAt: '2026-07-18T00:00:00.000Z',
+      createdAt: DateTime.utc(2026, 7, 18),
+      updatedAt: DateTime.utc(2026, 7, 18),
     );
 
 AttachmentItem _anh({
   required String id,
-  required bool coTheXoa,
+  required bool canDelete,
   String? statusFrom,
   String? statusTo,
-  String nguoiTaiLen = 'Trần Thợ',
+  String uploadedBy = 'Trần Thợ',
 }) =>
     AttachmentItem(
       id: id,
       fileName: '$id.jpg',
       contentType: 'image/jpeg',
       size: 2048,
-      createdAt: '2026-07-18T03:00:00.000Z',
-      nguoiTaiLen: nguoiTaiLen,
+      createdAt: DateTime.utc(2026, 7, 18, 3),
+      uploadedBy: uploadedBy,
       statusFrom: statusFrom,
       statusTo: statusTo,
-      coTheXoa: coTheXoa,
+      canDelete: canDelete,
     );
 
 /// A port answering a fixed order + a caller-chosen photo list, recording every
@@ -82,11 +82,14 @@ class _AnhPort extends FakeOrdersPort {
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[
-          OrderLifecycleStep(status: 'thicong', trangThai: 'current'),
+        steps: <OrderLifecycleStep>[
+          OrderLifecycleStep(
+            status: OrderLifecycleStepDtoStatus.thicong,
+            progress: OrderLifecycleStepDtoProgress.current,
+          ),
         ],
-        buocKeTiep: <OrderNextStep>[],
-        coTheHuy: false,
+        nextSteps: <OrderNextStep>[],
+        canCancel: false,
       );
 
   @override
@@ -94,23 +97,23 @@ class _AnhPort extends FakeOrdersPort {
       const <OrderVersionItem>[];
 
   @override
-  Future<List<AttachmentItem>> listAnh(String orderId) async {
+  Future<List<AttachmentItem>> listAttachments(String orderId) async {
     listCalls += 1;
     if (loiList) throw StateError('network down');
     return anh;
   }
 
   @override
-  Future<Uint8List> anhBytes(String orderId, String attachmentId) async =>
+  Future<Uint8List> attachmentBytes(String orderId, String attachmentId) async =>
       throw StateError('no bytes in test — the placeholder glyph stands in');
 
   @override
-  Future<void> xoaAnh(String orderId, String attachmentId) async {
+  Future<void> removeAttachment(String orderId, String attachmentId) async {
     daXoa.add(attachmentId);
   }
 
   @override
-  Future<void> themAnh(String orderId, List<XFile> files) async {
+  Future<void> addAttachments(String orderId, List<XFile> files) async {
     daThem.add(files.length);
   }
 }
@@ -196,13 +199,13 @@ void main() {
       tester,
       _AnhPort(
         anh: <AttachmentItem>[
-          _anh(id: 'a1', coTheXoa: true, nguoiTaiLen: 'Lê Kỹ Thuật'),
+          _anh(id: 'a1', canDelete: true, uploadedBy: 'Lê Kỹ Thuật'),
           _anh(
             id: 'a2',
-            coTheXoa: true,
+            canDelete: true,
             statusFrom: 'dacoc',
             statusTo: 'thicong',
-            nguoiTaiLen: 'Trần Thợ',
+            uploadedBy: 'Trần Thợ',
           ),
         ],
       ),
@@ -219,13 +222,13 @@ void main() {
     expect(find.text('Bước: Đã cọc → Đang thi công'), findsOneWidget);
   });
 
-  testWidgets('coTheXoa false ⇒ the delete button is ABSENT, not greyed (AC-14)',
+  testWidgets('canDelete false ⇒ the delete button is ABSENT, not greyed (AC-14)',
       (WidgetTester tester) async {
     await _moTabAnh(
       tester,
       _AnhPort(
         anh: <AttachmentItem>[
-          _anh(id: 'khong-xoa-duoc', coTheXoa: false),
+          _anh(id: 'khong-xoa-duoc', canDelete: false),
         ],
       ),
     );
@@ -236,15 +239,15 @@ void main() {
     expect(
       find.bySemanticsLabel('Xoá ảnh'),
       findsNothing,
-      reason: 'no delete control may render when the backend says coTheXoa=false',
+      reason: 'no delete control may render when the backend says canDelete=false',
     );
   });
 
-  testWidgets('coTheXoa true ⇒ the delete button renders',
+  testWidgets('canDelete true ⇒ the delete button renders',
       (WidgetTester tester) async {
     await _moTabAnh(
       tester,
-      _AnhPort(anh: <AttachmentItem>[_anh(id: 'xoa-duoc', coTheXoa: true)]),
+      _AnhPort(anh: <AttachmentItem>[_anh(id: 'xoa-duoc', canDelete: true)]),
     );
 
     expect(find.bySemanticsLabel('Xoá ảnh'), findsOneWidget);
@@ -253,7 +256,7 @@ void main() {
   testWidgets('delete asks first: Huỷ leaves the port untouched (AC-13)',
       (WidgetTester tester) async {
     final _AnhPort port =
-        _AnhPort(anh: <AttachmentItem>[_anh(id: 'anh-1', coTheXoa: true)]);
+        _AnhPort(anh: <AttachmentItem>[_anh(id: 'anh-1', canDelete: true)]);
     await _moTabAnh(tester, port);
 
     await _tap(tester, find.bySemanticsLabel('Xoá ảnh'));
@@ -273,8 +276,8 @@ void main() {
       (WidgetTester tester) async {
     final _AnhPort port = _AnhPort(
       anh: <AttachmentItem>[
-        _anh(id: 'anh-dau', coTheXoa: true),
-        _anh(id: 'anh-hai', coTheXoa: true),
+        _anh(id: 'anh-dau', canDelete: true),
+        _anh(id: 'anh-hai', canDelete: true),
       ],
     );
     await _moTabAnh(tester, port);

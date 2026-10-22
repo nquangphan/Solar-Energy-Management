@@ -33,3 +33,21 @@ const List<AppNavSection> kMobileMenu = [
     ],
   ),
 ];
+
+/// The bottom-nav tabs that open a screen (Đơn hàng = 1, Kho = 3). The bar stays
+/// locked to five tabs (UX-DR-15), so a tab is never hidden: one the account may
+/// not open does nothing when tapped, and its route sends the account back to its
+/// landing page. Keys and gates match the web `SIDEBAR_NAV` entries with the same
+/// key (design-system guard).
+const List<AppNavLink> kMobileTabLinks = [
+  AppNavLink(
+    key: 'orders',
+    label: 'Đơn hàng',
+    requiresAny: [AppPermissionKeys.ordersViewAll, AppPermissionKeys.ordersViewOwn],
+  ),
+  AppNavLink(
+    key: 'inventory',
+    label: 'Kho',
+    requiresAny: [AppPermissionKeys.inventoryManage, AppPermissionKeys.quotesCreateEdit],
+  ),
+];

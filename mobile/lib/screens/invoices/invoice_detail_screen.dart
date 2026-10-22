@@ -146,6 +146,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           ),
         ],
         title: file.fileName,
+      fileNames: <String>[file.fileName],
       );
     } catch (e) {
       if (mounted) {
@@ -188,7 +189,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
           children: <Widget>[
             Expanded(child: Text('${line.name} ×${line.qty}', style: _strong)),
             const SizedBox(width: AppTokens.space8),
-            MoneyText(line.amount),
+            MoneyText(line.amount.toInt()),
           ],
         ),
       );
@@ -217,12 +218,12 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
             const SizedBox(height: AppTokens.space8),
             for (final InvoiceLine line in i.lines) _line(line),
             const SizedBox(height: AppTokens.space8),
-            _field('Tổng trước VAT', MoneyText(i.subtotal)),
+            _field('Tổng trước VAT', MoneyText(i.subtotal.toInt())),
             if (i.discountAmount > 0)
-              _field('Chiết khấu', MoneyText(i.discountAmount)),
+              _field('Chiết khấu', MoneyText(i.discountAmount.toInt())),
             _field(i.applyVat ? 'VAT ${i.vatRate}%' : 'Không áp VAT',
-                MoneyText(i.vatAmount)),
-            _field('Tổng thanh toán', MoneyText(i.total)),
+                MoneyText(i.vatAmount.toInt())),
+            _field('Tổng thanh toán', MoneyText(i.total.toInt())),
           ],
         ),
       );

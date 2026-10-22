@@ -156,14 +156,14 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       // screen can be popped while the request is in flight.
       if (!mounted || ticket != _latest) return;
       setState(() {
-        _steps = vongDoi.buocKeTiep;
+        _steps = vongDoi.nextSteps;
         _state = _LoadState.ready;
       });
       // Preselect only when there is exactly one choice: with two open
       // branches (thi công / giao hàng) a default would make a consequential
       // decision for the user, and both are one tap from committing.
       _selectStep(
-        vongDoi.buocKeTiep.length == 1 ? vongDoi.buocKeTiep.first.event : null,
+        vongDoi.nextSteps.length == 1 ? vongDoi.nextSteps.first.event : null,
       );
     } catch (_) {
       if (!mounted || ticket != _latest) return;
@@ -171,7 +171,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
     }
   }
 
-  void _themAnh(List<XFile> files) {
+  void _addPhotos(List<XFile> files) {
     setState(() {
       for (final XFile file in files) {
         _seq += 1;
@@ -201,14 +201,14 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       _lineErrors = const <int, String>{};
     });
     try {
-      final StatusChangeResult ketQua = await widget.port.chuyenTrangThai(
+      final StatusChangeResult ketQua = await widget.port.transition(
         widget.orderId,
         chon,
         _anh.map((_AnhDaChon a) => a.file).toList(),
       );
       if (!mounted) return;
       setState(() => _dangGui = false);
-      widget.onDone?.call(ketQua.status);
+      widget.onDone?.call(ketQua.status.json ?? '');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -299,7 +299,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
                 _stockIssue!.voucher != null) ...<Widget>[
               const SizedBox(height: AppTokens.space8),
               Text(
-                'Đã xuất kho · ${_stockIssue!.voucher!.ma}',
+                'Đã xuất kho · ${_stockIssue!.voucher!.code}',
                 style: const TextStyle(
                   color: AppTokens.muted,
                   fontFamily: AppTokens.fontFamily,
@@ -360,7 +360,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
   }
 
   Widget _dongBuoc(OrderNextStep step) {
-    final StatusKey? key = statusKeyOf(step.to);
+    final StatusKey? key = statusKeyOf(step.to.json ?? '');
     final bool daChon = _chon == step.event;
     return Semantics(
       button: true,
@@ -382,7 +382,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
             alignment: Alignment.centerLeft,
             child: key == null
                 ? Text(
-                    step.to,
+                    step.to.json ?? '—',
                     style: const TextStyle(
                       color: AppTokens.ink,
                       fontFamily: AppTokens.fontFamily,
@@ -403,7 +403,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       onBg: true,
       child: AppImageUpload(
         images: _anh.map((_AnhDaChon a) => a.item).toList(),
-        onAdd: _themAnh,
+        onAdd: _addPhotos,
         onRemove: _boAnh,
         max: _kSoAnhToiDa,
         pick: widget.pick,

@@ -47,7 +47,7 @@ class _QuotePort extends FakeOrdersPort {
 
   Future<void> seed(List<AddOrderLineInput> lines) async {
     final Order order =
-        await super.create(const CreateOrderInput(customerSdt: '+84903176968'));
+        await super.create(const CreateOrderInput(customerPhone: '+84903176968'));
     for (final AddOrderLineInput line in lines) {
       await super.addLine(order.id, line);
     }
@@ -93,7 +93,7 @@ OrderStockCheck _single(String status,
         reserved: 0,
         available: available,
         shortfall: shortfall,
-        status: status,
+        status: OrderStockCheckLineDtoStatus.fromJson(status),
       ),
     ]);
 

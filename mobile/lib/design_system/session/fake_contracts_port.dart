@@ -48,7 +48,7 @@ class FakeContractsPort implements ContractsPort {
     final Object? err = overviewError;
     if (err != null) throw err;
     return ContractsOverview(
-      contractType: contractType,
+      contractType: ContractsOverviewResponseDtoContractType.fromJson(contractType),
       generatable: generatable,
       blockedReason: blockedReason,
       quoteNo: 'BG-2048',
@@ -72,14 +72,14 @@ class FakeContractsPort implements ContractsPort {
     final ContractSummary created = ContractSummary(
       id: 'contract-$_seq',
       contractNo: '$prefix-${(123455 + _seq).toString()}/2026',
-      contractType: contractType,
+      contractType: ContractResponseDtoContractType.fromJson(contractType),
       // The ORDER version printed (the overview's), not a contract counter.
       versionNo: 1,
       fileName: contractType == 'construction'
           ? 'hop-dong-thi-cong-$_seq'
           : 'hop-dong-mua-ban-$_seq',
       pdfSize: 4096,
-      createdAt: '2026-10-22T03:00:00.000Z',
+      createdAt: DateTime.utc(2026, 10, 22, 3),
     );
     _contracts.insert(0, created);
     return created;

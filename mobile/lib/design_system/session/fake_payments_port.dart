@@ -15,10 +15,10 @@ const Installment _inst1 = Installment(
   percent: 20,
   amount: 16602192,
   conditionNote: 'Cọc khi ký hợp đồng',
-  milestone: 'coc',
+  milestone: InstallmentResponseDtoMilestone.coc,
   paidAmount: 0,
   remainingAmount: 16602192,
-  status: 'unpaid',
+  status: InstallmentResponseDtoStatus.unpaid,
   payments: <Payment>[],
 );
 const Installment _inst2 = Installment(
@@ -27,9 +27,10 @@ const Installment _inst2 = Installment(
   percent: 70,
   amount: 58107672,
   conditionNote: 'Khi thi công',
+  milestone: null,
   paidAmount: 0,
   remainingAmount: 58107672,
-  status: 'unpaid',
+  status: InstallmentResponseDtoStatus.unpaid,
   payments: <Payment>[],
 );
 const Installment _inst3 = Installment(
@@ -38,14 +39,14 @@ const Installment _inst3 = Installment(
   percent: 10,
   amount: 8301096,
   conditionNote: 'Khi nghiệm thu, bàn giao',
-  milestone: 'tat_toan',
+  milestone: InstallmentResponseDtoMilestone.tatToan,
   paidAmount: 0,
   remainingAmount: 8301096,
-  status: 'unpaid',
+  status: InstallmentResponseDtoStatus.unpaid,
   payments: <Payment>[],
 );
 
-const PaymentSchedule demoPaymentScheduleConfigured = PaymentSchedule(
+final PaymentSchedule demoPaymentScheduleConfigured = PaymentSchedule(
   orderId: 'DH-2048',
   configured: true,
   editable: true,
@@ -56,10 +57,10 @@ const PaymentSchedule demoPaymentScheduleConfigured = PaymentSchedule(
   paidTotal: 0,
   remainingTotal: 83010960,
   paidPercent: 0,
-  paymentStatus: 'unpaid',
+  paymentStatus: PaymentScheduleResponseDtoPaymentStatus.unpaid,
   recordable: true,
   installments: <Installment>[_inst1, _inst2, _inst3],
-  updatedAt: '2026-10-21T03:15:00.000Z',
+  updatedAt: DateTime.utc(2026, 10, 21, 3, 15),
 );
 
 const PaymentSchedule demoPaymentScheduleEmpty = PaymentSchedule(
@@ -73,13 +74,14 @@ const PaymentSchedule demoPaymentScheduleEmpty = PaymentSchedule(
   paidTotal: 0,
   remainingTotal: 83010960,
   paidPercent: 0,
-  paymentStatus: 'unpaid',
+  paymentStatus: PaymentScheduleResponseDtoPaymentStatus.unpaid,
   recordable: true,
   installments: <Installment>[],
+  updatedAt: null,
 );
 
 /// Installments 1 and 2 only: the sum is short of the order total.
-const PaymentSchedule demoPaymentScheduleMismatch = PaymentSchedule(
+final PaymentSchedule demoPaymentScheduleMismatch = PaymentSchedule(
   orderId: 'DH-2048',
   configured: true,
   editable: true,
@@ -90,23 +92,24 @@ const PaymentSchedule demoPaymentScheduleMismatch = PaymentSchedule(
   paidTotal: 0,
   remainingTotal: 83010960,
   paidPercent: 0,
-  paymentStatus: 'unpaid',
+  paymentStatus: PaymentScheduleResponseDtoPaymentStatus.unpaid,
   recordable: true,
   installments: <Installment>[_inst1, _inst2],
-  updatedAt: '2026-10-21T03:15:00.000Z',
+  updatedAt: DateTime.utc(2026, 10, 21, 3, 15),
 );
 
-const Payment _depositPayment = Payment(
+final Payment _depositPayment = Payment(
   id: 'pay-1',
   installmentId: 'inst-1',
   amount: 16602192,
   paidOn: '2026-07-02',
-  method: 'bank_transfer',
-  recordedAt: '2026-07-02T03:00:00.000Z',
+  method: PaymentResponseDtoMethod.bankTransfer,
+  note: null,
+  recordedAt: DateTime.utc(2026, 7, 2, 3),
 );
 
 /// The mockup after the deposit was recorded (Thu 02/07 · Chuyển khoản).
-const PaymentSchedule demoPaymentScheduleDepositPaid = PaymentSchedule(
+final PaymentSchedule demoPaymentScheduleDepositPaid = PaymentSchedule(
   orderId: 'DH-2048',
   configured: true,
   editable: false,
@@ -117,7 +120,7 @@ const PaymentSchedule demoPaymentScheduleDepositPaid = PaymentSchedule(
   paidTotal: 16602192,
   remainingTotal: 66408768,
   paidPercent: 20,
-  paymentStatus: 'partial',
+  paymentStatus: PaymentScheduleResponseDtoPaymentStatus.partial,
   recordable: true,
   installments: <Installment>[
     Installment(
@@ -126,24 +129,28 @@ const PaymentSchedule demoPaymentScheduleDepositPaid = PaymentSchedule(
       percent: 20,
       amount: 16602192,
       conditionNote: 'Cọc khi ký hợp đồng',
-      milestone: 'coc',
+      milestone: InstallmentResponseDtoMilestone.coc,
       paidAmount: 16602192,
       remainingAmount: 0,
-      status: 'paid',
+      status: InstallmentResponseDtoStatus.paid,
       payments: <Payment>[_depositPayment],
     ),
     _inst2,
     _inst3,
   ],
-  updatedAt: '2026-10-21T03:15:00.000Z',
+  updatedAt: DateTime.utc(2026, 10, 21, 3, 15),
 );
 
 /// Answer to recording the full deposit: the order moved to Đã cọc.
-const RecordPaymentResult demoRecordDepositResult = RecordPaymentResult(
+final RecordPaymentResult demoRecordDepositResult = RecordPaymentResult(
   payment: _depositPayment,
   schedule: demoPaymentScheduleDepositPaid,
   orderStatus: 'dacoc',
-  autoTransition: AutoTransitionResult(event: 'du_coc', outcome: 'applied'),
+  autoTransition: const AutoTransitionResult(
+    event: AutoTransitionResultDtoEvent.duCoc,
+    outcome: AutoTransitionResultDtoOutcome.applied,
+    message: null,
+  ),
 );
 
 class FakePaymentsPort implements PaymentsPort {
@@ -152,17 +159,18 @@ class FakePaymentsPort implements PaymentsPort {
   /// a [RecordPaymentResult], a [PaymentsPortError] / any error (thrown), or a
   /// `Future<RecordPaymentResult> Function()` the test controls.
   FakePaymentsPort({
-    PaymentSchedule initial = demoPaymentScheduleEmpty,
-    Object replyToReplace = demoPaymentScheduleConfigured,
-    Object replyToRecord = demoRecordDepositResult,
+    PaymentSchedule? initial,
+    Object? replyToReplace,
+    Object? replyToRecord,
   })  : assert(
-          replyToReplace is PaymentSchedule ||
+          replyToReplace == null ||
+              replyToReplace is PaymentSchedule ||
               replyToReplace is PaymentsPortError,
           'replyToReplace must be a PaymentSchedule or a PaymentsPortError',
         ),
-        _current = initial,
-        _reply = replyToReplace,
-        _recordReply = replyToRecord;
+        _current = initial ?? demoPaymentScheduleEmpty,
+        _reply = replyToReplace ?? demoPaymentScheduleConfigured,
+        _recordReply = replyToRecord ?? demoRecordDepositResult;
 
   PaymentSchedule _current;
   final Object _reply;
@@ -212,6 +220,7 @@ class FakePaymentsPort implements PaymentsPort {
         payment: seen.payment,
         schedule: seen.schedule,
         orderStatus: seen.orderStatus,
+        autoTransition: null,
       );
     }
     final Object reply = _recordReply;

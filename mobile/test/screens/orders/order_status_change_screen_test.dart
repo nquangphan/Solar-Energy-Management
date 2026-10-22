@@ -26,12 +26,12 @@ const String _kOrderId = 'ord-test-1';
 const List<OrderNextStep> _kHaiNhanh = <OrderNextStep>[
   OrderNextStep(
     event: 'bat_dau_thi_cong',
-    to: 'thicong',
+    to: OrderNextStepDtoTo.thicong,
     requires: 'construction.transition',
   ),
   OrderNextStep(
     event: 'bat_dau_giao',
-    to: 'danggiao',
+    to: OrderNextStepDtoTo.danggiao,
     requires: 'delivery.confirm',
   ),
 ];
@@ -39,18 +39,18 @@ const List<OrderNextStep> _kHaiNhanh = <OrderNextStep>[
 const List<OrderNextStep> _kMotNhanh = <OrderNextStep>[
   OrderNextStep(
     event: 'xong_thi_cong',
-    to: 'nghiemthu',
+    to: OrderNextStepDtoTo.nghiemthu,
     requires: 'construction.transition',
   ),
 ];
 
 /// A port offering a caller-chosen step list and RECORDING what was submitted.
 class _StubPort extends FakeOrdersPort {
-  _StubPort({this.buocKeTiep = _kHaiNhanh, this.loiGui});
+  _StubPort({this.nextSteps = _kHaiNhanh, this.loiGui});
 
-  final List<OrderNextStep> buocKeTiep;
+  final List<OrderNextStep> nextSteps;
 
-  /// When set, `chuyenTrangThai` throws it instead of succeeding.
+  /// When set, `transition` throws it instead of succeeding.
   final Object? loiGui;
 
   String? eventDaGui;
@@ -61,25 +61,26 @@ class _StubPort extends FakeOrdersPort {
   Future<OrderLifecycle> getLifecycle(String orderId) async {
     lifecycleCalls += 1;
     return OrderLifecycle(
-      buoc: const <OrderLifecycleStep>[],
-      buocKeTiep: buocKeTiep,
-      coTheHuy: false,
+      steps: const <OrderLifecycleStep>[],
+      nextSteps: nextSteps,
+      canCancel: false,
     );
   }
 
   @override
-  Future<StatusChangeResult> chuyenTrangThai(
+  Future<StatusChangeResult> transition(
     String orderId,
     String event,
-    List<XFile> anh,
+    List<XFile> files,
   ) async {
     eventDaGui = event;
-    soAnhDaGui = anh.length;
+    soAnhDaGui = files.length;
     if (loiGui != null) throw loiGui!;
     return StatusChangeResult(
-      status: buocKeTiep.firstWhere((OrderNextStep b) => b.event == event).to,
+      status: StatusChangeResponseDtoStatus.fromJson(
+          nextSteps.firstWhere((OrderNextStep b) => b.event == event).to.json!),
       occurredAt: '2026-07-18T00:00:00.000Z',
-      soAnhDaLuu: anh.length,
+      savedAttachmentCount: files.length,
     );
   }
 }
@@ -167,7 +168,7 @@ void main() {
 
   testWidgets('ONE branch ⇒ preselected, submit posts THAT event with 0 photos',
       (WidgetTester tester) async {
-    final _StubPort port = _StubPort(buocKeTiep: _kMotNhanh);
+    final _StubPort port = _StubPort(nextSteps: _kMotNhanh);
     await _bom(tester, port);
 
     await tester.tap(find.text('Xác nhận chuyển'));
@@ -193,7 +194,7 @@ void main() {
 
   testWidgets('adding photos through the injected picker sends them all',
       (WidgetTester tester) async {
-    final _StubPort port = _StubPort(buocKeTiep: _kMotNhanh);
+    final _StubPort port = _StubPort(nextSteps: _kMotNhanh);
     await _bom(tester, port, pick: _fakePicker(2));
 
     // The shipped AppImageUpload opens its own sheet — tap the add tile, then
@@ -211,7 +212,7 @@ void main() {
 
   testWidgets('removing a thumbnail drops that photo from the submission',
       (WidgetTester tester) async {
-    final _StubPort port = _StubPort(buocKeTiep: _kMotNhanh);
+    final _StubPort port = _StubPort(nextSteps: _kMotNhanh);
     await _bom(tester, port, pick: _fakePicker(2));
 
     await tester.tap(find.bySemanticsLabel('Thêm ảnh'));
@@ -230,7 +231,7 @@ void main() {
 
   testWidgets('AC-11: no legal step ⇒ the "no step" copy, no submit button',
       (WidgetTester tester) async {
-    await _bom(tester, _StubPort(buocKeTiep: const <OrderNextStep>[]));
+    await _bom(tester, _StubPort(nextSteps: const <OrderNextStep>[]));
 
     expect(find.text('Không có bước nào để chuyển.'), findsOneWidget);
     expect(find.text('Xác nhận chuyển'), findsNothing);
@@ -241,7 +242,7 @@ void main() {
   testWidgets('a refusal renders the BACKEND\'s words, verbatim',
       (WidgetTester tester) async {
     final _StubPort port = _StubPort(
-      buocKeTiep: _kMotNhanh,
+      nextSteps: _kMotNhanh,
       loiGui: const OrderPortException(
         'Bạn không có quyền thực hiện chuyển trạng thái này.',
         code: 'FORBIDDEN',
@@ -263,7 +264,7 @@ void main() {
   testWidgets('a transport failure falls back to the screen\'s own copy',
       (WidgetTester tester) async {
     final _StubPort port = _StubPort(
-      buocKeTiep: _kMotNhanh,
+      nextSteps: _kMotNhanh,
       loiGui: StateError('socket closed'),
     );
     await _bom(tester, port);
@@ -292,7 +293,7 @@ void main() {
     String? daBao;
     await _bom(
       tester,
-      _StubPort(buocKeTiep: _kMotNhanh),
+      _StubPort(nextSteps: _kMotNhanh),
       onDone: (String status) => daBao = status,
     );
 
@@ -344,9 +345,9 @@ void main() {
     await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     cho.complete(
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[],
-        buocKeTiep: _kMotNhanh,
-        coTheHuy: false,
+        steps: <OrderLifecycleStep>[],
+        nextSteps: _kMotNhanh,
+        canCancel: false,
       ),
     );
     await tester.pumpAndSettle();

@@ -27,7 +27,7 @@ class PaymentResponseDto {
 
   /// Số tiền đã thu — số nguyên đồng.
   final num amount;
-  final DateTime paidOn;
+  final String paidOn;
   final PaymentResponseDtoMethod method;
   final String? note;
 

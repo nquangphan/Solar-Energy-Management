@@ -45,17 +45,33 @@ class OrderListScreen extends StatefulWidget {
     required this.perms,
     this.onOpen,
     this.onAdd,
+    this.onOpenDiscountApprovals,
+    this.reloadSignal,
   });
 
   final OrdersPort port;
+
+  /// Notified when the list must read again although nothing it opened reported
+  /// back: its tab was tapped over screens that wrote, or an order opened from
+  /// elsewhere (a confirmed quote) closed.
+  final Listenable? reloadSignal;
 
   /// Effective permission set, passed as a CONSTRUCTOR PROP (the convention this
   /// codebase already uses for screens) rather than read from an InheritedWidget
   /// — one style per screen, never a mix.
   final Set<PermissionKey> perms;
 
-  final void Function(String id)? onOpen;
-  final VoidCallback? onAdd;
+  /// Opens one order; the list reads again once that screen closes (its status
+  /// may have moved there).
+  final Future<void> Function(String id)? onOpen;
+
+  /// Opens the quote form; given only to an account that may create quotes
+  /// (null ⇒ no "+ Tạo đơn" button). The list reads again once the form closes.
+  final Future<void> Function()? onAdd;
+
+  /// Opens Duyệt chiết khấu; given only to an account that may approve
+  /// discounts (null ⇒ no button). The list reads again on return.
+  final Future<void> Function()? onOpenDiscountApprovals;
 
   @override
   State<OrderListScreen> createState() => _OrderListScreenState();
@@ -80,7 +96,23 @@ class _OrderListScreenState extends State<OrderListScreen> {
   @override
   void initState() {
     super.initState();
+    widget.reloadSignal?.addListener(_load);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(OrderListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reloadSignal != widget.reloadSignal) {
+      oldWidget.reloadSignal?.removeListener(_load);
+      widget.reloadSignal?.addListener(_load);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reloadSignal?.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -97,8 +129,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
       if (!mounted || ticket != _latest) return;
       setState(() {
         _items = page.items;
-        _total = page.total;
-        _pageSize = page.pageSize;
+        _total = page.total.toInt();
+        _pageSize = page.pageSize.toInt();
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -119,6 +151,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
     _load();
   }
 
+  /// Runs a navigation that may change orders, then reads the page again — a
+  /// screen pushed on top keeps this one alive with its old rows.
+  Future<void> _openThenReload(Future<void> Function() open) async {
+    await open();
+    if (mounted) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppPhoneFrame(
@@ -129,13 +168,24 @@ class _OrderListScreenState extends State<OrderListScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _filters(),
-            const SizedBox(height: AppTokens.space8),
-            AppButton(
-              variant: AppButtonVariant.primary,
-              label: '+ Tạo đơn',
-              wide: true,
-              onPressed: widget.onAdd,
-            ),
+            if (widget.onOpenDiscountApprovals != null) ...[
+              const SizedBox(height: AppTokens.space8),
+              AppButton(
+                variant: AppButtonVariant.ghost,
+                label: 'Duyệt chiết khấu',
+                wide: true,
+                onPressed: () => _openThenReload(widget.onOpenDiscountApprovals!),
+              ),
+            ],
+            if (widget.onAdd != null) ...[
+              const SizedBox(height: AppTokens.space8),
+              AppButton(
+                variant: AppButtonVariant.primary,
+                label: '+ Tạo đơn',
+                wide: true,
+                onPressed: () => _openThenReload(widget.onAdd!),
+              ),
+            ],
             const SizedBox(height: AppTokens.space16),
             // NOT Expanded: AppMobileShell already hands the body to a
             // SingleChildScrollView, so the height here is unbounded and a flex
@@ -264,14 +314,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
               message: 'Thử đổi bộ lọc.',
             );
           }
+          // An account that may not create quotes is not told to press one.
           return AppEmptyState(
             title: 'Chưa có đơn nào',
-            message: 'Bấm ➕Tạo để bắt đầu.',
-            action: AppButton(
-              variant: AppButtonVariant.primary,
-              label: '+ Tạo đơn',
-              onPressed: widget.onAdd,
-            ),
+            message: widget.onAdd == null ? null : 'Bấm ➕Tạo để bắt đầu.',
+            action: widget.onAdd == null
+                ? null
+                : AppButton(
+                    variant: AppButtonVariant.primary,
+                    label: '+ Tạo đơn',
+                    onPressed: () => _openThenReload(widget.onAdd!),
+                  ),
           );
         }
         // The shell owns the scrolling (see build); this list only lays its rows out.
@@ -288,7 +341,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   /// One order row. The web twin renders the same three facts as table columns:
   /// `Khách hàng` · `SĐT` · `Trạng thái`, plus the `Xem` action.
   Widget _row(OrderListItem order) {
-    final StatusKey? key = statusKeyOf(order.status);
+    final StatusKey? key = statusKeyOf(order.status.json ?? '');
     return AppCard(
       padding: const EdgeInsets.all(AppTokens.space12),
       child: Row(
@@ -310,7 +363,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 // The phone key is data read digit by digit: tabular figures make
                 // the digits align, so a mistyped number is visible at a glance.
                 Text(
-                  order.customerSdt,
+                  order.customerPhone,
                   style: const TextStyle(
                     color: AppTokens.muted,
                     fontFamily: AppTokens.fontFamily,
@@ -322,13 +375,16 @@ class _OrderListScreenState extends State<OrderListScreen> {
               ],
             ),
           ),
-          if (key != null) AppStatusChip(status: key) else Text(order.status),
+          if (key != null) AppStatusChip(status: key) else Text(order.status.json ?? '—'),
           const SizedBox(width: AppTokens.space8),
           AppButton(
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Xem',
-            onPressed: () => widget.onOpen?.call(order.id),
+            onPressed: () {
+              final open = widget.onOpen;
+              if (open != null) _openThenReload(() => open(order.id));
+            },
           ),
         ],
       ),

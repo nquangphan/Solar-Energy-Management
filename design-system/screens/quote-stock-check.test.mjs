@@ -96,7 +96,7 @@ test('both screens read the backend warning and pick the wording from `status`',
   assert.ok(/ordersPort\.getStockCheck\(/.test(WEB_SCREEN), 'web quote screen must read getStockCheck');
   assert.ok(/ordersPort\.getStockCheck\(/.test(MOBILE_SCREEN), 'mobile quote screen must read getStockCheck');
   assert.ok(/s\.status === 'short'/.test(WEB_SCREEN), "web must branch on status === 'short'");
-  assert.ok(/s\.status == kStockCheckShort/.test(MOBILE_SCREEN), 'mobile must branch on kStockCheckShort');
+  assert.ok(/s\.status\.json == kStockCheckShort/.test(MOBILE_SCREEN), 'mobile must branch on kStockCheckShort');
   // The hint is display-only: it is never part of the Chốt button's condition.
   for (const [name, code] of screens) {
     const before = code.split('Chốt báo giá').slice(0, -1);

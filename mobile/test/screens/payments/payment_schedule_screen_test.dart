@@ -106,7 +106,17 @@ Finder _input(String label, [int row = 0]) => find
     )
     .first;
 
-Map<String, Object> _json(ReplacePaymentScheduleInput i) => i.toJson();
+/// The submitted schedule with null fields dropped: a blank installment field
+/// travels as `null` (absent for the backend), never as 0.
+Map<String, Object> _json(ReplacePaymentScheduleInput i) => <String, Object>{
+      'installments': <Map<String, Object>>[
+        for (final InstallmentInput x in i.installments)
+          <String, Object>{
+            for (final MapEntry<String, Object?> e in x.toJson().entries)
+              if (e.value != null) e.key: e.value!,
+          },
+      ],
+    };
 
 PaymentSchedule _withEditable(PaymentSchedule s, {required bool editable}) =>
     PaymentSchedule(
@@ -170,18 +180,20 @@ void main() {
       paidTotal: 0,
       remainingTotal: 1000,
       paidPercent: 0,
-      paymentStatus: 'unpaid',
+      paymentStatus: PaymentScheduleResponseDtoPaymentStatus.unpaid,
       recordable: true,
+      updatedAt: null,
       installments: <Installment>[
         Installment(
           id: 'i1',
           seq: 1,
+          percent: null,
           amount: 1000,
           conditionNote: 'Một lần',
-          milestone: 'coc',
+          milestone: InstallmentResponseDtoMilestone.coc,
           paidAmount: 0,
           remainingAmount: 1000,
-          status: 'unpaid',
+          status: InstallmentResponseDtoStatus.unpaid,
           payments: <Payment>[],
         ),
       ],
@@ -189,6 +201,49 @@ void main() {
     await tester.pumpWidget(_host(FakePaymentsPort(initial: s)));
     await tester.pumpAndSettle();
     expect(find.text('—'), findsOneWidget);
+  });
+
+  testWidgets('a payment status this build does not know is a neutral "—" chip',
+      (WidgetTester tester) async {
+    _screen(tester);
+    final PaymentSchedule s = PaymentSchedule.fromJson(<String, Object?>{
+      'orderId': 'DH-2048',
+      'configured': true,
+      'editable': true,
+      'orderTotal': 1000,
+      'scheduledTotal': 1000,
+      'difference': 0,
+      'totalMatches': true,
+      'paidTotal': 0,
+      'remainingTotal': 1000,
+      'paidPercent': 0,
+      'paymentStatus': 'trang_thai_moi',
+      'recordable': true,
+      'updatedAt': '2026-10-21T03:15:00.000Z',
+      'installments': <Object?>[
+        <String, Object?>{
+          'id': 'i1',
+          'seq': 1,
+          'percent': 100,
+          'amount': 1000,
+          'conditionNote': 'Một lần',
+          'milestone': null,
+          'paidAmount': 0,
+          'remainingAmount': 1000,
+          'status': 'trang_thai_moi',
+          'payments': <Object?>[],
+        },
+      ],
+    });
+    expect(s.paymentStatus, PaymentScheduleResponseDtoPaymentStatus.$unknown);
+    expect(s.installments.single.status, InstallmentResponseDtoStatus.$unknown);
+    await tester.pumpWidget(_host(FakePaymentsPort(initial: s)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chưa thu'), findsNothing);
+    expect(find.text('Thu một phần'), findsNothing);
+    expect(find.widgetWithText(AppChip, '—'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('empty state with "Cấu hình lịch"', (WidgetTester tester) async {
@@ -385,8 +440,9 @@ void main() {
       paidTotal: 0,
       remainingTotal: 100,
       paidPercent: 0,
-      paymentStatus: 'unpaid',
+      paymentStatus: PaymentScheduleResponseDtoPaymentStatus.unpaid,
       recordable: true,
+      updatedAt: null,
       installments: <Installment>[
         Installment(
           id: 'i1',
@@ -394,19 +450,22 @@ void main() {
           percent: 40,
           amount: 40,
           conditionNote: 'A',
+          milestone: null,
           paidAmount: 0,
           remainingAmount: 40,
-          status: 'unpaid',
+          status: InstallmentResponseDtoStatus.unpaid,
           payments: <Payment>[],
         ),
         Installment(
           id: 'i2',
           seq: 2,
+          percent: null,
           amount: 60,
           conditionNote: 'B',
+          milestone: null,
           paidAmount: 0,
           remainingAmount: 60,
-          status: 'unpaid',
+          status: InstallmentResponseDtoStatus.unpaid,
           payments: <Payment>[],
         ),
       ],
@@ -822,6 +881,7 @@ void main() {
             payment: demoRecordDepositResult.payment,
             schedule: demoRecordDepositResult.schedule,
             orderStatus: demoRecordDepositResult.orderStatus,
+            autoTransition: null,
           );
         },
       );
@@ -932,20 +992,21 @@ void main() {
       final List<String> reported = <String>[];
       final FakePaymentsPort port = FakePaymentsPort(
         initial: demoPaymentScheduleConfigured,
-        replyToRecord: const RecordPaymentResult(
+        replyToRecord: RecordPaymentResult(
           payment: Payment(
             id: 'pay-3',
             installmentId: 'inst-3',
             amount: 8301096,
             paidOn: '2026-10-21',
-            method: 'bank_transfer',
-            recordedAt: '2026-10-21T03:00:00.000Z',
+            method: PaymentResponseDtoMethod.bankTransfer,
+            note: null,
+            recordedAt: DateTime.utc(2026, 10, 21, 3),
           ),
           schedule: demoPaymentScheduleConfigured,
           orderStatus: 'nghiemthu',
-          autoTransition: AutoTransitionResult(
-            event: 'hoan_thanh',
-            outcome: 'skipped',
+          autoTransition: const AutoTransitionResult(
+            event: AutoTransitionResultDtoEvent.hoanThanh,
+            outcome: AutoTransitionResultDtoOutcome.skipped,
             message:
                 'Đơn còn vật tư chưa xuất kho — xuất kho trước khi hoàn thành.',
           ),
@@ -1068,8 +1129,9 @@ void main() {
         paidTotal: 999999999,
         remainingTotal: -999999999,
         paidPercent: 100,
-        paymentStatus: 'partial',
+        paymentStatus: PaymentScheduleResponseDtoPaymentStatus.partial,
         recordable: true,
+        updatedAt: null,
         installments: <Installment>[
           for (int i = 1; i <= 12; i++)
             Installment(
@@ -1078,19 +1140,21 @@ void main() {
               percent: i == 12 ? null : 1,
               amount: 83010960,
               conditionNote: longNote,
-              milestone: i == 12 ? 'tat_toan' : (i == 1 ? 'coc' : null),
+              milestone: i == 12
+                  ? InstallmentResponseDtoMilestone.tatToan
+                  : (i == 1 ? InstallmentResponseDtoMilestone.coc : null),
               paidAmount: 1,
               remainingAmount: 83010959,
-              status: 'partial',
+              status: InstallmentResponseDtoStatus.partial,
               payments: <Payment>[
                 Payment(
                   id: 'p$i',
                   installmentId: 'i$i',
                   amount: 1999999999,
                   paidOn: '2026-12-31',
-                  method: 'bank_transfer',
+                  method: PaymentResponseDtoMethod.bankTransfer,
                   note: longNote,
-                  recordedAt: '2026-12-31T00:00:00.000Z',
+                  recordedAt: DateTime.utc(2026, 12, 31),
                 ),
               ],
             ),

@@ -18,6 +18,10 @@ const String backendSpecPath = '../backend/openapi/openapi.json';
 const String mobileSpecPath = '.dart_tool/pns_api/openapi.mobile.json';
 const String generatedDir = 'lib/api/generated';
 
+/// `paidOn` of RecordPaymentRequestDto and PaymentResponseDto: fewer means the
+/// date rewrite went blind.
+const int minDateRewrites = 2;
+
 /// Derives the spec swagger_parser reads from the backend spec.
 ///
 /// The backend declares file downloads the standard way (`type: string,
@@ -25,11 +29,30 @@ const String generatedDir = 'lib/api/generated';
 /// as UTF-8, which corrupts a PDF or an image. Its documented switch for
 /// `Stream<Uint8List>` is `type: integer, format: binary`. Only RESPONSE
 /// schemas under a non-JSON media type are rewritten: multipart request
-/// bodies (uploads) and JSON stay untouched. The backend spec itself is
-/// never edited.
-({String json, int binaryRewrites}) buildMobileSpec(String specJson) {
+/// bodies (uploads) and JSON stay untouched.
+///
+/// Calendar dates (`type: string, format: date`, e.g. `paidOn`) lose their
+/// `format`: swagger_parser would generate `DateTime`, whose toJson sends
+/// `2026-10-21T00:00:00.000` (the backend accepts only `YYYY-MM-DD`) and whose
+/// parse lands on local midnight. Kept as `String`, the date travels verbatim.
+/// `format: date-time` is untouched. The backend spec itself is never edited.
+({String json, int binaryRewrites, int dateRewrites}) buildMobileSpec(String specJson) {
   final spec = jsonDecode(specJson) as Map<String, dynamic>;
   var rewrites = 0;
+  var dateRewrites = 0;
+  void stripDateFormat(Object? node) {
+    if (node is Map<String, dynamic>) {
+      if (node['type'] == 'string' && node['format'] == 'date') {
+        node.remove('format');
+        dateRewrites++;
+      }
+      node.values.forEach(stripDateFormat);
+    } else if (node is List) {
+      node.forEach(stripDateFormat);
+    }
+  }
+
+  stripDateFormat(spec);
   final paths = spec['paths'] as Map<String, dynamic>? ?? const {};
   for (final operations in paths.values) {
     for (final operation in (operations as Map<String, dynamic>).values) {
@@ -49,7 +72,11 @@ const String generatedDir = 'lib/api/generated';
       }
     }
   }
-  return (json: '${const JsonEncoder.withIndent('  ').convert(spec)}\n', binaryRewrites: rewrites);
+  return (
+    json: '${const JsonEncoder.withIndent('  ').convert(spec)}\n',
+    binaryRewrites: rewrites,
+    dateRewrites: dateRewrites,
+  );
 }
 
 Future<void> _run(String executable, List<String> args) async {
@@ -69,6 +96,11 @@ Future<void> main() async {
   if (derived.binaryRewrites == 0) {
     stderr.writeln('generate_api: no binary response found in $backendSpecPath — '
         'downloads would be generated as Stream<String>.');
+    exit(1);
+  }
+  if (derived.dateRewrites < minDateRewrites) {
+    stderr.writeln('generate_api: expected at least $minDateRewrites `format: date` schemas in '
+        '$backendSpecPath, rewrote ${derived.dateRewrites} — paidOn would be generated as DateTime.');
     exit(1);
   }
   final target = File('${mobileRoot.path}/$mobileSpecPath');

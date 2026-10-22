@@ -20,7 +20,10 @@ import 'fake_stock_vouchers_port.dart';
 import 'orders_port.dart';
 import 'stock_vouchers_port.dart';
 
-const String _now = '2026-07-16T00:00:00.000Z';
+final DateTime _now = DateTime.utc(2026, 7, 16);
+
+/// `occurredAt` of a status change is a plain ISO string in the contract.
+const String _nowIso = '2026-07-16T00:00:00.000Z';
 
 /// Demo mirror of the backend's photo-count ceiling (`SO_ANH_TOI_DA`).
 const int _kDemoSoAnhToiDa = 10;
@@ -48,7 +51,7 @@ const String kFakeOrderIssued = 'ord-demo-4';
 /// Demo order whose stock-out the fake refuses (409 INSUFFICIENT_STOCK on `lines.0.qty`).
 const String kFakeOrderShortStock = 'ord-demo-3';
 
-/// Stock-out preview rows, typed as the backend returns them: already summed per
+/// Stock-out preview rows, typed as the backend returns added: already summed per
 /// product and in its canonical order (name, then id). Includes the LONGEST
 /// product name. The fake owns no stock rule — "not enough" is a fixed branch on
 /// a fixed order, never a `qty`/`onHand` comparison.
@@ -97,7 +100,7 @@ const Map<String, OrderStockCheckLine> _kDemoStockByProduct =
     reserved: 0,
     available: 42,
     shortfall: 0,
-    status: 'enough',
+    status: OrderStockCheckLineDtoStatus.enough,
   ),
   'prod-inverter-8k': OrderStockCheckLine(
     productId: 'prod-inverter-8k',
@@ -108,7 +111,7 @@ const Map<String, OrderStockCheckLine> _kDemoStockByProduct =
     reserved: 1,
     available: 0,
     shortfall: 1,
-    status: 'short',
+    status: OrderStockCheckLineDtoStatus.short,
   ),
 };
 
@@ -125,7 +128,7 @@ const List<OrderStockCheckLine> _kDemoStockCheck = <OrderStockCheckLine>[
     reserved: 0,
     available: 1,
     shortfall: 1,
-    status: 'short',
+    status: OrderStockCheckLineDtoStatus.short,
   ),
   OrderStockCheckLine(
     productId: 'prod-pin-580',
@@ -136,7 +139,7 @@ const List<OrderStockCheckLine> _kDemoStockCheck = <OrderStockCheckLine>[
     reserved: 0,
     available: 42,
     shortfall: 0,
-    status: 'enough',
+    status: OrderStockCheckLineDtoStatus.enough,
   ),
 ];
 const List<String> _kDemoUntrackedItems = <String>['Công lắp đặt'];
@@ -185,57 +188,57 @@ String _digits(String raw) =>
 /// Stand-in for the backend's scopePresetFor() (Story 4.3, FR-2) — lives in the
 /// fake (the demo "server"), never in a screen: CA_NHAN → all three on,
 /// THUONG_MAI → equipment only.
-({bool scopeThietBi, bool scopeThiCong, bool scopeVanChuyen}) _presetFor(
+({bool scopeEquipment, bool scopeConstruction, bool scopeDelivery}) _presetFor(
   String custType,
 ) {
   final bool caNhan = custType == 'CA_NHAN';
-  return (scopeThietBi: true, scopeThiCong: caNhan, scopeVanChuyen: caNhan);
+  return (scopeEquipment: true, scopeConstruction: caNhan, scopeDelivery: caNhan);
 }
 
 /// Demo rows for the order-list screen (Story 5.3) — used only when nothing was
 /// created in this session, so the list screen is demoable standalone. Spread
 /// across statuses so the follow-up filter ('baogia') and the "filtered but
 /// empty" state are both reachable without a backend. Mirrors the web fake.
-const List<OrderListItem> kDemoOrderRows = <OrderListItem>[
+final List<OrderListItem> kDemoOrderRows = <OrderListItem>[
   OrderListItem(
     id: 'ord-demo-1',
-    status: 'baogia',
-    customerSdt: '+84903176968',
+    status: OrderListItemDtoStatus.baogia,
+    customerPhone: '+84903176968',
     customerName: 'Khách lẻ',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: null,
-    createdAt: '2026-07-17T09:00:00.000Z',
-    updatedAt: '2026-07-17T09:00:00.000Z',
+    createdAt: DateTime.utc(2026, 7, 17, 9),
+    updatedAt: DateTime.utc(2026, 7, 17, 9),
   ),
   OrderListItem(
     id: 'ord-demo-2',
-    status: 'baogia',
-    customerSdt: '+84912345678',
+    status: OrderListItemDtoStatus.baogia,
+    customerPhone: '+84912345678',
     customerName: 'Khách lẻ',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: 'acc-demo',
-    createdAt: '2026-07-16T08:00:00.000Z',
-    updatedAt: '2026-07-16T08:00:00.000Z',
+    createdAt: DateTime.utc(2026, 7, 16, 8),
+    updatedAt: DateTime.utc(2026, 7, 16, 8),
   ),
   OrderListItem(
     id: 'ord-demo-3',
-    status: 'dachot',
-    customerSdt: '+84903176968',
+    status: OrderListItemDtoStatus.dachot,
+    customerPhone: '+84903176968',
     customerName: 'Khách lẻ',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: null,
-    createdAt: '2026-07-15T07:00:00.000Z',
-    updatedAt: '2026-07-15T07:00:00.000Z',
+    createdAt: DateTime.utc(2026, 7, 15, 7),
+    updatedAt: DateTime.utc(2026, 7, 15, 7),
   ),
   OrderListItem(
     id: 'ord-demo-4',
-    status: 'thicong',
-    customerSdt: '+84912345678',
+    status: OrderListItemDtoStatus.thicong,
+    customerPhone: '+84912345678',
     customerName: 'Khách lẻ',
     ownerAccountId: 'acc-demo',
     assigneeAccountId: 'acc-demo',
-    createdAt: '2026-07-14T06:00:00.000Z',
-    updatedAt: '2026-07-14T06:00:00.000Z',
+    createdAt: DateTime.utc(2026, 7, 14, 6),
+    updatedAt: DateTime.utc(2026, 7, 14, 6),
   ),
 ];
 
@@ -313,7 +316,7 @@ class FakeOrdersPort implements OrdersPort {
       if (productId == null || !_kDemoStockByProduct.containsKey(productId)) {
         continue;
       }
-      qtyByProduct[productId] = (qtyByProduct[productId] ?? 0) + line.qty;
+      qtyByProduct[productId] = (qtyByProduct[productId] ?? 0) + line.qty.toInt();
     }
     final List<OrderStockCheckLine> lines = <OrderStockCheckLine>[
       for (final MapEntry<String, int> e in qtyByProduct.entries)
@@ -340,24 +343,25 @@ class FakeOrdersPort implements OrdersPort {
   StockVoucherDetail _recordIssue(String orderId) {
     final StockVoucherDetail voucher = StockVoucherDetail(
       id: 'pk-xuat-$orderId',
-      ma: 'PK-X-0097',
-      type: 'xuat',
+      code: 'PK-X-0097',
+      type: StockVoucherDetailDtoType.xuat,
       orderId: orderId,
       createdAt: _now,
-      nguoiTao: const StockVoucherCreator(
+      createdBy: const StockVoucherCreator(
         id: 'acc-kho-binh',
         displayName: 'Kho/Giao hàng (Bình)',
       ),
-      soDong: _kDemoIssueLines.length,
-      tongSoLuong: 15,
+      lineCount: _kDemoIssueLines.length,
+      totalQty: 15,
       note: null,
+      canReturn: false,
       lines: <StockVoucherLine>[
         for (final OrderStockIssueLine l in _kDemoIssueLines)
           StockVoucherLine(
             productId: l.productId,
-            ten: l.name,
+            name: l.name,
             sku: l.sku,
-            donVi: l.unit,
+            unit: l.unit,
             qty: l.qty,
           ),
       ],
@@ -393,8 +397,8 @@ class FakeOrdersPort implements OrdersPort {
             .map(
               (Order o) => OrderListItem(
                 id: o.id,
-                status: o.status,
-                customerSdt: o.customerSdt,
+                status: OrderListItemDtoStatus.fromJson(o.status),
+                customerPhone: o.customerPhone,
                 customerName: 'Khách lẻ',
                 ownerAccountId: o.ownerAccountId,
                 assigneeAccountId: o.assigneeAccountId,
@@ -407,7 +411,7 @@ class FakeOrdersPort implements OrdersPort {
     final String? wanted = followUp == true ? 'baogia' : status;
     final List<OrderListItem> filtered = wanted == null
         ? rows
-        : rows.where((OrderListItem r) => r.status == wanted).toList();
+        : rows.where((OrderListItem r) => r.status.json == wanted).toList();
 
     final int p = page ?? 1;
     final int size = pageSize ?? 20;
@@ -431,7 +435,7 @@ class FakeOrdersPort implements OrdersPort {
     // The backend snapshots custType from the Customer and applies the scope
     // preset explicitly (Story 4.3) — the fake plays that role for its demo
     // customers; an unknown phone falls back to CA_NHAN.
-    final String needle = _digits(input.customerSdt);
+    final String needle = _digits(input.customerPhone);
     Customer? customer;
     for (final Customer c in customers) {
       if (needle.isNotEmpty && _digits(c.phone).endsWith(needle)) {
@@ -440,22 +444,22 @@ class FakeOrdersPort implements OrdersPort {
       }
     }
     final String custType = customer?.custType ?? 'CA_NHAN';
-    final ({bool scopeThietBi, bool scopeThiCong, bool scopeVanChuyen}) preset =
+    final ({bool scopeEquipment, bool scopeConstruction, bool scopeDelivery}) preset =
         _presetFor(custType);
     final Order order = Order(
       id: 'ord-demo-$_seq',
       status: 'baogia',
-      customerSdt: input.customerSdt,
+      customerPhone: input.customerPhone,
       currentVersionId: 'ver-demo-$_seq',
       ownerAccountId: 'acc-demo',
       sourceId: customer?.sourceId ?? 'src-facebook',
       custType: custType,
-      scopeThietBi: preset.scopeThietBi,
-      scopeThiCong: preset.scopeThiCong,
-      scopeVanChuyen: preset.scopeVanChuyen,
+      scopeEquipment: preset.scopeEquipment,
+      scopeConstruction: preset.scopeConstruction,
+      scopeDelivery: preset.scopeDelivery,
       // The backend writes the VAT tick EXPLICITLY on create (Story 4.4) —
       // null is reserved for pre-4.4 orders; the fake plays that role.
-      vatMode: 'co_vat',
+      vatMode: OrderResponseDtoVatMode.coVat,
       lineItems: <OrderLine>[],
       createdAt: _now,
       updatedAt: _now,
@@ -476,15 +480,15 @@ class FakeOrdersPort implements OrdersPort {
     final Order updated = Order(
       id: order.id,
       status: order.status,
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: input.scopeThiCong ?? order.scopeThiCong,
-      scopeVanChuyen: input.scopeVanChuyen ?? order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: input.scopeConstruction ?? order.scopeConstruction,
+      scopeDelivery: input.scopeDelivery ?? order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -511,17 +515,17 @@ class FakeOrdersPort implements OrdersPort {
     final Order updated = Order(
       id: order.id,
       status: order.status,
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: input.hasKWp ? input.kWp : order.kWp,
-      vatMode: input.vatMode ?? order.vatMode,
+      vatMode: input.vatMode == null ? order.vatMode : OrderResponseDtoVatMode.fromJson(input.vatMode!),
       validityNote:
           input.hasValidityNote ? input.validityNote : order.validityNote,
       lineItems: order.lineItems,
@@ -556,8 +560,8 @@ class FakeOrdersPort implements OrdersPort {
     final Order? order = _orders[orderId];
     // Demo rows carry no scope flags — treat them as CA_NHAN so the demo shows a
     // full-length stepper (also the case that overflows a phone width).
-    final bool thiCong = order?.scopeThiCong ?? true;
-    final bool vanChuyen = order?.scopeVanChuyen ?? true;
+    final bool thiCong = order?.scopeConstruction ?? true;
+    final bool vanChuyen = order?.scopeDelivery ?? true;
     final String status = order?.status ?? 'baogia';
     final List<String> chuoi = <String>[
       'baogia',
@@ -570,23 +574,23 @@ class FakeOrdersPort implements OrdersPort {
     ];
     final int dangO = chuoi.indexOf(status);
     return OrderLifecycle(
-      buoc: <OrderLifecycleStep>[
+      steps: <OrderLifecycleStep>[
         for (int i = 0; i < chuoi.length; i++)
           OrderLifecycleStep(
-            status: chuoi[i],
-            trangThai: dangO == -1 || i > dangO
-                ? 'upcoming'
+            status: OrderLifecycleStepDtoStatus.fromJson(chuoi[i]),
+            progress: dangO == -1 || i > dangO
+                ? OrderLifecycleStepDtoProgress.upcoming
                 : i == dangO
-                    ? 'current'
-                    : 'done',
+                    ? OrderLifecycleStepDtoProgress.current
+                    : OrderLifecycleStepDtoProgress.done,
           ),
       ],
-      buocKeTiep: _buocKeTiepDemo(status, thiCong, vanChuyen),
+      nextSteps: _buocKeTiepDemo(status, thiCong, vanChuyen),
       // The demo "server" answers this the way the real one does — from the
       // same three statuses the transition table gives a `huy` edge. It lives
       // HERE and never in a screen (AD-2), which is also why the fake, not the
       // screen, knows a cancelled order can no longer be cancelled.
-      coTheHuy: const <String>['baogia', 'dachot', 'dacoc'].contains(status),
+      canCancel: const <String>['baogia', 'dachot', 'dacoc'].contains(status),
     );
   }
 
@@ -612,49 +616,49 @@ class FakeOrdersPort implements OrdersPort {
       if (status == 'dachot')
         const OrderNextStep(
           event: 'hoan_thanh',
-          to: 'hoanthanh',
+          to: OrderNextStepDtoTo.hoanthanh,
           requires: 'payments.record',
         ),
       if (status == 'dacoc' && thiCong)
         const OrderNextStep(
           event: 'bat_dau_thi_cong',
-          to: 'thicong',
+          to: OrderNextStepDtoTo.thicong,
           requires: 'construction.transition',
         ),
       if (status == 'dacoc' && vanChuyen)
         const OrderNextStep(
           event: 'bat_dau_giao',
-          to: 'danggiao',
+          to: OrderNextStepDtoTo.danggiao,
           requires: 'delivery.confirm',
         ),
       if (status == 'dacoc' && !vanChuyen)
         const OrderNextStep(
           event: 'xong_giao',
-          to: 'dagiao',
+          to: OrderNextStepDtoTo.dagiao,
           requires: 'delivery.confirm',
         ),
       if (status == 'thicong')
         const OrderNextStep(
           event: 'xong_thi_cong',
-          to: 'nghiemthu',
+          to: OrderNextStepDtoTo.nghiemthu,
           requires: 'construction.transition',
         ),
       if (status == 'danggiao')
         const OrderNextStep(
           event: 'xong_giao',
-          to: 'dagiao',
+          to: OrderNextStepDtoTo.dagiao,
           requires: 'delivery.confirm',
         ),
       if (status == 'nghiemthu')
         const OrderNextStep(
           event: 'hoan_thanh',
-          to: 'hoanthanh',
+          to: OrderNextStepDtoTo.hoanthanh,
           requires: 'construction.transition',
         ),
       if (status == 'dagiao')
         const OrderNextStep(
           event: 'hoan_thanh',
-          to: 'hoanthanh',
+          to: OrderNextStepDtoTo.hoanthanh,
           requires: 'delivery.confirm',
         ),
     ];
@@ -669,10 +673,10 @@ class FakeOrdersPort implements OrdersPort {
   /// Photos are COUNTED, not stored: the demo has no R2 and inventing a fake
   /// object key would teach the screen a shape the real port does not return.
   @override
-  Future<StatusChangeResult> chuyenTrangThai(
+  Future<StatusChangeResult> transition(
     String orderId,
     String event,
-    List<XFile> anh,
+    List<XFile> files,
   ) async {
     final Order? order = _orders[orderId];
     if (order == null) {
@@ -683,8 +687,8 @@ class FakeOrdersPort implements OrdersPort {
     }
     final List<OrderNextStep> buoc = _buocKeTiepDemo(
       order.status,
-      order.scopeThiCong,
-      order.scopeVanChuyen,
+      order.scopeConstruction,
+      order.scopeDelivery,
     ).where((OrderNextStep b) => b.event == event).toList();
     if (buoc.isEmpty) {
       throw const OrderPortException(
@@ -700,12 +704,12 @@ class FakeOrdersPort implements OrdersPort {
         !_issuedVouchers.containsKey(orderId)) {
       throw kFakeCloseBeforeIssueError;
     }
-    if (anh.length > _kDemoSoAnhToiDa) {
+    if (files.length > _kDemoSoAnhToiDa) {
       throw const OrderPortException(
         'Ảnh đính kèm không hợp lệ.',
         code: 'VALIDATION_ERROR',
         fieldErrors: <String, String>{
-          'anh': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần chuyển trạng thái.',
+          'files': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần chuyển trạng thái.',
         },
       );
     }
@@ -715,9 +719,9 @@ class FakeOrdersPort implements OrdersPort {
       _recordIssue(orderId);
     }
     return StatusChangeResult(
-      status: buoc.first.to,
-      occurredAt: _now,
-      soAnhDaLuu: anh.length,
+      status: StatusChangeResponseDtoStatus.fromJson(buoc.first.to.json!),
+      occurredAt: _nowIso,
+      savedAttachmentCount: files.length,
     );
   }
 
@@ -727,7 +731,7 @@ class FakeOrdersPort implements OrdersPort {
   /// edge (including one already cancelled) → 409, reason too short → 400 with
   /// `fieldErrors`.
   @override
-  Future<void> huyDon(String orderId, String lyDo) async {
+  Future<void> cancel(String orderId, String reason) async {
     final Order? order = _orders[orderId];
     if (order == null) {
       throw OrderPortException(
@@ -741,13 +745,13 @@ class FakeOrdersPort implements OrdersPort {
         code: 'CONFLICT',
       );
     }
-    final String sach = lyDo.trim();
+    final String sach = reason.trim();
     if (sach.length < _kDemoLyDoToiThieu) {
       throw const OrderPortException(
         'Cần lý do khi huỷ đơn.',
         code: 'VALIDATION_ERROR',
         fieldErrors: <String, String>{
-          'lyDo':
+          'reason':
               'Lý do huỷ là bắt buộc, tối thiểu $_kDemoLyDoToiThieu ký tự.',
         },
       );
@@ -755,15 +759,15 @@ class FakeOrdersPort implements OrdersPort {
     _orders[orderId] = Order(
       id: order.id,
       status: 'huy',
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -784,16 +788,16 @@ class FakeOrdersPort implements OrdersPort {
     final OrderVersionItem goc = OrderVersionItem(
       id: '$orderId-v1',
       versionNo: 1,
-      laBanHienLuc: !orderId.endsWith('-1'),
+      isCurrent: !orderId.endsWith('-1'),
       createdAt: _now,
-      chotAt: null,
+      confirmedAt: null,
       createdByAccountId: 'acc-demo',
       createdByDisplayName: 'Nguyễn Văn Quản Lý',
-      soDong: 3,
-      thayDoi: const OrderVersionChange(
-        them: <String>[],
-        xoa: <String>[],
-        doiSoLuong: <OrderVersionQtyChange>[],
+      lineCount: 3,
+      changes: const OrderVersionChange(
+        added: <String>[],
+        removed: <String>[],
+        qtyChanged: <OrderVersionQtyChange>[],
       ),
     );
     if (!orderId.endsWith('-1')) return <OrderVersionItem>[goc];
@@ -802,18 +806,18 @@ class FakeOrdersPort implements OrdersPort {
       OrderVersionItem(
         id: '$orderId-v2',
         versionNo: 2,
-        laBanHienLuc: true,
+        isCurrent: true,
         createdAt: _now,
-        chotAt: null,
+        confirmedAt: null,
         // Bản cũ không có actor ⇒ null; màn hiện `—`, không bịa tên.
         createdByAccountId: null,
         createdByDisplayName: null,
-        soDong: 4,
-        thayDoi: const OrderVersionChange(
-          them: <String>['Tủ điện DC 2 string'],
-          xoa: <String>[],
-          doiSoLuong: <OrderVersionQtyChange>[
-            OrderVersionQtyChange(ten: 'Tấm pin JA Solar 580W', tu: 8, den: 12),
+        lineCount: 4,
+        changes: const OrderVersionChange(
+          added: <String>['Tủ điện DC 2 string'],
+          removed: <String>[],
+          qtyChanged: <OrderVersionQtyChange>[
+            OrderVersionQtyChange(name: 'Tấm pin JA Solar 580W', from: 8, to: 12),
           ],
         ),
       ),
@@ -842,7 +846,7 @@ class FakeOrdersPort implements OrdersPort {
       }
       // Stand-in for the backend's resolveUnitPrice(): demo has no tier data,
       // so the catalogue price wins unless the product allows a client price.
-      final int unitPrice = product.priceEditable && input.unitPrice != null
+      final num unitPrice = product.priceEditable && input.unitPrice != null
           ? input.unitPrice!
           : product.price;
       line = OrderLine(
@@ -853,7 +857,7 @@ class FakeOrdersPort implements OrdersPort {
         qty: input.qty,
         unitPrice: unitPrice,
         priceEditable: product.priceEditable,
-        isFlexible: input.isFlexible ?? false,
+        isFlexible: input.isFlexible,
         note: input.note,
         // Install/labour lines (priceEditable) never carry warranty — force null
         // even if the catalogue product has one (mirrors backend addLine).
@@ -862,7 +866,7 @@ class FakeOrdersPort implements OrdersPort {
         amount: _serverAmount(unitPrice, input.qty),
       );
     } else {
-      final int unitPrice = input.unitPrice ?? 0;
+      final num unitPrice = input.unitPrice ?? 0;
       line = OrderLine(
         id: 'line-demo-$_seq',
         name: input.name ?? '',
@@ -870,7 +874,7 @@ class FakeOrdersPort implements OrdersPort {
         qty: input.qty,
         unitPrice: unitPrice,
         priceEditable: true,
-        isFlexible: input.isFlexible ?? false,
+        isFlexible: input.isFlexible,
         note: input.note,
         // Free lines start with no warranty (set later via the row link — AC #4),
         // mirrors web `warrantyMonths: null`.
@@ -900,8 +904,8 @@ class FakeOrdersPort implements OrdersPort {
       throw OrderPortException('Không tìm thấy dòng báo giá: $lineId');
     }
     final OrderLine before = order.lineItems[index];
-    final int qty = input.qty ?? before.qty;
-    final int unitPrice = before.priceEditable && input.unitPrice != null
+    final num qty = input.qty ?? before.qty;
+    final num unitPrice = before.priceEditable && input.unitPrice != null
         ? input.unitPrice!
         : before.unitPrice;
     // Warranty tri-state: absent → keep; present → write (incl. null = clear), UNLESS the
@@ -910,7 +914,7 @@ class FakeOrdersPort implements OrdersPort {
     // that would drop a legitimate null-clear. Mirrors backend `warrantyLocked` guard.
     final bool warrantyLocked =
         before.productId != null && before.priceEditable;
-    final int? warrantyMonths = input.hasWarrantyMonths && !warrantyLocked
+    final num? warrantyMonths = input.hasWarrantyMonths && !warrantyLocked
         ? input.warrantyMonths
         : before.warrantyMonths;
     final OrderLine updated = OrderLine(
@@ -948,12 +952,12 @@ class FakeOrdersPort implements OrdersPort {
     // 4.4), lives in the fake (the demo "server"), never in a screen (AD-16).
     // Absent vatMode = pre-4.4 order = VAT applies.
     const int vatRate = 8;
-    final bool applyVat = input.vatMode != 'khong_vat';
+    final bool applyVat = input.vatMode != PreviewTotalRequestDtoVatMode.khongVat;
     int subtotal = 0;
     for (final PreviewTotalLine line in input.lines) {
       subtotal += _serverAmount(line.unitPrice, line.qty);
     }
-    final int discountAmount = input.discountAmount ?? 0;
+    final int discountAmount = (input.discountAmount ?? 0).toInt();
     final int vatBase = subtotal - discountAmount;
     final int vatAmount = applyVat ? (vatBase * vatRate + 50) ~/ 100 : 0;
     return OrderTotals(
@@ -986,15 +990,15 @@ class FakeOrdersPort implements OrdersPort {
     final Order confirmed = Order(
       id: order.id,
       status: 'dachot',
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -1023,15 +1027,15 @@ class FakeOrdersPort implements OrdersPort {
     final Order applied = Order(
       id: order.id,
       status: 'choduyet',
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -1067,15 +1071,15 @@ class FakeOrdersPort implements OrdersPort {
     final Order resolved = Order(
       id: order.id,
       status: input.approve ? order.status : 'baogia',
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -1112,14 +1116,14 @@ class FakeOrdersPort implements OrdersPort {
       items.add(
         DiscountPendingItem(
           orderId: order.id,
-          customerSdt: order.customerSdt,
+          customerPhone: order.customerPhone,
           amount: discount.amount,
           requestNote: discount.requestNote,
           requestedByAccountId: order.ownerAccountId,
           requestedByDisplayName: 'Nhân viên demo',
           requestedAt: discount.requestedAt,
           subtotal: subtotal,
-          afterDiscount: subtotal - discount.amount,
+          afterDiscount: subtotal - discount.amount.toInt(),
           lines: order.lineItems
               .map(
                 (OrderLine line) => DiscountPendingLine(
@@ -1186,15 +1190,15 @@ class FakeOrdersPort implements OrdersPort {
     final Order revised = Order(
       id: order.id,
       status: 'baogia',
-      customerSdt: order.customerSdt,
+      customerPhone: order.customerPhone,
       currentVersionId: order.currentVersionId,
       ownerAccountId: order.ownerAccountId,
       assigneeAccountId: order.assigneeAccountId,
       sourceId: order.sourceId,
       custType: order.custType,
-      scopeThietBi: order.scopeThietBi,
-      scopeThiCong: order.scopeThiCong,
-      scopeVanChuyen: order.scopeVanChuyen,
+      scopeEquipment: order.scopeEquipment,
+      scopeConstruction: order.scopeConstruction,
+      scopeDelivery: order.scopeDelivery,
       kWp: order.kWp,
       vatMode: order.vatMode,
       validityNote: order.validityNote,
@@ -1211,7 +1215,7 @@ class FakeOrdersPort implements OrdersPort {
   /// data: one step photo (both coordinates set), one supplementary photo (both
   /// null), and one the caller cannot delete.
   ///
-  /// [AttachmentItem.coTheXoa] arrives PRE-COMPUTED here exactly as it does from
+  /// `AttachmentItem.canDelete` arrives PRE-COMPUTED here exactly as it does from
   /// the real backend — the fake plays the server's role, so the rule lives here
   /// and never in a screen or widget (AD-2).
   final Map<String, List<AttachmentItem>> _anhDemo =
@@ -1225,10 +1229,10 @@ class FakeOrdersPort implements OrdersPort {
               contentType: 'image/png',
               size: 204800,
               createdAt: _now,
-              nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+              uploadedBy: 'Nguyễn Văn Quản Lý',
               statusFrom: null,
               statusTo: null,
-              coTheXoa: true,
+              canDelete: true,
             ),
             AttachmentItem(
               id: '$orderId-anh-buoc',
@@ -1236,10 +1240,10 @@ class FakeOrdersPort implements OrdersPort {
               contentType: 'image/jpeg',
               size: 512000,
               createdAt: _now,
-              nguoiTaiLen: 'Trần Thợ Thi Công',
+              uploadedBy: 'Trần Thợ Thi Công',
               statusFrom: 'dacoc',
               statusTo: 'thicong',
-              coTheXoa: true,
+              canDelete: true,
             ),
             AttachmentItem(
               id: '$orderId-anh-nguoi-khac',
@@ -1247,15 +1251,15 @@ class FakeOrdersPort implements OrdersPort {
               contentType: 'image/jpeg',
               size: 348160,
               createdAt: _now,
-              nguoiTaiLen: 'Lê Kho Giao',
+              uploadedBy: 'Lê Kho Giao',
               statusFrom: 'thicong',
               statusTo: 'danggiao',
-              coTheXoa: false,
+              canDelete: false,
             ),
           ]);
 
   @override
-  Future<List<AttachmentItem>> listAnh(String orderId) async {
+  Future<List<AttachmentItem>> listAttachments(String orderId) async {
     if (!_orders.containsKey(orderId)) {
       throw OrderPortException(
         'Không tìm thấy đơn hàng: $orderId',
@@ -1266,7 +1270,7 @@ class FakeOrdersPort implements OrdersPort {
   }
 
   @override
-  Future<void> themAnh(String orderId, List<XFile> files) async {
+  Future<void> addAttachments(String orderId, List<XFile> files) async {
     if (!_orders.containsKey(orderId)) {
       throw OrderPortException(
         'Không tìm thấy đơn hàng: $orderId',
@@ -1278,7 +1282,7 @@ class FakeOrdersPort implements OrdersPort {
         'Ảnh đính kèm không hợp lệ.',
         code: 'VALIDATION_ERROR',
         fieldErrors: <String, String>{
-          'anh': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần tải lên.',
+          'files': 'Tối đa $_kDemoSoAnhToiDa ảnh cho một lần tải lên.',
         },
       );
     }
@@ -1293,17 +1297,17 @@ class FakeOrdersPort implements OrdersPort {
           contentType: 'image/jpeg',
           size: 102400,
           createdAt: _now,
-          nguoiTaiLen: 'Nguyễn Văn Quản Lý',
+          uploadedBy: 'Nguyễn Văn Quản Lý',
           statusFrom: null,
           statusTo: null,
-          coTheXoa: true,
+          canDelete: true,
         ),
       );
     }
   }
 
   @override
-  Future<void> xoaAnh(String orderId, String attachmentId) async {
+  Future<void> removeAttachment(String orderId, String attachmentId) async {
     final List<AttachmentItem> danhSach = _anhCuaDon(orderId);
     final int viTri =
         danhSach.indexWhere((AttachmentItem a) => a.id == attachmentId);
@@ -1313,7 +1317,7 @@ class FakeOrdersPort implements OrdersPort {
         code: 'NOT_FOUND',
       );
     }
-    if (!danhSach[viTri].coTheXoa) {
+    if (!danhSach[viTri].canDelete) {
       throw const OrderPortException(
         'Bạn không có quyền xoá ảnh này.',
         code: 'FORBIDDEN',
@@ -1323,7 +1327,7 @@ class FakeOrdersPort implements OrdersPort {
   }
 
   @override
-  Future<Uint8List> anhBytes(String orderId, String attachmentId) async {
+  Future<Uint8List> attachmentBytes(String orderId, String attachmentId) async {
     final bool coAnh = _anhCuaDon(orderId)
         .any((AttachmentItem a) => a.id == attachmentId);
     if (!coAnh) {
@@ -1340,15 +1344,15 @@ class FakeOrdersPort implements OrdersPort {
   Order _copy(Order order) => Order(
         id: order.id,
         status: order.status,
-        customerSdt: order.customerSdt,
+        customerPhone: order.customerPhone,
         currentVersionId: order.currentVersionId,
         ownerAccountId: order.ownerAccountId,
         assigneeAccountId: order.assigneeAccountId,
         sourceId: order.sourceId,
         custType: order.custType,
-        scopeThietBi: order.scopeThietBi,
-        scopeThiCong: order.scopeThiCong,
-        scopeVanChuyen: order.scopeVanChuyen,
+        scopeEquipment: order.scopeEquipment,
+        scopeConstruction: order.scopeConstruction,
+        scopeDelivery: order.scopeDelivery,
         kWp: order.kWp,
         vatMode: order.vatMode,
         validityNote: order.validityNote,
@@ -1362,5 +1366,5 @@ class FakeOrdersPort implements OrdersPort {
 
   /// The BACKEND's lineAmount() stand-in — lives in the fake (the demo
   /// "server"), never in UI code.
-  int _serverAmount(int unitPrice, int qty) => unitPrice * qty;
+  int _serverAmount(num unitPrice, num qty) => (unitPrice * qty).toInt();
 }

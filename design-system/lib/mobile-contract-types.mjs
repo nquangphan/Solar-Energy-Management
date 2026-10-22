@@ -1,4 +1,4 @@
-// Reads the mobile's contract types where they now live (Story 10.7): a Dart port declares
+// Reads the mobile's contract types where they now live (Story 10.7, every data port since 10.8): a Dart port declares
 // `typedef Customer = CustomerResponseDto;`, so the fields are those of the generated class in
 // `mobile/lib/api/generated/models/`, i.e. the schema's properties in openapi.json (the client is
 // generated from it, drift-guarded byte-for-byte in `flutter test`). Twin of web-contract-types.mjs.
@@ -26,6 +26,15 @@ export function mobileAliasDto(portSrc, typeName) {
   assert.ok(existsSync(model), `${typeName} aliases ${dto}, which is not a generated model (${snake(dto)}.dart missing)`);
   assert.ok(readFileSync(model, 'utf8').includes(`class ${dto} {`), `${snake(dto)}.dart does not declare class ${dto}`);
   return dto;
+}
+
+/** The source of the generated Dart model of `dto` (`mobile/lib/api/generated/models/<snake>.dart`). */
+export function mobileDtoSource(dto) {
+  const model = resolve(MODELS_DIR, `${snake(dto)}.dart`);
+  assert.ok(existsSync(model), `${dto} is not a generated model (${snake(dto)}.dart missing)`);
+  const src = readFileSync(model, 'utf8');
+  assert.ok(src.includes(`class ${dto} {`), `${snake(dto)}.dart does not declare class ${dto}`);
+  return src;
 }
 
 /** The property names of a schema in openapi.json — the fields of the generated Dart class. */

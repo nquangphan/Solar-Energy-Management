@@ -1,6 +1,7 @@
-// buildMobileSpec (Story 10.6): the derived spec swagger_parser reads rewrites
-// ONLY binary response schemas (so downloads become Stream<Uint8List>) and
-// leaves everything else — JSON responses, multipart upload bodies — untouched.
+// buildMobileSpec (Story 10.6, 10.8): the derived spec swagger_parser reads
+// rewrites ONLY binary response schemas (so downloads become Stream<Uint8List>)
+// and calendar-date schemas (format: date dropped, so paidOn stays a String);
+// everything else — JSON responses, multipart upload bodies — is untouched.
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,6 +39,7 @@ void main() {
   });
 
   test('changes nothing else: undoing the rewrites gives the backend spec back', () {
+    final backend = jsonDecode(specJson);
     final derived = jsonDecode(buildMobileSpec(specJson).json) as Map<String, dynamic>;
     var undone = 0;
     for (final operations in (derived['paths'] as Map<String, dynamic>).values) {
@@ -55,7 +57,46 @@ void main() {
       }
     }
     expect(undone, greaterThan(0));
-    expect(jsonEncode(derived), jsonEncode(jsonDecode(specJson)));
+    // Put `format: date` back exactly where the backend has it.
+    var restoredDates = 0;
+    void restore(Object? from, Object? to) {
+      if (from is Map && to is Map) {
+        if (from['type'] == 'string' && from['format'] == 'date' && !to.containsKey('format')) {
+          to['format'] = 'date';
+          restoredDates++;
+        }
+        for (final key in from.keys) {
+          restore(from[key], to[key]);
+        }
+      } else if (from is List && to is List && from.length == to.length) {
+        for (var i = 0; i < from.length; i++) {
+          restore(from[i], to[i]);
+        }
+      }
+    }
+
+    restore(backend, derived);
+    expect(restoredDates, buildMobileSpec(specJson).dateRewrites);
+    // Deep (key-order independent) equality: a restored key lands last.
+    expect(derived, equals(backend));
+  });
+
+  test('drops format: date (paidOn x2) so dates generate as String; keeps date-time', () {
+    final derived = buildMobileSpec(specJson);
+    expect(derived.dateRewrites, greaterThanOrEqualTo(minDateRewrites));
+    expect(derived.json, isNot(contains('"format": "date"')));
+    expect('"format": "date-time"'.allMatches(derived.json).length,
+        '"format": "date-time"'.allMatches(specJson).length);
+
+    const synthetic = '''
+{"paths": {}, "components": {"schemas": {"X": {"type": "object", "properties": {
+  "paidOn": {"type": "string", "format": "date"},
+  "createdAt": {"type": "string", "format": "date-time"}}}}}}''';
+    final small = buildMobileSpec(synthetic);
+    expect(small.dateRewrites, 1);
+    final props = (jsonDecode(small.json) as Map)['components']['schemas']['X']['properties'] as Map;
+    expect(props['paidOn'], {'type': 'string'});
+    expect(props['createdAt'], {'type': 'string', 'format': 'date-time'});
   });
 
   test('leaves multipart request bodies and JSON responses alone', () {

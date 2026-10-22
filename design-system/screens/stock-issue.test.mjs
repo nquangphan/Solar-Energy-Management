@@ -27,11 +27,14 @@ const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 // SAME strippers as stock-vouchers.test.mjs.
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+// Import/export directives are paths, not code: `models/qty_change_dto.dart` would read as
+// "divide by qty" once the mobile port imports its generated types (Story 10.8).
 const stripDart = (s) =>
   s
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/\/.*$/gm, '')
-    .replace(/\/\/.*$/gm, '');
+    .replace(/\/\/.*$/gm, '')
+    .replace(/^(?:import|export) '[^'\n]*';$/gm, '');
 
 const WEB = [
   'web/src/screens/orders/stock-issue-preview.tsx',
@@ -116,6 +119,10 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
     assert.ok(BANNED.some(([pattern]) => pattern.test(sample)), `no ban pattern caught: ${sample}`);
   }
   assert.ok(!BANNED.some(([pattern]) => pattern.test("{d.qty}</td><td>{d.onHand}")), 'rendering a number is not a violation');
+  // Dropping directives removes the path only, never the code after it.
+  const stripped = stripDart("import '../models/qty_change_dto.dart';\nfinal int t = l.qty * 2;\n");
+  assert.ok(!stripped.includes('qty_change_dto'), 'the import path is dropped');
+  assert.ok(BANNED.some(([pattern]) => pattern.test(stripped)), 'code after a dropped import is still scanned');
   // Reading the backend's figure to pick a sentence is allowed.
   assert.ok(!BANNED.some(([pattern]) => pattern.test('line.shortfall > 0 ? a : b')), 'reading shortfall is not a violation');
 });

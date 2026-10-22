@@ -142,7 +142,7 @@ test('"Ghi nhận" is gated on the backend `recordable` AND payments.record, on 
     mobileCode,
     /_schedule\?\.recordable \?\? false\)\s*&&\s*can\(widget\.perms,\s*AppPermissionKeys\.paymentsRecord\)/,
   );
-  assert.match(mobileCode, /_canRecord\s*&&\s*i\.status\s*!=\s*'paid'/);
+  assert.match(mobileCode, /_canRecord\s*&&\s*i\.status\.json\s*!=\s*'paid'/);
 });
 
 test('recording goes through a confirm dialog on both platforms', () => {

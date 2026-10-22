@@ -1,4 +1,4 @@
-// Source-guard (Story 10.7, AD-12 client rule; twin of web composition-root.test.ts):
+// Source-guard (Stories 10.7–10.8, AD-12 client rule; twin of web composition-root.test.ts):
 // lib/main.dart is the mobile's ONE composition root.
 //
 //  - No fake port reaches the production path: main.dart, the app layer, the HTTP
@@ -77,6 +77,66 @@ const Map<String, List<String>> generatedTypes = {
     'WarrantyLookup',
   ],
   'lib/design_system/session/catalog_port.dart': ['CatalogGroupItem'],
+  'lib/design_system/session/orders_port.dart': [
+    'OrderLine',
+    'Order',
+    'OrderDiscount',
+    'OrderListItem',
+    'OrderLifecycleStep',
+    'OrderNextStep',
+    'OrderLifecycle',
+    'OrderStockIssueLine',
+    'OrderStockIssueView',
+    'OrderStockCheckLine',
+    'OrderStockCheck',
+    'OrderStockIssueResult',
+    'StatusChangeResult',
+    'AttachmentItem',
+    'OrderVersionQtyChange',
+    'OrderVersionChange',
+    'OrderVersionItem',
+    'OrderPage',
+    'CreateOrderInput',
+    'AddOrderLineInput',
+    'OrderTotals',
+    'ApplyDiscountInput',
+    'ResolveDiscountInput',
+    'DiscountPendingLine',
+    'DiscountPendingItem',
+    'PreviewTotalInput',
+    'PreviewTotalLine',
+  ],
+  'lib/design_system/session/inventory_port.dart': ['StockItemView', 'PurchaseNeedView', 'StockList'],
+  'lib/design_system/session/stock_vouchers_port.dart': [
+    'StockVoucherCreator',
+    'StockVoucherSummary',
+    'StockVoucherReturnOf',
+    'StockVoucherReturnRef',
+    'StockVoucherLine',
+    'StockVoucherDetail',
+    'StockVoucherList',
+    'CreateStockVoucherLineInput',
+    'CreateStockVoucherInput',
+    'CreateReturnVoucherLineInput',
+  ],
+  'lib/design_system/session/payments_port.dart': [
+    'Payment',
+    'Installment',
+    'PaymentSchedule',
+    'InstallmentInput',
+    'ReplacePaymentScheduleInput',
+    'AutoTransitionResult',
+    'RecordPaymentResult',
+  ],
+  'lib/design_system/session/contracts_port.dart': ['ContractSummary', 'ContractsOverview'],
+  'lib/design_system/session/invoices_port.dart': [
+    'InvoiceSummary',
+    'InvoicesOverview',
+    'InvoiceSeller',
+    'InvoiceLine',
+    'InvoicePdfInfo',
+    'InvoiceDetail',
+  ],
 };
 
 String snake(String name) =>
@@ -118,7 +178,23 @@ void main() {
 
   test('main.dart really assembles every piece (positive self-check)', () {
     final calls = assemblyCalls(sources[mainPath]!);
-    for (final name in ['SessionStore', 'Transport', 'PnsApiClient', 'HttpAuthPort', 'HttpMePort']) {
+    for (final name in [
+      'SessionStore',
+      'Transport',
+      'PnsApiClient',
+      'HttpAuthPort',
+      'HttpMePort',
+      'HttpPasswordPort',
+      'HttpCustomersPort',
+      'HttpWarrantyPort',
+      'HttpCatalogPort',
+      'HttpOrdersPort',
+      'HttpInventoryPort',
+      'HttpStockVouchersPort',
+      'HttpPaymentsPort',
+      'HttpContractsPort',
+      'HttpInvoicesPort',
+    ]) {
       expect(calls, contains(name), reason: 'main.dart no longer calls $name( — the guard would check nothing');
     }
   });
@@ -148,6 +224,7 @@ void main() {
         aliased++;
       }
     }
-    expect(aliased, 11);
+    // 11 (Story 10.7) + 55 order/stock/money/document types (Story 10.8).
+    expect(aliased, 66);
   });
 }

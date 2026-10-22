@@ -244,7 +244,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   /// response a fresh key would let the same payment be recorded twice.
   void _openRecord(Installment i) {
     if (_recordFor?.id == i.id) return;
-    _recordAmount.text = _digits(i.remainingAmount);
+    _recordAmount.text = _digits(i.remainingAmount.toInt());
     _recordDate.text = _todayIso();
     _recordNote.clear();
     setState(() {
@@ -303,7 +303,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     final Installment i = _recordFor!;
     final int? amount = int.tryParse(_recordAmount.text);
     if (amount == null) return;
-    final String deposit = i.milestone == 'coc'
+    final String deposit = i.milestone?.json == 'coc'
         ? '\nKhi đủ đợt cọc, đơn sẽ tự chuyển sang Đã cọc.'
         : '';
     await showAppDialog<void>(
@@ -338,7 +338,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
       });
       // A retry after a failed attempt may be the replay of a payment whose response was
       // lost: the replay carries no autoTransition, so the current status is reported as well.
-      if (r.autoTransition?.outcome == 'applied' || _recordFailedAttempt) {
+      if (r.autoTransition?.outcome.json == 'applied' || _recordFailedAttempt) {
         widget.onOrderStatusChanged?.call(r.orderStatus);
       }
     } on PaymentsPortError catch (e) {
@@ -383,12 +383,12 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
           i.percent != null
               ? _Row(
                   kind: _kKindPercent,
-                  number: _digits(i.percent!),
+                  number: _digits(i.percent!.toInt()),
                   note: i.conditionNote,
                 )
               : _Row(
                   kind: _kKindAmount,
-                  number: _digits(i.amount),
+                  number: _digits(i.amount.toInt()),
                   note: i.conditionNote,
                 ),
         );
@@ -602,15 +602,15 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
                   AppTableCellText(_installmentName(i), strong: true),
                   AppTableCellText(i.conditionNote),
                   AppTableCellText(i.percent == null ? '—' : '${i.percent}%'),
-                  MoneyText(i.amount),
+                  MoneyText(i.amount.toInt()),
                 ]),
             ],
           ),
         ),
         const SizedBox(height: AppTokens.space12),
-        _totalRow('Tổng lịch', s.scheduledTotal),
+        _totalRow('Tổng lịch', s.scheduledTotal.toInt()),
         const SizedBox(height: AppTokens.space4),
-        _totalRow('Tổng đơn (sau VAT)', s.orderTotal),
+        _totalRow('Tổng đơn (sau VAT)', s.orderTotal.toInt()),
         if (!s.totalMatches) ...<Widget>[
           const SizedBox(height: AppTokens.space12),
           AppBanner(
@@ -620,19 +620,19 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: <Widget>[
                 const Text('Tổng các đợt lệch tổng đơn sau VAT'),
-                MoneyText(s.difference),
+                MoneyText(s.difference.toInt()),
               ],
             ),
           ),
         ],
-        if (_outcome?.outcome == 'applied') ...<Widget>[
+        if (_outcome?.outcome.json == 'applied') ...<Widget>[
           const SizedBox(height: AppTokens.space12),
           AppBanner(
             tone: AppBannerTone.info,
             message: 'Đơn đã chuyển sang ${_orderStatusLabel(_outcomeStatus)}.',
           ),
         ],
-        if (_outcome?.outcome == 'skipped') ...<Widget>[
+        if (_outcome?.outcome.json == 'skipped') ...<Widget>[
           const SizedBox(height: AppTokens.space12),
           AppBanner(
             tone: AppBannerTone.warn,
@@ -662,9 +662,9 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _totalRow('Đã thu', s.paidTotal),
+            _totalRow('Đã thu', s.paidTotal.toInt()),
             const SizedBox(height: AppTokens.space4),
-            _totalRow('Còn lại', s.remainingTotal),
+            _totalRow('Còn lại', s.remainingTotal.toInt()),
             const SizedBox(height: AppTokens.space4),
             Row(
               children: <Widget>[
@@ -673,7 +673,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
               ],
             ),
             const SizedBox(height: AppTokens.space4),
-            _totalRow('Tổng đơn', s.orderTotal),
+            _totalRow('Tổng đơn', s.orderTotal.toInt()),
           ],
         ),
       );
@@ -703,7 +703,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
                 children: <Widget>[
                   Expanded(child: Text(_installmentName(i), style: _strong)),
                   const SizedBox(width: AppTokens.space8),
-                  _paymentStatusChip(i.status),
+                  _paymentStatusChip(i.status.json ?? '—'),
                 ],
               ),
               for (final Payment p in i.payments)
@@ -714,14 +714,14 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: <Widget>[
                       Text(
-                        'Thu ${_dayMonth(p.paidOn)} · ${_kMethodLabels[p.method] ?? p.method} ·',
+                        'Thu ${_dayMonth(p.paidOn)} · ${_kMethodLabels[p.method.json] ?? p.method.json ?? '—'} ·',
                         style: _micro,
                       ),
-                      MoneyText(p.amount, style: _micro),
+                      MoneyText(p.amount.toInt(), style: _micro),
                     ],
                   ),
                 ),
-              if (_canRecord && i.status != 'paid')
+              if (_canRecord && i.status.json != 'paid')
                 Padding(
                   padding: const EdgeInsets.only(top: AppTokens.space4),
                   child: Align(
@@ -834,9 +834,9 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   }
 
   String _installmentName(Installment i) {
-    final String suffix = i.milestone == 'coc'
+    final String suffix = i.milestone?.json == 'coc'
         ? ' · Cọc'
-        : i.milestone == 'tat_toan'
+        : i.milestone?.json == 'tat_toan'
             ? ' · Tất toán'
             : '';
     return 'Đợt ${i.seq}$suffix';

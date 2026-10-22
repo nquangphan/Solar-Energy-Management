@@ -17,30 +17,31 @@ const StockVoucherCreator _kKho = StockVoucherCreator(
 );
 
 /// Stock-in with costs, stock-out WITHOUT costs (caller lacks `costs.view`), and the LONGEST product name.
-const List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
+final List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
   StockVoucherDetail(
     id: 'pk-n-0119',
-    ma: 'PK-N-0119',
-    type: 'nhap',
-    createdAt: '2026-07-06T01:05:00.000Z',
-    nguoiTao: _kKho,
-    soDong: 2,
-    tongSoLuong: 50,
+    code: 'PK-N-0119',
+    type: StockVoucherDetailDtoType.nhap,
+    createdAt: DateTime.utc(2026, 7, 6, 1, 5),
+    createdBy: _kKho,
+    lineCount: 2,
+    totalQty: 50,
     note: 'Nhập từ nhà cung cấp',
-    lines: <StockVoucherLine>[
+    canReturn: false,
+    lines: const <StockVoucherLine>[
       StockVoucherLine(
         productId: 'prod-day-dc-4',
-        ten: 'Dây DC 4mm² (cuộn 100m)',
+        name: 'Dây DC 4mm² (cuộn 100m)',
         sku: 'DC-4-100',
-        donVi: 'cuộn',
+        unit: 'cuộn',
         qty: 10,
         unitCost: 1480000,
       ),
       StockVoucherLine(
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 40,
         unitCost: 2110000,
       ),
@@ -48,68 +49,70 @@ const List<StockVoucherDetail> kDemoStockVouchers = <StockVoucherDetail>[
   ),
   StockVoucherDetail(
     id: 'pk-x-0096',
-    ma: 'PK-X-0096',
-    type: 'xuat',
-    createdAt: '2026-07-05T23:30:00.000Z',
-    nguoiTao: _kKho,
-    soDong: 2,
-    tongSoLuong: 15,
+    code: 'PK-X-0096',
+    type: StockVoucherDetailDtoType.xuat,
+    createdAt: DateTime.utc(2026, 7, 5, 23, 30),
+    createdBy: _kKho,
+    lineCount: 2,
+    totalQty: 15,
     note: 'Hàng mẫu cho khách',
-    lines: <StockVoucherLine>[
+    canReturn: false,
+    lines: const <StockVoucherLine>[
       StockVoucherLine(
         productId: 'prod-inverter-8k',
-        ten: 'Inverter Solplanet ASW8000-S',
+        name: 'Inverter Solplanet ASW8000-S',
         sku: 'INV-ASW8000',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 1,
       ),
       StockVoucherLine(
         productId: 'prod-pin-ae-630',
-        ten: 'Tấm pin AE 630W',
+        name: 'Tấm pin AE 630W',
         sku: 'PIN-AE-630',
-        donVi: 'tấm',
+        unit: 'tấm',
         qty: 14,
       ),
     ],
   ),
-  // Order-bound stock-out — `nguoiTao` is the person who CONFIRMED it.
+  // Order-bound stock-out — `createdBy` is the person who CONFIRMED it.
   // `canReturn` is a fixture value, as the backend would return it.
   StockVoucherDetail(
     id: 'pk-x-0095',
-    ma: 'PK-X-0095',
-    type: 'xuat',
+    code: 'PK-X-0095',
+    type: StockVoucherDetailDtoType.xuat,
     orderId: 'ord-demo-4',
-    createdAt: '2026-07-04T02:30:00.000Z',
-    nguoiTao: _kKho,
-    soDong: 1,
-    tongSoLuong: 1,
+    createdAt: DateTime.utc(2026, 7, 4, 2, 30),
+    createdBy: _kKho,
+    lineCount: 1,
+    totalQty: 1,
     note: null,
     canReturn: true,
-    lines: <StockVoucherLine>[
+    lines: const <StockVoucherLine>[
       StockVoucherLine(
         productId: 'prod-inverter-hybrid-10k',
-        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
         sku: 'INV-ASW10K-H',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 1,
       ),
     ],
   ),
   StockVoucherDetail(
     id: 'pk-n-0118',
-    ma: 'PK-N-0118',
-    type: 'nhap',
-    createdAt: '2026-07-02T02:00:00.000Z',
-    nguoiTao: _kKho,
-    soDong: 1,
-    tongSoLuong: 5,
+    code: 'PK-N-0118',
+    type: StockVoucherDetailDtoType.nhap,
+    createdAt: DateTime.utc(2026, 7, 2, 2, 0),
+    createdBy: _kKho,
+    lineCount: 1,
+    totalQty: 5,
     note: 'Tồn đầu kỳ',
-    lines: <StockVoucherLine>[
+    canReturn: false,
+    lines: const <StockVoucherLine>[
       StockVoucherLine(
         productId: 'prod-inverter-hybrid-10k',
-        ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+        name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
         sku: 'INV-ASW10K-H',
-        donVi: 'bộ',
+        unit: 'bộ',
         qty: 5,
         unitCost: 18500000,
       ),
@@ -134,19 +137,19 @@ const StockVoucherPortException kFakeInsufficientStockError =
 
 StockVoucherSummary _tomTat(StockVoucherDetail d) => StockVoucherSummary(
       id: d.id,
-      ma: d.ma,
-      type: d.type,
+      code: d.code,
+      type: StockVoucherSummaryDtoType.fromJson(d.type.json ?? ''),
       orderId: d.orderId,
       createdAt: d.createdAt,
-      nguoiTao: d.nguoiTao,
-      soDong: d.soDong,
-      tongSoLuong: d.tongSoLuong,
+      createdBy: d.createdBy,
+      lineCount: d.lineCount,
+      totalQty: d.totalQty,
       returnOfVoucherId: d.returnOfVoucherId,
     );
 
 class FakeStockVouchersPort implements StockVouchersPort {
-  FakeStockVouchersPort([List<StockVoucherDetail> data = kDemoStockVouchers])
-      : _data = List<StockVoucherDetail>.of(data);
+  FakeStockVouchersPort([List<StockVoucherDetail>? data])
+      : _data = List<StockVoucherDetail>.of(data ?? kDemoStockVouchers);
 
   final List<StockVoucherDetail> _data;
 
@@ -155,7 +158,7 @@ class FakeStockVouchersPort implements StockVouchersPort {
     return StockVoucherList(
       items: <StockVoucherSummary>[
         for (final StockVoucherDetail d in _data)
-          if ((type == null || d.type == type) &&
+          if ((type == null || d.type.json == type) &&
               (isReturn == null || (d.returnOfVoucherId != null) == isReturn))
             _tomTat(d),
       ],
@@ -173,7 +176,7 @@ class FakeStockVouchersPort implements StockVouchersPort {
   @override
   Future<StockVoucherDetail> createVoucher(
       CreateStockVoucherInput input) async {
-    if (input.type == 'xuat' &&
+    if (input.type == CreateStockVoucherRequestDtoType.xuat &&
         input.lines.any(
           (CreateStockVoucherLineInput l) =>
               l.productId == kFakeOutOfStockProductId,
@@ -183,16 +186,17 @@ class FakeStockVouchersPort implements StockVouchersPort {
     // A canned answer shaped like the backend's — the demo screen needs a row to select.
     final StockVoucherDetail moi = StockVoucherDetail(
       id: 'pk-demo-${_data.length + 1}',
-      ma: input.type == 'nhap' ? 'PK-N-0120' : 'PK-X-0097',
-      type: input.type,
-      createdAt: '2026-10-21T03:15:00.000Z',
-      nguoiTao: _kKho,
-      soDong: input.lines.length,
-      tongSoLuong: input.lines.fold<int>(
+      code: input.type == CreateStockVoucherRequestDtoType.nhap ? 'PK-N-0120' : 'PK-X-0097',
+      type: StockVoucherDetailDtoType.fromJson(input.type.json!),
+      createdAt: DateTime.utc(2026, 10, 21, 3, 15),
+      createdBy: _kKho,
+      lineCount: input.lines.length,
+      totalQty: input.lines.fold<int>(
         0,
-        (int tong, CreateStockVoucherLineInput l) => tong + l.qty,
+        (int tong, CreateStockVoucherLineInput l) => tong + l.qty.toInt(),
       ),
       note: input.note,
+      canReturn: false,
       lines: <StockVoucherLine>[
         for (final CreateStockVoucherLineInput l in input.lines) _dong(l),
       ],
@@ -211,22 +215,23 @@ class FakeStockVouchersPort implements StockVouchersPort {
     final StockVoucherDetail origin = await getVoucher(originVoucherId);
     final StockVoucherDetail created = StockVoucherDetail(
       id: 'pk-nt-demo-${_data.length + 1}',
-      ma: 'PK-NT-0005',
-      type: 'nhap',
-      createdAt: '2026-10-21T03:15:00.000Z',
-      nguoiTao: _kKho,
-      soDong: lines.length,
-      tongSoLuong: lines.fold<int>(
+      code: 'PK-NT-0005',
+      type: StockVoucherDetailDtoType.nhap,
+      createdAt: DateTime.utc(2026, 10, 21, 3, 15),
+      createdBy: _kKho,
+      lineCount: lines.length,
+      totalQty: lines.fold<int>(
         0,
-        (int sum, CreateReturnVoucherLineInput l) => sum + l.qty,
+        (int sum, CreateReturnVoucherLineInput l) => sum + l.qty.toInt(),
       ),
       returnOfVoucherId: origin.id,
       returnOf: StockVoucherReturnOf(
         id: origin.id,
-        ma: origin.ma,
+        code: origin.code,
         orderId: origin.orderId ?? '',
       ),
       note: note,
+      canReturn: false,
       lines: <StockVoucherLine>[
         for (final CreateReturnVoucherLineInput l in lines)
           _dong(
@@ -238,18 +243,18 @@ class FakeStockVouchersPort implements StockVouchersPort {
         _data.indexWhere((StockVoucherDetail d) => d.id == origin.id);
     _data[at] = StockVoucherDetail(
       id: origin.id,
-      ma: origin.ma,
+      code: origin.code,
       type: origin.type,
       orderId: origin.orderId,
       createdAt: origin.createdAt,
-      nguoiTao: origin.nguoiTao,
-      soDong: origin.soDong,
-      tongSoLuong: origin.tongSoLuong,
+      createdBy: origin.createdBy,
+      lineCount: origin.lineCount,
+      totalQty: origin.totalQty,
       returnOfVoucherId: origin.returnOfVoucherId,
       note: origin.note,
       lines: origin.lines,
       returnOf: origin.returnOf,
-      returnVoucher: StockVoucherReturnRef(id: created.id, ma: created.ma),
+      returnVoucher: StockVoucherReturnRef(id: created.id, code: created.code),
       canReturn: false,
     );
     _data.insert(0, created);
@@ -263,9 +268,9 @@ class FakeStockVouchersPort implements StockVouchersPort {
     }
     return StockVoucherLine(
       productId: l.productId,
-      ten: sp?.ten ?? l.productId,
+      name: sp?.name ?? l.productId,
       sku: sp?.sku ?? '',
-      donVi: sp?.donVi ?? '',
+      unit: sp?.unit ?? '',
       qty: l.qty,
       unitCost: l.unitCost,
     );

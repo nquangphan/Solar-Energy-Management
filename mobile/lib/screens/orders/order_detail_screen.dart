@@ -97,18 +97,23 @@ class OrderDetailScreen extends StatefulWidget {
   final String orderId;
   final VoidCallback? onBack;
 
+  // Each action below opens a screen that WRITES (a transition, a payment that may
+  // move the status, a contract, an invoice). Its future completes when that
+  // screen closes; the order is then read again — the screen pushed on top kept
+  // this one alive with the old status and buttons (Story 10.8).
+
   /// Opens the status-change screen (Story 5.5). Null = the button never renders.
-  final VoidCallback? onChangeStatus;
+  final Future<void> Function()? onChangeStatus;
 
   /// Opens the payment-schedule screen (Story 7.1). Null = the button never renders.
-  final VoidCallback? onOpenPaymentSchedule;
+  final Future<void> Function()? onOpenPaymentSchedule;
 
   /// Opens the contract screen (Story 7.3). Null = the button never renders; the
   /// caller passes it only to a user holding `contracts.generate`.
-  final VoidCallback? onOpenContracts;
+  final Future<void> Function()? onOpenContracts;
 
   /// Opens the internal-invoice screen (Story 7.4). Null = the button never renders.
-  final VoidCallback? onOpenInvoices;
+  final Future<void> Function()? onOpenInvoices;
 
   /// Injectable picker for the Ảnh tab (Story 5.6) — widget tests run without a
   /// platform channel, so the seam has to reach the shipped picker.
@@ -142,7 +147,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   // this screen and most visits never open it. Folding them into [_load] would
   // make every detail view pay for a panel nobody asked for.
   List<AttachmentItem> _anh = const <AttachmentItem>[];
-  final Map<String, Uint8List> _anhBytes = <String, Uint8List>{};
+  final Map<String, Uint8List> _photoBytes = <String, Uint8List>{};
   _LoadState _anhState = _LoadState.loading;
   bool _anhDaMo = false;
   List<XFile> _anhDaChon = const <XFile>[];
@@ -155,11 +160,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       // The previous batch is dead the moment a reload starts. Keeping it means
       // a deleted photo's bytes stay resident for the life of the screen — at
       // 10 MB a photo that adds up on a phone.
-      _anhBytes.clear();
+      _photoBytes.clear();
     });
     try {
       final List<AttachmentItem> danhSach =
-          await widget.port.listAnh(widget.orderId);
+          await widget.port.listAttachments(widget.orderId);
       if (!mounted || ticket != _anhLatest) return;
       setState(() {
         _anh = danhSach;
@@ -171,9 +176,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       for (final AttachmentItem item in danhSach) {
         try {
           final Uint8List bytes =
-              await widget.port.anhBytes(widget.orderId, item.id);
+              await widget.port.attachmentBytes(widget.orderId, item.id);
           if (!mounted || ticket != _anhLatest) return;
-          setState(() => _anhBytes[item.id] = bytes);
+          setState(() => _photoBytes[item.id] = bytes);
         } catch (_) {
           // placeholder glyph stands in
         }
@@ -196,7 +201,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (_anhDaChon.isEmpty) return;
     final List<XFile> gui = _anhDaChon;
     try {
-      await widget.port.themAnh(widget.orderId, gui);
+      await widget.port.addAttachments(widget.orderId, gui);
       if (!mounted) return;
       setState(() => _anhDaChon = const <XFile>[]);
       await _loadAnh();
@@ -218,7 +223,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       child: AppConfirmDialog(
         title: 'Xoá ảnh',
         consequence: 'Ảnh sẽ bị xoá vĩnh viễn và không khôi phục được.',
-        onConfirm: () => _xoaAnh(attachmentId),
+        onConfirm: () => _removePhoto(attachmentId),
       ),
     );
   }
@@ -234,7 +239,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final bool? daHuy = await showAppDialog<bool>(
       context: context,
       child: _HuyDonDialog(
-        onConfirm: (String lyDo) => widget.port.huyDon(widget.orderId, lyDo),
+        onConfirm: (String reason) => widget.port.cancel(widget.orderId, reason),
       ),
     );
     if (daHuy != true || !mounted) return;
@@ -243,9 +248,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     await _load();
   }
 
-  Future<void> _xoaAnh(String attachmentId) async {
+  Future<void> _removePhoto(String attachmentId) async {
     try {
-      await widget.port.xoaAnh(widget.orderId, attachmentId);
+      await widget.port.removeAttachment(widget.orderId, attachmentId);
       await _loadAnh();
     } catch (_) {
       if (!mounted) return;
@@ -304,9 +309,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (_canSeeStockIssue) _loadStockIssue();
   }
 
-  Future<void> _load() async {
+  /// Runs an action that opens a writing screen, then reads everything it may
+  /// have changed: the order and lifecycle, the stock-out ("Đã giao" issues it)
+  /// and, once opened, the photos (a transition can attach some).
+  Future<void> _openThenReload(Future<void> Function() open) async {
+    await open();
+    if (!mounted) return;
+    _load(showSkeleton: false);
+    if (_canSeeStockIssue) _loadStockIssue();
+    if (_anhDaMo) _loadAnh();
+  }
+
+  /// [showSkeleton] false = a refresh behind the order already on screen: no
+  /// skeleton flash, and a failed refresh keeps the last good view.
+  Future<void> _load({bool showSkeleton = true}) async {
     final int ticket = ++_latest;
-    setState(() => _state = _LoadState.loading);
+    final bool silent = !showSkeleton && _state == _LoadState.ready;
+    if (!silent) setState(() => _state = _LoadState.loading);
     try {
       final List<Object> results = await Future.wait(<Future<Object>>[
         widget.port.get(widget.orderId),
@@ -317,14 +336,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       setState(() {
         _order = results[0] as Order;
         final OrderLifecycle vongDoi = results[1] as OrderLifecycle;
-        _steps = vongDoi.buoc;
-        _buocKeTiep = vongDoi.buocKeTiep;
-        _coTheHuy = vongDoi.coTheHuy;
+        _steps = vongDoi.steps;
+        _buocKeTiep = vongDoi.nextSteps;
+        _coTheHuy = vongDoi.canCancel;
         _versions = results[2] as List<OrderVersionItem>;
         _state = _LoadState.ready;
       });
     } catch (error) {
-      if (!mounted || ticket != _latest) return;
+      if (!mounted || ticket != _latest || silent) return;
       // Branch on the envelope CODE, never on the message text (AD-5).
       final bool khongThay =
           error is OrderPortException && error.code == 'NOT_FOUND';
@@ -411,22 +430,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     AppButton(
                       label: 'Chuyển trạng thái',
                       variant: AppButtonVariant.primary,
-                      onPressed: widget.onChangeStatus,
+                      onPressed: () => _openThenReload(widget.onChangeStatus!),
                     ),
                   if (widget.onOpenPaymentSchedule != null)
                     AppButton(
                       label: 'Thanh toán',
-                      onPressed: widget.onOpenPaymentSchedule,
+                      onPressed: () => _openThenReload(widget.onOpenPaymentSchedule!),
                     ),
                   if (widget.onOpenContracts != null)
                     AppButton(
                       label: 'Hợp đồng',
-                      onPressed: widget.onOpenContracts,
+                      onPressed: () => _openThenReload(widget.onOpenContracts!),
                     ),
                   if (widget.onOpenInvoices != null)
                     AppButton(
                       label: 'Hoá đơn',
-                      onPressed: widget.onOpenInvoices,
+                      onPressed: () => _openThenReload(widget.onOpenInvoices!),
                     ),
                   if (_coTheHuy)
                     AppButton(
@@ -476,7 +495,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           Text(
-            '${voucher.ma} · ${ngayGio(voucher.createdAt)} · ${voucher.nguoiTao.displayName}',
+            '${voucher.code} · ${ngayGio(voucher.createdAt.toUtc().toIso8601String())} · ${voucher.createdBy.displayName}',
             style: muted,
           ),
           const SizedBox(height: AppTokens.space8),
@@ -490,11 +509,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             rows: <AppTableRow>[
               for (final StockVoucherLine l in voucher.lines)
                 AppTableRow(<Widget>[
-                  AppTableCellText(l.ten),
+                  AppTableCellText(l.name),
                   AppTableCellText('${l.qty}'),
                   if (hasCost)
                     AppTableCellText(
-                        l.unitCost != null ? formatVnd(l.unitCost!) : ''),
+                        l.unitCost != null ? formatVnd(l.unitCost!.toInt()) : ''),
                 ]),
             ],
           ),
@@ -537,13 +556,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           steps: <AppStepItem>[
             for (final OrderLifecycleStep step in _steps)
               AppStepItem(
-                label: kStatusLabels[statusKeyOf(step.status)] ?? step.status,
+                label: kStatusLabels[statusKeyOf(step.status.json ?? '')] ?? (step.status.json ?? '—'),
                 // `gate` (dashed) is deliberately never used: a step blocked by
                 // a scope flag is absent, so the dashed state has no valid case
                 // on this screen.
-                state: step.trangThai == 'done'
+                state: step.progress.json == 'done'
                     ? AppStepState.done
-                    : step.trangThai == 'current'
+                    : step.progress.json == 'current'
                         ? AppStepState.current
                         : AppStepState.upcoming,
               ),
@@ -559,7 +578,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _kv('Mã đơn', order.id, mono: true),
-        _kv('SĐT khách', order.customerSdt, mono: true),
+        _kv('SĐT khách', order.customerPhone, mono: true),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: AppTokens.space4),
           child: Row(
@@ -599,11 +618,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   spacing: AppTokens.space4,
                   runSpacing: AppTokens.space4,
                   children: <Widget>[
-                    AppScopeFlag(label: 'Thiết bị', on: order.scopeThietBi),
-                    AppScopeFlag(label: 'Thi công', on: order.scopeThiCong),
+                    AppScopeFlag(label: 'Thiết bị', on: order.scopeEquipment),
+                    AppScopeFlag(label: 'Thi công', on: order.scopeConstruction),
                     AppScopeFlag(
                       label: 'Vận chuyển',
-                      on: order.scopeVanChuyen,
+                      on: order.scopeDelivery,
                     ),
                   ],
                 ),
@@ -628,7 +647,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   Expanded(child: _value(line.name)),
                   _label('${line.qty} ${line.unit}'),
                   const SizedBox(width: AppTokens.space8),
-                  _mono(formatVnd(line.amount)),
+                  _mono(formatVnd(line.amount.toInt())),
                 ],
               ),
             );
@@ -690,15 +709,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   AppAttachmentItem(
                     id: item.id,
                     fileName: item.fileName,
-                    nguoiTaiLen: item.nguoiTaiLen,
-                    createdAt: item.createdAt,
+                    uploadedBy: item.uploadedBy,
+                    createdAt: item.createdAt.toUtc().toIso8601String(),
                     statusTo: item.statusTo,
                     buocLabel: item.statusFrom != null && item.statusTo != null
                         ? 'Bước: ${_nhanTrangThai(item.statusFrom!)} → ${_nhanTrangThai(item.statusTo!)}'
                         : null,
-                    bytes: _anhBytes[item.id],
+                    bytes: _photoBytes[item.id],
                     // Backend-computed (AD-2) — rendered, never rebuilt.
-                    coTheXoa: item.coTheXoa,
+                    canDelete: item.canDelete,
                   ),
               ],
               onDelete: _hoiXoaAnh,
@@ -765,7 +784,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             children: <Widget>[
               _value('Bản ${version.versionNo}'),
               const SizedBox(width: AppTokens.space8),
-              if (version.laBanHienLuc)
+              if (version.isCurrent)
                 // The effective-version marker reuses the canonical `dachot`
                 // triplet — teal answers "which one counts", the same question
                 // the current step answers on the stepper.
@@ -781,7 +800,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           // No invented name: a version created before the actor column existed
           // simply has no author.
           _label(
-            '${version.createdByDisplayName ?? '—'} · ${version.createdAt} · ${version.soDong} dòng',
+            '${version.createdByDisplayName ?? '—'} · ${version.createdAt.toUtc().toIso8601String()} · ${version.lineCount} dòng',
           ),
           const SizedBox(height: AppTokens.space4),
           _label(_summarise(version)),
@@ -795,12 +814,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   String _summarise(OrderVersionItem version) {
     if (version.versionNo == 1) return 'Bản gốc';
     final List<String> parts = <String>[
-      if (version.thayDoi.them.isNotEmpty)
-        'thêm ${version.thayDoi.them.length} dòng',
-      if (version.thayDoi.xoa.isNotEmpty)
-        'xoá ${version.thayDoi.xoa.length} dòng',
-      if (version.thayDoi.doiSoLuong.isNotEmpty)
-        'đổi SL ${version.thayDoi.doiSoLuong.length} dòng',
+      if (version.changes.added.isNotEmpty)
+        'thêm ${version.changes.added.length} dòng',
+      if (version.changes.removed.isNotEmpty)
+        'xoá ${version.changes.removed.length} dòng',
+      if (version.changes.qtyChanged.isNotEmpty)
+        'đổi SL ${version.changes.qtyChanged.length} dòng',
     ];
     return parts.isEmpty ? 'Không đổi dòng nào' : parts.join(' · ');
   }

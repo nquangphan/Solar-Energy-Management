@@ -15,6 +15,7 @@
 // 401 surfaces as an ApiError (the session is kept); only a failed REFRESH clears
 // the session and reports it expired.
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
@@ -73,6 +74,18 @@ class Transport {
   // The session generation that renewal belongs to: a request of a LATER session never
   // joins it (its outcome is the old session's, and a new session needs its own renewal).
   int _refreshingGeneration = 0;
+
+  /// One file part of a multipart upload, for the generated client's `List<MultipartFile>`
+  /// arguments — so an adapter never imports `package:dio`. Built from bytes, not a stream:
+  /// a 401 replay clones the FormData, and only byte-backed parts can be cloned. The
+  /// backend accepts a photo by the content type DECLARED on its part; without one Dio
+  /// would declare `application/octet-stream`.
+  MultipartFile uploadPart(Uint8List bytes, {required String fileName, String? contentType}) =>
+      MultipartFile.fromBytes(
+        bytes,
+        filename: fileName,
+        contentType: contentType == null ? null : DioMediaType.parse(contentType),
+      );
 
   /// Trades the stored refresh token for new tokens; shares an in-flight renewal.
   Future<bool> refreshSession() async => await _renewOnce() == null;

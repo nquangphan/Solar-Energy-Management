@@ -43,6 +43,34 @@ Widget _host(InventoryPort port) => MaterialApp(
     );
 
 void main() {
+  testWidgets('a stock status this build does not know is neutral "—", never "Đủ"',
+      (WidgetTester tester) async {
+    final StockList list = StockList.fromJson(<String, Object?>{
+      'items': <Object?>[
+        <String, Object?>{
+          'productId': 'prod-x',
+          'name': 'Sản phẩm trạng thái mới',
+          'sku': 'X-1',
+          'unit': 'bộ',
+          'onHand': 3,
+          'reserved': 1,
+          'available': 2,
+          'toPurchase': 0,
+          'stockStatus': 'trang_thai_moi',
+        },
+      ],
+      'purchaseList': <Object?>[],
+    });
+    expect(list.items.single.stockStatus, StockItemViewDtoStockStatus.$unknown);
+    await tester.pumpWidget(_host(FakeInventoryPort(list)));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sản phẩm trạng thái mới'), findsOneWidget);
+    expect(find.text('Đủ'), findsNothing);
+    expect(find.text('—'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('loading: cổng chưa trả lời ⇒ skeleton, chưa có thẻ nào',
       (WidgetTester tester) async {
     await tester.pumpWidget(_host(_TreoPort()));
@@ -72,7 +100,7 @@ void main() {
   testWidgets('empty: không sản phẩm nào ⇒ câu rỗng, không bảng cần mua',
       (WidgetTester tester) async {
     await tester.pumpWidget(_host(const FakeInventoryPort(
-      StockList(items: <StockItemView>[], danhSachCanMua: <CanMuaView>[]),
+      StockList(items: <StockItemView>[], purchaseList: <PurchaseNeedView>[]),
     )));
     await tester.pumpAndSettle();
 
@@ -140,17 +168,17 @@ void main() {
         items: <StockItemView>[
           StockItemView(
             productId: 'prod-pin-ae-630',
-            ten: 'Tấm pin AE 630W',
+            name: 'Tấm pin AE 630W',
             sku: 'PIN-AE-630',
-            donVi: 'tấm',
+            unit: 'tấm',
             onHand: 42,
             reserved: 14,
-            khaDung: 28,
-            canNhap: 0,
-            tinhTrang: 'du',
+            available: 28,
+            toPurchase: 0,
+            stockStatus: StockItemViewDtoStockStatus.du,
           ),
         ],
-        danhSachCanMua: <CanMuaView>[],
+        purchaseList: <PurchaseNeedView>[],
       ),
     )));
     await tester.pumpAndSettle();

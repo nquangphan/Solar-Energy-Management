@@ -26,8 +26,8 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
 import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
+import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -217,11 +217,10 @@ test('both status-change screens render the empty answer, not an error', () => {
 test('both ports declare the transition method and the 5.5 types (parity)', () => {
   const webPort = stripTsx(read(WEB_PORT));
   const dartPort = stripDart(read(MOBILE_PORT));
-  // Web follows the contract name (Story 10.5); mobile keeps its twin's until 10.8.
-  const mobTransition = mobileMethod('transition');
+  // Both follow the contract name (web Story 10.5, mobile 10.8).
 
   assert.match(webPort, /transition\(\s*orderId: string,\s*event: string,\s*files: File\[\],\s*\): Promise<StatusChangeResult>/, 'web port must declare transition');
-  assert.match(dartPort, new RegExp(`Future<StatusChangeResult> ${mobTransition}\\(`), `mobile port must declare ${mobTransition}`);
+  assert.match(dartPort, /Future<StatusChangeResult> transition\(/, 'mobile port must declare transition');
 
   for (const [type, dto] of [
     ['OrderNextStep', 'OrderNextStepDto'],
@@ -229,7 +228,7 @@ test('both ports declare the transition method and the 5.5 types (parity)', () =
     ['StatusChangeResult', 'StatusChangeResponseDto'],
   ]) {
     assert.equal(webAliasDto(webPort, type), dto, `web port must declare ${type} as the generated ${dto}`);
-    assert.ok(dartPort.includes(`class ${type}`), `mobile port must declare ${type}`);
+    assert.equal(mobileAliasDto(dartPort, type), dto, `mobile port must declare ${type} as the generated ${dto}`);
   }
 });
 
@@ -241,7 +240,8 @@ test('the OrderNextStep contract carries EXACTLY the backend fields (AD-12)', ()
   const webFields = Object.keys(generatedFields(webAliasDto(webPort, 'OrderNextStep')));
   assert.deepEqual(webFields.sort(), [...FIELDS].sort(), 'the web type must carry EXACTLY the backend fields');
 
-  const dartBody = dartPort.match(/class OrderNextStep \{([\s\S]*?)\n\}/)?.[1] ?? '';
+  assert.equal(mobileAliasDto(dartPort, 'OrderNextStep'), 'OrderNextStepDto', 'the mobile type must be the generated OrderNextStepDto');
+  const dartBody = mobileDtoSource('OrderNextStepDto').match(/class OrderNextStepDto \{([\s\S]*?)\n\}/)?.[1] ?? '';
   const dartFields = [...dartBody.matchAll(/^\s*final \w+\??\s+(\w+);/gm)].map((m) => m[1]);
   assert.deepEqual(dartFields.sort(), [...FIELDS].sort(), 'the mobile type must carry EXACTLY the backend fields');
 });

@@ -28,33 +28,36 @@ class _Port extends FakeOrdersPort {
   Future<Order> get(String id) async => Order(
         id: _kOrderId,
         status: statusKey.name,
-        customerSdt: '+84903176968',
+        customerPhone: '+84903176968',
         currentVersionId: 'ver-1',
         ownerAccountId: 'acc-1',
         sourceId: 'src-facebook',
         custType: 'CA_NHAN',
-        scopeThietBi: true,
-        scopeThiCong: true,
-        scopeVanChuyen: true,
-        vatMode: 'co_vat',
+        scopeEquipment: true,
+        scopeConstruction: true,
+        scopeDelivery: true,
+        vatMode: OrderResponseDtoVatMode.coVat,
         lineItems: const <OrderLine>[],
-        createdAt: '2026-07-18T00:00:00.000Z',
-        updatedAt: '2026-07-18T00:00:00.000Z',
+        createdAt: DateTime.utc(2026, 7, 18),
+        updatedAt: DateTime.utc(2026, 7, 18),
       );
 
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async => OrderLifecycle(
-        buoc: <OrderLifecycleStep>[
-          OrderLifecycleStep(status: statusKey.name, trangThai: 'current'),
+        steps: <OrderLifecycleStep>[
+          OrderLifecycleStep(
+            status: OrderLifecycleStepDtoStatus.fromJson(statusKey.name),
+            progress: OrderLifecycleStepDtoProgress.current,
+          ),
         ],
-        buocKeTiep: const <OrderNextStep>[
+        nextSteps: const <OrderNextStep>[
           OrderNextStep(
             event: 'bat_dau_thi_cong',
-            to: 'thicong',
+            to: OrderNextStepDtoTo.thicong,
             requires: 'quotes.create_edit',
           ),
         ],
-        coTheHuy: true,
+        canCancel: true,
       );
 
   @override
@@ -68,7 +71,7 @@ Widget _host(StatusKey key) => MaterialApp(
           key: ValueKey<StatusKey>(key),
           port: _Port(key),
           orderId: _kOrderId,
-          onChangeStatus: () {},
+          onChangeStatus: () async {},
         ),
       ),
     );

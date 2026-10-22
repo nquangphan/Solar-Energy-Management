@@ -8,14 +8,22 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/api/session_store.dart';
+import 'package:pns_mobile/app/app_ports.dart';
 import 'package:pns_mobile/app/pns_app.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
 import 'package:pns_mobile/design_system/session/auth_port.dart';
 import 'package:pns_mobile/design_system/shell/app_phone_frame.dart';
 import 'package:pns_mobile/main.dart';
+import 'package:pns_mobile/design_system/session/fake_catalog_port.dart';
+import 'package:pns_mobile/design_system/session/fake_contracts_port.dart';
 import 'package:pns_mobile/design_system/session/fake_customers_port.dart';
+import 'package:pns_mobile/design_system/session/fake_inventory_port.dart';
+import 'package:pns_mobile/design_system/session/fake_invoices_port.dart';
 import 'package:pns_mobile/design_system/session/fake_me_port.dart';
+import 'package:pns_mobile/design_system/session/fake_orders_port.dart';
 import 'package:pns_mobile/design_system/session/fake_password_port.dart';
+import 'package:pns_mobile/design_system/session/fake_payments_port.dart';
+import 'package:pns_mobile/design_system/session/fake_stock_vouchers_port.dart';
 import 'package:pns_mobile/design_system/session/fake_warranty_port.dart';
 import 'package:pns_mobile/screens/auth/forgot_password_screen.dart';
 import 'package:pns_mobile/screens/auth/login_screen.dart';
@@ -205,10 +213,19 @@ void main() {
   testWidgets('a restore that throws ⇒ Đăng nhập instead of a stuck skeleton', (tester) async {
     await tester.pumpWidget(PnsApp(
       auth: _ThrowingRestorePort(),
-      me: const FakeMePort(),
-      password: const FakePasswordPort(),
-      customers: FakeCustomersPort(),
-      warranty: const FakeWarrantyPort(),
+      ports: AppPorts(
+        me: const FakeMePort(),
+        password: const FakePasswordPort(),
+        customers: FakeCustomersPort(),
+        warranty: const FakeWarrantyPort(),
+        catalog: FakeCatalogPort(),
+        orders: FakeOrdersPort(),
+        inventory: const FakeInventoryPort(),
+        stockVouchers: FakeStockVouchersPort(),
+        payments: FakePaymentsPort(),
+        contracts: FakeContractsPort(),
+        invoices: FakeInvoicesPort(),
+      ),
     ));
     await _settle(tester);
 

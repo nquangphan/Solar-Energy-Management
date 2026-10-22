@@ -25,9 +25,9 @@ class AppAttachmentItem {
   const AppAttachmentItem({
     required this.id,
     required this.fileName,
-    required this.nguoiTaiLen,
+    required this.uploadedBy,
     required this.createdAt,
-    required this.coTheXoa,
+    required this.canDelete,
     this.statusTo,
     this.buocLabel,
     this.bytes,
@@ -35,12 +35,12 @@ class AppAttachmentItem {
 
   final String id;
   final String fileName;
-  final String nguoiTaiLen;
+  final String uploadedBy;
   final String createdAt;
 
   /// Backend-computed (uploader OR order-edit permission). The widget only
   /// renders it — rebuilding the rule here would be a second copy (AD-2).
-  final bool coTheXoa;
+  final bool canDelete;
 
   /// Null ⇒ supplementary photo, belonging to no transition.
   final String? statusTo;
@@ -54,7 +54,7 @@ class AppAttachmentItem {
 
 /// Read-only gallery for photos already stored on the server (Story 5.6, FR-24).
 ///
-/// The delete button is HIDDEN outright when [AppAttachmentItem.coTheXoa] is
+/// The delete button is HIDDEN outright when [AppAttachmentItem.canDelete] is
 /// false, never greyed out (UX-DR-22): a disabled control still advertises a
 /// capability the caller does not have. Deleting reports intent through
 /// [onDelete]; the screen owns the confirm dialog.
@@ -108,7 +108,7 @@ class AppAttachmentGallery extends StatelessWidget {
             ),
           ),
           Text(
-            item.nguoiTaiLen,
+            item.uploadedBy,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(
@@ -157,7 +157,7 @@ class AppAttachmentGallery extends StatelessWidget {
           : const AppIcon('ic-image', size: 24.0, color: _thumbGlyph),
     );
 
-    if (!item.coTheXoa) return box;
+    if (!item.canDelete) return box;
     return Stack(
       children: <Widget>[
         box,

@@ -21,7 +21,6 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -106,8 +105,7 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
 
 // (b) THE STATUS IS READ, NOT DERIVED.
 test('both screens branch on the stock status, naming all three statuses', () => {
-  const status = mobileField('StockItemViewDto', 'stockStatus');
-  for (const [name, code, field] of [['web', webCode, 'stockStatus'], ['mobile', mobileCode, status]]) {
+  for (const [name, code, field] of [['web', webCode, 'stockStatus'], ['mobile', mobileCode, 'stockStatus']]) {
     assert.ok(code.includes(field), `${name} screen must branch on ${field}`);
     for (const status of ["'du'", "'het'", "'am'"]) {
       assert.ok(code.includes(status), `${name} screen missing the ${status} branch`);

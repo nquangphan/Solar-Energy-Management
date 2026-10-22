@@ -71,12 +71,14 @@ class _Shared {
   /// The file name travels as the share title (`XFile.fromData` has no name on
   /// the test VM).
   final List<String?> titles = <String?>[];
+  final List<List<String>?> names = <List<String>?>[];
   Object? error;
 
   Future<AppShareResult> call(List<XFile> files,
-      {String? title, String? text}) async {
+      {String? title, String? text, List<String>? fileNames}) async {
     expect(files.length, 1);
     titles.add(title);
+    names.add(fileNames);
     final Object? err = error;
     if (err != null) throw err;
     return AppShareResult.shared;
@@ -231,6 +233,7 @@ void main() {
     expect(port.exportCalls, <String>[_kInvoiceId]);
     expect(port.downloadCalls, <String>[_kInvoiceId]);
     expect(shared.titles, <String?>['hoa-don-HD-2026-0001.pdf']);
+    expect(shared.names, <List<String>?>[<String>['hoa-don-HD-2026-0001.pdf']]);
     expect(port.getInvoiceCalls.length, 2);
     expect(find.text('Đã xuất PDF · 22/10/2026'), findsOneWidget);
     expect(find.byType(AppBanner), findsOneWidget); // only the info banner

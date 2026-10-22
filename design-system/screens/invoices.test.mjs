@@ -337,11 +337,12 @@ test('"Xuất PDF" goes export → download → share through the port, once, wi
 test('detail amounts render only through the money component', () => {
   for (const field of ['subtotal', 'discountAmount', 'vatAmount', 'total']) {
     assert.match(webDetailCode, new RegExp(`<Money value=\\{invoice\\.${field}\\}\\s*/>`), `web:detail ${field}`);
-    assert.match(mobileDetailCode, new RegExp(`MoneyText\\(i\\.${field}\\)`), `mobile:detail ${field}`);
+    // `.toInt()` turns the generated `num` into the component's `int` — a type change, not arithmetic.
+    assert.match(mobileDetailCode, new RegExp(`MoneyText\\(i\\.${field}\\.toInt\\(\\)\\)`), `mobile:detail ${field}`);
   }
   assert.match(webDetailCode, /<Money value=\{line\.unitPrice\}\s*\/>/);
   assert.match(webDetailCode, /<Money value=\{line\.amount\}\s*\/>/);
-  assert.match(mobileDetailCode, /MoneyText\(line\.amount\)/);
+  assert.match(mobileDetailCode, /MoneyText\(line\.amount\.toInt\(\)\)/);
   for (const [name, code] of details) {
     assert.ok(
       !new RegExp(`\\$\\{[^}]*${MONEY}[^}]*\\}`, 'i').test(code),

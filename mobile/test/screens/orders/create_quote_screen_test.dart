@@ -10,6 +10,7 @@
 // that a backend rejection reaches the user in the BACKEND'S words.
 
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,29 @@ class _ManualPreviewPort extends FakeOrdersPort {
     final Completer<OrderTotals> completer = Completer<OrderTotals>();
     pendingPreviews.add(completer);
     return completer.future;
+  }
+}
+
+/// Orders come back with a `vatMode` this build does not know; every preview
+/// request is recorded.
+class _UnknownVatPort extends FakeOrdersPort {
+  final List<PreviewTotalInput> previews = <PreviewTotalInput>[];
+
+  Order _unknownVat(Order o) => Order.fromJson(<String, Object?>{
+        ...jsonDecode(jsonEncode(o.toJson())) as Map<String, Object?>,
+        'vatMode': 'loai_moi',
+      });
+
+  @override
+  Future<Order> create(CreateOrderInput input) async => _unknownVat(await super.create(input));
+
+  @override
+  Future<Order> get(String id) async => _unknownVat(await super.get(id));
+
+  @override
+  Future<OrderTotals> previewTotal(PreviewTotalInput input) {
+    previews.add(input);
+    return super.previewTotal(input);
   }
 }
 
@@ -326,6 +350,20 @@ CreateQuoteScreen _screen({
 
 void main() {
   group('CreateQuoteScreen (Story 4.1)', () {
+    testWidgets('an order vatMode this build does not know is left out of the preview, never echoed',
+        (WidgetTester tester) async {
+      final _UnknownVatPort port = _UnknownVatPort();
+      await tester.pumpWidget(_host(_screen(ordersPort: port)));
+      await tester.pumpAndSettle();
+      await _pickDemoCustomer(tester);
+
+      expect(port.previews, isNotEmpty);
+      for (final PreviewTotalInput p in port.previews) {
+        expect(p.vatMode, isNull);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets(
         'renders: step 1 is the reused pick screen, chọn khách → giỏ hàng rỗng',
         (WidgetTester tester) async {
@@ -450,6 +488,7 @@ void main() {
       // Preview MỚI NHẤT (qty 2) về TRƯỚC.
       port.pendingPreviews[2].complete(const OrderTotals(
           subtotal: 4900000,
+          discountAmount: 0,
           vatAmount: 392000,
           total: 5292000,
           vatRate: 8,
@@ -462,12 +501,13 @@ void main() {
       // cả hai, số mới giữ nguyên trên màn.
       port.pendingPreviews[1].complete(const OrderTotals(
           subtotal: 2450000,
+          discountAmount: 0,
           vatAmount: 196000,
           total: 2646000,
           vatRate: 8,
           applyVat: true));
       port.pendingPreviews[0].complete(const OrderTotals(
-          subtotal: 0, vatAmount: 0, total: 0, vatRate: 8, applyVat: true));
+          subtotal: 0, discountAmount: 0, vatAmount: 0, total: 0, vatRate: 8, applyVat: true));
       await tester.pumpAndSettle();
 
       expect(find.text('5.292.000 đ'), findsOneWidget);
@@ -676,8 +716,8 @@ void main() {
       expect(_flagOn(tester, 'Thi công'), isTrue);
       // Partial đúng nghĩa: CHỈ cờ user chạm đi ra port, cờ kia để null.
       expect(port.scopeCalls, hasLength(1));
-      expect(port.scopeCalls.single.scopeThiCong, isTrue);
-      expect(port.scopeCalls.single.scopeVanChuyen, isNull);
+      expect(port.scopeCalls.single.scopeConstruction, isTrue);
+      expect(port.scopeCalls.single.scopeDelivery, isNull);
       // Cờ Thiết bị không suy suyển — và không có Checkbox nào để tắt nó.
       expect(_flagOn(tester, 'Thiết bị'), isTrue);
       expect(find.widgetWithText(AppCheckbox, 'Thiết bị'), findsNothing);
@@ -1352,12 +1392,15 @@ void main() {
         (WidgetTester tester) async {
       final _RecordingExportPort port = _RecordingExportPort();
       final List<List<XFile>> shared = <List<XFile>>[];
+      final List<List<String>?> names = <List<String>?>[];
       Future<AppShareResult> recordingShare(
         List<XFile> files, {
         String? title,
         String? text,
+        List<String>? fileNames,
       }) async {
         shared.add(files);
+        names.add(fileNames);
         return AppShareResult.shared;
       }
 
@@ -1374,14 +1417,17 @@ void main() {
 
       // Fake nhận ĐÚNG một lần cho đúng đơn.
       expect(port.exportCalls, hasLength(1));
-      // shareImpl nhận đúng 2 file, ẢNH đứng TRƯỚC pdf (UX-DR-21). Thứ tự pin
-      // bằng mimeType — XFile.fromData không expose lại `name` (getter rỗng
-      // khi không có path), nên không assert tên file ở đây.
+      // shareImpl nhận đúng 2 file, ẢNH đứng TRƯỚC pdf (UX-DR-21). XFile.fromData
+      // không giữ `name` trên IO (getter lấy từ path rỗng), nên tên đi qua
+      // `fileNames` (share_plus fileNameOverrides) — đúng tên backend đặt.
       expect(shared, hasLength(1));
       final List<XFile> files = shared.single;
       expect(files, hasLength(2));
       expect(files[0].mimeType, 'image/png');
       expect(files[1].mimeType, 'application/pdf');
+      expect(names.single, hasLength(2));
+      expect(names.single![0], endsWith('.png'));
+      expect(names.single![1], endsWith('.pdf'));
     });
 
     testWidgets(
@@ -1425,6 +1471,7 @@ void main() {
         List<XFile> files, {
         String? title,
         String? text,
+        List<String>? fileNames,
       }) async {
         shared.add(files);
         return AppShareResult.shared;

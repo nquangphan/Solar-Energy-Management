@@ -39,12 +39,18 @@ class InventoryScreen extends StatefulWidget {
     required this.port,
     this.onOpenVouchers,
     this.perms = const <PermissionKey>{},
+    this.reloadSignal,
   });
 
   final InventoryPort port;
 
-  /// Opens the Phiếu kho screen. No router yet ⇒ a callback; null ⇒ no entry point.
-  final VoidCallback? onOpenVouchers;
+  /// Notified when the stock must read again although Phiếu kho did not report
+  /// back: the Kho tab was tapped over it.
+  final Listenable? reloadSignal;
+
+  /// Opens the Phiếu kho screen; null ⇒ no entry point. Its future completes when
+  /// that screen closes, and the stock is read again — a voucher moves `onHand`.
+  final Future<void> Function()? onOpenVouchers;
 
   /// Effective permission set (mobile has no permissions context yet, so the
   /// host injects it). Default `{}` = the Phiếu kho entry hidden — fail-closed.
@@ -61,7 +67,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
   @override
   void initState() {
     super.initState();
+    widget.reloadSignal?.addListener(_tai);
     _tai();
+  }
+
+  @override
+  void didUpdateWidget(InventoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.reloadSignal != widget.reloadSignal) {
+      oldWidget.reloadSignal?.removeListener(_tai);
+      widget.reloadSignal?.addListener(_tai);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.reloadSignal?.removeListener(_tai);
+    super.dispose();
+  }
+
+  Future<void> _openVouchers() async {
+    await widget.onOpenVouchers!();
+    if (mounted) _tai();
   }
 
   Future<void> _tai() async {
@@ -83,7 +110,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   Widget _chipTinhTrang(StockItemView item) {
     late final String label;
     late final Color mau;
-    switch (item.tinhTrang) {
+    switch (item.stockStatus.json) {
       case 'am':
         label = 'Âm';
         mau = AppTokens.danger;
@@ -91,9 +118,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
         label = 'Hết khả dụng';
         mau = AppTokens.warn;
       case 'du':
-      default:
         label = 'Đủ';
         mau = AppTokens.ok;
+      default:
+        // A status this build does not know yet: neutral, never "Đủ".
+        label = '—';
+        mau = AppTokens.muted;
     }
     return AppChip(
       label: label,
@@ -105,7 +135,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   /// The card border follows the status the backend sent — never the numbers.
   AppCardVariant _vien(StockItemView item) {
-    switch (item.tinhTrang) {
+    switch (item.stockStatus.json) {
       case 'am':
         return AppCardVariant.danger;
       case 'het':
@@ -118,14 +148,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   /// TWIN of `tomTat()` in the web screen — byte-identical wording.
   String _tomTat(StockItemView item) {
     final String dau = 'Còn ${item.onHand} · Đã hứa ${item.reserved}';
-    if (item.tinhTrang == 'am') {
-      return '$dau · Cần nhập ${item.canNhap} ${item.donVi}';
+    if (item.stockStatus.json == 'am') {
+      return '$dau · Cần nhập ${item.toPurchase} ${item.unit}';
     }
-    return '$dau · Khả dụng ${item.khaDung} ${item.donVi}';
+    return '$dau · Khả dụng ${item.available} ${item.unit}';
   }
 
   Widget _theSanPham(StockItemView item) {
-    final bool am = item.tinhTrang == 'am';
+    final bool am = item.stockStatus.json == 'am';
     return Padding(
       padding: const EdgeInsets.only(bottom: AppTokens.space8),
       child: AppCard(
@@ -139,7 +169,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               children: <Widget>[
                 Expanded(
                   child: Text(
-                    item.ten,
+                    item.name,
                     style: const TextStyle(
                       color: AppTokens.ink,
                       fontFamily: AppTokens.fontFamily,
@@ -150,7 +180,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 ),
                 const SizedBox(width: AppTokens.space8),
                 Text(
-                  am ? 'Cần nhập ${item.canNhap}' : '${item.khaDung}',
+                  am ? 'Cần nhập ${item.toPurchase}' : '${item.available}',
                   style: TextStyle(
                     color: am ? AppTokens.danger : AppTokens.ink,
                     fontFamily: AppTokens.fontFamily,
@@ -187,7 +217,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _danhSachCanMua(List<CanMuaView> canMua) {
+  Widget _danhSachCanMua(List<PurchaseNeedView> canMua) {
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.space12),
       child: AppFrame(
@@ -198,10 +228,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
             AppTableColumn('Cần nhập', numeric: true, flex: 2),
           ],
           rows: <AppTableRow>[
-            for (final CanMuaView c in canMua)
+            for (final PurchaseNeedView c in canMua)
               AppTableRow(<Widget>[
-                AppTableCellText(c.ten, strong: true),
-                AppTableCellText('${c.canNhap} ${c.donVi}', strong: true),
+                AppTableCellText(c.name, strong: true),
+                AppTableCellText('${c.toPurchase} ${c.unit}', strong: true),
               ]),
           ],
         ),
@@ -232,8 +262,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             for (final StockItemView item in data.items) _theSanPham(item),
-            if (data.danhSachCanMua.isNotEmpty)
-              _danhSachCanMua(data.danhSachCanMua),
+            if (data.purchaseList.isNotEmpty)
+              _danhSachCanMua(data.purchaseList),
           ],
         );
     }
@@ -257,7 +287,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                onAction: widget.onOpenVouchers,
+                onAction: _openVouchers,
               )
             : const AppTopbar(eyebrow: 'KHO · 1 KHO', title: 'Tồn kho'),
         bottomNav: const AppBottomNav(activeIndex: kInventoryTabIndex),

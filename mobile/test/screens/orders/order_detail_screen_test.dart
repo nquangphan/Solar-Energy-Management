@@ -27,34 +27,34 @@ Order _order({
     Order(
       id: _kOrderId,
       status: status,
-      customerSdt: '+84903176968',
+      customerPhone: '+84903176968',
       currentVersionId: 'ver-1',
       ownerAccountId: 'acc-1',
       sourceId: 'src-facebook',
       custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: true,
-      scopeVanChuyen: true,
-      vatMode: 'co_vat',
+      scopeEquipment: true,
+      scopeConstruction: true,
+      scopeDelivery: true,
+      vatMode: OrderResponseDtoVatMode.coVat,
       lineItems: lines,
-      createdAt: '2026-07-18T00:00:00.000Z',
-      updatedAt: '2026-07-18T00:00:00.000Z',
+      createdAt: DateTime.utc(2026, 7, 18),
+      updatedAt: DateTime.utc(2026, 7, 18),
     );
 
 OrderVersionItem _version(int no, {required bool hienLuc, String? actor}) =>
     OrderVersionItem(
       id: 'ver-$no',
       versionNo: no,
-      laBanHienLuc: hienLuc,
-      createdAt: '2026-07-18T00:00:00.000Z',
-      chotAt: null,
+      isCurrent: hienLuc,
+      createdAt: DateTime.utc(2026, 7, 18),
+      confirmedAt: null,
       createdByAccountId: actor == null ? null : 'acc-1',
       createdByDisplayName: actor,
-      soDong: 3,
-      thayDoi: const OrderVersionChange(
-        them: <String>['Tủ điện DC'],
-        xoa: <String>[],
-        doiSoLuong: <OrderVersionQtyChange>[],
+      lineCount: 3,
+      changes: const OrderVersionChange(
+        added: <String>['Tủ điện DC'],
+        removed: <String>[],
+        qtyChanged: <OrderVersionQtyChange>[],
       ),
     );
 
@@ -63,33 +63,35 @@ class _StubPort extends FakeOrdersPort {
   _StubPort({
     required this.steps,
     this.versions = const <OrderVersionItem>[],
-    this.buocKeTiep = const <OrderNextStep>[],
+    this.nextSteps = const <OrderNextStep>[],
   });
 
   final List<String> steps;
   final List<OrderVersionItem> versions;
 
   /// Story 5.5: non-empty makes the "Chuyển trạng thái" button render.
-  final List<OrderNextStep> buocKeTiep;
+  final List<OrderNextStep> nextSteps;
 
   /// Story 5.7: this stub never offers cancelling — that button has its own
-  /// test file (order_detail_cancel_test.dart), where `coTheHuy` is the point.
-  static const bool coTheHuy = false;
+  /// test file (order_detail_cancel_test.dart), where `canCancel` is the point.
+  static const bool canCancel = false;
 
   @override
   Future<Order> get(String id) async => _order();
 
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async => OrderLifecycle(
-        buoc: <OrderLifecycleStep>[
+        steps: <OrderLifecycleStep>[
           for (int i = 0; i < steps.length; i++)
             OrderLifecycleStep(
-              status: steps[i],
-              trangThai: i == 0 ? 'current' : 'upcoming',
+              status: OrderLifecycleStepDtoStatus.fromJson(steps[i]),
+              progress: i == 0
+                  ? OrderLifecycleStepDtoProgress.current
+                  : OrderLifecycleStepDtoProgress.upcoming,
             ),
         ],
-        buocKeTiep: buocKeTiep,
-        coTheHuy: coTheHuy,
+        nextSteps: nextSteps,
+        canCancel: canCancel,
       );
 
   @override
@@ -147,9 +149,9 @@ class _HangingPort extends FakeOrdersPort {
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[],
-        buocKeTiep: <OrderNextStep>[],
-        coTheHuy: false,
+        steps: <OrderLifecycleStep>[],
+        nextSteps: <OrderNextStep>[],
+        canCancel: false,
       );
 
   @override
@@ -188,6 +190,24 @@ void main() {
     expect(find.text('Báo giá'), findsWidgets);
     expect(find.text('Đã chốt'), findsWidgets);
     expect(find.text('Hoàn thành'), findsWidgets);
+  });
+
+  testWidgets('a lifecycle step this build does not know renders a neutral "—", no crash',
+      (WidgetTester tester) async {
+    // A status the backend adds later parses to `$unknown` (generated enum).
+    expect(OrderLifecycleStepDtoStatus.fromJson('trang_thai_moi'),
+        OrderLifecycleStepDtoStatus.$unknown);
+    await tester.pumpWidget(
+      _host(_StubPort(steps: const <String>['baogia', 'trang_thai_moi'])),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder stepper = find.byType(AppStepper);
+    expect(find.descendant(of: stepper, matching: find.text('Báo giá')),
+        findsOneWidget);
+    expect(find.descendant(of: stepper, matching: find.text('—')),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('transport error shows the retry copy, and "Thử lại" calls again',
@@ -246,6 +266,45 @@ void main() {
     // rather than an invented name.
     expect(find.text('Bản gốc'), findsOneWidget);
     expect(find.textContaining('—'), findsWidgets);
+  });
+
+  testWidgets(
+      'a version row shows the createdAt ISO string as before — fixture DateTime.utc and a parsed …Z alike',
+      (WidgetTester tester) async {
+    // The contract type carries a DateTime now (Story 10.8); the row must keep the
+    // exact UTC ISO text it showed when the port handed over a string — not
+    // DateTime.toString() ("2026-07-18 00:00:00.000Z").
+    final OrderVersionItem parsed = OrderVersionItem.fromJson(<String, Object?>{
+      'id': 'ver-2',
+      'versionNo': 2,
+      'isCurrent': true,
+      'createdAt': '2026-07-19T08:30:00.000Z',
+      'confirmedAt': null,
+      'createdByAccountId': null,
+      'createdByDisplayName': null,
+      'lineCount': 4,
+      'changes': <String, Object?>{
+        'added': <String>[],
+        'removed': <String>[],
+        'qtyChanged': <Object?>[],
+      },
+    });
+    await tester.pumpWidget(
+      _host(
+        _StubPort(
+          steps: const <String>['baogia'],
+          versions: <OrderVersionItem>[
+            _version(1, hienLuc: false, actor: 'Nguyễn Quản Lý'),
+            parsed,
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Lịch sử update'));
+
+    expect(find.text('Nguyễn Quản Lý · 2026-07-18T00:00:00.000Z · 3 dòng'), findsOneWidget);
+    expect(find.text('— · 2026-07-19T08:30:00.000Z · 4 dòng'), findsOneWidget);
   });
 
   testWidgets('empty history shows the empty state, not a blank pane',
@@ -372,16 +431,16 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(
             steps: const <String>['baogia', 'dachot'],
-            buocKeTiep: const <OrderNextStep>[
+            nextSteps: const <OrderNextStep>[
               OrderNextStep(
                 event: 'bat_dau_thi_cong',
-                to: 'thicong',
+                to: OrderNextStepDtoTo.thicong,
                 requires: 'construction.transition',
               ),
             ],
           ),
           orderId: _kOrderId,
-          onChangeStatus: () => daBam = true,
+          onChangeStatus: () async => daBam = true,
         ),
       ),
     );
@@ -401,7 +460,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onChangeStatus: () {},
+          onChangeStatus: () async {},
         ),
       ),
     );
@@ -422,10 +481,10 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(
             steps: const <String>['baogia', 'dachot'],
-            buocKeTiep: const <OrderNextStep>[
+            nextSteps: const <OrderNextStep>[
               OrderNextStep(
                 event: 'bat_dau_thi_cong',
-                to: 'thicong',
+                to: OrderNextStepDtoTo.thicong,
                 requires: 'construction.transition',
               ),
             ],
@@ -448,7 +507,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onOpenPaymentSchedule: () => opened = true,
+          onOpenPaymentSchedule: () async => opened = true,
         ),
       ),
     );
@@ -467,7 +526,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onChangeStatus: () {},
+          onChangeStatus: () async {},
         ),
       ),
     );
@@ -487,7 +546,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onOpenContracts: () => opened = true,
+          onOpenContracts: () async => opened = true,
         ),
       ),
     );
@@ -508,8 +567,8 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onOpenPaymentSchedule: () {},
-          onChangeStatus: () {},
+          onOpenPaymentSchedule: () async {},
+          onChangeStatus: () async {},
         ),
       ),
     );
@@ -528,7 +587,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onOpenInvoices: () => opened += 1,
+          onOpenInvoices: () async => opened += 1,
         ),
       ),
     );
@@ -548,7 +607,7 @@ void main() {
         home: OrderDetailScreen(
           port: _StubPort(steps: const <String>['baogia', 'dachot']),
           orderId: _kOrderId,
-          onOpenContracts: () {},
+          onOpenContracts: () async {},
         ),
       ),
     );

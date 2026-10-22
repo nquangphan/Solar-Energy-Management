@@ -8,74 +8,24 @@
 
 import 'dart:typed_data';
 
-/// Mirrors `ContractSummaryDto`.
-class ContractSummary {
-  const ContractSummary({
-    required this.id,
-    required this.contractNo,
-    required this.contractType,
-    required this.versionNo,
-    required this.fileName,
-    required this.pdfSize,
-    required this.createdAt,
-  });
+import '../../api/generated/models/contract_response_dto.dart';
+import '../../api/generated/models/contracts_overview_response_dto.dart';
 
-  final String id;
+export '../../api/generated/models/contract_response_dto_contract_type.dart';
+export '../../api/generated/models/contracts_overview_response_dto_contract_type.dart';
 
-  /// e.g. `HĐMB-123456/2026`.
-  final String contractNo;
+/// `ContractResponseDto` (generated, Story 10.8). `contractNo` e.g.
+/// `HĐMB-123456/2026`; `contractType` is `construction` | `sale`; `fileName` is
+/// ASCII without extension; `pdfSize` in bytes.
+typedef ContractSummary = ContractResponseDto;
 
-  /// `construction` | `sale`.
-  final String contractType;
-  final int versionNo;
+/// `ContractsOverviewResponseDto`. `orderTotal` is whole đồng computed by the
+/// backend; `missingPartyFields` are labels of the legal-entity fields still
+/// blank; `contracts` newest first.
+typedef ContractsOverview = ContractsOverviewResponseDto;
 
-  /// ASCII, without extension.
-  final String fileName;
-
-  /// Bytes.
-  final int pdfSize;
-
-  /// ISO-8601 UTC.
-  final String createdAt;
-}
-
-/// Mirrors `ContractsOverviewDto`.
-class ContractsOverview {
-  const ContractsOverview({
-    required this.contractType,
-    required this.generatable,
-    this.blockedReason,
-    required this.quoteNo,
-    required this.versionNo,
-    required this.customerName,
-    required this.lineCount,
-    required this.orderTotal,
-    this.scheduleLabel,
-    required this.missingPartyFields,
-    required this.contracts,
-  });
-
-  /// `construction` | `sale`.
-  final String contractType;
-  final bool generatable;
-  final String? blockedReason;
-  final String quoteNo;
-  final int versionNo;
-  final String customerName;
-  final int lineCount;
-
-  /// Whole đồng, computed by the backend.
-  final int orderTotal;
-  final String? scheduleLabel;
-
-  /// Labels of the legal-entity fields still blank.
-  final List<String> missingPartyFields;
-
-  /// Newest first.
-  final List<ContractSummary> contracts;
-}
-
-/// The PDF of one contract, as downloaded.
+/// The PDF of one contract, as downloaded. Hand-kept: the adapter assembles it
+/// from the bytes and the contract's `fileName`; it is not a contract type.
 class ContractPdfFile {
   const ContractPdfFile({required this.bytes, required this.fileName});
 

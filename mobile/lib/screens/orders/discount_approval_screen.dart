@@ -227,7 +227,7 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(item.orderId, style: _strong),
-                                      Text(item.customerSdt,
+                                      Text(item.customerPhone,
                                           style: _microMuted),
                                       Text(item.requestedByDisplayName,
                                           style: _microMuted),
@@ -240,7 +240,7 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    MoneyText(item.amount, style: _mono),
+                                    MoneyText(item.amount.toInt(), style: _mono),
                                     const SizedBox(height: AppTokens.space4),
                                     // Chip enum key `choduyet` — label canonical
                                     // "Chờ duyệt", KHÔNG override ad-hoc.
@@ -273,11 +273,11 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 3 con số backend (AD-16) — màn hiển thị qua formatVnd, canh phải.
-          _SummaryRow(label: 'Giá gốc', value: formatVnd(selected.subtotal)),
-          _SummaryRow(label: 'Chiết khấu', value: formatVnd(selected.amount)),
+          _SummaryRow(label: 'Giá gốc', value: formatVnd(selected.subtotal.toInt())),
+          _SummaryRow(label: 'Chiết khấu', value: formatVnd(selected.amount.toInt())),
           _SummaryRow(
             label: 'Sau chiết khấu',
-            value: formatVnd(selected.afterDiscount),
+            value: formatVnd(selected.afterDiscount.toInt()),
             strong: true,
           ),
           const SizedBox(height: AppTokens.space8),
@@ -296,7 +296,7 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                     <Widget>[
                       AppTableCellText(entry.value.name),
                       AppTableCellText('${entry.value.qty}'),
-                      AppTableCellText(formatVnd(entry.value.unitPrice)),
+                      AppTableCellText(formatVnd(entry.value.unitPrice.toInt())),
                       // Biên là SỐ PORT TRẢ (integer %) — null = "—" (FR-37).
                       AppTableCellText(
                         entry.value.estimatedMarginPct == null

@@ -73,29 +73,29 @@ class _InDeliveryPort extends FakeOrdersPort {
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[],
-        buocKeTiep: <OrderNextStep>[
+        steps: <OrderLifecycleStep>[],
+        nextSteps: <OrderNextStep>[
           OrderNextStep(
             event: 'xong_giao',
-            to: 'dagiao',
+            to: OrderNextStepDtoTo.dagiao,
             requires: 'delivery.confirm',
           ),
         ],
-        coTheHuy: false,
+        canCancel: false,
       );
 
   @override
-  Future<StatusChangeResult> chuyenTrangThai(
+  Future<StatusChangeResult> transition(
     String orderId,
     String event,
-    List<XFile> anh,
+    List<XFile> files,
   ) async {
     transitionCalls += 1;
     if (transitionError != null) throw transitionError!;
     return const StatusChangeResult(
-      status: 'dagiao',
+      status: StatusChangeResponseDtoStatus.dagiao,
       occurredAt: '2026-10-21T04:00:00.000Z',
-      soAnhDaLuu: 0,
+      savedAttachmentCount: 0,
     );
   }
 
@@ -106,21 +106,21 @@ class _InDeliveryPort extends FakeOrdersPort {
   }
 }
 
-Order _order() => const Order(
+Order _order() => Order(
       id: _kOrderId,
       status: 'danggiao',
-      customerSdt: '+84903176968',
+      customerPhone: '+84903176968',
       currentVersionId: 'ver-1',
       ownerAccountId: 'acc-1',
       sourceId: 'src-facebook',
       custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: true,
-      scopeVanChuyen: true,
-      vatMode: 'co_vat',
+      scopeEquipment: true,
+      scopeConstruction: true,
+      scopeDelivery: true,
+      vatMode: OrderResponseDtoVatMode.coVat,
       lineItems: <OrderLine>[],
-      createdAt: '2026-07-18T00:00:00.000Z',
-      updatedAt: '2026-07-18T00:00:00.000Z',
+      createdAt: DateTime.utc(2026, 7, 18),
+      updatedAt: DateTime.utc(2026, 7, 18),
     );
 
 /// A fixed order for the detail screen; `issueStock` hangs until the test lets go.
@@ -137,9 +137,9 @@ class _DetailPort extends FakeOrdersPort {
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[],
-        buocKeTiep: <OrderNextStep>[],
-        coTheHuy: false,
+        steps: <OrderLifecycleStep>[],
+        nextSteps: <OrderNextStep>[],
+        canCancel: false,
       );
 
   @override
@@ -182,20 +182,20 @@ class _TwoStepPort extends FakeOrdersPort {
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async =>
       const OrderLifecycle(
-        buoc: <OrderLifecycleStep>[],
-        buocKeTiep: <OrderNextStep>[
+        steps: <OrderLifecycleStep>[],
+        nextSteps: <OrderNextStep>[
           OrderNextStep(
             event: 'bat_dau_thi_cong',
-            to: 'thicong',
+            to: OrderNextStepDtoTo.thicong,
             requires: 'construction.transition',
           ),
           OrderNextStep(
             event: 'xong_giao',
-            to: 'dagiao',
+            to: OrderNextStepDtoTo.dagiao,
             requires: 'delivery.confirm',
           ),
         ],
-        coTheHuy: false,
+        canCancel: false,
       );
 
   @override
@@ -211,13 +211,13 @@ class _TwoStepPort extends FakeOrdersPort {
   }
 
   @override
-  Future<StatusChangeResult> chuyenTrangThai(
+  Future<StatusChangeResult> transition(
     String orderId,
     String event,
     List<XFile> anh,
   ) async {
     if (transitionError != null) throw transitionError!;
-    return super.chuyenTrangThai(orderId, event, anh);
+    return super.transition(orderId, event, anh);
   }
 }
 
@@ -702,7 +702,7 @@ void main() {
   group('Equipment-only order at dachot — issue before the direct close', () {
     Future<String> confirmed(FakeOrdersPort port) async {
       final Order order = await port
-          .create(const CreateOrderInput(customerSdt: '+84903176968'));
+          .create(const CreateOrderInput(customerPhone: '+84903176968'));
       await port.confirmOrder(order.id);
       return order.id;
     }

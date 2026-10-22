@@ -18,15 +18,15 @@ const String _kOrderId = 'DH-2048';
 const String _kLongBlocked =
     'Tổng các đợt thanh toán lệch tổng đơn — sửa lịch trước khi sinh hợp đồng.';
 
-const ContractSummary _existing = ContractSummary(
+final ContractSummary _existing = ContractSummary(
   id: 'c-old',
   contractNo: 'HĐMB-123456/2026',
-  contractType: 'sale',
+  contractType: ContractResponseDtoContractType.sale,
   versionNo: 2,
   fileName: 'hop-dong-old',
   pdfSize: 2048,
   // 2026-10-21 18:30 UTC is already 22/10 in Vietnam.
-  createdAt: '2026-10-21T18:30:00.000Z',
+  createdAt: DateTime.utc(2026, 10, 21, 18, 30),
 );
 
 class _GatedPort extends FakeContractsPort {
@@ -36,26 +36,28 @@ class _GatedPort extends FakeContractsPort {
   Future<ContractSummary> generateContract(String orderId) async {
     generateCalls.add(orderId);
     await gate.future;
-    return const ContractSummary(
+    return ContractSummary(
       id: 'c-gated',
       contractNo: 'HĐMB-1/2026',
-      contractType: 'sale',
+      contractType: ContractResponseDtoContractType.sale,
       versionNo: 1,
       fileName: 'g',
       pdfSize: 1,
-      createdAt: '2026-10-22T03:00:00.000Z',
+      createdAt: DateTime.utc(2026, 10, 22, 3),
     );
   }
 }
 
 class _Shared {
   final List<String?> titles = <String?>[];
+  final List<List<String>?> names = <List<String>?>[];
   int calls = 0;
 
   Future<AppShareResult> call(List<XFile> files,
-      {String? title, String? text}) async {
+      {String? title, String? text, List<String>? fileNames}) async {
     calls += 1;
     titles.add(title);
+    names.add(fileNames);
     expect(files.length, 1);
     return AppShareResult.shared;
   }
@@ -140,6 +142,16 @@ void main() {
     expect(find.text('HĐ Mua bán'), findsNothing);
   });
 
+  testWidgets('a contractType this build does not know shows "—", never another type',
+      (WidgetTester tester) async {
+    _screen(tester);
+    await _pump(tester, FakeContractsPort(contractType: 'loai_moi'));
+    expect(find.text('—'), findsWidgets);
+    expect(find.text('HĐ Mua bán'), findsNothing);
+    expect(find.text('HĐ Thi công'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('missing legal-entity fields warn but keep the button',
       (WidgetTester tester) async {
     _screen(tester);
@@ -190,6 +202,7 @@ void main() {
     expect(port.downloadCalls.single.orderId, _kOrderId);
     expect(shared.calls, 1);
     expect(shared.titles.single, 'contract-1.pdf');
+    expect(shared.names.single, <String>['contract-1.pdf']);
     // The list was reloaded and now shows the new contract.
     expect(find.textContaining('HĐMB-123456/2026'), findsOneWidget);
     expect(find.text('Chưa sinh hợp đồng nào.'), findsNothing);
@@ -265,14 +278,14 @@ void main() {
       (WidgetTester tester) async {
     _screen(tester);
     final FakeContractsPort port =
-        FakeContractsPort(initial: const <ContractSummary>[_existing]);
+        FakeContractsPort(initial: <ContractSummary>[_existing]);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
           body: ContractsScreen(
             port: port,
             orderId: _kOrderId,
-            shareImpl: (List<XFile> files, {String? title, String? text}) =>
+            shareImpl: (List<XFile> files, {String? title, String? text, List<String>? fileNames}) =>
                 Future<AppShareResult>.error(StateError('share failed')),
           ),
         ),
@@ -290,18 +303,18 @@ void main() {
   testWidgets('history keeps the port order (newest first)',
       (WidgetTester tester) async {
     _screen(tester);
-    const ContractSummary newer = ContractSummary(
+    final ContractSummary newer = ContractSummary(
       id: 'c-new',
       contractNo: 'HĐMB-123457/2026',
-      contractType: 'sale',
+      contractType: ContractResponseDtoContractType.sale,
       versionNo: 3,
       fileName: 'hop-dong-mua-ban-123457',
       pdfSize: 2048,
-      createdAt: '2026-10-22T03:00:00.000Z',
+      createdAt: DateTime.utc(2026, 10, 22, 3),
     );
     await _pump(
       tester,
-      FakeContractsPort(initial: const <ContractSummary>[newer, _existing]),
+      FakeContractsPort(initial: <ContractSummary>[newer, _existing]),
     );
     final double newY =
         tester.getTopLeft(find.textContaining('HĐMB-123457/2026')).dy;
@@ -315,7 +328,7 @@ void main() {
     _screen(tester);
     await _pump(
       tester,
-      FakeContractsPort(initial: const <ContractSummary>[_existing]),
+      FakeContractsPort(initial: <ContractSummary>[_existing]),
     );
     expect(find.text('Hợp đồng đã sinh'.toUpperCase()), findsOneWidget);
     expect(
@@ -328,7 +341,7 @@ void main() {
       (WidgetTester tester) async {
     _screen(tester);
     final FakeContractsPort port =
-        FakeContractsPort(initial: const <ContractSummary>[_existing]);
+        FakeContractsPort(initial: <ContractSummary>[_existing]);
     final _Shared shared = _Shared();
     await _pump(tester, port, shared: shared);
 
@@ -396,7 +409,7 @@ void main() {
           'Điện thoại',
           'Tài khoản ngân hàng',
         ],
-        initial: const <ContractSummary>[_existing],
+        initial: <ContractSummary>[_existing],
       );
       await _pump(tester, port);
       expect(tester.takeException(), isNull);
@@ -414,7 +427,7 @@ void main() {
           customerName: 'N' * 80,
           generatable: false,
           blockedReason: _kLongBlocked,
-          initial: const <ContractSummary>[_existing],
+          initial: <ContractSummary>[_existing],
         ),
       );
       expect(find.text(_kLongBlocked), findsOneWidget);

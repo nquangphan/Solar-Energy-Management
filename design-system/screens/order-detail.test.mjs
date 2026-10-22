@@ -18,8 +18,8 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { WEB_TO_MOBILE_FIELD, mobileField } from '../lib/web-mobile-contract-map.mjs';
 import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
+import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -522,7 +522,6 @@ const VERSION_ITEM_FIELDS = [
   'lineCount',
   'changes',
 ];
-const mobileVersionField = (field) => mobileField('OrderVersionItemDto', field);
 
 const BACKEND_DTO = 'backend/src/orders/dto/order-version-item.dto.ts';
 const WEB_PORT = 'web/src/design-system/session/orders-port.ts';
@@ -543,17 +542,14 @@ function typeBody(code, opener) {
 test('the version-history contract carries the same fields on backend, web and mobile (AC-9, AD-12)', () => {
   const dto = typeBody(stripTsx(read(BACKEND_DTO)), 'export class OrderVersionItemDto {');
   const webDto = webAliasDto(stripTsx(read(WEB_PORT)), 'OrderVersionItem');
-  const dartType = typeBody(stripDart(read(MOBILE_PORT)), 'class OrderVersionItem {');
+  // Mobile: the port type IS the generated model (Story 10.8); its class body is read.
+  assert.equal(mobileAliasDto(stripDart(read(MOBILE_PORT)), 'OrderVersionItem'), 'OrderVersionItemDto', `${MOBILE_PORT} OrderVersionItem must be the generated OrderVersionItemDto`);
+  const dartType = typeBody(stripDart(mobileDtoSource('OrderVersionItemDto')), 'class OrderVersionItemDto {');
 
   assert.equal(webDto, 'OrderVersionItemDto', `${WEB_PORT} OrderVersionItem must be the generated OrderVersionItemDto`);
-  assert.deepEqual(
-    Object.keys(WEB_TO_MOBILE_FIELD.OrderVersionItemDto).filter((f) => !VERSION_ITEM_FIELDS.includes(f)),
-    [],
-    'every OrderVersionItemDto entry of the web→mobile map must map a field of the contract',
-  );
   for (const field of VERSION_ITEM_FIELDS) {
     assert.match(dto, new RegExp(`\\b${field}!`), `${BACKEND_DTO} must declare ${field}`);
-    assert.match(dartType, new RegExp(`\\b${mobileVersionField(field)}\\b`), `${MOBILE_PORT} must mirror ${field} as ${mobileVersionField(field)}`);
+    assert.match(dartType, new RegExp(`\\b${field}\\b`), `mobile OrderVersionItemDto must mirror ${field}`);
   }
 
   // No side may carry a field the other two do not — an invented client field is
@@ -561,7 +557,7 @@ test('the version-history contract carries the same fields on backend, web and m
   const webFields = Object.keys(generatedFields(webDto));
   const dartFields = [...dartType.matchAll(/^\s{2}final [\w<>?]+ (\w+);/gm)].map((m) => m[1]);
   assert.deepEqual(webFields.sort(), [...VERSION_ITEM_FIELDS].sort(), 'the web type must carry EXACTLY the AC-9 fields');
-  assert.deepEqual(dartFields.sort(), VERSION_ITEM_FIELDS.map(mobileVersionField).sort(), 'the mobile type must carry EXACTLY the AC-9 fields');
+  assert.deepEqual(dartFields.sort(), [...VERSION_ITEM_FIELDS].sort(), 'the mobile type must carry EXACTLY the AC-9 fields');
 });
 
 // (h.2) Both ports must OFFER both reads. A screen can only be built on a method
@@ -571,7 +567,7 @@ test('both ports declare getLifecycle and listVersions (parity)', () => {
   const webPort = stripTsx(read(WEB_PORT));
   const dartPort = stripDart(read(MOBILE_PORT));
   // Story 5.5 widened `getLifecycle`'s return from a bare step list to
-  // `OrderLifecycle { buoc, buocKeTiep }` on BOTH platforms — one read answers
+  // `OrderLifecycle { steps, nextSteps }` on BOTH platforms — one read answers
   // both "what does the stepper draw" and "what can this caller do next".
   assert.match(webPort, /getLifecycle\(orderId: string\): Promise<OrderLifecycle>/, 'web port must declare getLifecycle');
   assert.match(webPort, /listVersions\(orderId: string\): Promise<OrderVersionItem\[\]>/, 'web port must declare listVersions');

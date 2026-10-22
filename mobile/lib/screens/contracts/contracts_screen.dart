@@ -46,9 +46,13 @@ const String _kDownloadError =
 String _generatedButNotDownloaded(String contractNo) =>
     'Đã sinh hợp đồng $contractNo nhưng chưa tải được — bấm “Tải PDF” trong danh sách.';
 
-/// Presentation-only label of a backend `contractType`.
-String contractTypeLabel(String contractType) =>
-    contractType == 'construction' ? 'HĐ Thi công' : 'HĐ Mua bán';
+/// Presentation-only label of a backend `contractType`; a type this build does
+/// not know shows the neutral `—`, never another document's name.
+String contractTypeLabel(String contractType) => switch (contractType) {
+      'construction' => 'HĐ Thi công',
+      'sale' => 'HĐ Mua bán',
+      _ => '—',
+    };
 
 /// ISO-8601 UTC ⇒ `dd/MM/yyyy` in Vietnam (UTC+7).
 String _vnDate(String iso) {
@@ -124,6 +128,7 @@ class _ContractsScreenState extends State<ContractsScreen> {
         ),
       ],
       title: file.fileName,
+      fileNames: <String>[file.fileName],
     );
   }
 
@@ -187,10 +192,10 @@ class _ContractsScreenState extends State<ContractsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _field('Loại HĐ', _text(contractTypeLabel(o.contractType))),
+            _field('Loại HĐ', _text(contractTypeLabel(o.contractType.json ?? ''))),
             _field('Hai bên', _text('A: ${o.customerName} · B: Phương Nam')),
             _field('Vật tư', _text('${o.lineCount} dòng · snapshot đơn')),
-            _field('Tổng tiền', MoneyText(o.orderTotal)),
+            _field('Tổng tiền', MoneyText(o.orderTotal.toInt())),
             _field('Lịch TT', _text(o.scheduleLabel ?? '—')),
             _field('Số BG', _text(o.quoteNo)),
           ],
@@ -203,8 +208,8 @@ class _ContractsScreenState extends State<ContractsScreen> {
           children: <Widget>[
             Expanded(
               child: Text(
-                '${c.contractNo} · ${contractTypeLabel(c.contractType)} · '
-                'Bản ${c.versionNo} · ${_vnDate(c.createdAt)}',
+                '${c.contractNo} · ${contractTypeLabel(c.contractType.json ?? '')} · '
+                'Bản ${c.versionNo} · ${_vnDate(c.createdAt.toUtc().toIso8601String())}',
                 style: _strong,
               ),
             ),

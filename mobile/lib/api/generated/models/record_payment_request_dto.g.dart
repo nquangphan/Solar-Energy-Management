@@ -12,7 +12,7 @@ RecordPaymentRequestDto _$RecordPaymentRequestDtoFromJson(
   idempotencyKey: json['idempotencyKey'] as String,
   installmentId: json['installmentId'] as String,
   amount: json['amount'] as num,
-  paidOn: DateTime.parse(json['paidOn'] as String),
+  paidOn: json['paidOn'] as String,
   method: RecordPaymentRequestDtoMethod.fromJson(json['method'] as String),
   note: json['note'] as String?,
 );
@@ -23,7 +23,7 @@ Map<String, dynamic> _$RecordPaymentRequestDtoToJson(
   'idempotencyKey': instance.idempotencyKey,
   'installmentId': instance.installmentId,
   'amount': instance.amount,
-  'paidOn': instance.paidOn.toIso8601String(),
+  'paidOn': instance.paidOn,
   'method': _$RecordPaymentRequestDtoMethodEnumMap[instance.method]!,
   'note': instance.note,
 };

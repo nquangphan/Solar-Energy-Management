@@ -6,161 +6,53 @@
 // "totals match" verdict, what is paid and every paid/unpaid status are the backend's. The input carries only what the
 // user typed: a blank number is ABSENT from the payload — never coerced to 0.
 
-/// Mirrors `PaymentResponseDto`.
-class Payment {
-  const Payment({
-    required this.id,
-    required this.installmentId,
-    required this.amount,
-    required this.paidOn,
-    required this.method,
-    this.note,
-    required this.recordedAt,
-  });
+import '../../api/generated/models/auto_transition_result_dto.dart';
+import '../../api/generated/models/installment_input_dto.dart';
+import '../../api/generated/models/installment_response_dto.dart';
+import '../../api/generated/models/payment_response_dto.dart';
+import '../../api/generated/models/payment_schedule_response_dto.dart';
+import '../../api/generated/models/record_payment_response_dto.dart';
+import '../../api/generated/models/replace_payment_schedule_request_dto.dart';
 
-  final String id;
-  final String installmentId;
+export '../../api/generated/models/auto_transition_result_dto_event.dart';
+export '../../api/generated/models/auto_transition_result_dto_outcome.dart';
+export '../../api/generated/models/installment_response_dto_milestone.dart';
+export '../../api/generated/models/installment_response_dto_status.dart';
+export '../../api/generated/models/payment_response_dto_method.dart';
+export '../../api/generated/models/payment_schedule_response_dto_payment_status.dart';
 
-  /// Whole đồng.
-  final int amount;
+/// `PaymentResponseDto` (generated, Story 10.8). `amount` is whole đồng;
+/// `paidOn` is the `YYYY-MM-DD` string as the backend sent it (the derived spec
+/// keeps calendar dates as strings — tool/generate_api.dart); `method` is
+/// `bank_transfer` | `cash`.
+typedef Payment = PaymentResponseDto;
 
-  /// `YYYY-MM-DD`.
-  final String paidOn;
+/// `InstallmentResponseDto`. `percent` is null when the installment was typed
+/// as an amount; `amount`/`paidAmount`/`remainingAmount` are whole đồng computed
+/// by the backend; `milestone` is `coc` (first) | `tat_toan` (last) | null;
+/// `status` is `unpaid` | `partial` | `paid`; `payments` are ordered by payment
+/// date, then recording time.
+typedef Installment = InstallmentResponseDto;
 
-  /// `bank_transfer` | `cash`.
-  final String method;
-  final String? note;
+/// `PaymentScheduleResponseDto`. `editable` and `recordable` are decided by the
+/// backend (the record button also needs `payments.record`); `difference` and
+/// `remainingTotal` may be negative; `paidPercent` is floored by the backend;
+/// `updatedAt` is null while unconfigured.
+typedef PaymentSchedule = PaymentScheduleResponseDto;
 
-  /// ISO-8601 UTC.
-  final String recordedAt;
-}
-
-/// Mirrors `InstallmentResponseDto`.
-class Installment {
-  const Installment({
-    required this.id,
-    required this.seq,
-    this.percent,
-    required this.amount,
-    required this.conditionNote,
-    this.milestone,
-    required this.paidAmount,
-    required this.remainingAmount,
-    required this.status,
-    required this.payments,
-  });
-
-  /// Sent back when recording a payment against this installment.
-  final String id;
-
-  /// 1-based position in the schedule.
-  final int seq;
-
-  /// Null when the installment was typed as an amount.
-  final int? percent;
-
-  /// Whole đồng, computed by the backend.
-  final int amount;
-  final String conditionNote;
-
-  /// `coc` (first) | `tat_toan` (last) | null.
-  final String? milestone;
-
-  /// Whole đồng collected / still owed on this installment, computed by the backend.
-  final int paidAmount;
-  final int remainingAmount;
-
-  /// `unpaid` | `partial` | `paid`.
-  final String status;
-
-  /// Ordered by payment date, then recording time.
-  final List<Payment> payments;
-}
-
-/// Mirrors `PaymentScheduleResponseDto`.
-class PaymentSchedule {
-  const PaymentSchedule({
-    required this.orderId,
-    required this.configured,
-    required this.editable,
-    required this.orderTotal,
-    required this.scheduledTotal,
-    required this.difference,
-    required this.totalMatches,
-    required this.paidTotal,
-    required this.remainingTotal,
-    required this.paidPercent,
-    required this.paymentStatus,
-    required this.recordable,
-    required this.installments,
-    this.updatedAt,
-  });
-
-  final String orderId;
-  final bool configured;
-
-  /// Decided by the backend; the client never derives it from the order status.
-  final bool editable;
-
-  /// Order total after VAT, whole đồng.
-  final int orderTotal;
-  final int scheduledTotal;
-
-  /// `orderTotal - scheduledTotal`; may be negative.
-  final int difference;
-  final bool totalMatches;
-
-  /// Whole đồng collected on the order; `orderTotal - paidTotal` (may be negative).
-  final int paidTotal;
-  final int remainingTotal;
-
-  /// Whole percent paid, floored by the backend.
-  final int paidPercent;
-
-  /// `unpaid` | `partial` | `paid`.
-  final String paymentStatus;
-
-  /// Decided by the backend: the order accepts payments. The button also needs
-  /// `payments.record`.
-  final bool recordable;
-  final List<Installment> installments;
-
-  /// ISO-8601 UTC; null while unconfigured.
-  final String? updatedAt;
-}
-
-/// One typed installment. A null [percent] / [amount] is omitted from the wire
-/// payload (blank ≠ 0); the backend answers 400 `exactlyOneOf`.
-class InstallmentInput {
-  const InstallmentInput(
-      {this.percent, this.amount, required this.conditionNote});
-
-  final int? percent;
-  final int? amount;
-  final String conditionNote;
-
-  Map<String, Object> toJson() => <String, Object>{
-        if (percent != null) 'percent': percent!,
-        if (amount != null) 'amount': amount!,
-        'conditionNote': conditionNote,
-      };
-}
+/// One typed installment. A null `percent` / `amount` means blank (never 0);
+/// the backend reads a null as absent and answers 400 `exactlyOneOf`.
+typedef InstallmentInput = InstallmentInputDto;
 
 /// Body of `PUT /orders/:id/payment-schedule`.
-class ReplacePaymentScheduleInput {
-  const ReplacePaymentScheduleInput({required this.installments});
-
-  final List<InstallmentInput> installments;
-
-  Map<String, Object> toJson() => <String, Object>{
-        'installments': <Map<String, Object>>[
-          for (final InstallmentInput i in installments) i.toJson(),
-        ],
-      };
-}
+typedef ReplacePaymentScheduleInput = ReplacePaymentScheduleRequestDto;
 
 /// Body of `POST /orders/:id/payments`. [idempotencyKey] is generated ONCE per
 /// opened form and re-sent on every retry. A null [amount] is omitted (blank ≠ 0).
+///
+/// Hand-kept: the generated `RecordPaymentRequestDto` requires `amount`, and a
+/// blank amount must never become a number the user did not type. The adapter
+/// refuses a null [amount] with the backend's own field error, sending nothing.
 class RecordPaymentInput {
   const RecordPaymentInput({
     required this.idempotencyKey,
@@ -188,43 +80,18 @@ class RecordPaymentInput {
       };
 }
 
-/// Mirrors `AutoTransitionResultDto`.
-class AutoTransitionResult {
-  const AutoTransitionResult({
-    required this.event,
-    required this.outcome,
-    this.message,
-  });
+/// `AutoTransitionResultDto`. `event` is `du_coc` | `hoan_thanh`; `outcome` is
+/// `applied` | `already` | `skipped` (money still recorded).
+typedef AutoTransitionResult = AutoTransitionResultDto;
 
-  /// `du_coc` | `hoan_thanh`.
-  final String event;
-
-  /// `applied` | `already` | `skipped` (money still recorded).
-  final String outcome;
-  final String? message;
-}
-
-/// Mirrors `RecordPaymentResponseDto`.
-class RecordPaymentResult {
-  const RecordPaymentResult({
-    required this.payment,
-    required this.schedule,
-    required this.orderStatus,
-    this.autoTransition,
-  });
-
-  final Payment payment;
-
-  /// The schedule as it is after this payment.
-  final PaymentSchedule schedule;
-  final String orderStatus;
-
-  /// Null when no milestone was reached, and always null on a retry of the same key.
-  final AutoTransitionResult? autoTransition;
-}
+/// `RecordPaymentResponseDto`. `schedule` is the schedule as it is after this
+/// payment; `autoTransition` is null when no milestone was reached, and always
+/// null on a retry of the same key.
+typedef RecordPaymentResult = RecordPaymentResponseDto;
 
 /// One `fieldErrors[]` entry. [field] is the backend path, e.g.
-/// `installments.0.percent` or plain `installments`.
+/// `installments.0.percent` or plain `installments`. Hand-kept: the payload of
+/// [PaymentsPortError], not a response type.
 class FieldError {
   const FieldError({
     required this.field,

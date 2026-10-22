@@ -31,7 +31,7 @@ class RecordPaymentRequestDto {
   final num amount;
 
   /// Ngày thu YYYY-MM-DD, không sau hôm nay (giờ Việt Nam).
-  final DateTime paidOn;
+  final String paidOn;
   final RecordPaymentRequestDtoMethod method;
 
   /// Ghi chú, tối đa 200 ký tự sau khi bỏ khoảng trắng hai đầu.

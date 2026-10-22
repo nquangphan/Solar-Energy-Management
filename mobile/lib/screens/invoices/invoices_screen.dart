@@ -174,7 +174,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
             _field('Nguồn', _text('Bản ${o.versionNo} (snapshot)')),
             _field('Khách hàng', _text(o.customerName)),
             _field('MST khách', _text(o.customerTaxCode ?? 'Không có MST')),
-            _field('Tổng tiền', MoneyText(o.orderTotal)),
+            _field('Tổng tiền', MoneyText(o.orderTotal.toInt())),
             _field('Số HĐ nội bộ', _text('Tự cấp khi tạo')),
           ],
         ),
@@ -191,7 +191,7 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
               ),
             ),
             const SizedBox(width: AppTokens.space8),
-            MoneyText(i.total),
+            MoneyText(i.total.toInt()),
             if (widget.onOpenInvoice != null) ...<Widget>[
               const SizedBox(width: AppTokens.space8),
               AppButton(

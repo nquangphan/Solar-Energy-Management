@@ -129,7 +129,7 @@ test('the screens talk only to their port (no fetch/http, no DB, no other sessio
 
 test('the total renders only through the money component', () => {
   assert.match(webCode, /<Money value=\{overview\.orderTotal\}\s*\/>/);
-  assert.match(mobileCode, /MoneyText\(o\.orderTotal\)/);
+  assert.match(mobileCode, /MoneyText\(o\.orderTotal\.toInt\(\)\)/);
   for (const [name, code] of screens) {
     assert.ok(!/\$\{[^}]*orderTotal[^}]*\}/.test(code), `${name} must not interpolate orderTotal as text`);
     assert.ok(!/toLocaleString|Intl\.|NumberFormat/.test(code), `${name} must not format money itself`);

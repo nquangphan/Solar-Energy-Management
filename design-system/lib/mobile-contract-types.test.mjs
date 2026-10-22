@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { mobileAliasDto, mobileClassFields, mobileDtoFields } from './mobile-contract-types.mjs';
+import { mobileAliasDto, mobileClassFields, mobileDtoFields, mobileDtoSource } from './mobile-contract-types.mjs';
 
 test('the spec reader sees the DTO (not blind)', () => {
   const fields = mobileDtoFields('CustomerResponseDto');
@@ -41,4 +41,10 @@ test('mobileClassFields reads own and inherited final fields', () => {
   assert.deepEqual(mobileClassFields(src, 'Child'), ['id', 'items', 'warrantyMonths']);
   assert.throws(() => mobileClassFields('class Empty {\n  const Empty();\n}', 'Empty'), /reader went blind/);
   assert.throws(() => mobileClassFields(src, 'Missing'), /no class Missing/);
+});
+
+test('mobileDtoSource reads the generated model class, and only a generated one', () => {
+  assert.match(mobileDtoSource('OrderResponseDto'), /^class OrderResponseDto \{$/m);
+  assert.match(mobileDtoSource('OrderResponseDto'), /final num\? kWp;/);
+  assert.throws(() => mobileDtoSource('NoSuchDto'), /not a generated model/);
 });

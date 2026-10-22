@@ -7,7 +7,7 @@
 // dialog opens, or that confirming is blocked until a reason is typed. Those are
 // asserted here.
 //
-// THE MOST IMPORTANT CASE IS `coTheHuy: true` WITH AN EMPTY `buocKeTiep`. That is
+// THE MOST IMPORTANT CASE IS `canCancel: true` WITH AN EMPTY `buocKeTiep`. That is
 // the real shape at 'baogia' — the status orders are cancelled from most often —
 // and it is exactly the shape a shared `buocKeTiep.isNotEmpty` wrapper would
 // render as nothing at all.
@@ -24,31 +24,31 @@ const String _kOrderId = 'ord-huy-1';
 Order _order({String status = 'baogia', String? cancelReason}) => Order(
       id: _kOrderId,
       status: status,
-      customerSdt: '+84903176968',
+      customerPhone: '+84903176968',
       currentVersionId: 'ver-1',
       ownerAccountId: 'acc-1',
       sourceId: 'src-facebook',
       custType: 'CA_NHAN',
-      scopeThietBi: true,
-      scopeThiCong: false,
-      scopeVanChuyen: false,
-      vatMode: 'co_vat',
+      scopeEquipment: true,
+      scopeConstruction: false,
+      scopeDelivery: false,
+      vatMode: OrderResponseDtoVatMode.coVat,
       cancelReason: cancelReason,
-      cancelledAt: cancelReason == null ? null : '2026-07-18T00:00:00.000Z',
+      cancelledAt: cancelReason == null ? null : DateTime.utc(2026, 7, 18),
       lineItems: const <OrderLine>[],
-      createdAt: '2026-07-18T00:00:00.000Z',
-      updatedAt: '2026-07-18T00:00:00.000Z',
+      createdAt: DateTime.utc(2026, 7, 18),
+      updatedAt: DateTime.utc(2026, 7, 18),
     );
 
 /// A port that answers a fixed order + `coTheHuy`, and records the cancel call.
 class _HuyPort extends FakeOrdersPort {
-  _HuyPort({this.coTheHuy = true, this.loi, this.coBuocKeTiep = false});
+  _HuyPort({this.canCancel = true, this.loi, this.coBuocKeTiep = false});
 
-  final bool coTheHuy;
+  final bool canCancel;
 
   /// When true the lifecycle also offers a manual-lane step, so the OUTER
   /// action-container condition is satisfied on its own. Without this the
-  /// `coTheHuy: false` case proves nothing: the whole container is skipped and
+  /// `canCancel: false` case proves nothing: the whole container is skipped and
   /// the button would be absent even with its own gate deleted.
   final bool coBuocKeTiep;
 
@@ -56,7 +56,7 @@ class _HuyPort extends FakeOrdersPort {
   /// matters because its `buocKeTiep` is empty.
   static const String status = 'baogia';
 
-  /// When set, `huyDon` throws it instead of succeeding.
+  /// When set, `cancel` throws it instead of succeeding.
   final OrderPortException? loi;
 
   final List<String> lyDoDaGui = <String>[];
@@ -69,21 +69,24 @@ class _HuyPort extends FakeOrdersPort {
 
   @override
   Future<OrderLifecycle> getLifecycle(String orderId) async => OrderLifecycle(
-        buoc: <OrderLifecycleStep>[
-          const OrderLifecycleStep(status: status, trangThai: 'current'),
+        steps: <OrderLifecycleStep>[
+          OrderLifecycleStep(
+            status: OrderLifecycleStepDtoStatus.fromJson(status),
+            progress: OrderLifecycleStepDtoProgress.current,
+          ),
         ],
         // EMPTY on purpose: at 'baogia' no manual-lane step is available, which
         // is the exact shape that hides a wrongly-nested cancel button.
-        buocKeTiep: coBuocKeTiep
+        nextSteps: coBuocKeTiep
             ? const <OrderNextStep>[
                 OrderNextStep(
                   event: 'bat_dau_thi_cong',
-                  to: 'thicong',
+                  to: OrderNextStepDtoTo.thicong,
                   requires: 'quotes.create_edit',
                 ),
               ]
             : const <OrderNextStep>[],
-        coTheHuy: cancelReason == null && coTheHuy,
+        canCancel: cancelReason == null && canCancel,
       );
 
   @override
@@ -91,10 +94,10 @@ class _HuyPort extends FakeOrdersPort {
       const <OrderVersionItem>[];
 
   @override
-  Future<void> huyDon(String orderId, String lyDo) async {
+  Future<void> cancel(String orderId, String reason) async {
     if (loi != null) throw loi!;
-    lyDoDaGui.add(lyDo);
-    cancelReason = lyDo.trim();
+    lyDoDaGui.add(reason);
+    cancelReason = reason.trim();
   }
 }
 
@@ -125,7 +128,7 @@ void main() {
 
   testWidgets('coTheHuy false ⇒ nút ẨN HẲN, không vẽ xám (UX-DR-22)',
       (WidgetTester tester) async {
-    await tester.pumpWidget(_host(_HuyPort(coTheHuy: false)));
+    await tester.pumpWidget(_host(_HuyPort(canCancel: false)));
     await tester.pumpAndSettle();
 
     expect(find.widgetWithText(AppButton, 'Huỷ đơn'), findsNothing);
@@ -142,9 +145,9 @@ void main() {
       MaterialApp(
         home: Scaffold(
           body: OrderDetailScreen(
-            port: _HuyPort(coTheHuy: false, coBuocKeTiep: true),
+            port: _HuyPort(canCancel: false, coBuocKeTiep: true),
             orderId: _kOrderId,
-            onChangeStatus: () {},
+            onChangeStatus: () async {},
           ),
         ),
       ),

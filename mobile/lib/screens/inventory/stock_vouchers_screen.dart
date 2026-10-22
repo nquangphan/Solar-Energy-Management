@@ -72,8 +72,15 @@ String ngayGio(String iso) {
 String _hai(int n) => n.toString().padLeft(2, '0');
 
 /// `+40` / `−14` — a sign glued on as text from the type. TWIN of `soLuongCoDau()`.
-String _soLuongCoDau(String type, int qty) =>
-    '${type == 'nhap' ? '+' : '−'}$qty';
+/// A type this build does not know gets no sign: the direction is not guessed.
+String _soLuongCoDau(String type, int qty) {
+  final String sign = switch (type) {
+    'nhap' => '+',
+    'xuat' => '−',
+    _ => '',
+  };
+  return '$sign$qty';
+}
 
 String _moTaLoai(
   String type, {
@@ -190,9 +197,11 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
   Widget _chipLoai(String type, {bool isReturn = false}) {
     if (isReturn) return _returnChip();
     final bool nhap = type == 'nhap';
-    final Color mau = nhap ? AppTokens.ok : AppTokens.warn;
+    // A type this build does not know: neutral, never a guessed direction.
+    final bool known = nhap || type == 'xuat';
+    final Color mau = !known ? AppTokens.muted : (nhap ? AppTokens.ok : AppTokens.warn);
     return AppChip(
-      label: nhap ? 'Nhập' : 'Xuất',
+      label: !known ? '—' : (nhap ? 'Nhập' : 'Xuất'),
       background: AppTokens.surface,
       foreground: mau,
       border: mau,
@@ -246,21 +255,21 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
               children: <Widget>[
                 Flexible(
                   child: Text(
-                    p.ma,
+                    p.code,
                     style: _so,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(width: AppTokens.space8),
-                _chipLoai(p.type, isReturn: p.returnOfVoucherId != null),
+                _chipLoai(p.type.json ?? '', isReturn: p.returnOfVoucherId != null),
                 const Spacer(),
-                Text(_soLuongCoDau(p.type, p.tongSoLuong), style: _so),
+                Text(_soLuongCoDau(p.type.json ?? '', p.totalQty.toInt()), style: _so),
               ],
             ),
             const SizedBox(height: AppTokens.space4),
             Text(
-              '${p.nguoiTao.displayName} · ${ngayNgan(p.createdAt)}',
+              '${p.createdBy.displayName} · ${ngayNgan(p.createdAt.toUtc().toIso8601String())}',
               style: _microMuted,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -321,7 +330,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
     final bool coGiaVon =
         d.lines.any((StockVoucherLine l) => l.unitCost != null);
     return AppCard(
-      variant: d.type == 'nhap' ? AppCardVariant.teal : AppCardVariant.line,
+      variant: d.type.json == 'nhap' ? AppCardVariant.teal : AppCardVariant.line,
       padding: const EdgeInsets.all(AppTokens.space12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -332,44 +341,44 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             children: <Widget>[
               Expanded(
                 child: Text(
-                  d.ma,
+                  d.code,
                   style: _so,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: AppTokens.space8),
-              _chipLoai(d.type, isReturn: d.returnOfVoucherId != null),
+              _chipLoai(d.type.json ?? '', isReturn: d.returnOfVoucherId != null),
             ],
           ),
           const SizedBox(height: AppTokens.space8),
           _kv(
             'Loại',
             _moTaLoai(
-              d.type,
+              d.type.json ?? '',
               orderBound: d.orderId != null,
               isReturn: d.returnOf != null,
             ),
           ),
           if (d.returnOf != null) ...<Widget>[
             _kv('Gắn đơn', d.returnOf!.orderId),
-            _kv('Phiếu xuất gốc', d.returnOf!.ma),
+            _kv('Phiếu xuất gốc', d.returnOf!.code),
           ] else if (d.orderId != null)
             _kv('Gắn đơn', d.orderId!),
           if (d.returnVoucher != null)
             _kv(
               'Phiếu nhập trả',
-              d.returnVoucher!.ma,
+              d.returnVoucher!.code,
               onTap: () => _chon(d.returnVoucher!.id),
             ),
-          _kv('Ngày', ngayGio(d.createdAt)),
+          _kv('Ngày', ngayGio(d.createdAt.toUtc().toIso8601String())),
           _kv(
             d.returnOf != null
                 ? 'Người nhận'
                 : d.orderId != null
                     ? 'Người xác nhận'
                     : 'Người tạo',
-            d.nguoiTao.displayName,
+            d.createdBy.displayName,
           ),
           _kv('Ghi chú', d.note ?? '—'),
           const SizedBox(height: AppTokens.space8),
@@ -383,11 +392,11 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             rows: <AppTableRow>[
               for (final StockVoucherLine l in d.lines)
                 AppTableRow(<Widget>[
-                  AppTableCellText(l.ten),
-                  AppTableCellText(_soLuongCoDau(d.type, l.qty)),
+                  AppTableCellText(l.name),
+                  AppTableCellText(_soLuongCoDau(d.type.json ?? '', l.qty.toInt())),
                   if (coGiaVon)
                     AppTableCellText(
-                      l.unitCost != null ? formatVnd(l.unitCost!) : '',
+                      l.unitCost != null ? formatVnd(l.unitCost!.toInt()) : '',
                       strong: true,
                     ),
                 ]),
@@ -423,10 +432,10 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
                 ),
               ),
             )
-          else
+          else if (d.type.json == 'nhap' || d.type.json == 'xuat')
             AppBanner(
               tone: AppBannerTone.info,
-              message: d.type == 'nhap' ? _kNoteNhap : _kNoteXuat,
+              message: d.type.json == 'nhap' ? _kNoteNhap : _kNoteXuat,
             ),
         ],
       ),
@@ -582,7 +591,7 @@ class _FormPhieuState extends State<_FormPhieu> {
       final String note = _note.text.trim();
       final StockVoucherDetail moi = await widget.port.createVoucher(
         CreateStockVoucherInput(
-          type: _loai,
+          type: CreateStockVoucherRequestDtoType.fromJson(_loai),
           note: note.isEmpty ? null : note,
           lines: <CreateStockVoucherLineInput>[
             for (final _DongForm d in _dong)
@@ -642,8 +651,8 @@ class _FormPhieuState extends State<_FormPhieu> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    Text(d.sp.ten, style: _strong),
-                    Text('Còn ${d.sp.onHand} ${d.sp.donVi}',
+                    Text(d.sp.name, style: _strong),
+                    Text('Còn ${d.sp.onHand} ${d.sp.unit}',
                         style: _microMuted),
                   ],
                 ),
@@ -759,7 +768,7 @@ class _FormPhieuState extends State<_FormPhieu> {
                 children: <Widget>[
                   for (final StockItemView sp in _goiY)
                     AppButton(
-                      label: '${sp.ten} · Còn ${sp.onHand} ${sp.donVi}',
+                      label: '${sp.name} · Còn ${sp.onHand} ${sp.unit}',
                       size: AppButtonSize.sm,
                       variant: AppButtonVariant.ghost,
                       onPressed: () => _themDong(sp),
@@ -932,12 +941,12 @@ class _ReturnSheetState extends State<_ReturnSheet> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: <Widget>[
-              Expanded(flex: 5, child: Text(l.ten, style: _strong)),
+              Expanded(flex: 5, child: Text(l.name, style: _strong)),
               const SizedBox(width: AppTokens.space8),
               Expanded(
                 flex: 2,
                 child: Text(
-                  '${l.qty} ${l.donVi}',
+                  '${l.qty} ${l.unit}',
                   style: _strong,
                   textAlign: TextAlign.right,
                 ),

@@ -6,181 +6,66 @@
 // and its port carries no write verb. Vouchers are the one thing that moves
 // `onHand`, so the write lives here.
 //
-// THE CLIENT COMPUTES NOTHING (AD-2). The voucher code (`ma`), `soDong`,
-// `tongSoLuong`, the weighted-average cost and the "not enough stock" decision are
+// THE CLIENT COMPUTES NOTHING (AD-2). The voucher `code`, `lineCount`,
+// `totalQty`, the weighted-average cost and the "not enough stock" decision are
 // all the backend's. `unitCost` is ABSENT (null here) when the caller lacks
 // `costs.view` — the screen shows a cost only when the field is there.
 
-/// Mirrors `StockVoucherCreatorDto`.
-class StockVoucherCreator {
-  const StockVoucherCreator({required this.id, required this.displayName});
+import '../../api/generated/models/create_stock_voucher_request_dto.dart';
+import '../../api/generated/models/return_voucher_line_request_dto.dart';
+import '../../api/generated/models/stock_voucher_creator_dto.dart';
+import '../../api/generated/models/stock_voucher_detail_dto.dart';
+import '../../api/generated/models/stock_voucher_line_request_dto.dart';
+import '../../api/generated/models/stock_voucher_line_response_dto.dart';
+import '../../api/generated/models/stock_voucher_list_response_dto.dart';
+import '../../api/generated/models/stock_voucher_return_of_dto.dart';
+import '../../api/generated/models/stock_voucher_return_ref_dto.dart';
+import '../../api/generated/models/stock_voucher_summary_dto.dart';
 
-  final String id;
-  final String displayName;
-}
+export '../../api/generated/models/create_stock_voucher_request_dto_type.dart';
+export '../../api/generated/models/stock_voucher_detail_dto_type.dart';
+export '../../api/generated/models/stock_voucher_summary_dto_type.dart';
 
-/// Mirrors `StockVoucherSummaryDto` field for field.
-class StockVoucherSummary {
-  const StockVoucherSummary({
-    required this.id,
-    required this.ma,
-    required this.type,
-    this.orderId,
-    required this.createdAt,
-    required this.nguoiTao,
-    required this.soDong,
-    required this.tongSoLuong,
-    this.returnOfVoucherId,
-  });
+/// `StockVoucherCreatorDto` (generated, Story 10.8).
+typedef StockVoucherCreator = StockVoucherCreatorDto;
 
-  final String id;
+/// `StockVoucherSummaryDto`. `code` is the display code (`PK-N-0119`) built by
+/// the backend; `type` is `nhap` | `xuat`; `orderId` is null on a free-standing
+/// voucher; `totalQty` is always positive (the direction comes from `type`);
+/// `returnOfVoucherId` is set only on a return voucher.
+typedef StockVoucherSummary = StockVoucherSummaryDto;
 
-  /// Display code, e.g. `PK-N-0119` — built by the backend.
-  final String ma;
+/// `returnOf` on `StockVoucherDetailDto` (return voucher only).
+typedef StockVoucherReturnOf = StockVoucherReturnOfDto;
 
-  /// `nhap` = stock in · `xuat` = stock out (free-standing, or bound to an
-  /// order via [orderId]).
-  final String type;
+/// `returnVoucher` on `StockVoucherDetailDto` (a stock-out that has one).
+typedef StockVoucherReturnRef = StockVoucherReturnRefDto;
 
-  /// The order this stock-out belongs to (one order, one stock-out).
-  /// NULL on a free-standing voucher (field absent).
-  final String? orderId;
+/// `StockVoucherLineResponseDto`. `qty` is always positive; `unitCost` is NULL
+/// when the caller lacks `costs.view`.
+typedef StockVoucherLine = StockVoucherLineResponseDto;
 
-  /// ISO-8601 UTC.
-  final String createdAt;
-  final StockVoucherCreator nguoiTao;
-  final int soDong;
+/// `StockVoucherDetailDto` — the summary fields plus `note`, `lines`,
+/// `returnOf`, `returnVoucher` and `canReturn` (decided by the backend). Not a
+/// subtype of [StockVoucherSummary]: code that renders either reads the shared
+/// fields at the point of use.
+typedef StockVoucherDetail = StockVoucherDetailDto;
 
-  /// Sum of line quantities — always positive; the direction comes from [type].
-  final int tongSoLuong;
+/// `StockVoucherListResponseDto`.
+typedef StockVoucherList = StockVoucherListResponseDto;
 
-  /// Set only on a return voucher (`Nhập trả`): the stock-out it returns.
-  final String? returnOfVoucherId;
-}
+/// One line of `CreateStockVoucherRequestDto` — `unitCost` REQUIRED on `nhap`,
+/// omitted on `xuat` (the server snapshots it).
+typedef CreateStockVoucherLineInput = StockVoucherLineRequestDto;
 
-/// Mirrors `returnOf` on `StockVoucherDetailDto` (return voucher only).
-class StockVoucherReturnOf {
-  const StockVoucherReturnOf({
-    required this.id,
-    required this.ma,
-    required this.orderId,
-  });
-
-  final String id;
-  final String ma;
-  final String orderId;
-}
-
-/// Mirrors `returnVoucher` on `StockVoucherDetailDto` (a stock-out that has one).
-class StockVoucherReturnRef {
-  const StockVoucherReturnRef({required this.id, required this.ma});
-
-  final String id;
-  final String ma;
-}
-
-/// Mirrors `StockVoucherLineResponseDto`.
-class StockVoucherLine {
-  const StockVoucherLine({
-    required this.productId,
-    required this.ten,
-    required this.sku,
-    required this.donVi,
-    required this.qty,
-    this.unitCost,
-  });
-
-  final String productId;
-  final String ten;
-  final String sku;
-  final String donVi;
-
-  /// Always positive; the direction comes from the voucher type.
-  final int qty;
-
-  /// Unit cost in đồng. NULL when the caller lacks `costs.view` (field absent).
-  final int? unitCost;
-}
-
-/// Mirrors `StockVoucherDetailDto`.
-class StockVoucherDetail extends StockVoucherSummary {
-  const StockVoucherDetail({
-    required super.id,
-    required super.ma,
-    required super.type,
-    super.orderId,
-    required super.createdAt,
-    required super.nguoiTao,
-    required super.soDong,
-    required super.tongSoLuong,
-    super.returnOfVoucherId,
-    required this.note,
-    required this.lines,
-    this.returnOf,
-    this.returnVoucher,
-    this.canReturn = false,
-  });
-
-  final String? note;
-  final List<StockVoucherLine> lines;
-
-  /// Return voucher only: the stock-out it returns and that stock-out's order.
-  final StockVoucherReturnOf? returnOf;
-
-  /// Order-bound stock-out that already has a return voucher.
-  final StockVoucherReturnRef? returnVoucher;
-
-  /// Decided by the backend; the client never derives it.
-  final bool canReturn;
-}
-
-/// Mirrors `StockVoucherListResponseDto`.
-class StockVoucherList {
-  const StockVoucherList({required this.items});
-
-  final List<StockVoucherSummary> items;
-}
-
-/// One line of `CreateStockVoucherRequestDto`.
-class CreateStockVoucherLineInput {
-  const CreateStockVoucherLineInput({
-    required this.productId,
-    required this.qty,
-    this.unitCost,
-  });
-
-  final String productId;
-  final int qty;
-
-  /// REQUIRED on `nhap`; must be NULL (omitted) on `xuat` — the server snapshots it.
-  final int? unitCost;
-}
-
-/// Mirrors `CreateStockVoucherRequestDto`.
-class CreateStockVoucherInput {
-  const CreateStockVoucherInput({
-    required this.type,
-    this.note,
-    required this.lines,
-  });
-
-  final String type;
-  final String? note;
-  final List<CreateStockVoucherLineInput> lines;
-}
+/// `CreateStockVoucherRequestDto`.
+typedef CreateStockVoucherInput = CreateStockVoucherRequestDto;
 
 /// One line of `CreateReturnVoucherRequestDto`.
-class CreateReturnVoucherLineInput {
-  const CreateReturnVoucherLineInput({
-    required this.productId,
-    required this.qty,
-  });
-
-  final String productId;
-  final int qty;
-}
+typedef CreateReturnVoucherLineInput = ReturnVoucherLineRequestDto;
 
 /// One `fieldErrors[]` entry. [field] is the backend's path, e.g. `lines.0.qty`.
+/// Hand-kept: the payload of [StockVoucherPortException], not a response type.
 class StockVoucherFieldError {
   const StockVoucherFieldError({
     required this.field,
@@ -210,9 +95,8 @@ class StockVoucherPortException implements Exception {
 }
 
 /// Injectable transport for the Phiếu kho screen. A PORT, NOT an HTTP client.
-///
-/// TODO(app-runtime/login-network): the real implementation attaches the bearer
-/// token and parses the AD-5 envelope into [StockVoucherPortException].
+/// The real implementation is `HttpStockVouchersPort`, which turns the AD-5
+/// envelope into a [StockVoucherPortException].
 abstract class StockVouchersPort {
   /// [type] = `nhap` | `xuat`; null ⇒ every type. [isReturn] filters return
   /// vouchers in (true) or out (false); null ⇒ no filter.

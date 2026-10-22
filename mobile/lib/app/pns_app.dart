@@ -1,4 +1,5 @@
-// hand-authored — the mobile app shell (Story 10.6, signed-in app Story 10.7).
+// hand-authored — the mobile app shell (Story 10.6, signed-in app Story 10.7,
+// ports as one AppPorts value Story 10.8).
 // Restores the session at start-up, then switches between Đăng nhập (with Quên
 // mật khẩu) and the signed-in app. It only sees ports: tokens and HTTP stay
 // behind them.
@@ -9,13 +10,10 @@ import 'package:flutter/material.dart';
 
 import '../design_system/session/app_session.dart';
 import '../design_system/session/auth_port.dart';
-import '../design_system/session/customers_port.dart';
-import '../design_system/session/me_port.dart';
-import '../design_system/session/password_port.dart';
-import '../design_system/session/warranty_port.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
 import 'app_chrome.dart';
+import 'app_ports.dart';
 import 'signed_in_app.dart';
 
 enum _Phase { restoring, signedOut, forgotPassword, signedIn }
@@ -24,18 +22,12 @@ class PnsApp extends StatefulWidget {
   const PnsApp({
     super.key,
     required this.auth,
-    required this.me,
-    required this.password,
-    required this.customers,
-    required this.warranty,
+    required this.ports,
     this.sessionExpired,
   });
 
   final AuthPort auth;
-  final MePort me;
-  final PasswordPort password;
-  final CustomersPort customers;
-  final WarrantyPort warranty;
+  final AppPorts ports;
 
   /// Fires when the transport could not renew the session (refresh refused).
   final Listenable? sessionExpired;
@@ -106,11 +98,9 @@ class _PnsAppState extends State<PnsApp> {
     if (_phase == _Phase.signedIn) {
       return PermissionsProvider(
         key: ValueKey<int>(_signInCount),
-        port: widget.me,
+        port: widget.ports.me,
         child: SignedInApp(
-          password: widget.password,
-          customers: widget.customers,
-          warranty: widget.warranty,
+          ports: widget.ports,
           onLogout: _logout,
           onRetry: () => setState(() => _signInCount++),
         ),
@@ -144,7 +134,7 @@ class _PnsAppState extends State<PnsApp> {
             if (!didPop) setState(() => _phase = _Phase.signedOut);
           },
           child: ForgotPasswordScreen(
-            port: widget.password,
+            port: widget.ports.password,
             onBackToLogin: () => setState(() => _phase = _Phase.signedOut),
           ),
         );

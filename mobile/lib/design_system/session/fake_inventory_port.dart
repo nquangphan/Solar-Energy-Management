@@ -14,72 +14,72 @@ const StockList kDemoStockList = StockList(
   items: <StockItemView>[
     StockItemView(
       productId: 'prod-battery-10kwh',
-      ten: 'Battery LiFePO4 10kWh',
+      name: 'Battery LiFePO4 10kWh',
       sku: 'BAT-10K',
-      donVi: 'bình',
+      unit: 'bình',
       onHand: 0,
       reserved: 2,
-      khaDung: -2,
-      canNhap: 2,
-      tinhTrang: 'am',
+      available: -2,
+      toPurchase: 2,
+      stockStatus: StockItemViewDtoStockStatus.am,
     ),
     StockItemView(
       productId: 'prod-day-dc-4',
-      ten: 'Dây DC 4mm² (cuộn 100m)',
+      name: 'Dây DC 4mm² (cuộn 100m)',
       sku: 'DC-4-100',
-      donVi: 'cuộn',
+      unit: 'cuộn',
       onHand: 11,
       reserved: 2,
-      khaDung: 9,
-      canNhap: 0,
-      tinhTrang: 'du',
+      available: 9,
+      toPurchase: 0,
+      stockStatus: StockItemViewDtoStockStatus.du,
     ),
     StockItemView(
       productId: 'prod-inverter-hybrid-10k',
-      ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+      name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
       sku: 'INV-ASW10K-H',
-      donVi: 'bộ',
+      unit: 'bộ',
       onHand: 5,
       reserved: 20,
-      khaDung: -15,
-      canNhap: 15,
-      tinhTrang: 'am',
+      available: -15,
+      toPurchase: 15,
+      stockStatus: StockItemViewDtoStockStatus.am,
     ),
     StockItemView(
       productId: 'prod-inverter-8k',
-      ten: 'Inverter Solplanet ASW8000-S',
+      name: 'Inverter Solplanet ASW8000-S',
       sku: 'INV-ASW8000',
-      donVi: 'bộ',
+      unit: 'bộ',
       onHand: 3,
       reserved: 3,
-      khaDung: 0,
-      canNhap: 0,
-      tinhTrang: 'het',
+      available: 0,
+      toPurchase: 0,
+      stockStatus: StockItemViewDtoStockStatus.het,
     ),
     StockItemView(
       productId: 'prod-pin-ae-630',
-      ten: 'Tấm pin AE 630W',
+      name: 'Tấm pin AE 630W',
       sku: 'PIN-AE-630',
-      donVi: 'tấm',
+      unit: 'tấm',
       onHand: 42,
       reserved: 14,
-      khaDung: 28,
-      canNhap: 0,
-      tinhTrang: 'du',
+      available: 28,
+      toPurchase: 0,
+      stockStatus: StockItemViewDtoStockStatus.du,
     ),
   ],
-  danhSachCanMua: <CanMuaView>[
-    CanMuaView(
+  purchaseList: <PurchaseNeedView>[
+    PurchaseNeedView(
       productId: 'prod-inverter-hybrid-10k',
-      ten: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
-      donVi: 'bộ',
-      canNhap: 15,
+      name: 'Inverter Hybrid Solplanet ASW10K-LT-G2 Pro 3 pha',
+      unit: 'bộ',
+      toPurchase: 15,
     ),
-    CanMuaView(
+    PurchaseNeedView(
       productId: 'prod-battery-10kwh',
-      ten: 'Battery LiFePO4 10kWh',
-      donVi: 'bình',
-      canNhap: 2,
+      name: 'Battery LiFePO4 10kWh',
+      unit: 'bình',
+      toPurchase: 2,
     ),
   ],
 );
@@ -96,15 +96,15 @@ class FakeInventoryPort implements InventoryPort {
     final List<StockItemView> items = data.items
         .where(
           (StockItemView i) =>
-              i.ten.toLowerCase().contains(needle) ||
+              i.name.toLowerCase().contains(needle) ||
               i.sku.toLowerCase().contains(needle),
         )
         .toList();
     final Set<String> ids = items.map((StockItemView i) => i.productId).toSet();
     return StockList(
       items: items,
-      danhSachCanMua: data.danhSachCanMua
-          .where((CanMuaView c) => ids.contains(c.productId))
+      purchaseList: data.purchaseList
+          .where((PurchaseNeedView c) => ids.contains(c.productId))
           .toList(),
     );
   }

@@ -1,7 +1,9 @@
 // The signed-in app (Story 10.7): Menu gated by /me, the router over the Menu's
-// screens, the bottom nav's Menu tab, back navigation, per-account permissions,
+// screens, the bottom nav's tabs, back navigation, per-account permissions,
 // a failed /me with retry, and session expiry from a sub-screen — the whole app
-// over the real HTTP adapters with a fake backend.
+// over the real HTTP adapters with a fake backend. An account that may see orders
+// lands on the order list (Story 10.8); the Menu tests open the Menu tab first.
+// The order/stock routes are in order_routes_test.dart.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -14,6 +16,7 @@ import 'package:pns_mobile/screens/customers/customer_detail_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_list_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_pick_screen.dart';
 import 'package:pns_mobile/screens/menu/menu_screen.dart';
+import 'package:pns_mobile/screens/orders/order_list_screen.dart';
 import 'package:pns_mobile/screens/warranty/warranty_lookup_screen.dart';
 
 import '../api/support/fake_http.dart';
@@ -63,18 +66,29 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
       return jsonBody(200, [
         {'id': 'src-1', 'name': 'Facebook', 'description': null, 'active': true, 'sortOrder': 1, 'isOther': false},
       ]);
+    case '/orders':
+      return jsonBody(200, {'items': [], 'total': 0, 'page': 1, 'pageSize': 20});
     case '/orders/warranty-lookup':
       return jsonBody(200, {'found': false, 'phone': '+84999999999', 'customer': null, 'orders': []});
   }
   return jsonBody(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
 };
 
-Future<TestApp> _signedIn(WidgetTester tester, FakeHandler backend) async {
+/// Signed in from a stored session; with [toMenu] the Menu tab is opened first (an
+/// account with an order key lands on the order list).
+Future<TestApp> _signedIn(WidgetTester tester, FakeHandler backend, {bool toMenu = true}) async {
   final app = TestApp(backend);
   app.store.values['pns.refreshToken'] = 'refresh-0';
   await tester.pumpWidget(app.widget);
   await settle(tester);
+  if (toMenu) await _openMenu(tester);
   return app;
+}
+
+Future<void> _openMenu(WidgetTester tester) async {
+  if (find.byType(MenuScreen).evaluate().isNotEmpty) return;
+  await tester.tap(find.text('Menu'));
+  await _navigated(tester);
 }
 
 Future<void> _login(WidgetTester tester, String email) async {
@@ -264,34 +278,45 @@ void main() {
     expect(find.text('Đã đổi mật khẩu. Bạn cần đăng nhập lại.'), findsOneWidget);
   });
 
-  testWidgets('a path the account may not open, or an unknown one, lands on the Menu', (tester) async {
-    await _signedIn(tester, _backend(permsA: ['orders.view_own']));
+  testWidgets('a path the account may not open, or an unknown one, lands on the landing page', (tester) async {
+    // With an order key the landing page is the order list (Story 10.8).
+    await _signedIn(tester, _backend(permsA: ['orders.view_own']), toMenu: false);
+    expect(find.byType(OrderListScreen), findsOneWidget);
+    expect(_location(tester), '/orders');
     _router(tester).go('/customers');
     await _navigated(tester);
     expect(find.byType(CustomerListScreen), findsNothing);
-    expect(find.byType(MenuScreen), findsOneWidget);
-    expect(_location(tester), '/menu');
+    expect(_location(tester), '/orders');
 
-    _router(tester).go('/orders');
+    _router(tester).go('/nowhere');
     await _navigated(tester);
-    expect(find.byType(MenuScreen), findsOneWidget);
-    expect(_location(tester), '/menu');
+    expect(_location(tester), '/orders');
 
     // Control: an openable path does open.
     _router(tester).go('/warranty');
     await _navigated(tester);
     expect(find.byType(WarrantyLookupScreen), findsOneWidget);
+
+    // Without an order key the landing page is the Menu, and /orders is gated out.
+    await tester.pumpWidget(const SizedBox());
+    await _signedIn(tester, _backend(permsA: ['customers.manage']), toMenu: false);
+    expect(find.byType(MenuScreen), findsOneWidget);
+    _router(tester).go('/orders');
+    await _navigated(tester);
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(_location(tester), '/menu');
   });
 
-  testWidgets('the Menu tab from a sub-screen returns to the Menu; the unwired tabs and the FAB do nothing', (
+  testWidgets('the Menu tab from a sub-screen returns to the Menu; Trang chủ and the tabs/FAB this account may not open do nothing', (
     tester,
   ) async {
+    // customers.manage + orders.view_own: no stock key (Kho) and no quote key (Tạo).
     await _signedIn(tester, _backend());
     await tester.tap(find.text('Hồ sơ'));
     await _navigated(tester);
     expect(find.byType(ProfileScreen), findsOneWidget);
 
-    for (final tab in ['Trang chủ', 'Đơn hàng', 'Kho', 'Tạo']) {
+    for (final tab in ['Trang chủ', 'Kho', 'Tạo']) {
       await tester.tap(find.text(tab));
       await _navigated(tester);
       expect(tester.takeException(), isNull, reason: tab);
@@ -302,6 +327,12 @@ void main() {
     await _navigated(tester);
     expect(find.byType(MenuScreen), findsOneWidget);
     expect(_location(tester), '/menu');
+
+    // The Đơn hàng tab is wired (Story 10.8): this account may see orders.
+    await tester.tap(find.text('Đơn hàng'));
+    await _navigated(tester);
+    expect(find.byType(OrderListScreen), findsOneWidget);
+    expect(_location(tester), '/orders');
   });
 
   testWidgets('signing out A and in as B gives B\'s permissions, not A\'s', (tester) async {
@@ -312,6 +343,9 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
     await _login(tester, 'b@pns.solar');
 
+    // B may see orders: B lands on the order list; B's Menu is B's.
+    expect(find.byType(OrderListScreen), findsOneWidget);
+    await _openMenu(tester);
     expect(find.byType(MenuScreen), findsOneWidget);
     expect(find.text('Người B'), findsOneWidget);
     expect(find.text('Khách hàng'), findsNothing);
@@ -324,7 +358,7 @@ void main() {
     final app = await _signedIn(tester, (r) {
       if (r.path == '/me' && ++meCalls == 1) return jsonBody(500, envelope('INTERNAL', 'Lỗi máy chủ.'));
       return ok(r);
-    });
+    }, toMenu: false);
     expect(find.byType(AppErrorState), findsOneWidget);
     expect(find.widgetWithText(AppButton, 'Đăng xuất'), findsOneWidget);
     expect(app.adapter.to('/me'), hasLength(1));
@@ -332,7 +366,8 @@ void main() {
     await tester.tap(find.widgetWithText(AppButton, 'Thử lại'));
     await _navigated(tester);
     expect(app.adapter.to('/me'), hasLength(2));
-    expect(find.byType(MenuScreen), findsOneWidget);
+    // Signed in: the landing page of this account (it may see orders).
+    expect(find.byType(OrderListScreen), findsOneWidget);
   });
 
   testWidgets('Đăng xuất on the /me error, tapped twice while logout is pending ⇒ one POST /auth/logout', (
@@ -344,7 +379,7 @@ void main() {
       if (r.path == '/me') return jsonBody(500, envelope('INTERNAL', 'Lỗi máy chủ.'));
       if (r.path == '/auth/logout') await release.future;
       return ok(r);
-    });
+    }, toMenu: false);
     expect(find.byType(AppErrorState), findsOneWidget);
     final logout = find.widgetWithText(AppButton, 'Đăng xuất');
     await tester.tap(logout);

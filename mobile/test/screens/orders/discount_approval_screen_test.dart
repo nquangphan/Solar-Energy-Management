@@ -48,7 +48,7 @@ class _RejectingResolvePort extends FakeOrdersPort {
 /// all numbers the FAKE-BACKEND computes, the screen renders them as-is.
 Future<T> _seedPendingDiscount<T extends FakeOrdersPort>(T port) async {
   final Order order =
-      await port.create(const CreateOrderInput(customerSdt: '0903176968'));
+      await port.create(const CreateOrderInput(customerPhone: '0903176968'));
   await port.addLine(
     order.id,
     const AddOrderLineInput(productId: 'prod-pin-580', qty: 2),
