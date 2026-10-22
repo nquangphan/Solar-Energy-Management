@@ -2,6 +2,8 @@
 // signs in since Story 10.6). Mirrors mobile/test/design_system/shell_render_test.dart:
 // pump the real screen and assert it composes the shipped widgets, has no auth
 // nav (UX-DR-15), and that empty-submit validation surfaces an AppBanner (AC-2).
+// Since 10.9 sign-in is by phone: the RAW number (only trimmed) reaches the port
+// and a 400 `fieldErrors.phone` shows right under the phone field.
 // The Story 10.6 group drives the REAL HttpAuthPort + transport over a fake
 // HTTP adapter (no FakeAuthPort).
 
@@ -44,8 +46,8 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Future<void> _fillAndSubmit(WidgetTester tester, String email, String password) async {
-  await tester.enterText(find.byType(TextField).at(0), email);
+Future<void> _fillAndSubmit(WidgetTester tester, String phone, String password) async {
+  await tester.enterText(find.byType(TextField).at(0), phone);
   await tester.enterText(find.byType(TextField).at(1), password);
   await tester.tap(find.byType(AppButton));
 }
@@ -89,36 +91,16 @@ void main() {
       await tester.pump();
 
       expect(find.byType(AppBanner), findsOneWidget);
-      expect(find.text('Nhập đủ tài khoản và mật khẩu.'), findsOneWidget);
+      expect(find.text('Nhập đủ số điện thoại và mật khẩu.'), findsOneWidget);
     });
 
-    testWidgets('malformed account surfaces the format error (AC-2)',
-        (tester) async {
+    testWidgets('the phone field opens the phone keyboard', (tester) async {
       await tester.pumpWidget(_host(_screen()));
 
-      // Account is not a valid email.
-      await tester.enterText(find.byType(TextField).at(0), 'not-an-account');
-      await tester.enterText(find.byType(TextField).at(1), 'secret');
-      await tester.tap(find.byType(AppButton));
-      await tester.pump();
-
-      expect(find.byType(AppBanner), findsOneWidget);
-      expect(
-        find.text('Tài khoản phải là email hợp lệ.'),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a phone number is refused — sign-in is by email only',
-        (tester) async {
-      await tester.pumpWidget(_host(_screen()));
-
-      await tester.enterText(find.byType(TextField).at(0), '0912345678');
-      await tester.enterText(find.byType(TextField).at(1), 'secret');
-      await tester.tap(find.byType(AppButton));
-      await tester.pump();
-
-      expect(find.text('Tài khoản phải là email hợp lệ.'), findsOneWidget);
+      final TextField phone = tester.widget<TextField>(find.byType(TextField).at(0));
+      expect(phone.keyboardType, TextInputType.phone);
+      // AppField micro-uppercases its label.
+      expect(find.text('Số điện thoại'.toUpperCase()), findsOneWidget);
     });
 
     testWidgets('valid credentials clear the error region (AC-2 happy path)',
@@ -130,20 +112,7 @@ void main() {
       await tester.pump();
       expect(find.byType(AppBanner), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField).at(0), 'admin@pns.vn');
-      await tester.enterText(find.byType(TextField).at(1), 'secret');
-      await tester.tap(find.byType(AppButton));
-      await tester.pump();
-
-      // Valid email + password ⇒ no banner (real auth wires in Story 10.6).
-      expect(find.byType(AppBanner), findsNothing);
-    });
-
-    testWidgets('valid email is accepted too (AC-2 happy path)',
-        (tester) async {
-      await tester.pumpWidget(_host(_screen()));
-
-      await tester.enterText(find.byType(TextField).at(0), 'a@b.co');
+      await tester.enterText(find.byType(TextField).at(0), '0912345678');
       await tester.enterText(find.byType(TextField).at(1), 'secret');
       await tester.tap(find.byType(AppButton));
       await tester.pump();
@@ -154,7 +123,7 @@ void main() {
     testWidgets('password field masks its input (AC-1)', (tester) async {
       await tester.pumpWidget(_host(_screen()));
 
-      // Field order: account (0), password (1).
+      // Field order: phone (0), password (1).
       final TextField password =
           tester.widget<TextField>(find.byType(TextField).at(1));
       expect(password.obscureText, isTrue);
@@ -168,12 +137,13 @@ void main() {
       var loggedIn = 0;
       await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(store), () => loggedIn++)));
 
-      await _fillAndSubmit(tester, ' nv@pns.solar ', 'secret-1');
+      await _fillAndSubmit(tester, ' 0912 345 678 ', 'secret-1');
       await _settle(tester);
 
       expect(loggedIn, 1);
       expect(adapter.requests.single.path, '/auth/login');
-      expect(adapter.requests.single.json, {'email': 'nv@pns.solar', 'password': 'secret-1'});
+      // Trimmed at both ends, inner spaces kept: the client never normalizes a phone.
+      expect(adapter.requests.single.json, {'phone': '0912 345 678', 'password': 'secret-1'});
       expect(store.values[kRefreshTokenKey], 'refresh-1');
       expect(find.byType(AppBanner), findsNothing);
     });
@@ -184,7 +154,7 @@ void main() {
       var loggedIn = 0;
       await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(store), () => loggedIn++)));
 
-      await _fillAndSubmit(tester, 'nv@pns.solar', 'wrong');
+      await _fillAndSubmit(tester, '0912345678', 'wrong');
       await _settle(tester);
 
       expect(find.text('Thông tin đăng nhập không đúng'), findsOneWidget);
@@ -199,7 +169,7 @@ void main() {
       var loggedIn = 0;
       await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(MemoryKeyValueStore()), () => loggedIn++)));
 
-      await _fillAndSubmit(tester, 'nv@pns.solar', 'secret-1');
+      await _fillAndSubmit(tester, '0912345678', 'secret-1');
       await _settle(tester);
       expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed, isNull);
       await tester.tap(find.byType(AppButton));
@@ -219,7 +189,7 @@ void main() {
       var loggedIn = 0;
       await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(store), () => loggedIn++)));
 
-      await _fillAndSubmit(tester, 'nv@pns.solar', 'secret-1');
+      await _fillAndSubmit(tester, '0912345678', 'secret-1');
       await _settle(tester);
 
       expect(find.text('Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.'), findsOneWidget);
@@ -229,19 +199,42 @@ void main() {
       expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed, isNotNull);
     });
 
-    testWidgets('the password is sent exactly as typed (only the email is trimmed)', (tester) async {
+    testWidgets('the password is sent exactly as typed (only the phone is trimmed)', (tester) async {
       final adapter = FakeAdapter((_) => jsonBody(200, tokens('access-1', 'refresh-1')));
       await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(MemoryKeyValueStore()), () {})));
 
-      await _fillAndSubmit(tester, 'nv@pns.solar', ' pass word ');
+      await _fillAndSubmit(tester, '0912345678', ' pass word ');
       await _settle(tester);
 
-      expect(adapter.requests.single.json, {'email': 'nv@pns.solar', 'password': ' pass word '});
+      expect(adapter.requests.single.json, {'phone': '0912345678', 'password': ' pass word '});
+    });
+
+    testWidgets('400 fieldErrors.phone ⇒ the message sits right under the phone field, no top banner', (tester) async {
+      const message = 'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).';
+      final adapter = FakeAdapter((_) => jsonBody(
+            400,
+            envelope('VALIDATION_ERROR', 'Số điện thoại không hợp lệ.', fieldErrors: [
+              {'field': 'phone', 'code': 'isPhoneNumber', 'message': message},
+            ]),
+          ));
+      await tester.pumpWidget(_host(_httpScreen(adapter, SessionStore(MemoryKeyValueStore()), () {})));
+
+      await _fillAndSubmit(tester, 'abc', 'secret-1');
+      await _settle(tester);
+
+      expect(find.text(message), findsOneWidget);
+      expect(find.text('Số điện thoại không hợp lệ.'), findsNothing);
+      expect(find.byType(AppBanner), findsOneWidget);
+      // Vertical order: phone field < its error < password field.
+      final double phoneY = tester.getTopLeft(find.byType(TextField).at(0)).dy;
+      final double errorY = tester.getTopLeft(find.text(message)).dy;
+      final double passwordY = tester.getTopLeft(find.byType(TextField).at(1)).dy;
+      expect(phoneY < errorY && errorY < passwordY, isTrue);
     });
 
     testWidgets('a failure that is not an ApiError shows the generic Vietnamese message', (tester) async {
       await tester.pumpWidget(_host(LoginScreen(port: FakeAuthPort(throwWith: StateError('boom')), onLoggedIn: () {})));
-      await _fillAndSubmit(tester, 'nv@pns.solar', 'secret-1');
+      await _fillAndSubmit(tester, '0912345678', 'secret-1');
       await tester.pump();
       expect(find.text('Không thực hiện được. Thử lại.'), findsOneWidget);
       expect(find.textContaining('boom'), findsNothing);

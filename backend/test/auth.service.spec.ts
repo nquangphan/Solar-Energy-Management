@@ -49,7 +49,7 @@ describe('AuthService (unit, hermetic)', () => {
   };
 
   let accounts: {
-    findByEmail: jest.Mock;
+    findByPhone: jest.Mock;
     findById: jest.Mock;
     updatePasswordHash: jest.Mock;
   };
@@ -60,7 +60,7 @@ describe('AuthService (unit, hermetic)', () => {
 
   beforeEach(() => {
     accounts = {
-      findByEmail: jest.fn(),
+      findByPhone: jest.fn(),
       findById: jest.fn(),
       updatePasswordHash: jest.fn().mockResolvedValue(undefined),
     };
@@ -91,6 +91,7 @@ describe('AuthService (unit, hermetic)', () => {
     return {
       id: 'acc-1',
       email: 'user@example.com',
+      phone: '+84912345678',
       passwordHash,
       displayName: 'User',
       isActive,
@@ -102,9 +103,9 @@ describe('AuthService (unit, hermetic)', () => {
   describe('login', () => {
     it('creds đúng → phát access JWT (sub=accountId) + refresh + expiresIn, tạo Session', async () => {
       const hash = await new PasswordService().hash('correct-horse');
-      accounts.findByEmail.mockResolvedValue(makeAccount(hash));
+      accounts.findByPhone.mockResolvedValue(makeAccount(hash));
 
-      const tokens = await service.login('user@example.com', 'correct-horse');
+      const tokens = await service.login('0912345678', 'correct-horse');
 
       expect(tokens.expiresIn).toBe(900);
       expect(typeof tokens.refreshToken).toBe('string');
@@ -123,32 +124,32 @@ describe('AuthService (unit, hermetic)', () => {
 
     it('sai mật khẩu → AppException(UNAUTHENTICATED, 401), KHÔNG tạo session', async () => {
       const hash = await new PasswordService().hash('correct-horse');
-      accounts.findByEmail.mockResolvedValue(makeAccount(hash));
+      accounts.findByPhone.mockResolvedValue(makeAccount(hash));
 
       const err = await catchAppException(
-        service.login('user@example.com', 'wrong-password'),
+        service.login('0912345678', 'wrong-password'),
       );
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
       expect(err.getStatus()).toBe(401);
       expect(sessionRepo.create).not.toHaveBeenCalled();
     });
 
-    it('email không tồn tại → AppException(UNAUTHENTICATED)', async () => {
-      accounts.findByEmail.mockResolvedValue(null);
+    it('unknown phone → AppException(UNAUTHENTICATED)', async () => {
+      accounts.findByPhone.mockResolvedValue(null);
       const err = await catchAppException(
-        service.login('unknown@example.com', 'whatever'),
+        service.login('0987654321', 'whatever'),
       );
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
     });
 
-    it('email không tồn tại VẪN gọi verify (dummy hash) — cân bằng timing chống enumeration', async () => {
+    it('unknown phone STILL calls verify (dummy hash) — timing balance against enumeration', async () => {
       // Bất biến bảo mật AC-1: nhánh "email lạ" KHÔNG được bỏ qua verify (nếu bỏ, thời
       // gian phản hồi ngắn hơn nhánh "sai mật khẩu" → lộ email nào tồn tại). Verify được
       // gọi với một hash argon2 hợp lệ (dummy) chứ không phải null/rỗng.
-      accounts.findByEmail.mockResolvedValue(null);
+      accounts.findByPhone.mockResolvedValue(null);
       const verifySpy = jest.spyOn(passwords, 'verify');
 
-      await catchAppException(service.login('unknown@example.com', 'whatever'));
+      await catchAppException(service.login('0987654321', 'whatever'));
 
       expect(verifySpy).toHaveBeenCalledTimes(1);
       const [hashArg, plainArg] = verifySpy.mock.calls[0];
@@ -159,33 +160,70 @@ describe('AuthService (unit, hermetic)', () => {
 
     it('account isActive=false → AppException(UNAUTHENTICATED) dù mật khẩu đúng', async () => {
       const hash = await new PasswordService().hash('correct-horse');
-      accounts.findByEmail.mockResolvedValue(makeAccount(hash, false));
+      accounts.findByPhone.mockResolvedValue(makeAccount(hash, false));
       const err = await catchAppException(
-        service.login('user@example.com', 'correct-horse'),
+        service.login('0912345678', 'correct-horse'),
       );
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
     });
 
-    it('chống enumeration: message "email lạ" === "sai mật khẩu" === "inactive"', async () => {
+    it('anti-enumeration: "unknown phone" === "wrong password" === "inactive" message', async () => {
       const hash = await new PasswordService().hash('correct-horse');
 
-      accounts.findByEmail.mockResolvedValueOnce(null);
+      accounts.findByPhone.mockResolvedValueOnce(null);
       const unknownEmail = await catchAppException(
-        service.login('unknown@example.com', 'x'),
+        service.login('0987654321', 'x'),
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount(hash));
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount(hash));
       const wrongPassword = await catchAppException(
-        service.login('user@example.com', 'wrong'),
+        service.login('0912345678', 'wrong'),
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount(hash, false));
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount(hash, false));
       const inactive = await catchAppException(
-        service.login('user@example.com', 'correct-horse'),
+        service.login('0912345678', 'correct-horse'),
       );
 
       expect(unknownEmail.message).toBe(wrongPassword.message);
       expect(wrongPassword.message).toBe(inactive.message);
+    });
+  });
+
+  describe('login by phone', () => {
+    it.each(['0912 345 678', '+84912345678', '84912345678'])(
+      'looks up the E.164 form of %p',
+      async (raw) => {
+        const hash = await new PasswordService().hash('correct-horse');
+        accounts.findByPhone.mockResolvedValue(makeAccount(hash));
+
+        await service.login(raw, 'correct-horse');
+
+        expect(accounts.findByPhone).toHaveBeenCalledTimes(1);
+        expect(accounts.findByPhone).toHaveBeenCalledWith('+84912345678');
+      },
+    );
+
+    it('malformed phone → 400 fieldErrors.phone, never looks up or verifies', async () => {
+      const verifySpy = jest.spyOn(passwords, 'verify');
+      const err = await catchAppException(service.login('abc', 'x'));
+
+      expect(err.getStatus()).toBe(400);
+      expect(err.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
+      expect(err.fieldErrors).toEqual([
+        expect.objectContaining({ field: 'phone', code: 'isPhoneNumber' }),
+      ]);
+      expect(accounts.findByPhone).toHaveBeenCalledTimes(0);
+      expect(verifySpy).toHaveBeenCalledTimes(0);
+    });
+
+    it('a valid but unregistered landline is a 401, not a 400', async () => {
+      accounts.findByPhone.mockResolvedValue(null);
+      const err = await catchAppException(
+        service.login('028 3822 1234', 'whatever'),
+      );
+      expect(err.getStatus()).toBe(401);
+      expect(accounts.findByPhone).toHaveBeenCalledWith('+842838221234');
     });
   });
 

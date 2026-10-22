@@ -180,12 +180,12 @@ describe('transport — bearer', () => {
       'POST /auth/reset-password': record,
     });
     await client.GET('/me');
-    await client.POST('/auth/login', { body: { email: 'a@pns.vn', password: 'x' } });
+    await client.POST('/auth/login', { body: { phone: '0912345678', password: 'x' } });
     await client.POST('/auth/refresh', { body: { refreshToken: 'r' } });
     await client.POST('/auth/logout', { body: { refreshToken: 'r' } });
-    await client.POST('/auth/forgot-password', { body: { email: 'a@pns.vn' } });
+    await client.POST('/auth/forgot-password', { body: { phone: '0912345678' } });
     await client.POST('/auth/reset-password', {
-      body: { email: 'a@pns.vn', code: '123456', newPassword: 'MatKhauMoi456' },
+      body: { phone: '0912345678', code: '123456', newPassword: 'MatKhauMoi456' },
     });
     expect(seen.get('/me')).toBe('Bearer access-1');
     for (const path of [
@@ -316,7 +316,7 @@ describe('transport — 401 and refresh', () => {
       'POST /auth/refresh': refreshOk,
     });
     const error = await rejection(
-      client.POST('/auth/login', { body: { email: 'a@pns.vn', password: 'sai' } }),
+      client.POST('/auth/login', { body: { phone: '0912345678', password: 'sai' } }),
     );
     expect(error).toMatchObject({ status: 401, code: 'UNAUTHENTICATED', message: BAD_CREDENTIALS.message });
     expect(handlers['POST /auth/refresh']).toHaveBeenCalledTimes(0);
@@ -637,7 +637,7 @@ describe('transport — relative /api base (the main.tsx default, proxied by vit
         new Request(`${PAGE}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: 'a@pns.vn', password: 'sai' }),
+          body: JSON.stringify({ phone: '0912345678', password: 'sai' }),
         }),
       ),
     );

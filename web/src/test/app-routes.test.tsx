@@ -42,7 +42,7 @@ const ALL_PERMISSIONS = [
 function ports(permissions: string[]): AppPorts {
   return {
     auth: new FakeAuthPort(),
-    me: new FakeMePort({ id: 'acc-1', email: 'a@pns.vn', displayName: 'A', permissions }),
+    me: new FakeMePort({ id: 'acc-1', email: 'a@pns.vn', phone: null, displayName: 'A', permissions }),
     password: new FakePasswordPort(),
     customers: new FakeCustomersPort(),
     customerSources: new FakeCustomerSourcesPort(),

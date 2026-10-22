@@ -31,6 +31,9 @@ generator client {
 model Account {
   id           String    @id @default(uuid())
   email        String    @unique
+  /// Sign-in identity since 10.9, stored as E.164 (`normalizeVnPhone`). Nullable because
+  /// accounts created before 10.9 have no number yet; `email` stays as contact info only.
+  phone        String?   @unique
   passwordHash String    @map("password_hash")
   displayName  String    @map("display_name")
   isActive     Boolean   @default(true) @map("is_active")

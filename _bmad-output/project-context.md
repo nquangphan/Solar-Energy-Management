@@ -98,6 +98,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 - **Message lỗi validate trả client là tiếng Việt:** `createValidationPipe` dịch câu mặc định tiếng Anh của class-validator theo mã constraint (bảng `BUILT_IN_MESSAGES`); decorator mới ngoài bảng ra "Giá trị không hợp lệ." — muốn câu cụ thể thì thêm vào bảng hoặc truyền `{ message }` tiếng Việt. Test `validation-messages.spec.ts` chạy pipe thật.
 - Sửa giá danh mục **KHÔNG hồi tố** đơn đã chốt (snapshot đã khoá).
 - Ẩn/disable UI theo quyền **không phải bảo mật** — backend enforce mọi request.
+- **Đăng nhập bằng SĐT (10.9):** định danh `accounts.phone` (E.164, `@unique`, nullable cho account cũ) qua `accountPhoneOrThrow` → `normalizeVnPhone` — số rác ⇒ 400 `fieldErrors.phone` TRƯỚC khi tra; client gửi chuỗi THÔ. `email` gửi kèm body `/auth/login|forgot-password|reset-password` ⇒ 400 (`@IsAbsent` + `@ApiHideProperty` — ẩn khỏi OpenAPI để client sinh không gửi `email: null`). `/me` có `phone`; `email` chỉ còn là liên hệ. Seed bắt buộc `SEED_ADMIN_PHONE`.
 
 ---
 

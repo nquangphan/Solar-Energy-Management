@@ -74,15 +74,18 @@ test('the password port exposes the SAME three methods on both platforms (Story 
   // The port must never carry the verification code INBOUND: `requestResetCode`
   // returns only the code lifetime. A `code` in a RESPONSE shape would mean the
   // backend leaked it — the whole reset flow collapses if that is ever allowed.
-  assert.match(webPort, /requestResetCode\(email: string\): Promise<\{ expiresInSeconds: number \}>/, 'web requestResetCode must resolve only expiresInSeconds');
-  assert.match(mobPort, /Future<int> requestResetCode\(String email\)/, 'mobile requestResetCode must resolve only the code lifetime');
+  assert.match(webPort, /requestResetCode\(phone: string\): Promise<\{ expiresInSeconds: number \}>/, 'web requestResetCode must resolve only expiresInSeconds');
+  assert.match(mobPort, /Future<int> requestResetCode\(String phone\)/, 'mobile requestResetCode must resolve only the code lifetime');
+  // Reset is keyed by the same phone (10.9) on both platforms.
+  assert.match(webPort, /resetPassword\(input: \{\s*phone: string;/, 'web resetPassword must take phone');
+  assert.match(mobPort, /resetPassword\(\{\s*required String phone,/, 'mobile resetPassword must take phone');
 });
 
 test('the auth port exposes the SAME three methods on both platforms (Story 10.6)', () => {
   const webPort = readFileSync(resolve(webDir, 'auth-port.ts'), 'utf8');
   const mobPort = readFileSync(resolve(mobDir, 'auth_port.dart'), 'utf8');
-  assert.match(webPort, /login\(input: \{ email: string; password: string \}\): Promise<void>/, 'web AuthPort.login');
-  assert.match(mobPort, /Future<void> login\(\{required String email, required String password\}\)/, 'mobile AuthPort.login');
+  assert.match(webPort, /login\(input: \{ phone: string; password: string \}\): Promise<void>/, 'web AuthPort.login');
+  assert.match(mobPort, /Future<void> login\(\{required String phone, required String password\}\)/, 'mobile AuthPort.login');
   for (const [name, src, restore, logout] of [
     ['web', webPort, /restoreSession\(\): Promise<boolean>/, /logout\(\): Promise<void>/],
     ['mobile', mobPort, /Future<bool> restoreSession\(\)/, /Future<void> logout\(\)/],

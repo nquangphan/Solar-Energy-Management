@@ -18,18 +18,18 @@ class HttpPasswordPort implements PasswordPort {
   final Transport _transport;
 
   @override
-  Future<int> requestResetCode(String email) async {
+  Future<int> requestResetCode(String phone) async {
     final response = await _transport.call(
-      () => _client.auth.authControllerForgotPassword(body: ForgotPasswordRequestDto(email: email)),
+      () => _client.auth.authControllerForgotPassword(body: ForgotPasswordRequestDto(phone: phone)),
     );
     return response.expiresInSeconds.toInt();
   }
 
   @override
-  Future<void> resetPassword({required String email, required String code, required String newPassword}) =>
+  Future<void> resetPassword({required String phone, required String code, required String newPassword}) =>
       _transport.call(
         () => _client.auth.authControllerResetPassword(
-          body: ResetPasswordRequestDto(email: email, code: code, newPassword: newPassword),
+          body: ResetPasswordRequestDto(phone: phone, code: code, newPassword: newPassword),
         ),
       );
 

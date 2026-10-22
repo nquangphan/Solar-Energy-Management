@@ -1,9 +1,10 @@
 import 'dotenv/config';
 import 'reflect-metadata';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { PasswordService } from '../src/auth/password.service';
 import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
+import { normalizeVnPhone } from '../src/customers/domain/phone';
 
 /**
  * Seed MỘT account admin để đăng nhập được lúc dev (AC-1 "có gì để đăng nhập"). Đọc
@@ -110,36 +111,63 @@ export async function seedCustomerSources(prisma: PrismaClient): Promise<void> {
 }
 
 /**
- * Seed account admin — CHỈ chạy khi có `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD`.
+ * Seed account admin — CHỈ chạy khi có `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` +
+ * `SEED_ADMIN_PHONE` (đăng nhập bằng SĐT từ 10.9; email giữ làm liên hệ).
  *
- * Vắng CẢ HAI ⇒ bỏ qua (danh mục nguồn khách vẫn được seed): dữ liệu tham chiếu mà
+ * Vắng CẢ BA ⇒ bỏ qua (danh mục nguồn khách vẫn được seed): dữ liệu tham chiếu mà
  * `Customer.sourceId` FK tới không được phép phụ thuộc vào việc máy đó có đặt credential admin
- * hay không. Có MỘT mà thiếu cái kia ⇒ ném lỗi: đó là cấu hình gõ nhầm, không phải chủ ý bỏ qua.
+ * hay không. Có một/hai mà thiếu cái khác ⇒ ném lỗi: đó là cấu hình gõ nhầm, không phải chủ ý
+ * bỏ qua. SĐT lưu E.164 qua `normalizeVnPhone` — cùng hàm login dùng để tra.
  */
 async function seedAdminAccount(prisma: PrismaClient): Promise<void> {
-  // Lowercase to match AccountsService.normalizeEmail — email is case-insensitive.
+  // Lowercase — email is case-insensitive contact info (`accounts.email` is unique).
   const email = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD;
-  if (!email && !password) {
+  const rawPhone = process.env.SEED_ADMIN_PHONE?.trim();
+  if (!email && !password && !rawPhone) {
     console.log(
-      'Bỏ qua seed admin: thiếu SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD trong .env.',
+      'Bỏ qua seed admin: thiếu SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD + SEED_ADMIN_PHONE trong .env.',
     );
     return;
   }
-  if (!email || !password) {
+  if (!email || !password || !rawPhone) {
     throw new Error(
-      'Cần CẢ HAI SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD trong .env để seed admin.',
+      'Cần CẢ BA SEED_ADMIN_EMAIL + SEED_ADMIN_PASSWORD + SEED_ADMIN_PHONE trong .env để seed admin.',
     );
+  }
+  const phone = normalizeVnPhone(rawPhone);
+  if (phone === null) {
+    throw new Error('SEED_ADMIN_PHONE không phải SĐT Việt Nam hợp lệ.');
   }
   const isSuperAdmin = process.env.SEED_ADMIN_IS_SUPER_ADMIN === 'true';
 
   const passwordHash = await new PasswordService().hash(password);
-  const account = await prisma.account.upsert({
-    where: { email },
-    update: { passwordHash, isActive: true },
-    create: { email, passwordHash, displayName: 'Admin', isActive: true },
-  });
-  console.log(`Đã seed account admin: ${email}`);
+  let account: { id: string };
+  try {
+    account = await prisma.account.upsert({
+      where: { email },
+      update: { passwordHash, isActive: true, phone },
+      create: {
+        email,
+        phone,
+        passwordHash,
+        displayName: 'Admin',
+        isActive: true,
+      },
+    });
+  } catch (err: unknown) {
+    // The number already signs in another account: never take over someone's identity.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === 'P2002'
+    ) {
+      throw new Error(
+        `SEED_ADMIN_PHONE ${phone} đã thuộc một account khác — đổi số khác.`,
+      );
+    }
+    throw err;
+  }
+  console.log(`Đã seed account admin: ${email} (đăng nhập bằng ${phone})`);
 
   if (isSuperAdmin) {
     const keys = [...new Set(ROLE_PRESETS.SUPER_ADMIN)];

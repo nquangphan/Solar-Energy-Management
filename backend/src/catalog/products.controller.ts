@@ -47,7 +47,7 @@ import { ProductsService } from './products.service';
  * `canViewCosts` resolve TƯƠI từ DB mỗi request qua `AccountPermissionsService`
  * (AD-8) — KHÔNG suy từ JWT claim (2.3 cố ý không nhét quyền vào token: quyền đổi runtime,
  * token thì stale) và KHÔNG đọc từ `request` thô (`PermissionsGuard` không gắn effective
- * set vào request; `@CurrentAccount()` chỉ mang `{ id, email, displayName }`).
+ * set vào request; `@CurrentAccount()` chỉ mang `{ id, email, phone, displayName }`).
  *
  * Controller KHÔNG dựng envelope lỗi: service ném `AppException`, `AllExceptionsFilter`
  * dựng envelope (AD-5).

@@ -46,6 +46,7 @@ describe('JwtAuthGuard (unit)', () => {
   const activeAccount = {
     id: 'acc-1',
     email: 'user@example.com',
+    phone: '+84912345678',
     displayName: 'Người Dùng',
     passwordHash: 'argon2-hash-secret',
     isActive: true,
@@ -127,6 +128,7 @@ describe('JwtAuthGuard (unit)', () => {
     expect(request.account).toEqual({
       id: 'acc-1',
       email: 'user@example.com',
+      phone: '+84912345678',
       displayName: 'Người Dùng',
     });
     expect(JSON.stringify(request.account)).not.toContain('passwordHash');

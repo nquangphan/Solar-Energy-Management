@@ -9,29 +9,29 @@ import 'support/api_stack.dart';
 import 'support/fake_http.dart';
 
 void main() {
-  test('requestResetCode posts the email (no Bearer) and returns the lifetime', () async {
+  test('requestResetCode posts the raw phone (no Bearer) and returns the lifetime', () async {
     final s = ApiStack((_) => jsonBody(200, {'expiresInSeconds': 300}));
-    expect(await HttpPasswordPort(s.client, s.transport).requestResetCode('nv@pns.solar'), 300);
+    expect(await HttpPasswordPort(s.client, s.transport).requestResetCode('0912 345 678'), 300);
     final request = s.adapter.requests.single;
     expect([request.method, request.path], ['POST', '/auth/forgot-password']);
-    expect(request.json, {'email': 'nv@pns.solar'});
+    expect(request.json, {'phone': '0912 345 678'});
     expect(request.authorization, isNull);
   });
 
-  test('resetPassword posts email, code and new password', () async {
+  test('resetPassword posts phone, code and new password', () async {
     final s = ApiStack((_) => noContent());
     await HttpPasswordPort(
       s.client,
       s.transport,
-    ).resetPassword(email: 'nv@pns.solar', code: '123456', newPassword: 'MatKhauMoi#1');
+    ).resetPassword(phone: '0912345678', code: '123456', newPassword: 'MatKhauMoi#1');
     final request = s.adapter.to('/auth/reset-password').single;
-    expect(request.json, {'email': 'nv@pns.solar', 'code': '123456', 'newPassword': 'MatKhauMoi#1'});
+    expect(request.json, {'phone': '0912345678', 'code': '123456', 'newPassword': 'MatKhauMoi#1'});
   });
 
   test('resetPassword with a wrong code throws the backend message', () async {
     final s = ApiStack((_) => jsonBody(400, envelope('VALIDATION_ERROR', 'Mã xác nhận không đúng hoặc đã hết hạn.')));
     await expectLater(
-      HttpPasswordPort(s.client, s.transport).resetPassword(email: 'nv@pns.solar', code: '000000', newPassword: 'x'),
+      HttpPasswordPort(s.client, s.transport).resetPassword(phone: '0912345678', code: '000000', newPassword: 'x'),
       throwsA(isA<ApiError>().having((e) => e.message, 'message', 'Mã xác nhận không đúng hoặc đã hết hạn.')),
     );
     expect(s.adapter.to('/auth/refresh'), isEmpty);

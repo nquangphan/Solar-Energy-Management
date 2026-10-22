@@ -49,7 +49,7 @@ export class AuthController {
     description: 'Sai thông tin đăng nhập (UNAUTHENTICATED, message generic).',
   })
   login(@Body() body: LoginRequestDto): Promise<AuthTokensDto> {
-    return this.auth.login(body.email, body.password);
+    return this.auth.login(body.phone, body.password);
   }
 
   @Post('refresh')
@@ -80,12 +80,12 @@ export class AuthController {
   @ApiOkResponse({
     type: ForgotPasswordResponseDto,
     description:
-      'Luôn 200 với cùng một body, dù email tồn tại hay không (chống dò email hợp lệ).',
+      'Luôn 200 với cùng một body, dù SĐT tồn tại hay không (chống dò SĐT hợp lệ).',
   })
   forgotPassword(
     @Body() body: ForgotPasswordRequestDto,
   ): Promise<ForgotPasswordResponseDto> {
-    return this.passwordReset.requestCode(body.email);
+    return this.passwordReset.requestCode(body.phone);
   }
 
   @Post('reset-password')
@@ -96,9 +96,9 @@ export class AuthController {
   @ApiUnauthorizedResponse({
     type: ErrorEnvelopeDto,
     description:
-      'Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc email lạ (UNAUTHENTICATED, một message duy nhất).',
+      'Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc SĐT lạ (UNAUTHENTICATED, một message duy nhất).',
   })
   async resetPassword(@Body() body: ResetPasswordRequestDto): Promise<void> {
-    await this.passwordReset.reset(body.email, body.code, body.newPassword);
+    await this.passwordReset.reset(body.phone, body.code, body.newPassword);
   }
 }

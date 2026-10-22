@@ -31,6 +31,7 @@ Future<void> _pumpExample(WidgetTester tester, MeResponse me) async {
 const _superAdmin = MeResponse(
   id: 'a1',
   email: 'sa@pns.solar',
+  phone: null,
   displayName: 'Super Admin',
   permissions: ['audit.read', 'orders.view_all', 'permissions.manage'],
 );
@@ -45,7 +46,7 @@ void main() {
 
     test('empty permissions → empty set (revoked account edge case)', () {
       const revoked = MeResponse(
-          id: 'x', email: 'e', displayName: 'D', permissions: []);
+          id: 'x', email: 'e', phone: null, displayName: 'D', permissions: []);
       expect(toPermissionSet(revoked), isEmpty);
     });
   });
@@ -55,7 +56,7 @@ void main() {
       late String scopeValue;
       await tester.pumpWidget(_host(PermissionsProvider(
         port: const FakeMePort(MeResponse(
-            id: 'a', email: 'e', displayName: 'D',
+            id: 'a', email: 'e', phone: null, displayName: 'D',
             permissions: ['orders.view_all'])),
         child: Builder(builder: (context) {
           scopeValue = PermissionsScope.of(context).orderScope;
@@ -70,7 +71,7 @@ void main() {
       late String scopeValue;
       await tester.pumpWidget(_host(PermissionsProvider(
         port: const FakeMePort(MeResponse(
-            id: 'a', email: 'e', displayName: 'D',
+            id: 'a', email: 'e', phone: null, displayName: 'D',
             permissions: ['orders.view_own'])),
         child: Builder(builder: (context) {
           scopeValue = PermissionsScope.of(context).orderScope;
@@ -112,7 +113,7 @@ void main() {
       await _pumpExample(
         tester,
         const MeResponse(
-            id: 'f', email: 'e', displayName: 'D',
+            id: 'f', email: 'e', phone: null, displayName: 'D',
             permissions: ['dashboard.finance_view']),
       );
       expect(find.text('1.250.000.000 đ'), findsOneWidget);

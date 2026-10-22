@@ -8,7 +8,7 @@
 
 export interface AuthPort {
   /** POST /auth/login — rejects with the AD-5 error (401 wrong credentials, 400 validation). */
-  login(input: { email: string; password: string }): Promise<void>;
+  login(input: { phone: string; password: string }): Promise<void>;
   /** Start-up: trade the stored refresh token for an access token. false ⇒ show Đăng nhập. */
   restoreSession(): Promise<boolean>;
   /** POST /auth/logout with the stored refresh token; ALWAYS clears the local session. */

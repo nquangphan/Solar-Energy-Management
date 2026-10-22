@@ -41,7 +41,7 @@ test('(a) session module ships MePort + MeResponse + toPermissionSet(perms[] →
   );
   const generated = readFileSync(resolve(repoRoot, 'web/src/api/generated/schema.d.ts'), 'utf8');
   const meDto = /\n {8}MeResponseDto: \{[\s\S]*?\n {8}\};/.exec(generated)?.[0] ?? '';
-  for (const field of ['id', 'email', 'displayName', 'permissions']) {
+  for (const field of ['id', 'email', 'phone', 'displayName', 'permissions']) {
     assert.match(meDto, new RegExp(`\\b${field}: `), `MeResponseDto must carry the ${field} field (/me contract)`);
   }
   assert.match(meDto, /permissions: string\[\]/, 'MeResponseDto.permissions must be string[]');

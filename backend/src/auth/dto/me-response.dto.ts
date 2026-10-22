@@ -12,8 +12,17 @@ export class MeResponseDto {
   @ApiProperty({ description: 'ID account (UUID).' })
   id!: string;
 
-  @ApiProperty({ description: 'Email đăng nhập.' })
+  @ApiProperty({
+    description: 'Email liên hệ (không còn là định danh đăng nhập).',
+  })
   email!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'SĐT đăng nhập (E.164) — null khi account chưa có số.',
+  })
+  phone!: string | null;
 
   @ApiProperty({ description: 'Tên hiển thị.' })
   displayName!: string;

@@ -38,12 +38,12 @@ Map<String, Object?> _customer(String phone, String name) => {
   'updatedAt': '2026-07-13T00:00:00.000Z',
 };
 
-/// A backend for two accounts: `a@…` holds [permsA], `b@…` holds [permsB]; each
+/// A backend for two accounts: `0911…` (A) holds [permsA], `0922…` (B) holds [permsB]; each
 /// login hands out a token naming its account, /me answers for that token.
 FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB = const []}) => (r) {
   switch (r.path) {
     case '/auth/login':
-      final who = ((r.json as Map)['email'] as String).startsWith('b') ? 'b' : 'a';
+      final who = ((r.json as Map)['phone'] as String).startsWith('0922') ? 'b' : 'a';
       return jsonBody(200, tokens('access-$who', 'refresh-$who'));
     case '/auth/refresh':
       return jsonBody(200, tokens('access-a', 'refresh-a'));
@@ -91,8 +91,8 @@ Future<void> _openMenu(WidgetTester tester) async {
   await _navigated(tester);
 }
 
-Future<void> _login(WidgetTester tester, String email) async {
-  await tester.enterText(find.byType(TextField).at(0), email);
+Future<void> _login(WidgetTester tester, String phone) async {
+  await tester.enterText(find.byType(TextField).at(0), phone);
   await tester.enterText(find.byType(TextField).at(1), 'secret-1');
   await tester.tap(find.widgetWithText(AppButton, 'Đăng nhập'));
   await settle(tester);
@@ -341,7 +341,7 @@ void main() {
 
     await _logout(tester);
     expect(find.byType(LoginScreen), findsOneWidget);
-    await _login(tester, 'b@pns.solar');
+    await _login(tester, '0922222222');
 
     // B may see orders: B lands on the order list; B's Menu is B's.
     expect(find.byType(OrderListScreen), findsOneWidget);

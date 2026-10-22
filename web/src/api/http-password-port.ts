@@ -10,13 +10,13 @@ import type { ApiClient } from './client';
 export class HttpPasswordPort implements PasswordPort {
   constructor(private readonly client: ApiClient) {}
 
-  async requestResetCode(email: string): Promise<{ expiresInSeconds: number }> {
-    const { data } = await this.client.POST('/auth/forgot-password', { body: { email } });
+  async requestResetCode(phone: string): Promise<{ expiresInSeconds: number }> {
+    const { data } = await this.client.POST('/auth/forgot-password', { body: { phone } });
     if (!data) throw new ApiError(GENERIC_ERROR_MESSAGE);
     return { expiresInSeconds: data.expiresInSeconds };
   }
 
-  async resetPassword(input: { email: string; code: string; newPassword: string }): Promise<void> {
+  async resetPassword(input: { phone: string; code: string; newPassword: string }): Promise<void> {
     // 204 — there is no body to read.
     await this.client.POST('/auth/reset-password', { body: input });
   }

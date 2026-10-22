@@ -26,19 +26,19 @@ class _Auth {
 void main() {
   test('login 200 stores both tokens and sends the typed body', () async {
     final a = _Auth((_) => jsonBody(200, tokens('access-1', 'refresh-1')));
-    await a.port.login(email: 'nv@pns.solar', password: 'secret-1');
+    await a.port.login(phone: '0912 345 678', password: 'secret-1');
     expect(a.session.accessToken, 'access-1');
     expect(a.store.values[kRefreshTokenKey], 'refresh-1');
     final request = a.adapter.requests.single;
     expect([request.method, request.path], ['POST', '/auth/login']);
-    expect(request.json, {'email': 'nv@pns.solar', 'password': 'secret-1'});
+    expect(request.json, {'phone': '0912 345 678', 'password': 'secret-1'});
     expect(request.authorization, isNull);
   });
 
   test('login 401 throws the envelope message and stores nothing', () async {
     final a = _Auth((_) => jsonBody(401, envelope('UNAUTHENTICATED', 'Thông tin đăng nhập không đúng')));
     await expectLater(
-      a.port.login(email: 'nv@pns.solar', password: 'wrong'),
+      a.port.login(phone: '0912345678', password: 'wrong'),
       throwsA(isA<ApiError>()
           .having((e) => e.message, 'message', 'Thông tin đăng nhập không đúng')
           .having((e) => e.status, 'status', 401)),

@@ -9,7 +9,8 @@
 import '../../api/generated/models/me_response_dto.dart';
 
 /// The `/me` payload — the generated `MeResponseDto` (Story 10.7, AD-12):
-/// `{ id, email, displayName, permissions: string[] }`; `permissions` is sorted,
+/// `{ id, email, phone, displayName, permissions: string[] }` (`phone` E.164 or
+/// null); `permissions` is sorted,
 /// each element a key in `backend/openapi/permissions.json`.
 typedef MeResponse = MeResponseDto;
 

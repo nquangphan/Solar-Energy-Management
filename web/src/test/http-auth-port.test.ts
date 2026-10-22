@@ -36,11 +36,11 @@ describe('HttpAuthPort', () => {
     const { port, session, storage, fetchImpl } = setup(() =>
       json(200, { accessToken: 'access-1', refreshToken: 'refresh-1', expiresIn: 900 }),
     );
-    await port.login({ email: 'admin@pns.vn', password: 'MatKhau123' });
+    await port.login({ phone: '0912 345 678', password: 'MatKhau123' });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const request = fetchImpl.mock.lastCall![0] as Request;
     expect(new URL(request.url).pathname).toBe('/auth/login');
-    expect(await request.json()).toEqual({ email: 'admin@pns.vn', password: 'MatKhau123' });
+    expect(await request.json()).toEqual({ phone: '0912 345 678', password: 'MatKhau123' });
     expect(session.getAccessToken()).toBe('access-1');
     expect(storage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-1');
   });
@@ -53,7 +53,7 @@ describe('HttpAuthPort', () => {
         traceId: 't-1',
       }),
     );
-    await expect(port.login({ email: 'admin@pns.vn', password: 'sai' })).rejects.toMatchObject({
+    await expect(port.login({ phone: '0912345678', password: 'sai' })).rejects.toMatchObject({
       status: 401,
       message: 'Thông tin đăng nhập không đúng',
     });
@@ -114,6 +114,6 @@ describe('HttpAuthPort', () => {
 
   it('rejections are ApiError instances', async () => {
     const { port } = setup(() => json(400, { code: 'VALIDATION_ERROR', message: 'Dữ liệu không hợp lệ', traceId: 't' }));
-    await expect(port.login({ email: 'x', password: 'y' })).rejects.toBeInstanceOf(ApiError);
+    await expect(port.login({ phone: 'x', password: 'y' })).rejects.toBeInstanceOf(ApiError);
   });
 });

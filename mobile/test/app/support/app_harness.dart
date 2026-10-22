@@ -70,4 +70,4 @@ Map<String, Object?> meBody(
   List<String> permissions, {
   String displayName = 'Nhân viên A',
   String email = 'nv@pns.solar',
-}) => {'id': 'acc-$email', 'email': email, 'displayName': displayName, 'permissions': permissions};
+}) => {'id': 'acc-$email', 'email': email, 'phone': null, 'displayName': displayName, 'permissions': permissions};

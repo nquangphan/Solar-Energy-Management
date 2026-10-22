@@ -35,12 +35,12 @@ npm run prisma:generate
 
 ## Đăng nhập được lúc dev (Story 2.3)
 
-Cần một Postgres đang chạy + `.env` có `DATABASE_URL` + `JWT_ACCESS_SECRET` (≥32 ký tự) + `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD` (xem `.env.example`). Sau đó:
+Cần một Postgres đang chạy + `.env` có `DATABASE_URL` + `JWT_ACCESS_SECRET` (≥32 ký tự) + `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`/`SEED_ADMIN_PHONE` (xem `.env.example`). Sau đó:
 
 ```bash
 npm run prisma:migrate:deploy   # áp toàn bộ migration đã commit (auth, danh mục, khách hàng, đơn hàng, tệp đính kèm, tồn kho…)
 npx prisma db seed              # tạo account admin; SEED_ADMIN_IS_SUPER_ADMIN=true → cấp preset SUPER_ADMIN
-npm run start:dev               # POST /auth/login với email/mật khẩu admin
+npm run start:dev               # POST /auth/login với SĐT/mật khẩu admin
 ```
 
 Token trả về: `{ accessToken (JWT ngắn), refreshToken (opaque), expiresIn }`. Refresh qua `POST /auth/refresh` (rotate), thu hồi qua `POST /auth/logout`. Chi tiết luật token/phiên: `CONVENTIONS.md#Auth`.
@@ -51,11 +51,11 @@ Quyền là **một registry chính tắc** (`src/accounts/domain/permission-reg
 
 ## Enforce quyền server-side + `/me` (Story 2.5)
 
-Guard **fail-closed toàn cục**: mọi endpoint mặc định cần `Authorization: Bearer <accessToken>` (`APP_GUARD`: `JwtAuthGuard` → `PermissionsGuard`). `@Public()` mở route hạ-tầng (`/health`, `/auth/*`); `@RequirePermissions(PERM.x)` (AND) đòi quyền cụ thể; thiếu token → 401, thiếu quyền → 403. `GET /me` trả bộ quyền hiệu lực `{ id, email, displayName, permissions: string[] }` (sorted) để FE dựng phiên — server enforce mỗi request, client gating chỉ UX (AD-4). Chi tiết: `CONVENTIONS.md#Guard quyền server-side`.
+Guard **fail-closed toàn cục**: mọi endpoint mặc định cần `Authorization: Bearer <accessToken>` (`APP_GUARD`: `JwtAuthGuard` → `PermissionsGuard`). `@Public()` mở route hạ-tầng (`/health`, `/auth/*`); `@RequirePermissions(PERM.x)` (AND) đòi quyền cụ thể; thiếu token → 401, thiếu quyền → 403. `GET /me` trả bộ quyền hiệu lực `{ id, email, phone, displayName, permissions: string[] }` (sorted) để FE dựng phiên — server enforce mỗi request, client gating chỉ UX (AD-4). Chi tiết: `CONVENTIONS.md#Guard quyền server-side`.
 
 ## Đặt lại & đổi mật khẩu (Story 2.8)
 
-Ba route: `POST /auth/forgot-password` (công khai — trả `{ expiresInSeconds }`, **cùng một response** dù email tồn tại hay không), `POST /auth/reset-password` (công khai — mã 6 số + mật khẩu mới → `204`), `POST /auth/change-password` (**cần Bearer** — verify mật khẩu hiện tại → `204`). Sau reset **và** sau change: **mọi phiên bị thu hồi**.
+Ba route: `POST /auth/forgot-password` (công khai — trả `{ expiresInSeconds }`, **cùng một response** dù SĐT tồn tại hay không), `POST /auth/reset-password` (công khai — SĐT + mã 6 số + mật khẩu mới → `204`), `POST /auth/change-password` (**cần Bearer** — verify mật khẩu hiện tại → `204`). Sau reset **và** sau change: **mọi phiên bị thu hồi**.
 
 Hai biến env (xem `.env.example`, có giá trị mặc định):
 

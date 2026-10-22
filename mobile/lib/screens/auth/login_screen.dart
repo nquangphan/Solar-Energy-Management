@@ -1,10 +1,12 @@
 // hand-authored — Flutter app-screen (Story 1.11, signs in since Story 10.6).
 // Mobile twin of the web LoginScreen: the Đăng nhập screen composed from shipped
 // design-system widgets (AppField/AppButton/AppCard-less full-screen form/
-// AppBanner/AppIcon) + tokens (AD-13). Validates empty/format locally, then
-// signs in through the injected [AuthPort]; the backend's message is shown
-// verbatim in the AppBanner. No token and no network here — the port's HTTP
-// adapter owns both. No router: success is emitted via [onLoggedIn].
+// AppBanner/AppIcon) + tokens (AD-13). Validates emptiness locally, then signs
+// in by phone (10.9) through the injected [AuthPort] with the RAW number, only
+// trimmed — the backend alone normalizes it (AD-9). Its message is shown verbatim
+// in the AppBanner; a 400 `fieldErrors.phone` goes right under the phone field.
+// No token and no network here — the port's HTTP adapter owns both. No router:
+// success is emitted via [onLoggedIn].
 //
 // Auth screen ⇒ no topbar / no bottom-nav: wrapped in AppPhoneFrame DIRECTLY,
 // never AppMobileShell (which adds a topbar + the locked 5-tab bottom-nav) —
@@ -40,48 +42,53 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _account = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
   final TextEditingController _password = TextEditingController();
   String? _error;
+  String? _phoneError;
   bool _busy = false;
 
   @override
   void dispose() {
-    _account.dispose();
+    _phone.dispose();
     _password.dispose();
     super.dispose();
   }
 
-  // Local validation first (AC-2): empty → AppBanner; minimal email format
-  // (accounts sign in by email only). Same Vietnamese copy as web for label parity.
+  // Local validation is emptiness only (the number's format is the backend's call,
+  // AD-9). Same Vietnamese copy as web for label parity.
   Future<void> _submit() async {
     if (_busy) return;
-    final String account = _account.text.trim();
+    final String phone = _phone.text.trim();
     final String password = _password.text.trim();
-    if (account.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Nhập đủ tài khoản và mật khẩu.');
-      return;
-    }
-    final bool isEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(account);
-    if (!isEmail) {
-      setState(() => _error = 'Tài khoản phải là email hợp lệ.');
+    if (phone.isEmpty || password.isEmpty) {
+      setState(() {
+        _error = 'Nhập đủ số điện thoại và mật khẩu.';
+        _phoneError = null;
+      });
       return;
     }
     setState(() {
       _error = null;
+      _phoneError = null;
       _busy = true;
     });
     try {
-      await widget.port.login(email: account, password: _password.text);
+      await widget.port.login(phone: phone, password: _password.text);
       if (!mounted) return;
       setState(() => _busy = false);
       widget.onLoggedIn();
     } catch (e) {
       if (!mounted) return;
+      final String? fieldMessage = e is ApiError ? _phoneMessageOf(e) : null;
       setState(() {
         _busy = false;
-        // A non-ApiError would carry an English runtime message — never show it.
-        _error = e is ApiError ? e.message : kGenericErrorMessage;
+        if (fieldMessage != null) {
+          _phoneError = fieldMessage;
+        } else {
+          // A non-ApiError would carry an English runtime message — never show it.
+          _error = e is ApiError ? e.message : kGenericErrorMessage;
+        }
       });
     }
   }
@@ -104,12 +111,16 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: AppTokens.space12),
             ],
             AppField(
-              label: 'Tài khoản',
+              label: 'Số điện thoại',
               size: AppFieldSize.large,
-              controller: _account,
-              placeholder: 'Email đăng nhập',
-              keyboardType: TextInputType.emailAddress,
+              controller: _phone,
+              placeholder: 'Nhập số điện thoại',
+              keyboardType: TextInputType.phone,
             ),
+            if (_phoneError != null) ...[
+              const SizedBox(height: AppTokens.space8),
+              AppBanner(tone: AppBannerTone.danger, message: _phoneError!),
+            ],
             const SizedBox(height: AppTokens.space12),
             AppField(
               label: 'Mật khẩu',
@@ -146,6 +157,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  /// The FIRST backend message about `phone`, or null (same rule as web).
+  String? _phoneMessageOf(ApiError e) {
+    for (final f in e.fieldErrors ?? const []) {
+      if (f.field == 'phone') return f.message;
+    }
+    return null;
   }
 
   Widget _brand() {

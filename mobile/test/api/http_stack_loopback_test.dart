@@ -55,7 +55,7 @@ class _Backend {
 
     switch ('${request.method} $path') {
       case 'POST /api/auth/login':
-        final ok = body is Map && body['email'] == 'nv@pns.solar' && body['password'] == 'secret-1';
+        final ok = body is Map && body['phone'] == '0912345678' && body['password'] == 'secret-1';
         return ok
             ? reply(200, tokens('access-1', 'refresh-1'))
             : reply(401, envelope('UNAUTHENTICATED', 'Thông tin đăng nhập không đúng'));
@@ -70,7 +70,7 @@ class _Backend {
         return reply(204);
       case 'GET /api/me':
         return request.headers.value(HttpHeaders.authorizationHeader) == 'Bearer $validAccess'
-            ? reply(200, {'id': 'u-1', 'email': 'nv@pns.solar', 'displayName': 'Nhân viên', 'permissions': <String>[]})
+            ? reply(200, {'id': 'u-1', 'email': 'nv@pns.solar', 'phone': '+84912345678', 'displayName': 'Nhân viên', 'permissions': <String>[]})
             : reply(401, envelope('UNAUTHENTICATED', 'Token hết hạn.'));
     }
     reply(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
@@ -100,7 +100,7 @@ void main() {
   tearDown(() => backend.server.close(force: true));
 
   test('sign in, an expired access token renewed + replayed, sign out — over a real socket', () async {
-    await port.login(email: 'nv@pns.solar', password: 'secret-1');
+    await port.login(phone: '0912345678', password: 'secret-1');
     expect(session.accessToken, 'access-1');
     expect(store.values[kRefreshTokenKey], 'refresh-1');
 
@@ -131,7 +131,7 @@ void main() {
 
   test('wrong password ⇒ ApiError with the backend message, no refresh, nothing stored', () async {
     await expectLater(
-      port.login(email: 'nv@pns.solar', password: 'wrong'),
+      port.login(phone: '0912345678', password: 'wrong'),
       throwsA(isA<ApiError>()
           .having((e) => e.status, 'status', 401)
           .having((e) => e.code, 'code', 'UNAUTHENTICATED')
@@ -159,7 +159,7 @@ void main() {
     final offline = Transport(baseUrl: 'http://127.0.0.1:$port/api', session: session);
     final auth = HttpAuthPort(PnsApiClient(offline.dio), session, offline);
     await expectLater(
-      auth.login(email: 'nv@pns.solar', password: 'secret-1'),
+      auth.login(phone: '0912345678', password: 'secret-1'),
       throwsA(isA<ApiError>()
           .having((e) => e.message, 'message', kNetworkErrorMessage)
           .having((e) => e.status, 'status', isNull)),

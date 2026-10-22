@@ -52,17 +52,33 @@ test('web LoginScreen composes from design-system components (AC-1)', () => {
   assert.ok(web.includes('tone="danger"'), 'LoginScreen.tsx must show errors via <Banner tone="danger">');
 });
 
-// (a.2) VALIDATE branches (AC-2): both the empty and the malformed-account
-// messages must exist so presentational validation actually has copy to show.
-test('web LoginScreen carries both validation messages (AC-2)', () => {
+// (a.2) VALIDATE (AC-2): sign-in is by phone since 10.9 and the client never judges
+// a number's format (AD-9) — only emptiness is checked locally, so the old email
+// regex and its message must be gone.
+test('web LoginScreen validates emptiness only — no email format check (AC-2, AD-9)', () => {
   assert.ok(
-    web.includes('Nhập đủ tài khoản và mật khẩu.'),
+    web.includes('Nhập đủ số điện thoại và mật khẩu.'),
     'LoginScreen.tsx must show the empty-field message',
   );
+  // Positive anchor on mobile too, so the absence checks below can't pass on an empty read.
   assert.ok(
-    web.includes('Tài khoản phải là email hợp lệ.'),
-    'LoginScreen.tsx must show the malformed-account message',
+    mobile.includes('Nhập đủ số điện thoại và mật khẩu.'),
+    'login_screen.dart must show the empty-field message',
   );
+  for (const [name, src] of [['web', web], ['mobile', mobile]]) {
+    assert.ok(!src.includes('Tài khoản phải là email hợp lệ.'), `${name} login must not keep the email-format message`);
+    assert.ok(!src.includes('@[^@'), `${name} login must not keep an email regex`);
+  }
+});
+
+// (a.3) The phone field: tel input + tel autocomplete on web, phone keyboard on mobile;
+// no email input left anywhere on the screen.
+test('the sign-in identifier is a phone field on both platforms (10.9)', () => {
+  assert.ok(web.includes('type="tel"'), 'LoginScreen.tsx phone field must be type="tel"');
+  assert.ok(web.includes('autoComplete="tel"'), 'LoginScreen.tsx phone field must set autoComplete="tel"');
+  assert.ok(!web.includes('type="email"'), 'LoginScreen.tsx must not keep an email input');
+  assert.ok(mobile.includes('TextInputType.phone'), 'login_screen.dart phone field must use TextInputType.phone');
+  assert.ok(!mobile.includes('TextInputType.emailAddress'), 'login_screen.dart must not keep the email keyboard');
 });
 
 test('mobile login_screen composes from design-system widgets (AC-1)', () => {
@@ -106,19 +122,33 @@ test('both platform screens exist (parity coverage, AC-3)', () => {
 test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => {
   const labels = [
     'Đăng nhập',
-    'Tài khoản',
+    'Số điện thoại',
     'Mật khẩu',
     'Quên mật khẩu',
     'Phương Nam Solar',
-    'Email đăng nhập',
+    'Nhập số điện thoại',
     'Nhập mật khẩu',
     // Validation copy is user-facing too — it must not drift between platforms.
-    'Nhập đủ tài khoản và mật khẩu.',
-    'Tài khoản phải là email hợp lệ.',
+    'Nhập đủ số điện thoại và mật khẩu.',
   ];
   for (const label of labels) {
     assert.ok(web.includes(label), `LoginScreen.tsx missing label "${label}"`);
     assert.ok(mobile.includes(label), `login_screen.dart missing label "${label}"`);
+  }
+});
+
+// (c.2) Field label/placeholder parity as EXACT attribute literals: a bare `includes` is
+// fooled when one string is a prefix of another (placeholder vs. its validation copy).
+test('field labels and placeholders match as exact literals on both platforms', () => {
+  const fields = [
+    ['label', 'Số điện thoại'],
+    ['placeholder', 'Nhập số điện thoại'],
+    ['label', 'Mật khẩu'],
+    ['placeholder', 'Nhập mật khẩu'],
+  ];
+  for (const [attr, value] of fields) {
+    assert.ok(web.includes(`${attr}="${value}"`), `LoginScreen.tsx must carry ${attr}="${value}"`);
+    assert.ok(mobile.includes(`${attr}: '${value}'`), `login_screen.dart must carry ${attr}: '${value}'`);
   }
 });
 

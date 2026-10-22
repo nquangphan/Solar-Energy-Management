@@ -751,6 +751,7 @@ As a nhân viên, I want đăng nhập bằng số điện thoại của mình, 
 - **Given** `GET /me`, **When** gọi, **Then** trả thêm `phone`; `openapi.json` sinh lại, client web + Dart sinh lại (drift-guard xanh).
 - **Given** màn Đăng nhập + Quên mật khẩu web và mobile, **When** dùng, **Then** ô "Số điện thoại" (bàn phím số trên mobile, `autocomplete="tel"` trên web) thay ô email; gửi chuỗi THÔ, client không tự chuẩn hoá (AD-9); lỗi `fieldErrors.phone` hiện dưới ô; bỏ `maskEmail` ở mobile, câu xác nhận không lộ số có tồn tại hay không.
 - **Given** test, **When** 5 lane, **Then** ca unit + e2e login bằng SĐT nhiều dạng (`0912 345 678`, `+84912345678`), ca email-trong-body ⇒ 400, ca account chưa có SĐT ⇒ 401 cùng message; ca DB: hai account trùng SĐT ⇒ unique vi phạm; widget test mobile + vitest web cho ô SĐT; smoke thật đăng nhập bằng SĐT trên web và emulator.
+- **Quyết định chốt khi làm story (2026-10-22):** `email` trong body bị 400 `isAbsent` ở CẢ BA route `/auth/login|forgot-password|reset-password` (kể cả `email: null`), field ẩn khỏi OpenAPI (`@ApiHideProperty`) để client sinh không bao giờ gửi; số không phân giải được ⇒ 400 `fieldErrors.phone` ở cả ba route, TRƯỚC khi tra account; câu xác nhận bước 2 Quên mật khẩu = "Nếu số điện thoại đã đăng ký, mã 6 số sẽ được gửi tới số đó. Mã có hiệu lực 5 phút." (không nhắc lại số đã gõ); client chỉ validate rỗng; seed: vắng cả ba biến ⇒ bỏ qua, thiếu một ⇒ ném, `SEED_ADMIN_PHONE` không hợp lệ ⇒ ném.
 - **Ngoài phạm vi:** form tạo/sửa account (Epic 8 — form account Epic 8 phải BẮT BUỘC SĐT, ghi vào Story 8.x khi viết); OTP SMS; đăng nhập bằng email song song.
 
 ## Epic 8: Quản trị — Dashboard, Phân quyền & Audit
@@ -776,6 +777,7 @@ As a Admin, I want tạo/sửa/vô hiệu hoá Account và chọn Role preset l�
 - **Given** tạo Account, **When** chọn Role preset, **Then** nạp bộ quyền mặc định của preset vào Account (FR-16).
 - **Given** một Account, **When** vô hiệu hoá, **Then** account không đăng nhập được nhưng dữ liệu/lịch sử giữ nguyên (FR-16).
 - **Given** thay đổi account, **When** lưu, **Then** ghi Audit qua event (FR-16, AD-18).
+- **Given** form tạo/sửa account, **When** lưu, **Then** SĐT BẮT BUỘC (đăng nhập bằng SĐT từ Story 10.9) — chuẩn hoá `normalizeVnPhone` (E.164), unique (`accounts_phone_key`, P2002 ⇒ 409/400 trỏ ô `phone`).
 
 ### Story 8.4: Cấu hình ma trận quyền hành động & duyệt
 As a Admin, I want mỗi quyền chuyển trạng thái và quyền duyệt là một mục ma trận cấu hình được, So that phân quyền linh hoạt không hardcode.

@@ -29,7 +29,7 @@ const DEAD_REFRESH = {
 };
 
 function me(permissions: string[], displayName = 'Tài khoản A') {
-  return { id: `acc-${displayName}`, email: 'a@pns.vn', displayName, permissions };
+  return { id: `acc-${displayName}`, email: 'a@pns.vn', phone: null, displayName, permissions };
 }
 const OWN_ORDERS = me(['orders.view_own']);
 const CUSTOMER_STAFF = me(['customers.manage', 'orders.view_own'], 'Tài khoản B');
@@ -62,8 +62,8 @@ async function boot(routes: Record<string, Handler>, storedRefreshToken?: string
   return { handlers, fetchMock, localStorage };
 }
 
-async function signIn(email = 'a@pns.vn') {
-  fireEvent.change(await screen.findByPlaceholderText('Email đăng nhập'), { target: { value: email } });
+async function signIn(phone = '0912345678') {
+  fireEvent.change(await screen.findByPlaceholderText('Nhập số điện thoại'), { target: { value: phone } });
   fireEvent.change(screen.getByPlaceholderText('Nhập mật khẩu'), { target: { value: 'MatKhau123' } });
   fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }));
 }
@@ -301,7 +301,7 @@ describe('composition root (main.tsx)', () => {
     const callsForA = handlers['GET /me'].mock.calls.length;
 
     account = CUSTOMER_STAFF;
-    await signIn('b@pns.vn');
+    await signIn('0987654321');
     await waitFor(() => expect(navLabels()).toEqual(['Đơn hàng', 'Khách hàng', 'Tra cứu bảo hành', 'Hồ sơ']));
     expect(window.location.pathname).toBe('/orders');
     expect(handlers['GET /me'].mock.calls.length).toBeGreaterThan(callsForA);
@@ -331,11 +331,11 @@ describe('composition root (main.tsx)', () => {
     });
     fireEvent.click(await screen.findByRole('button', { name: 'Quên mật khẩu?' }));
     expect(window.location.pathname).toBe('/forgot-password');
-    fireEvent.change(screen.getByPlaceholderText('Nhập email đã đăng ký'), { target: { value: 'a@pns.vn' } });
+    fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại đã đăng ký'), { target: { value: '0912 345 678' } });
     fireEvent.click(screen.getByRole('button', { name: 'Gửi mã' }));
     await waitFor(() => expect(handlers['POST /auth/forgot-password']).toHaveBeenCalledTimes(1));
     const request = handlers['POST /auth/forgot-password'].mock.lastCall![0];
-    expect(await request.json()).toEqual({ email: 'a@pns.vn' });
+    expect(await request.json()).toEqual({ phone: '0912 345 678' });
     expect(await screen.findByPlaceholderText('000000')).toBeTruthy();
   });
 });

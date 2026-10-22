@@ -6,20 +6,20 @@ import { HttpPasswordPort } from '../api/http-password-port';
 import { envelope, json, setupHarness, target } from './http-adapter-harness';
 
 describe('HttpPasswordPort', () => {
-  it('requestResetCode POSTs the email and resolves only the code lifetime', async () => {
+  it('requestResetCode POSTs the raw phone and resolves only the code lifetime', async () => {
     const h = setupHarness(() => json(200, { expiresInSeconds: 600 }));
-    await expect(new HttpPasswordPort(h.client).requestResetCode('a@pns.vn')).resolves.toEqual({
+    await expect(new HttpPasswordPort(h.client).requestResetCode('0912 345 678')).resolves.toEqual({
       expiresInSeconds: 600,
     });
     expect(h.fetchImpl).toHaveBeenCalledTimes(1);
     expect(h.requests[0].method).toBe('POST');
     expect(target(h.requests[0])).toBe('/auth/forgot-password');
-    expect(await h.requests[0].json()).toEqual({ email: 'a@pns.vn' });
+    expect(await h.requests[0].json()).toEqual({ phone: '0912 345 678' });
   });
 
-  it('resetPassword sends email/code/newPassword and resolves undefined on 204', async () => {
+  it('resetPassword sends phone/code/newPassword and resolves undefined on 204', async () => {
     const h = setupHarness(() => new Response(null, { status: 204 }));
-    const input = { email: 'a@pns.vn', code: '123456', newPassword: 'MatKhauMoi1' };
+    const input = { phone: '0912345678', code: '123456', newPassword: 'MatKhauMoi1' };
     await expect(new HttpPasswordPort(h.client).resetPassword(input)).resolves.toBeUndefined();
     expect(h.fetchImpl).toHaveBeenCalledTimes(1);
     expect(target(h.requests[0])).toBe('/auth/reset-password');
@@ -33,7 +33,7 @@ describe('HttpPasswordPort', () => {
       ]),
     );
     const error = await new HttpPasswordPort(h.client)
-      .resetPassword({ email: 'a@pns.vn', code: '000000', newPassword: 'MatKhauMoi1' })
+      .resetPassword({ phone: '0912345678', code: '000000', newPassword: 'MatKhauMoi1' })
       .catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({

@@ -128,8 +128,8 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Quên mật khẩu',
     'Gửi mã',
     'Mã & mật khẩu mới',
-    'Email đã đăng ký',
-    'Nhập email đã đăng ký',
+    'Số điện thoại đã đăng ký',
+    'Nhập số điện thoại đã đăng ký',
     'Mã xác thực',
     'Mật khẩu mới',
     'Nhập mật khẩu mới',
@@ -137,12 +137,11 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
     'Nhập lại mật khẩu mới',
     'Đặt lại mật khẩu',
     'Quay lại đăng nhập',
-    'Đã gửi mã 6 số đến ',
-    '. Mã có hiệu lực 5 phút.',
+    // Step 2 never echoes the number nor claims a code was sent (no existence leak).
+    'Nếu số điện thoại đã đăng ký, mã 6 số sẽ được gửi tới số đó. Mã có hiệu lực 5 phút.',
     'Gửi lại mã sau ',
     // Validation + failure copy is user-facing too.
-    'Nhập email đã đăng ký.',
-    'Email không hợp lệ.',
+    'Nhập số điện thoại đã đăng ký.',
     'Mã xác thực gồm đúng 6 chữ số.',
     'Mật khẩu tối thiểu 8 ký tự, có chữ và số.',
     'Xác nhận mật khẩu không khớp.',
@@ -155,6 +154,25 @@ test('Vietnamese labels are byte-identical on web and mobile (UX-DR-27)', () => 
   }
 });
 
+// (e.1) Field label/placeholder parity as EXACT attribute literals: a bare `includes` is
+// fooled when one string is a prefix of another (placeholder vs. its validation copy).
+test('field labels and placeholders match as exact literals on both platforms', () => {
+  const fields = [
+    ['label', 'Số điện thoại đã đăng ký'],
+    ['placeholder', 'Nhập số điện thoại đã đăng ký'],
+    ['label', 'Mã xác thực'],
+    ['placeholder', '000000'],
+    ['label', 'Mật khẩu mới'],
+    ['placeholder', 'Nhập mật khẩu mới'],
+    ['label', 'Xác nhận mật khẩu mới'],
+    ['placeholder', 'Nhập lại mật khẩu mới'],
+  ];
+  for (const [attr, value] of fields) {
+    assert.ok(web.includes(`${attr}="${value}"`), `ForgotPasswordScreen.tsx must carry ${attr}="${value}"`);
+    assert.ok(mobile.includes(`${attr}: '${value}'`), `forgot_password_screen.dart must carry ${attr}: '${value}'`);
+  }
+});
+
 // (e.2) ONE failure message for every reset branch — the backend refuses to say which
 // branch failed (anti-enumeration); the UI must not invent a distinction either.
 test('one generic failure message for every reset branch (anti-enumeration)', () => {
@@ -164,8 +182,22 @@ test('one generic failure message for every reset branch (anti-enumeration)', ()
   assert.equal(mobileMatches.length, 1, 'mobile must carry exactly ONE reset-failure message');
   // ...and it must not name a specific cause.
   for (const [name, src] of [['web', web], ['mobile', mobile]]) {
-    assert.ok(!/mã đã hết hạn|mã đã dùng|email không tồn tại|tài khoản không tồn tại/i.test(src), `${name} must not reveal WHICH branch failed`);
+    assert.ok(!/mã đã hết hạn|mã đã dùng|email không tồn tại|tài khoản không tồn tại|số điện thoại không tồn tại|chưa đăng ký/i.test(src), `${name} must not reveal WHICH branch failed`);
   }
+});
+
+// (e.3) Sign-in is by phone (10.9): the email field, its format check and the client-side
+// email masking are gone on both platforms; the number is sent RAW (AD-9).
+test('the forgot-password identifier is a phone field, no email masking left (10.9)', () => {
+  for (const [name, src] of [['web', web], ['mobile', mobile]]) {
+    assert.ok(!src.includes('maskEmail'), `${name} forgot-password must not keep maskEmail`);
+    assert.ok(!/Đã gửi mã 6 số đến/.test(src), `${name} step 2 must not claim the code was sent to the typed number`);
+    assert.ok(!src.includes('Email không hợp lệ.'), `${name} must not keep the email-format message`);
+  }
+  assert.ok(web.includes('type="tel"') && web.includes('autoComplete="tel"'), 'web phone field must be type="tel" + autoComplete="tel"');
+  assert.ok(!web.includes('type="email"'), 'web must not keep an email input');
+  assert.ok(mobile.includes('TextInputType.phone'), 'mobile phone field must use TextInputType.phone');
+  assert.ok(!mobile.includes('TextInputType.emailAddress'), 'mobile must not keep the email keyboard');
 });
 
 // (f) VIỀN NÉT — no ad-hoc elevation/shadow/gradient anywhere (AD-13, UX-DR-4), and

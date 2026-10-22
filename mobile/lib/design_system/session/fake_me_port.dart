@@ -15,6 +15,7 @@ import 'me_port.dart';
 const MeResponse kDemoMe = MeResponse(
   id: 'demo-account',
   email: 'demo@phuongnam.solar',
+  phone: '+84900000001',
   displayName: 'Quản lý (demo)',
   permissions: ['orders.view_all', 'permissions.manage'],
 );

@@ -103,7 +103,7 @@ describe('smoke render — mọi màn web/src/screens', () => {
   it('ForgotPasswordScreen', async () => {
     renderScreen(<ForgotPasswordScreen port={new FakePasswordPort()} />);
     expect(await screen.findByText('Quên mật khẩu')).toBeTruthy();
-    expect(screen.getByText('Email đã đăng ký')).toBeTruthy();
+    expect(screen.getByText('Số điện thoại đã đăng ký')).toBeTruthy();
   });
 
   it('ProfileScreen', async () => {

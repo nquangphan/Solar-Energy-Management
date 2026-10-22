@@ -23,16 +23,17 @@ class FakePasswordPort implements PasswordPort {
   final int expiresInSeconds;
 
   @override
-  Future<int> requestResetCode(String email) async {
-    // The real forgot-password endpoint ALWAYS returns 200 (anti-enumeration),
-    // so this never surfaces a failure — [throwWith] only models a reset/change
+  Future<int> requestResetCode(String phone) async {
+    // The real forgot-password endpoint returns the same 200 for a known and an
+    // unknown number (anti-enumeration; only a malformed one is a 400), so this
+    // never surfaces a failure — [throwWith] only models a reset/change
     // rejection, letting a test reach step 2 and then fail the submit.
     return expiresInSeconds;
   }
 
   @override
   Future<void> resetPassword({
-    required String email,
+    required String phone,
     required String code,
     required String newPassword,
   }) async {

@@ -28,7 +28,7 @@ const FAIR: CustomerSource = {
 const SOURCES = [...DEMO_CUSTOMER_SOURCES, FAIR];
 const CUSTOMER = { ...DEMO_CUSTOMERS[0], sourceId: FAIR.id };
 
-const ME = new FakeMePort({ id: 'acc-1', email: 'a@pns.vn', displayName: 'A', permissions: ['customers.manage'] });
+const ME = new FakeMePort({ id: 'acc-1', email: 'a@pns.vn', phone: null, displayName: 'A', permissions: ['customers.manage'] });
 
 function port() {
   return new FakeCustomersPort([CUSTOMER], SOURCES);

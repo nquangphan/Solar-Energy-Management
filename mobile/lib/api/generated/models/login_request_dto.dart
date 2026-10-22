@@ -9,14 +9,14 @@ part 'login_request_dto.g.dart';
 @JsonSerializable()
 class LoginRequestDto {
   const LoginRequestDto({
-    required this.email,
+    required this.phone,
     required this.password,
   });
   
   factory LoginRequestDto.fromJson(Map<String, Object?> json) => _$LoginRequestDtoFromJson(json);
   
-  /// Email đăng nhập.
-  final String email;
+  /// SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.
+  final String phone;
 
   /// Mật khẩu.
   final String password;

@@ -5,7 +5,7 @@
 //
 // THE VERIFICATION CODE NEVER CROSSES THIS PORT INBOUND. [requestResetCode]
 // returns only how long a code stays valid — the same value whether or not the
-// email exists (the backend refuses to reveal which). The code reaches the user
+// number is registered (the backend refuses to reveal which). The code reaches the user
 // out of band; the screen only ever SENDS one back.
 //
 // The backend enforces every rule behind these calls (AD-4): attempt ceiling,
@@ -21,13 +21,14 @@
 /// parses the AD-5 error envelope into the screen's banner copy. It lands with
 /// the app-runtime; until then [FakePasswordPort] drives tests.
 abstract class PasswordPort {
-  /// Ask for a reset code. Resolves identically for a known and an unknown email
-  /// — never branch the UI on "does this account exist".
-  Future<int> requestResetCode(String email);
+  /// Ask for a reset code for a RAW phone (the backend normalizes it). Resolves
+  /// identically for a known and an unknown number — never branch the UI on
+  /// "does this account exist".
+  Future<int> requestResetCode(String phone);
 
   /// Consume the code and set a new password. Throws on any invalid branch.
   Future<void> resetPassword({
-    required String email,
+    required String phone,
     required String code,
     required String newPassword,
   });

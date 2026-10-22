@@ -9,15 +9,15 @@ part 'reset_password_request_dto.g.dart';
 @JsonSerializable()
 class ResetPasswordRequestDto {
   const ResetPasswordRequestDto({
-    required this.email,
+    required this.phone,
     required this.code,
     required this.newPassword,
   });
   
   factory ResetPasswordRequestDto.fromJson(Map<String, Object?> json) => _$ResetPasswordRequestDtoFromJson(json);
   
-  /// Email đã đăng ký (cùng email đã yêu cầu mã).
-  final String email;
+  /// SĐT đã đăng ký (cùng số đã yêu cầu mã), dạng THÔ.
+  final String phone;
 
   /// Mã xác thực 6 chữ số đã nhận.
   final String code;

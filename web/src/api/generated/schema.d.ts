@@ -956,10 +956,10 @@ export interface components {
         };
         LoginRequestDto: {
             /**
-             * @description Email đăng nhập.
-             * @example admin@example.com
+             * @description SĐT dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.
+             * @example 0912345678
              */
-            email: string;
+            phone: string;
             /**
              * @description Mật khẩu.
              * @example MatKhauManh!23
@@ -1023,10 +1023,10 @@ export interface components {
         };
         ForgotPasswordRequestDto: {
             /**
-             * @description Email đã đăng ký của tài khoản cần đặt lại mật khẩu.
-             * @example admin@example.com
+             * @description SĐT đã đăng ký, dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.
+             * @example 0912345678
              */
-            email: string;
+            phone: string;
         };
         ForgotPasswordResponseDto: {
             /**
@@ -1037,10 +1037,10 @@ export interface components {
         };
         ResetPasswordRequestDto: {
             /**
-             * @description Email đã đăng ký (cùng email đã yêu cầu mã).
-             * @example admin@example.com
+             * @description SĐT đã đăng ký (cùng số đã yêu cầu mã), dạng THÔ.
+             * @example 0912345678
              */
-            email: string;
+            phone: string;
             /**
              * @description Mã xác thực 6 chữ số đã nhận.
              * @example 000000
@@ -1067,8 +1067,10 @@ export interface components {
         MeResponseDto: {
             /** @description ID account (UUID). */
             id: string;
-            /** @description Email đăng nhập. */
+            /** @description Email liên hệ (không còn là định danh đăng nhập). */
             email: string;
+            /** @description SĐT đăng nhập (E.164) — null khi account chưa có số. */
+            phone: string | null;
             /** @description Tên hiển thị. */
             displayName: string;
             /**
@@ -2940,7 +2942,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Luôn 200 với cùng một body, dù email tồn tại hay không (chống dò email hợp lệ). */
+            /** @description Luôn 200 với cùng một body, dù SĐT tồn tại hay không (chống dò SĐT hợp lệ). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2971,7 +2973,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc email lạ (UNAUTHENTICATED, một message duy nhất). */
+            /** @description Mã sai/hết hạn/đã dùng/vượt số lần thử, hoặc SĐT lạ (UNAUTHENTICATED, một message duy nhất). */
             401: {
                 headers: {
                     [name: string]: unknown;

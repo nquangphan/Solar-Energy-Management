@@ -1,6 +1,7 @@
 // LoginScreen against FakeAuthPort: the backend's message reaches the Banner
-// verbatim, a double submit is impossible while a request is in flight, and an
-// account that is not an email never reaches the port.
+// verbatim, a double submit is impossible while a request is in flight, the phone
+// reaches the port RAW (only trimmed — the backend normalizes, AD-9), and a 400
+// `fieldErrors.phone` shows right under the phone field.
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,8 +12,8 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 
 afterEach(cleanup);
 
-function fill(account: string, password: string) {
-  fireEvent.change(screen.getByPlaceholderText('Email đăng nhập'), { target: { value: account } });
+function fill(phone: string, password: string) {
+  fireEvent.change(screen.getByPlaceholderText('Nhập số điện thoại'), { target: { value: phone } });
   fireEvent.change(screen.getByPlaceholderText('Nhập mật khẩu'), { target: { value: password } });
 }
 
@@ -26,11 +27,12 @@ describe('LoginScreen', () => {
     const login = vi.spyOn(port, 'login');
     const onLoggedIn = vi.fn();
     render(<LoginScreen port={port} onLoggedIn={onLoggedIn} />);
-    fill(' admin@pns.vn ', 'MatKhau123');
+    fill(' 0912 345 678 ', 'MatKhau123');
     fireEvent.click(submitButton());
     await vi.waitFor(() => expect(onLoggedIn).toHaveBeenCalledTimes(1));
     expect(login).toHaveBeenCalledTimes(1);
-    expect(login).toHaveBeenCalledWith({ email: 'admin@pns.vn', password: 'MatKhau123' });
+    // Trimmed at both ends, inner spaces kept: the client never normalizes a phone.
+    expect(login).toHaveBeenCalledWith({ phone: '0912 345 678', password: 'MatKhau123' });
   });
 
   it('shows the backend 401 message verbatim in the alert Banner', async () => {
@@ -39,7 +41,7 @@ describe('LoginScreen', () => {
     );
     const onLoggedIn = vi.fn();
     render(<LoginScreen port={port} onLoggedIn={onLoggedIn} />);
-    fill('admin@pns.vn', 'sai');
+    fill('0912345678', 'sai');
     fireEvent.click(submitButton());
     expect((await screen.findByRole('alert')).textContent).toContain('Thông tin đăng nhập không đúng');
     expect(onLoggedIn).toHaveBeenCalledTimes(0);
@@ -49,7 +51,7 @@ describe('LoginScreen', () => {
   it('a failure that is not an ApiError shows the generic message, not its own text', async () => {
     const port = new FakeAuthPort(new TypeError('Cannot read properties of undefined'));
     render(<LoginScreen port={port} onLoggedIn={vi.fn()} />);
-    fill('admin@pns.vn', 'MatKhau123');
+    fill('0912345678', 'MatKhau123');
     fireEvent.click(submitButton());
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Không thực hiện được. Thử lại.');
@@ -65,7 +67,7 @@ describe('LoginScreen', () => {
     };
     const onLoggedIn = vi.fn();
     render(<LoginScreen port={port} onLoggedIn={onLoggedIn} />);
-    fill('admin@pns.vn', 'MatKhau123');
+    fill('0912345678', 'MatKhau123');
     fireEvent.click(submitButton());
     await vi.waitFor(() => expect(submitButton().disabled).toBe(true));
     fireEvent.click(submitButton());
@@ -75,13 +77,44 @@ describe('LoginScreen', () => {
     expect(onLoggedIn).toHaveBeenCalledTimes(1);
   });
 
-  it('a phone number is refused before reaching the port', async () => {
+  it('the phone field is a tel input with tel autocomplete', () => {
+    render(<LoginScreen port={new FakeAuthPort()} onLoggedIn={vi.fn()} />);
+    const input = screen.getByLabelText('Số điện thoại') as HTMLInputElement;
+    expect(input.type).toBe('tel');
+    expect(input.getAttribute('autocomplete')).toBe('tel');
+    expect(input.getAttribute('inputmode')).toBe('tel');
+  });
+
+  it('an empty phone is refused before reaching the port', async () => {
     const port = new FakeAuthPort();
     const login = vi.spyOn(port, 'login');
     render(<LoginScreen port={port} onLoggedIn={vi.fn()} />);
-    fill('0912345678', 'MatKhau123');
+    fill('   ', 'MatKhau123');
     fireEvent.click(submitButton());
-    expect((await screen.findByRole('alert')).textContent).toContain('Tài khoản phải là email hợp lệ.');
+    expect((await screen.findByRole('alert')).textContent).toContain('Nhập đủ số điện thoại và mật khẩu.');
     expect(login).toHaveBeenCalledTimes(0);
+  });
+
+  it('a 400 fieldErrors.phone shows right after the phone field, not in the top banner', async () => {
+    const message = 'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).';
+    const port = new FakeAuthPort(
+      new ApiError('Số điện thoại không hợp lệ.', {
+        status: 400,
+        code: 'VALIDATION_ERROR',
+        fieldErrors: [{ field: 'phone', code: 'isPhoneNumber', message }],
+      }),
+    );
+    render(<LoginScreen port={port} onLoggedIn={vi.fn()} />);
+    fill('abc', 'MatKhau123');
+    fireEvent.click(submitButton());
+
+    const fieldError = await screen.findByText(message);
+    const phoneInput = screen.getByLabelText('Số điện thoại');
+    const passwordInput = screen.getByLabelText('Mật khẩu');
+    // DOM order: phone input → its error → password input.
+    expect(phoneInput.compareDocumentPosition(fieldError) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(fieldError.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getAllByText(message)).toHaveLength(1);
   });
 });

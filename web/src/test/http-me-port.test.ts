@@ -5,7 +5,7 @@ import { ApiError } from '../api/api-error';
 import { HttpMePort } from '../api/http-me-port';
 import { envelope, json, setupHarness, target } from './http-adapter-harness';
 
-const ME = { id: 'acc-1', email: 'sale@pns.vn', displayName: 'Sale A', permissions: ['customers.manage'] };
+const ME = { id: 'acc-1', email: 'sale@pns.vn', phone: '+84912345678', displayName: 'Sale A', permissions: ['customers.manage'] };
 
 describe('HttpMePort', () => {
   it('fetchMe GETs /me with the bearer and resolves the payload', async () => {

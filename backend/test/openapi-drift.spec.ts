@@ -163,6 +163,38 @@ describe('OpenAPI drift-guard (AD-12)', () => {
     ]);
   });
 
+  it.each([
+    'LoginRequestDto',
+    'ForgotPasswordRequestDto',
+    'ResetPasswordRequestDto',
+  ])('%s identifies by a required phone and never exposes email', (name) => {
+    // `email` stays in the DTO only to be refused (@IsAbsent). If it leaks into the spec,
+    // the generated Dart client writes `"email": null` on every call and every mobile
+    // sign-in turns into a 400 — so the hidden field must stay hidden.
+    const document = buildOpenApiDocument(app);
+    const schema = document.components?.schemas?.[name] as {
+      required?: string[];
+      properties?: Record<string, unknown>;
+    };
+
+    expect(schema.required).toContain('phone');
+    expect(schema.properties).toHaveProperty('phone');
+    expect(schema.properties).not.toHaveProperty('email');
+  });
+
+  it('MeResponseDto.phone is a nullable string next to email', () => {
+    const document = buildOpenApiDocument(app);
+    const schema = document.components?.schemas?.MeResponseDto as {
+      required?: string[];
+      properties?: Record<string, { type?: string; nullable?: boolean }>;
+    };
+
+    expect(schema.properties?.phone).toEqual(
+      expect.objectContaining({ type: 'string', nullable: true }),
+    );
+    expect(schema.properties).toHaveProperty('email');
+  });
+
   it('CreateCustomerRequestDto đòi ĐÚNG 4 field định danh — không siết thêm', () => {
     // Bộ field bắt buộc là một QUYẾT ĐỊNH có chủ đích: Story 3.4 tạo khách INLINE giữa lúc dựng
     // báo giá, nên bắt gõ CCCD/MST lúc tạo sẽ giết chính luồng đó. Ai thêm một `@IsNotEmpty()`

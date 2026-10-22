@@ -17,7 +17,7 @@ class FakeAuthPort implements AuthPort {
   final bool restored;
 
   @override
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({required String phone, required String password}) async {
     if (throwWith != null) throw throwWith!;
   }
 

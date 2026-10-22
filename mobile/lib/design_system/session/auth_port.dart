@@ -8,7 +8,7 @@
 
 abstract class AuthPort {
   /// POST /auth/login — throws the AD-5 error (401 wrong credentials, 400 validation).
-  Future<void> login({required String email, required String password});
+  Future<void> login({required String phone, required String password});
 
   /// Start-up: trade the stored refresh token for an access token. false ⇒ show Đăng nhập.
   Future<bool> restoreSession();

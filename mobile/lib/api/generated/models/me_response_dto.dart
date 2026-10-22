@@ -11,6 +11,7 @@ class MeResponseDto {
   const MeResponseDto({
     required this.id,
     required this.email,
+    required this.phone,
     required this.displayName,
     required this.permissions,
   });
@@ -20,8 +21,11 @@ class MeResponseDto {
   /// ID account (UUID).
   final String id;
 
-  /// Email đăng nhập.
+  /// Email liên hệ (không còn là định danh đăng nhập).
   final String email;
+
+  /// SĐT đăng nhập (E.164) — null khi account chưa có số.
+  final String? phone;
 
   /// Tên hiển thị.
   final String displayName;

@@ -17,6 +17,7 @@ import type { MePort, MeResponse } from './me-port';
 export const DEMO_ME: MeResponse = {
   id: 'demo-account',
   email: 'demo@phuongnam.solar',
+  phone: '+84900000001',
   displayName: 'Quản lý (demo)',
   permissions: ['orders.view_all', 'permissions.manage'],
 };

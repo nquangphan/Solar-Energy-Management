@@ -79,6 +79,7 @@ describe('auth decorators (unit)', () => {
       const account: AuthenticatedAccount = {
         id: 'acc-1',
         email: 'u@e.com',
+        phone: null,
         displayName: 'U',
       };
       expect(currentAccountFactory()(undefined, ctxWith(account))).toBe(

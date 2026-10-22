@@ -15,6 +15,9 @@ import { initAppOnLoopback } from './util/listen-loopback';
  * unit test). Kiểm: body sai → 400 VALIDATION_ERROR + fieldErrors (ValidationPipe 2.2
  * áp cho route mới); creds sai → 401 UNAUTHENTICATED envelope; success trả AuthTokensDto
  * KHÔNG lộ passwordHash.
+ *
+ * Phone normalization through the REAL services lives in `auth-phone.e2e.spec.ts` — a
+ * mock here would only measure `jest.fn`.
  */
 describe('/auth/* (e2e)', () => {
   let app: INestApplication;
@@ -61,19 +64,61 @@ describe('/auth/* (e2e)', () => {
   }
 
   describe('POST /auth/login', () => {
-    it('body sai DTO → 400 VALIDATION_ERROR + fieldErrors (email, password), KHÔNG gọi service', async () => {
+    it('invalid DTO body → 400 VALIDATION_ERROR + fieldErrors (phone, password), service not called', async () => {
       const res = await request(server())
         .post('/auth/login')
-        .send({ email: 'khong-phai-email', password: '' });
+        .send({ phone: '', password: '' });
       const body = res.body as Envelope;
 
       expect(res.status).toBe(400);
       expect(body.code).toBe(ErrorCode.VALIDATION_ERROR);
       expect(Array.isArray(body.fieldErrors)).toBe(true);
       expect((body.fieldErrors ?? []).map((fe) => fe.field)).toEqual(
-        expect.arrayContaining(['email', 'password']),
+        expect.arrayContaining(['phone', 'password']),
       );
       expect(authMock.login).not.toHaveBeenCalled();
+    });
+
+    it('missing phone → 400 fieldErrors[phone], service not called', async () => {
+      const res = await request(server())
+        .post('/auth/login')
+        .send({ password: 'dung' });
+      const body = res.body as Envelope;
+
+      expect(res.status).toBe(400);
+      expect((body.fieldErrors ?? []).map((fe) => fe.field)).toContain('phone');
+      expect(authMock.login).toHaveBeenCalledTimes(0);
+    });
+
+    it.each([
+      ['an email string', 'user@example.com'],
+      ['email: null', null],
+    ])(
+      'email in the body (%s) → 400 isAbsent, never silently stripped',
+      async (_label, email) => {
+        const res = await request(server())
+          .post('/auth/login')
+          .send({ phone: '0912345678', password: 'dung', email });
+        const body = res.body as Envelope;
+
+        expect(res.status).toBe(400);
+        expect(body.code).toBe(ErrorCode.VALIDATION_ERROR);
+        expect(body.fieldErrors).toEqual([
+          expect.objectContaining({ field: 'email', code: 'isAbsent' }),
+        ]);
+        expect(authMock.login).toHaveBeenCalledTimes(0);
+      },
+    );
+
+    it('a phone that is not a string → 400 before the normalizer', async () => {
+      const res = await request(server())
+        .post('/auth/login')
+        .send({ phone: ['0912345678'], password: 'dung' });
+      expect(res.status).toBe(400);
+      expect(
+        ((res.body as Envelope).fieldErrors ?? []).map((fe) => fe.field),
+      ).toContain('phone');
+      expect(authMock.login).toHaveBeenCalledTimes(0);
     });
 
     it('creds sai → 401 envelope UNAUTHENTICATED (message generic, KHÔNG lộ chi tiết)', async () => {
@@ -86,7 +131,7 @@ describe('/auth/* (e2e)', () => {
       );
       const res = await request(server())
         .post('/auth/login')
-        .send({ email: 'user@example.com', password: 'sai' });
+        .send({ phone: '0912345678', password: 'sai' });
       const body = res.body as Envelope;
 
       expect(res.status).toBe(401);
@@ -103,7 +148,7 @@ describe('/auth/* (e2e)', () => {
       });
       const res = await request(server())
         .post('/auth/login')
-        .send({ email: 'user@example.com', password: 'dung' });
+        .send({ phone: '0912 345 678', password: 'dung' });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -113,7 +158,8 @@ describe('/auth/* (e2e)', () => {
       });
       // Không leak field account nhạy cảm.
       expect(JSON.stringify(res.body)).not.toContain('passwordHash');
-      expect(authMock.login).toHaveBeenCalledWith('user@example.com', 'dung');
+      // The controller passes the RAW phone through; normalizing is the service's job.
+      expect(authMock.login).toHaveBeenCalledWith('0912 345 678', 'dung');
     });
   });
 

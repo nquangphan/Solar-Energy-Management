@@ -6,7 +6,9 @@
 //
 // Real sign-in since Story 10.3: the screen validates presentation only, then
 // calls `AuthPort.login`; tokens never reach it (the adapter stores them). Sign-in
-// is by email only — accounts carry no phone. No router here (AD-1/2): success
+// is by phone since 10.9: the RAW string is sent (only trimmed) — the backend alone
+// normalizes it (AD-9) and answers 400 `fieldErrors.phone` for a number it cannot
+// parse, shown right under the field. No router here (AD-1/2): success
 // and the "Quên mật khẩu" link only EMIT intents; the caller decides what shows.
 import { useState } from 'react';
 import type { FormEvent } from 'react';
@@ -28,32 +30,39 @@ export interface LoginScreenProps {
 }
 
 export function LoginScreen({ port, onLoggedIn, onForgotPassword }: LoginScreenProps) {
-  const [account, setAccount] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Presentational validation first (empty / not an email), then the backend
-  // decides; its message is shown verbatim (AD-5).
+  // Presentational validation is emptiness only — the number's format is the
+  // backend's call (AD-9); its message is shown verbatim (AD-5).
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
-    if (account.trim() === '' || password.trim() === '') {
-      setError('Nhập đủ tài khoản và mật khẩu.');
-      return;
-    }
-    const email = account.trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      setError('Tài khoản phải là email hợp lệ.');
+    if (phone.trim() === '' || password.trim() === '') {
+      setError('Nhập đủ số điện thoại và mật khẩu.');
+      setPhoneError(null);
       return;
     }
     setError(null);
+    setPhoneError(null);
     setBusy(true);
     try {
-      await port.login({ email, password });
+      await port.login({ phone: phone.trim(), password });
     } catch (err) {
-      // Anything but an ApiError is a client bug: never show its (English) text.
-      setError(err instanceof ApiError ? err.message : GENERIC_ERROR_MESSAGE);
+      // A phone the backend could not parse belongs under its field, not in the banner.
+      const fieldMessage =
+        err instanceof ApiError
+          ? err.fieldErrors?.find((item) => item.field === 'phone')?.message
+          : undefined;
+      if (fieldMessage) {
+        setPhoneError(fieldMessage);
+      } else {
+        // Anything but an ApiError is a client bug: never show its (English) text.
+        setError(err instanceof ApiError ? err.message : GENERIC_ERROR_MESSAGE);
+      }
       setBusy(false);
       return;
     }
@@ -79,14 +88,16 @@ export function LoginScreen({ port, onLoggedIn, onForgotPassword }: LoginScreenP
               </Banner>
             )}
             <Field
-              label="Tài khoản"
+              label="Số điện thoại"
               size="lg"
-              placeholder="Email đăng nhập"
-              type="email"
-              autoComplete="username"
-              value={account}
-              onChange={(e) => setAccount(e.target.value)}
+              placeholder="Nhập số điện thoại"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
+            {phoneError && <Banner tone="danger">{phoneError}</Banner>}
             <Field
               label="Mật khẩu"
               size="lg"

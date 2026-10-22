@@ -40,7 +40,7 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
   };
 
   let accounts: {
-    findByEmail: jest.Mock;
+    findByPhone: jest.Mock;
     findById: jest.Mock;
     updatePasswordHash: jest.Mock;
   };
@@ -53,7 +53,7 @@ describe('AuthService.changePassword (unit, hermetic)', () => {
 
   beforeEach(async () => {
     accounts = {
-      findByEmail: jest.fn(),
+      findByPhone: jest.fn(),
       findById: jest.fn(),
       updatePasswordHash: jest.fn().mockResolvedValue(undefined),
     };

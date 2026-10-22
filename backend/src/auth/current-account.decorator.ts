@@ -8,6 +8,8 @@ import type { Request } from 'express';
 export interface AuthenticatedAccount {
   id: string;
   email: string;
+  /** Sign-in phone (E.164); `null` for an account that has no number yet. */
+  phone: string | null;
   displayName: string;
 }
 
@@ -17,7 +19,7 @@ export interface RequestWithAccount extends Request {
 }
 
 /**
- * `@CurrentAccount()` — lấy danh tính (`{ id, email, displayName }`) mà `JwtAuthGuard`
+ * `@CurrentAccount()` — lấy danh tính (`{ id, email, phone, displayName }`) mà `JwtAuthGuard`
  * gắn vào `request.account`, để controller KHÔNG đọc `request` thô.
  */
 export const CurrentAccount = createParamDecorator(

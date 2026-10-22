@@ -9,13 +9,13 @@ part 'forgot_password_request_dto.g.dart';
 @JsonSerializable()
 class ForgotPasswordRequestDto {
   const ForgotPasswordRequestDto({
-    required this.email,
+    required this.phone,
   });
   
   factory ForgotPasswordRequestDto.fromJson(Map<String, Object?> json) => _$ForgotPasswordRequestDtoFromJson(json);
   
-  /// Email đã đăng ký của tài khoản cần đặt lại mật khẩu.
-  final String email;
+  /// SĐT đã đăng ký, dạng THÔ — backend chuẩn hoá về E.164 rồi mới tra.
+  final String phone;
 
   Map<String, Object?> toJson() => _$ForgotPasswordRequestDtoToJson(this);
 }

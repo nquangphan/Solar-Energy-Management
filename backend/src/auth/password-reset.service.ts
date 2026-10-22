@@ -6,6 +6,7 @@ import { ErrorCode } from '../common/errors/error-code';
 import { AccountsService } from '../accounts/accounts.service';
 import { EventBus } from '../events/event-bus';
 import { PasswordService } from './password.service';
+import { accountPhoneOrThrow } from './account-phone';
 import { AUTH_CONFIG, type AuthConfig } from './auth.config';
 import {
   PasswordResetCompleted,
@@ -13,9 +14,9 @@ import {
 } from './domain/password-events';
 
 /**
- * Message DUY NHẤT cho MỌI nhánh reset-fail (email lạ / account inactive / không có mã
+ * Message DUY NHẤT cho MỌI nhánh reset-fail (SĐT lạ / account inactive / không có mã
  * sống / mã sai / mã hết hạn / vượt trần số lần thử). Cùng mã `UNAUTHENTICATED` + cùng
- * message → không tiết lộ email nào tồn tại, mã nào còn sống (mirror `AUTH_FAILED_MESSAGE`
+ * message → không tiết lộ SĐT nào tồn tại, mã nào còn sống (mirror `AUTH_FAILED_MESSAGE`
  * của login). KHÔNG dựng envelope ở đây — chỉ ném `AppException`; filter trung tâm dựng
  * envelope (AD-5).
  */
@@ -58,15 +59,16 @@ export class PasswordResetService {
   }
 
   /**
-   * Phát mã đặt lại. Trả **cùng một response** dù email tồn tại hay không, và tốn cùng
+   * Phát mã đặt lại. Trả **cùng một response** dù SĐT tồn tại hay không, và tốn cùng
    * lượng công việc (luôn băm đúng một mã) — chống user-enumeration qua cả body lẫn timing.
+   * A malformed number is a 400 before any lookup (format reveals no account).
    */
-  async requestCode(email: string): Promise<{ expiresInSeconds: number }> {
+  async requestCode(phone: string): Promise<{ expiresInSeconds: number }> {
     const expiresInSeconds = this.config.passwordResetTtlMs / MS_PER_SECOND;
-    const account = await this.accounts.findByEmail(email);
+    const account = await this.accounts.findByPhone(accountPhoneOrThrow(phone));
 
     // Băm LUÔN — kể cả khi account không tồn tại/bị vô hiệu. argon2id là chi phí trội của
-    // request này; bỏ nó ở nhánh "email lạ" làm response nhanh hơn hẳn → lộ email tồn tại.
+    // request này; bỏ nó ở nhánh "SĐT lạ" làm response nhanh hơn hẳn → lộ SĐT tồn tại.
     const code = generateCode();
     const codeHash = await this.passwords.hash(code);
 
@@ -106,8 +108,8 @@ export class PasswordResetService {
    * Tiêu thụ mã + đặt mật khẩu mới + **thu hồi mọi phiên**. Mọi nhánh sai ném cùng một
    * `AppException(UNAUTHENTICATED)` với cùng message.
    */
-  async reset(email: string, code: string, newPassword: string): Promise<void> {
-    const account = await this.accounts.findByEmail(email);
+  async reset(phone: string, code: string, newPassword: string): Promise<void> {
+    const account = await this.accounts.findByPhone(accountPhoneOrThrow(phone));
     // Tra mã theo `accountId`, KHÔNG theo hash: argon2 dùng salt ngẫu nhiên nên hash không
     // tra được, và hai account có thể cùng mã 6 số. (`Session.refreshTokenHash` unique được
     // vì token entropy cao + băm SHA-256 tất định — đừng bắt chước máy móc.)

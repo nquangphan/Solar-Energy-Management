@@ -38,7 +38,7 @@ class _ThrowingRestorePort implements AuthPort {
   Future<bool> restoreSession() async => throw StateError('restore crashed');
 
   @override
-  Future<void> login({required String email, required String password}) async {}
+  Future<void> login({required String phone, required String password}) async {}
 
   @override
   Future<void> logout() async {}
@@ -84,7 +84,7 @@ void main() {
     await tester.pumpWidget(app.widget);
     await _settle(tester);
 
-    await tester.enterText(find.byType(TextField).at(0), 'nv@pns.solar');
+    await tester.enterText(find.byType(TextField).at(0), '0912345678');
     await tester.enterText(find.byType(TextField).at(1), 'secret-1');
     await tester.tap(find.widgetWithText(AppButton, 'Đăng nhập'));
     await _settle(tester);
@@ -272,7 +272,7 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
-  testWidgets('Đăng nhập → Quên mật khẩu ⇒ sending the code posts the email; back ⇒ Đăng nhập', (tester) async {
+  testWidgets('Đăng nhập → Quên mật khẩu ⇒ sending the code posts the raw phone; back ⇒ Đăng nhập', (tester) async {
     final app = TestApp(_backend);
     await tester.pumpWidget(app.widget);
     await _settle(tester);
@@ -281,11 +281,14 @@ void main() {
     await _settle(tester);
     expect(find.byType(ForgotPasswordScreen), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField).first, 'nv@pns.solar');
+    await tester.enterText(find.byType(TextField).first, '0912 345 678');
     await tester.tap(find.widgetWithText(AppButton, 'Gửi mã'));
     await _settle(tester);
-    expect(app.adapter.to('/auth/forgot-password').single.json, {'email': 'nv@pns.solar'});
+    expect(app.adapter.to('/auth/forgot-password').single.json, {'phone': '0912 345 678'});
 
+    // Step 2's card scrolls; bring the back action into view before tapping it.
+    await tester.ensureVisible(find.widgetWithText(AppButton, 'Quay lại đăng nhập'));
+    await tester.pump();
     await tester.tap(find.widgetWithText(AppButton, 'Quay lại đăng nhập'));
     await _settle(tester);
     expect(find.byType(LoginScreen), findsOneWidget);

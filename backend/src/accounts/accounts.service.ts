@@ -11,7 +11,7 @@ export type AccountsTransactionClient = Prisma.TransactionClient;
 
 /**
  * `accounts/domain` sở hữu entity `Account` — nguồn danh tính DUY NHẤT (AD-8). Story
- * 2.3 chỉ cung cấp phần đọc mà `auth/` cần để đăng nhập (`findByEmail`/`findById`);
+ * 2.3 chỉ cung cấp phần đọc mà `auth/` cần để đăng nhập (`findByPhone`/`findById`);
  * KHÔNG build registry quyền / `/me` / guard ở đây (thuộc Story 2.4/2.5).
  *
  * Truy vấn DB CHỈ qua `PrismaService` (AD-1) — `auth/` KHÔNG chạm bảng `accounts`
@@ -22,18 +22,12 @@ export class AccountsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Chuẩn hoá email về chữ thường + trim — email không phân biệt hoa/thường.
-   * Dùng ở MỌI nơi ghi/đọc account theo email để tránh lệch hoa/thường.
+   * Look up the account by its sign-in phone (`@unique`). Takes an ALREADY-normalized
+   * E.164 string (`accountPhoneOrThrow`) — never a raw one, never `null`, so an account
+   * whose `phone` is still NULL cannot match. `null` if not found.
    */
-  static normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
-  }
-
-  /** Tra account theo email đăng nhập (`@unique`). `null` nếu không tồn tại. */
-  findByEmail(email: string): Promise<Account | null> {
-    return this.prisma.account.findUnique({
-      where: { email: AccountsService.normalizeEmail(email) },
-    });
+  findByPhone(phone: string): Promise<Account | null> {
+    return this.prisma.account.findUnique({ where: { phone } });
   }
 
   /** Tra account theo id (UUID). `null` nếu không tồn tại. */

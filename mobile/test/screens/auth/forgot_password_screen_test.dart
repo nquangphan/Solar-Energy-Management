@@ -2,11 +2,15 @@
 // Mirrors mobile/test/screens/auth/login_screen_test.dart: pump the real screen
 // with an injected FakePasswordPort and assert it composes the shipped widgets,
 // carries no bottom-nav (UX-DR-15), walks the two-step flow, and surfaces every
-// validation failure through an AppBanner (the Field has no error slot).
+// validation failure through an AppBanner (the Field has no error slot). Since
+// 10.9 the identifier is a RAW phone and step 2 never echoes it.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pns_mobile/api/api_error.dart';
+import 'package:pns_mobile/api/generated/models/field_error_dto.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
+import 'package:pns_mobile/design_system/session/password_port.dart';
 import 'package:pns_mobile/design_system/session/fake_password_port.dart';
 import 'package:pns_mobile/design_system/shell/shell.dart';
 import 'package:pns_mobile/screens/auth/forgot_password_screen.dart';
@@ -50,7 +54,7 @@ void main() {
       expect(find.text('Quên mật khẩu'), findsOneWidget);
       // AppField renders its label micro-uppercased (Dart `.toUpperCase()`),
       // unlike web's CSS text-transform which leaves the DOM text intact.
-      expect(find.text('Email đã đăng ký'.toUpperCase()), findsOneWidget);
+      expect(find.text('Số điện thoại đã đăng ký'.toUpperCase()), findsOneWidget);
       expect(find.text('Gửi mã'), findsWidgets);
       expect(find.text('Quay lại đăng nhập'), findsOneWidget);
     });
@@ -66,40 +70,60 @@ void main() {
       expect(find.byType(AppMobileShell), findsNothing);
     });
 
-    testWidgets('empty email surfaces an AppBanner error (AC-3)', (tester) async {
+    testWidgets('empty phone surfaces an AppBanner error (AC-3)', (tester) async {
       await tester.pumpWidget(_screen());
       expect(find.byType(AppBanner), findsNothing);
 
       await _tapLabel(tester, 'Gửi mã');
 
       expect(find.byType(AppBanner), findsOneWidget);
-      expect(find.text('Nhập email đã đăng ký.'), findsOneWidget);
+      expect(find.text('Nhập số điện thoại đã đăng ký.'), findsOneWidget);
     });
 
-    testWidgets('malformed email surfaces the format error', (tester) async {
+    testWidgets('the phone field opens the phone keyboard', (tester) async {
       await tester.pumpWidget(_screen());
+      final TextField phone = tester.widget<TextField>(find.byType(TextField).at(0));
+      expect(phone.keyboardType, TextInputType.phone);
+    });
 
-      await tester.enterText(find.byType(TextField).at(0), 'khong-phai-email');
+    testWidgets('400 fieldErrors.phone ⇒ the message sits right under the phone field', (tester) async {
+      const message = 'Số điện thoại không hợp lệ — cần số Việt Nam (vd 0912345678).';
+      await tester.pumpWidget(_host(ForgotPasswordScreen(
+        port: _RecordingPasswordPort(
+          requestError: ApiError('Số điện thoại không hợp lệ.', status: 400, fieldErrors: const [
+            FieldErrorDto(field: 'phone', code: 'isPhoneNumber', message: message),
+          ]),
+        ),
+      )));
+
+      await tester.enterText(find.byType(TextField).at(0), 'abc');
       await _tapLabel(tester, 'Gửi mã');
 
-      expect(find.text('Email không hợp lệ.'), findsOneWidget);
+      expect(find.text(message), findsOneWidget);
+      expect(find.text('Không gửi được mã. Thử lại sau.'), findsNothing);
+      final double phoneY = tester.getTopLeft(find.byType(TextField).at(0)).dy;
+      final double errorY = tester.getTopLeft(find.text(message)).dy;
+      final double buttonY = tester.getTopLeft(find.widgetWithText(AppButton, 'Gửi mã')).dy;
+      expect(phoneY < errorY && errorY < buttonY, isTrue);
     });
 
-    testWidgets('valid email advances to step 2 with the code-sent banner',
+    testWidgets('sends the raw phone; step 2 neither echoes it nor claims a code was sent',
         (tester) async {
-      await tester.pumpWidget(_screen());
+      final port = _RecordingPasswordPort();
+      await tester.pumpWidget(_host(ForgotPasswordScreen(port: port)));
 
-      await tester.enterText(find.byType(TextField).at(0), 'nguyen@example.com');
+      await tester.enterText(find.byType(TextField).at(0), ' 0912 345 678 ');
       await _tapLabel(tester, 'Gửi mã');
 
+      expect(port.requested, ['0912 345 678']);
       // Three fields now: mã, mật khẩu mới, xác nhận.
       expect(find.byType(AppField), findsNWidgets(3));
       expect(find.text('Đặt lại mật khẩu'), findsOneWidget);
-      // The email is masked client-side; the code itself never came back.
       expect(
-        find.text('Đã gửi mã 6 số đến ng•••@example.com. Mã có hiệu lực 5 phút.'),
+        find.text('Nếu số điện thoại đã đăng ký, mã 6 số sẽ được gửi tới số đó. Mã có hiệu lực 5 phút.'),
         findsOneWidget,
       );
+      expect(find.textContaining('678'), findsNothing);
       expect(find.text('Gửi lại mã sau 05:00'), findsOneWidget);
 
       await _unmount(tester);
@@ -108,7 +132,7 @@ void main() {
     testWidgets('countdown ticks down and the Timer is cancelled on dispose',
         (tester) async {
       await tester.pumpWidget(_screen());
-      await tester.enterText(find.byType(TextField).at(0), 'nguyen@example.com');
+      await tester.enterText(find.byType(TextField).at(0), '0912 345 678');
       await _tapLabel(tester, 'Gửi mã');
 
       expect(find.text('Gửi lại mã sau 05:00'), findsOneWidget);
@@ -121,7 +145,7 @@ void main() {
 
     Future<void> toStep2(WidgetTester tester, {Object? throwWith}) async {
       await tester.pumpWidget(_screen(throwWith: throwWith));
-      await tester.enterText(find.byType(TextField).at(0), 'nguyen@example.com');
+      await tester.enterText(find.byType(TextField).at(0), '0912 345 678');
       await _tapLabel(tester, 'Gửi mã');
     }
 
@@ -186,7 +210,7 @@ void main() {
         onBackToLogin: () => backToLogin++,
       )));
 
-      await tester.enterText(find.byType(TextField).at(0), 'nguyen@example.com');
+      await tester.enterText(find.byType(TextField).at(0), '0912 345 678');
       await _tapLabel(tester, 'Gửi mã');
       await tester.enterText(find.byType(TextField).at(0), '123456');
       await tester.enterText(find.byType(TextField).at(1), 'MatKhau123');
@@ -194,6 +218,23 @@ void main() {
       await _tapLabel(tester, 'Đặt lại mật khẩu');
 
       expect(backToLogin, 1);
+      await _unmount(tester);
+    });
+
+    testWidgets('step 2 resets with the same raw phone typed in step 1', (tester) async {
+      final port = _RecordingPasswordPort();
+      await tester.pumpWidget(_host(ForgotPasswordScreen(port: port)));
+
+      await tester.enterText(find.byType(TextField).at(0), ' 0912 345 678 ');
+      await _tapLabel(tester, 'Gửi mã');
+      await tester.enterText(find.byType(TextField).at(0), '123456');
+      await tester.enterText(find.byType(TextField).at(1), 'MatKhau123');
+      await tester.enterText(find.byType(TextField).at(2), 'MatKhau123');
+      await _tapLabel(tester, 'Đặt lại mật khẩu');
+
+      expect(port.resets, [
+        (phone: '0912 345 678', code: '123456', newPassword: 'MatKhau123'),
+      ]);
       await _unmount(tester);
     });
 
@@ -208,4 +249,28 @@ void main() {
       await _unmount(tester);
     });
   });
+}
+
+/// Records the phone each request/reset carries; [requestError] models a 400.
+class _RecordingPasswordPort implements PasswordPort {
+  _RecordingPasswordPort({this.requestError});
+
+  final Object? requestError;
+  final List<String> requested = <String>[];
+  final List<({String phone, String code, String newPassword})> resets = [];
+
+  @override
+  Future<int> requestResetCode(String phone) async {
+    requested.add(phone);
+    if (requestError != null) throw requestError!;
+    return 300;
+  }
+
+  @override
+  Future<void> resetPassword({required String phone, required String code, required String newPassword}) async {
+    resets.add((phone: phone, code: code, newPassword: newPassword));
+  }
+
+  @override
+  Future<void> changePassword({required String currentPassword, required String newPassword}) async {}
 }

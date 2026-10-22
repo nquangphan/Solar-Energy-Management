@@ -15,6 +15,7 @@ import 'package:pns_mobile/screens/account/profile_screen.dart';
 const MeResponse _me = MeResponse(
   id: 'acc-1',
   email: 'quanly@phuongnam.solar',
+  phone: null,
   displayName: 'Quản lý ca',
   permissions: ['orders.view_all'],
 );

@@ -5,7 +5,7 @@
 //
 // THE VERIFICATION CODE NEVER CROSSES THIS PORT INBOUND. `requestResetCode`
 // returns only how long a code stays valid — the same value whether or not the
-// email exists (the backend refuses to reveal which). The code reaches the user
+// number is registered (the backend refuses to reveal which). The code reaches the user
 // out of band; the screen only ever SENDS one back.
 //
 // The backend enforces every rule behind these calls (AD-4): attempt ceiling,
@@ -22,14 +22,15 @@
  */
 export interface PasswordPort {
   /**
-   * Ask for a reset code. Resolves identically for a known and an unknown email
-   * — never branch the UI on "does this account exist".
+   * Ask for a reset code for a RAW phone (the backend normalizes it). Resolves
+   * identically for a known and an unknown number — never branch the UI on "does
+   * this account exist".
    */
-  requestResetCode(email: string): Promise<{ expiresInSeconds: number }>;
+  requestResetCode(phone: string): Promise<{ expiresInSeconds: number }>;
 
   /** Consume the code and set a new password. Rejects on any invalid branch. */
   resetPassword(input: {
-    email: string;
+    phone: string;
     code: string;
     newPassword: string;
   }): Promise<void>;

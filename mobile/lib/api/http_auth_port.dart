@@ -19,9 +19,9 @@ class HttpAuthPort implements AuthPort {
   final Transport _transport;
 
   @override
-  Future<void> login({required String email, required String password}) async {
+  Future<void> login({required String phone, required String password}) async {
     final tokens = await _transport.call(
-      () => _client.auth.authControllerLogin(body: LoginRequestDto(email: email, password: password)),
+      () => _client.auth.authControllerLogin(body: LoginRequestDto(phone: phone, password: password)),
     );
     await _session.setTokens(accessToken: tokens.accessToken, refreshToken: tokens.refreshToken);
   }

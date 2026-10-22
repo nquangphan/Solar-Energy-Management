@@ -34,6 +34,7 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
   const account = {
     id: 'acc-1',
     email: 'me@example.com',
+    phone: '+84912345678',
     displayName: 'Tôi',
     passwordHash: 'argon2-secret-hash',
     isActive: true,
@@ -96,7 +97,7 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
   }
 
   const validReset = {
-    email: 'me@example.com',
+    phone: '0912345678',
     code: '123456',
     newPassword: 'MatKhauMoi123',
   };
@@ -108,23 +109,36 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
       });
       const res = await request(server())
         .post('/auth/forgot-password')
-        .send({ email: 'me@example.com' });
+        .send({ phone: '0912345678' });
       expect(res.status).toBe(200);
     });
 
-    it('email không hợp lệ → 400 VALIDATION_ERROR + fieldErrors[email], KHÔNG gọi service', async () => {
+    it('empty phone → 400 VALIDATION_ERROR + fieldErrors[phone], service not called', async () => {
       const res = await request(server())
         .post('/auth/forgot-password')
-        .send({ email: 'khong-phai-email' });
+        .send({ phone: '' });
       const body = res.body as Envelope;
 
       expect(res.status).toBe(400);
       expect(body.code).toBe(ErrorCode.VALIDATION_ERROR);
-      expect((body.fieldErrors ?? []).map((fe) => fe.field)).toContain('email');
+      expect((body.fieldErrors ?? []).map((fe) => fe.field)).toContain('phone');
       expect(passwordResetMock.requestCode).not.toHaveBeenCalled();
     });
 
-    it('email lạ vs email tồn tại → CÙNG status + CÙNG body (chống enumeration)', async () => {
+    it('email in the body → 400 isAbsent, service not called', async () => {
+      const res = await request(server())
+        .post('/auth/forgot-password')
+        .send({ phone: '0912345678', email: 'me@example.com' });
+      const body = res.body as Envelope;
+
+      expect(res.status).toBe(400);
+      expect(body.fieldErrors).toEqual([
+        expect.objectContaining({ field: 'email', code: 'isAbsent' }),
+      ]);
+      expect(passwordResetMock.requestCode).toHaveBeenCalledTimes(0);
+    });
+
+    it('unknown vs registered phone → SAME status + SAME body (anti-enumeration)', async () => {
       // Service trả cùng một giá trị cho hai nhánh (unit test đã chứng minh); ở đây chứng
       // minh controller KHÔNG thêm bất kỳ khác biệt nào vào response.
       passwordResetMock.requestCode.mockResolvedValue({
@@ -133,10 +147,10 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
 
       const existing = await request(server())
         .post('/auth/forgot-password')
-        .send({ email: 'me@example.com' });
+        .send({ phone: '0912345678' });
       const unknown = await request(server())
         .post('/auth/forgot-password')
-        .send({ email: 'khong-ton-tai@example.com' });
+        .send({ phone: '0987654321' });
 
       expect(existing.status).toBe(unknown.status);
       expect(existing.body).toEqual(unknown.body);
@@ -149,7 +163,7 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
       });
       const res = await request(server())
         .post('/auth/forgot-password')
-        .send({ email: 'me@example.com' });
+        .send({ phone: '0912345678' });
       expect(Object.keys(res.body as object)).toEqual(['expiresInSeconds']);
     });
   });
@@ -163,10 +177,21 @@ describe('/auth/{forgot,reset,change}-password (e2e)', () => {
       expect(res.status).toBe(204);
       expect(res.body).toEqual({});
       expect(passwordResetMock.reset).toHaveBeenCalledWith(
-        validReset.email,
+        validReset.phone,
         validReset.code,
         validReset.newPassword,
       );
+    });
+
+    it('email in the body → 400 isAbsent, service not called', async () => {
+      const res = await request(server())
+        .post('/auth/reset-password')
+        .send({ ...validReset, email: null });
+      expect(res.status).toBe(400);
+      expect((res.body as Envelope).fieldErrors).toEqual([
+        expect.objectContaining({ field: 'email', code: 'isAbsent' }),
+      ]);
+      expect(passwordResetMock.reset).toHaveBeenCalledTimes(0);
     });
 
     it('mã không đủ 6 số → 400 VALIDATION_ERROR + fieldErrors[code]', async () => {

@@ -9,32 +9,25 @@
 // router. The two-step flow lives in widget state.
 //
 // VALIDATION HERE IS UX ONLY (AD-4). The backend owns every real rule: attempt
-// ceiling, single-use, expiry, and the neutral response that hides whether an
-// email exists. Never branch this UI on "does this account exist".
+// ceiling, single-use, expiry, phone normalization (AD-9 — the RAW number is
+// sent), and the neutral response that hides whether a number is registered.
+// Never branch this UI on "does this account exist" — step 2 never echoes it.
 
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../../api/api_error.dart';
 import '../../design_system/components/components.dart';
 import '../../design_system/session/password_port.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 
-final RegExp _emailRe = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 final RegExp _codeRe = RegExp(r'^[0-9]{6}$');
 // Mirror of the backend policy (`IsPasswordPolicy`): ≥8 chars, at least one
 // letter and one digit. Presentational only — the backend rejects regardless.
 final RegExp _passwordRe = RegExp(r'^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$');
-
-/// `nguyen.van.a@domain.vn` → `ng•••@domain.vn`. Masking is CLIENT-side cosmetics.
-String maskEmail(String email) {
-  final parts = email.split('@');
-  final user = parts.first;
-  final head = user.length >= 2 ? user.substring(0, 2) : user;
-  return '$head•••@${parts.last}';
-}
 
 /// Seconds → `MM:SS` for the resend countdown.
 String formatCountdown(int seconds) {
@@ -62,13 +55,14 @@ class ForgotPasswordScreen extends StatefulWidget {
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
-  final TextEditingController _email = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
   final TextEditingController _code = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirm = TextEditingController();
 
   _Step _step = _Step.request;
   String? _error;
+  String? _phoneError;
   int _remaining = 0;
   Timer? _timer;
 
@@ -77,7 +71,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     // Not optional: a surviving Timer keeps calling setState after the widget is
     // gone (and `flutter test` fails on the pending timer).
     _timer?.cancel();
-    _email.dispose();
+    _phone.dispose();
     _code.dispose();
     _password.dispose();
     _confirm.dispose();
@@ -103,24 +97,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _submitRequest() async {
-    final String email = _email.text.trim();
-    if (email.isEmpty) {
-      setState(() => _error = 'Nhập email đã đăng ký.');
+    final String phone = _phone.text.trim();
+    if (phone.isEmpty) {
+      setState(() {
+        _error = 'Nhập số điện thoại đã đăng ký.';
+        _phoneError = null;
+      });
       return;
     }
-    if (!_emailRe.hasMatch(email)) {
-      setState(() => _error = 'Email không hợp lệ.');
-      return;
-    }
-    setState(() => _error = null);
+    setState(() {
+      _error = null;
+      _phoneError = null;
+    });
     try {
-      final int expiresInSeconds = await widget.port.requestResetCode(email);
+      final int expiresInSeconds = await widget.port.requestResetCode(phone);
       if (!mounted) return;
       setState(() => _step = _Step.verify);
       _startCountdown(expiresInSeconds);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Không gửi được mã. Thử lại sau.');
+      // A number the backend could not parse belongs under its field; anything
+      // else gets the one generic message.
+      final String? fieldMessage = e is ApiError ? _phoneMessageOf(e) : null;
+      setState(() {
+        if (fieldMessage != null) {
+          _phoneError = fieldMessage;
+        } else {
+          _error = 'Không gửi được mã. Thử lại sau.';
+        }
+      });
     }
   }
 
@@ -142,7 +147,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _error = null);
     try {
       await widget.port.resetPassword(
-        email: _email.text.trim(),
+        phone: _phone.text.trim(),
         code: code,
         newPassword: password,
       );
@@ -203,6 +208,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
+  /// The FIRST backend message about `phone`, or null (same rule as web).
+  String? _phoneMessageOf(ApiError e) {
+    for (final f in e.fieldErrors ?? const []) {
+      if (f.field == 'phone') return f.message;
+    }
+    return null;
+  }
+
   Widget _stepper() {
     return AppStepper(
       steps: [
@@ -225,12 +238,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   List<Widget> _requestStep() {
     return [
       AppField(
-        label: 'Email đã đăng ký',
+        label: 'Số điện thoại đã đăng ký',
         size: AppFieldSize.large,
-        controller: _email,
-        placeholder: 'Nhập email đã đăng ký',
-        keyboardType: TextInputType.emailAddress,
+        controller: _phone,
+        placeholder: 'Nhập số điện thoại đã đăng ký',
+        keyboardType: TextInputType.phone,
       ),
+      if (_phoneError != null) ...[
+        const SizedBox(height: AppTokens.space8),
+        AppBanner(tone: AppBannerTone.danger, message: _phoneError!),
+      ],
       const SizedBox(height: AppTokens.space16),
       AppButton(
         variant: AppButtonVariant.primary,
@@ -243,10 +260,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   List<Widget> _verifyStep() {
     return [
-      AppBanner(
+      const AppBanner(
         tone: AppBannerTone.info,
         message:
-            'Đã gửi mã 6 số đến ${maskEmail(_email.text.trim())}. Mã có hiệu lực 5 phút.',
+            'Nếu số điện thoại đã đăng ký, mã 6 số sẽ được gửi tới số đó. Mã có hiệu lực 5 phút.',
       ),
       const SizedBox(height: AppTokens.space12),
       AppField(

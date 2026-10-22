@@ -7,12 +7,13 @@ import { ErrorCode } from '../common/errors/error-code';
 import { AccountsService } from '../accounts/accounts.service';
 import { EventBus } from '../events/event-bus';
 import { PasswordService } from './password.service';
+import { accountPhoneOrThrow } from './account-phone';
 import { AUTH_CONFIG, type AuthConfig } from './auth.config';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
 import { PasswordChanged } from './domain/password-events';
 
 /**
- * Message DUY NHẤT cho MỌI nhánh auth-fail (email lạ / account inactive / sai mật khẩu
+ * Message DUY NHẤT cho MỌI nhánh auth-fail (SĐT lạ / account inactive / sai mật khẩu
  * / refresh sai-hết hạn-đã thu hồi). Cùng mã `UNAUTHENTICATED` + cùng message → chống
  * user-enumeration (an toàn > tiện, AD-5). KHÔNG dựng envelope ở đây — chỉ ném
  * `AppException`; `AllExceptionsFilter` dựng envelope + gắn traceId.
@@ -35,9 +36,9 @@ const AUTH_FAILED_MESSAGE = 'Thông tin đăng nhập không đúng';
 @Injectable()
 export class AuthService {
   /**
-   * Hash argon2id của một chuỗi ngẫu nhiên, tính MỘT lần lúc khởi tạo. Khi email
+   * Hash argon2id của một chuỗi ngẫu nhiên, tính MỘT lần lúc khởi tạo. Khi SĐT
    * không tồn tại, login vẫn verify với hash này để cân bằng thời gian phản hồi
-   * (giảm lệch timing giúp dò email tồn tại hay không). Không bao giờ khớp mật khẩu thật.
+   * (giảm lệch timing giúp dò SĐT tồn tại hay không). Không bao giờ khớp mật khẩu thật.
    */
   private readonly dummyHash: Promise<string>;
 
@@ -56,11 +57,14 @@ export class AuthService {
    * Đăng nhập: creds đúng → phát access JWT + refresh token (tạo `Session`). Mọi nhánh
    * sai (account không tồn tại / `isActive=false` / sai mật khẩu) → cùng
    * `AppException(UNAUTHENTICATED)` + cùng message (chống enumeration).
+   *
+   * `phone` is raw as typed; a malformed number is a 400 before any lookup. An account
+   * without a phone yet simply is not found ⇒ the same 401.
    */
-  async login(email: string, password: string): Promise<AuthTokensDto> {
-    const account = await this.accounts.findByEmail(email);
+  async login(phone: string, password: string): Promise<AuthTokensDto> {
+    const account = await this.accounts.findByPhone(accountPhoneOrThrow(phone));
     // Verify LUÔN — kể cả khi account không tồn tại (dùng dummy hash) — để thời gian
-    // phản hồi đồng đều giữa "email lạ" và "sai mật khẩu".
+    // phản hồi đồng đều giữa "SĐT lạ" và "sai mật khẩu".
     const passwordOk = await this.passwords.verify(
       account?.passwordHash ?? (await this.dummyHash),
       password,

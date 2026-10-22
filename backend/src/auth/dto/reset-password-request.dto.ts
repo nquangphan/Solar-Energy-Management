@@ -1,15 +1,19 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, Matches } from 'class-validator';
+import { ApiHideProperty, ApiProperty } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, Matches, MaxLength } from 'class-validator';
+import { IsAbsent } from '../../customers/dto/is-absent.decorator';
+import { EMAIL_NOT_ACCEPTED_MESSAGE } from './login-request.dto';
 import { IsPasswordPolicy } from './password-policy';
 
 /** Body của `POST /auth/reset-password`: mã xác thực + mật khẩu mới. */
 export class ResetPasswordRequestDto {
   @ApiProperty({
-    description: 'Email đã đăng ký (cùng email đã yêu cầu mã).',
-    example: 'admin@example.com',
+    description: 'SĐT đã đăng ký (cùng số đã yêu cầu mã), dạng THÔ.',
+    example: '0912345678',
   })
-  @IsEmail()
-  email!: string;
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(32)
+  phone!: string;
 
   @ApiProperty({
     description: 'Mã xác thực 6 chữ số đã nhận.',
@@ -24,4 +28,9 @@ export class ResetPasswordRequestDto {
   })
   @IsPasswordPolicy()
   newPassword!: string;
+
+  /** Rejected, never stripped — see `LoginRequestDto.email`. */
+  @ApiHideProperty()
+  @IsAbsent(EMAIL_NOT_ACCEPTED_MESSAGE)
+  email?: unknown;
 }

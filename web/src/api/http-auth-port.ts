@@ -17,7 +17,7 @@ export class HttpAuthPort implements AuthPort {
     private readonly transport: Pick<Transport, 'refreshSession'>,
   ) {}
 
-  async login(input: { email: string; password: string }): Promise<void> {
+  async login(input: { phone: string; password: string }): Promise<void> {
     const { data } = await this.client.POST('/auth/login', { body: input });
     // A non-ok response already threw in the transport; an ok one without tokens is a broken backend.
     if (!data) throw new ApiError(GENERIC_ERROR_MESSAGE);

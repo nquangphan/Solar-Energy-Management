@@ -22,8 +22,9 @@ export class FakePasswordPort implements PasswordPort {
   ) {}
 
   requestResetCode(): Promise<{ expiresInSeconds: number }> {
-    // The real forgot-password endpoint ALWAYS returns 200 (anti-enumeration),
-    // so this never surfaces a failure — rejectWith only models a reset/change
+    // The real forgot-password endpoint returns the same 200 for a known and an
+    // unknown number (anti-enumeration; only a malformed one is a 400), so this
+    // never surfaces a failure — rejectWith only models a reset/change
     // rejection, letting a test reach step 2 and then fail the submit.
     return Promise.resolve({ expiresInSeconds: this.expiresInSeconds });
   }

@@ -16,6 +16,7 @@ import 'package:pns_mobile/screens/menu/menu_screen.dart';
 const MeResponse _me = MeResponse(
   id: 'acc-1',
   email: 'hung@phuongnam.solar',
+  phone: null,
   displayName: 'Trần Văn Hùng',
   permissions: ['customers.manage', 'orders.view_own'],
 );

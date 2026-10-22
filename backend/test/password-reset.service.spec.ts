@@ -17,7 +17,7 @@ import { ErrorCode } from '../src/common/errors/error-code';
  */
 
 const ACCOUNT_ID = 'acc-1';
-const EMAIL = 'user@example.com';
+const PHONE = '0912345678';
 const NEW_PASSWORD = 'MatKhauMoi123';
 const MAX_ATTEMPTS = 5;
 const TTL_MS = 5 * 60 * 1000;
@@ -42,7 +42,7 @@ describe('PasswordResetService (unit, hermetic)', () => {
   };
 
   let accounts: {
-    findByEmail: jest.Mock;
+    findByPhone: jest.Mock;
     findById: jest.Mock;
     updatePasswordHash: jest.Mock;
   };
@@ -59,7 +59,7 @@ describe('PasswordResetService (unit, hermetic)', () => {
 
   beforeEach(() => {
     accounts = {
-      findByEmail: jest.fn(),
+      findByPhone: jest.fn(),
       findById: jest.fn(),
       updatePasswordHash: jest.fn().mockResolvedValue(undefined),
     };
@@ -96,7 +96,8 @@ describe('PasswordResetService (unit, hermetic)', () => {
   function makeAccount(isActive = true) {
     return {
       id: ACCOUNT_ID,
-      email: EMAIL,
+      email: 'user@example.com',
+      phone: '+84912345678',
       passwordHash: 'irrelevant',
       displayName: 'User',
       isActive,
@@ -123,11 +124,11 @@ describe('PasswordResetService (unit, hermetic)', () => {
   }
 
   describe('requestCode', () => {
-    it('email tồn tại → tạo mã 6 chữ số (hash argon2id), publish PasswordResetRequested', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+    it('registered phone → creates a 6-digit code (argon2id hash), publishes PasswordResetRequested', async () => {
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       const hashSpy = jest.spyOn(passwords, 'hash');
 
-      const result = await service.requestCode(EMAIL);
+      const result = await service.requestCode(PHONE);
 
       expect(result).toEqual({ expiresInSeconds: TTL_MS / 1000 });
 
@@ -150,33 +151,33 @@ describe('PasswordResetService (unit, hermetic)', () => {
       );
     });
 
-    it('email lạ → CÙNG response, KHÔNG tạo row, KHÔNG publish', async () => {
-      accounts.findByEmail.mockResolvedValue(null);
+    it('unknown phone → SAME response, no row, no publish', async () => {
+      accounts.findByPhone.mockResolvedValue(null);
 
-      const result = await service.requestCode('unknown@example.com');
+      const result = await service.requestCode('0987654321');
 
       expect(result).toEqual({ expiresInSeconds: TTL_MS / 1000 });
       expect(codeRepo.create).not.toHaveBeenCalled();
       expect(eventBus.publish).not.toHaveBeenCalled();
     });
 
-    it('email lạ VẪN băm đúng một lần — cân bằng timing chống enumeration', async () => {
+    it('unknown phone STILL hashes exactly once — timing balance against enumeration', async () => {
       // Bất biến bảo mật AC-1: nhánh "email lạ" phải trả cùng response VÀ tốn cùng lượng
       // công việc. argon2id là chi phí trội của request này; bỏ nó ở nhánh email lạ khiến
       // thời gian phản hồi ngắn hơn hẳn → lộ email nào tồn tại.
-      accounts.findByEmail.mockResolvedValue(null);
+      accounts.findByPhone.mockResolvedValue(null);
       const hashSpy = jest.spyOn(passwords, 'hash');
 
-      await service.requestCode('unknown@example.com');
+      await service.requestCode('0987654321');
 
       expect(hashSpy).toHaveBeenCalledTimes(1);
       expect(hashSpy.mock.calls[0][0]).toMatch(/^\d{6}$/);
     });
 
-    it('account inactive → trung tính như email lạ (không row, không event)', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount(false));
+    it('inactive account → neutral like an unknown phone (no row, no event)', async () => {
+      accounts.findByPhone.mockResolvedValue(makeAccount(false));
 
-      const result = await service.requestCode(EMAIL);
+      const result = await service.requestCode(PHONE);
 
       expect(result).toEqual({ expiresInSeconds: TTL_MS / 1000 });
       expect(codeRepo.create).not.toHaveBeenCalled();
@@ -184,10 +185,10 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
 
     it('đang còn mã sống → cooldown: KHÔNG sinh mã mới, vẫn trả response trung tính', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(await liveCode('111111'));
 
-      const result = await service.requestCode(EMAIL);
+      const result = await service.requestCode(PHONE);
 
       expect(result).toEqual({ expiresInSeconds: TTL_MS / 1000 });
       expect(codeRepo.create).not.toHaveBeenCalled();
@@ -200,13 +201,41 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
   });
 
+  describe('phone identifier', () => {
+    it('requestCode and reset look up the E.164 form of a spaced number', async () => {
+      accounts.findByPhone.mockResolvedValue(null);
+      await service.requestCode('0912 345 678');
+      await catchAppException(
+        service.reset('+84912345678', '654321', NEW_PASSWORD),
+      );
+      expect(accounts.findByPhone.mock.calls).toEqual([
+        ['+84912345678'],
+        ['+84912345678'],
+      ]);
+    });
+
+    it('malformed phone → 400 fieldErrors.phone on both endpoints, no lookup', async () => {
+      const forgot = await catchAppException(service.requestCode('abc'));
+      const reset = await catchAppException(
+        service.reset('abc', '654321', NEW_PASSWORD),
+      );
+      for (const err of [forgot, reset]) {
+        expect(err.getStatus()).toBe(400);
+        expect(err.fieldErrors).toEqual([
+          expect.objectContaining({ field: 'phone', code: 'isPhoneNumber' }),
+        ]);
+      }
+      expect(accounts.findByPhone).toHaveBeenCalledTimes(0);
+    });
+  });
+
   describe('reset', () => {
     it('mã đúng → tiêu thụ mã, đổi hash, THU HỒI MỌI PHIÊN, publish PasswordResetCompleted', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(await liveCode('654321'));
 
       await expect(
-        service.reset(EMAIL, '654321', NEW_PASSWORD),
+        service.reset(PHONE, '654321', NEW_PASSWORD),
       ).resolves.toBeUndefined();
 
       // Single-use: consumedAt lật bằng updateMany CÓ ĐIỀU KIỆN (cổng atomic).
@@ -240,10 +269,10 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
 
     it('tăng attemptCount ATOMIC trước khi verify (có điều kiện lt maxAttempts)', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(await liveCode('654321'));
 
-      await service.reset(EMAIL, '654321', NEW_PASSWORD);
+      await service.reset(PHONE, '654321', NEW_PASSWORD);
 
       expect(codeRepo.updateMany).toHaveBeenCalledTimes(1);
       const gate = codeRepo.updateMany.mock.calls[0][0];
@@ -254,11 +283,11 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
 
     it('mã sai → 401, attempt VẪN bị tính, không đổi mật khẩu', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(await liveCode('654321'));
 
       const err = await catchAppException(
-        service.reset(EMAIL, '000000', NEW_PASSWORD),
+        service.reset(PHONE, '000000', NEW_PASSWORD),
       );
 
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
@@ -271,14 +300,14 @@ describe('PasswordResetService (unit, hermetic)', () => {
     it('vượt trần số lần thử → 401 KỂ CẢ khi nhập đúng mã (cổng atomic count=0)', async () => {
       // Bất biến bảo mật: khi `attemptCount >= max`, updateMany có điều kiện lật 0 dòng ⇒
       // mã bị khoá vĩnh viễn. Đây là thứ chặn brute-force 10⁶ khả năng của mã 6 số.
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(
         await liveCode('654321', { attemptCount: MAX_ATTEMPTS }),
       );
       codeRepo.updateMany.mockResolvedValue({ count: 0 });
 
       const err = await catchAppException(
-        service.reset(EMAIL, '654321', NEW_PASSWORD),
+        service.reset(PHONE, '654321', NEW_PASSWORD),
       );
 
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
@@ -289,12 +318,12 @@ describe('PasswordResetService (unit, hermetic)', () => {
     it('đua đồng thời tiêu thụ: kẻ thua (consume count=0) → 401, KHÔNG đổi mật khẩu', async () => {
       // Hai request cùng mã đúng: chỉ request lật được `consumedAt` (count===1) mới đổi
       // mật khẩu — mirror cổng rotate refresh của 2.3. Kẻ thua bị từ chối.
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(await liveCode('654321'));
       txCodeRepo.updateMany.mockResolvedValue({ count: 0 });
 
       const err = await catchAppException(
-        service.reset(EMAIL, '654321', NEW_PASSWORD),
+        service.reset(PHONE, '654321', NEW_PASSWORD),
       );
 
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
@@ -303,11 +332,11 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
 
     it('mã hết hạn / đã tiêu thụ → không tra ra dòng sống → 401', async () => {
-      accounts.findByEmail.mockResolvedValue(makeAccount());
+      accounts.findByPhone.mockResolvedValue(makeAccount());
       codeRepo.findFirst.mockResolvedValue(null);
 
       const err = await catchAppException(
-        service.reset(EMAIL, '654321', NEW_PASSWORD),
+        service.reset(PHONE, '654321', NEW_PASSWORD),
       );
 
       expect(err.errorCode).toBe(ErrorCode.UNAUTHENTICATED);
@@ -320,11 +349,11 @@ describe('PasswordResetService (unit, hermetic)', () => {
     });
 
     it('nhánh thiếu account/mã VẪN verify với dummy hash — cân bằng timing', async () => {
-      accounts.findByEmail.mockResolvedValue(null);
+      accounts.findByPhone.mockResolvedValue(null);
       const verifySpy = jest.spyOn(passwords, 'verify');
 
       await catchAppException(
-        service.reset('unknown@example.com', '654321', NEW_PASSWORD),
+        service.reset('0987654321', '654321', NEW_PASSWORD),
       );
 
       expect(verifySpy).toHaveBeenCalledTimes(1);
@@ -336,40 +365,40 @@ describe('PasswordResetService (unit, hermetic)', () => {
     it('MỌI nhánh sai trả CÙNG MỘT message (chống enumeration)', async () => {
       const messages: string[] = [];
 
-      accounts.findByEmail.mockResolvedValueOnce(null);
+      accounts.findByPhone.mockResolvedValueOnce(null);
       messages.push(
         (
           await catchAppException(
-            service.reset('x@y.z', '654321', NEW_PASSWORD),
+            service.reset('0987654321', '654321', NEW_PASSWORD),
           )
         ).message,
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount(false));
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount(false));
       messages.push(
-        (await catchAppException(service.reset(EMAIL, '654321', NEW_PASSWORD)))
+        (await catchAppException(service.reset(PHONE, '654321', NEW_PASSWORD)))
           .message,
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount());
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount());
       codeRepo.findFirst.mockResolvedValueOnce(null);
       messages.push(
-        (await catchAppException(service.reset(EMAIL, '654321', NEW_PASSWORD)))
+        (await catchAppException(service.reset(PHONE, '654321', NEW_PASSWORD)))
           .message,
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount());
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount());
       codeRepo.findFirst.mockResolvedValueOnce(await liveCode('654321'));
       messages.push(
-        (await catchAppException(service.reset(EMAIL, '000000', NEW_PASSWORD)))
+        (await catchAppException(service.reset(PHONE, '000000', NEW_PASSWORD)))
           .message,
       );
 
-      accounts.findByEmail.mockResolvedValueOnce(makeAccount());
+      accounts.findByPhone.mockResolvedValueOnce(makeAccount());
       codeRepo.findFirst.mockResolvedValueOnce(await liveCode('654321'));
       codeRepo.updateMany.mockResolvedValueOnce({ count: 0 });
       messages.push(
-        (await catchAppException(service.reset(EMAIL, '654321', NEW_PASSWORD)))
+        (await catchAppException(service.reset(PHONE, '654321', NEW_PASSWORD)))
           .message,
       );
 

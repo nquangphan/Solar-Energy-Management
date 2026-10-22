@@ -7,11 +7,13 @@
 // in component state, not in routes.
 //
 // GATING/VALIDATION HERE IS UX ONLY (AD-4). The backend owns every real rule: attempt
-// ceiling, single-use, expiry, and the neutral response that hides whether an email
-// exists. Never branch this UI on "does this account exist" — the API refuses to say.
+// ceiling, single-use, expiry, phone normalization (AD-9 — the RAW string is sent), and
+// the neutral response that hides whether a number is registered. Never branch this UI
+// on "does this account exist" — the API refuses to say, and step 2 never echoes the number.
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 
+import { ApiError } from '../../api/api-error';
 import { Banner, Button, Card, Field, Stepper } from '../../design-system/components';
 import type { PasswordPort } from '../../design-system/session/password-port';
 import { WebShell } from '../../design-system/shell';
@@ -24,17 +26,10 @@ export interface ForgotPasswordScreenProps {
   onBackToLogin?: () => void;
 }
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const CODE_RE = /^[0-9]{6}$/;
 // Mirror of the backend policy (`IsPasswordPolicy`): ≥8 chars, at least one letter and
 // one digit. Presentational only — the backend rejects a weak password regardless.
 const PASSWORD_RE = /^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$/;
-
-/** `nguyen.van.a@domain.vn` → `ng•••@domain.vn`. Masking is CLIENT-side cosmetics. */
-function maskEmail(email: string): string {
-  const [user, domain] = email.split('@');
-  return `${user.slice(0, 2)}•••@${domain}`;
-}
 
 /** Seconds → `MM:SS` for the resend countdown. */
 function formatCountdown(seconds: number): string {
@@ -45,7 +40,8 @@ function formatCountdown(seconds: number): string {
 
 export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScreenProps) {
   const [step, setStep] = useState<'request' | 'verify'>('request');
-  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -71,13 +67,10 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
 
   async function submitRequest(e: FormEvent) {
     e.preventDefault();
-    const value = email.trim();
+    const value = phone.trim();
+    setPhoneError(null);
     if (value === '') {
-      setError('Nhập email đã đăng ký.');
-      return;
-    }
-    if (!EMAIL_RE.test(value)) {
-      setError('Email không hợp lệ.');
+      setError('Nhập số điện thoại đã đăng ký.');
       return;
     }
     setError(null);
@@ -85,8 +78,18 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
       const { expiresInSeconds } = await port.requestResetCode(value);
       setRemaining(expiresInSeconds);
       setStep('verify');
-    } catch {
-      setError('Không gửi được mã. Thử lại sau.');
+    } catch (err) {
+      // A number the backend could not parse belongs under its field; anything else
+      // gets the one generic message.
+      const fieldMessage =
+        err instanceof ApiError
+          ? err.fieldErrors?.find((item) => item.field === 'phone')?.message
+          : undefined;
+      if (fieldMessage) {
+        setPhoneError(fieldMessage);
+      } else {
+        setError('Không gửi được mã. Thử lại sau.');
+      }
     }
   }
 
@@ -106,7 +109,7 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
     }
     setError(null);
     try {
-      await port.resetPassword({ email: email.trim(), code: code.trim(), newPassword: password });
+      await port.resetPassword({ phone: phone.trim(), code: code.trim(), newPassword: password });
       onBackToLogin?.();
     } catch {
       // ONE message for every backend failure — the API deliberately does not say which
@@ -139,13 +142,16 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
           {step === 'request' ? (
             <form onSubmit={submitRequest} noValidate>
               <Field
-                label="Email đã đăng ký"
+                label="Số điện thoại đã đăng ký"
                 size="lg"
-                type="email"
-                placeholder="Nhập email đã đăng ký"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="Nhập số điện thoại đã đăng ký"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
               />
+              {phoneError && <Banner tone="danger">{phoneError}</Banner>}
               <Button variant="primary" size="wide" type="submit">
                 Gửi mã
               </Button>
@@ -153,7 +159,7 @@ export function ForgotPasswordScreen({ port, onBackToLogin }: ForgotPasswordScre
           ) : (
             <form onSubmit={submitReset} noValidate>
               <Banner tone="info">
-                Đã gửi mã 6 số đến {maskEmail(email.trim())}. Mã có hiệu lực 5 phút.
+                Nếu số điện thoại đã đăng ký, mã 6 số sẽ được gửi tới số đó. Mã có hiệu lực 5 phút.
               </Banner>
               <Field
                 label="Mã xác thực"

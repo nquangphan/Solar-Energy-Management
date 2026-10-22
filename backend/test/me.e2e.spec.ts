@@ -44,9 +44,19 @@ describe('/me + enforcement (e2e)', () => {
   let app: INestApplication;
   let jwt: JwtService;
 
-  const account = {
+  const account: {
+    id: string;
+    email: string;
+    phone: string | null;
+    displayName: string;
+    passwordHash: string;
+    isActive: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  } = {
     id: 'acc-1',
     email: 'me@example.com',
+    phone: '+84912345678',
     displayName: 'Tôi',
     passwordHash: 'argon2-secret-hash',
     isActive: true,
@@ -142,6 +152,7 @@ describe('/me + enforcement (e2e)', () => {
       expect(res.body).toEqual({
         id: 'acc-1',
         email: 'me@example.com',
+        phone: '+84912345678',
         displayName: 'Tôi',
         // sorted tất định: 'audit.read' < 'orders.view_all'
         permissions: ['audit.read', 'orders.view_all'],
@@ -164,9 +175,33 @@ describe('/me + enforcement (e2e)', () => {
       expect(res.body).toEqual({
         id: 'acc-1',
         email: 'me@example.com',
+        phone: '+84912345678',
         displayName: 'Tôi',
         permissions: [],
       });
+    });
+
+    it('account without a phone yet → 200 with phone: null (key present)', async () => {
+      accountsMock.findById.mockImplementationOnce(() => ({
+        ...account,
+        phone: null,
+      }));
+      accountPermissionsMock.listForAccount.mockResolvedValueOnce(new Set());
+      const token = await signAccessToken();
+
+      const res = await request(server())
+        .get('/me')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body as object).sort()).toEqual([
+        'displayName',
+        'email',
+        'id',
+        'permissions',
+        'phone',
+      ]);
+      expect((res.body as { phone: unknown }).phone).toBeNull();
     });
 
     it('token hợp lệ nhưng account inactive → 401', async () => {

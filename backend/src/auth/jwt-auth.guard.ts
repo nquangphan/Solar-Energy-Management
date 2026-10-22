@@ -82,6 +82,7 @@ export class JwtAuthGuard implements CanActivate {
     request.account = {
       id: account.id,
       email: account.email,
+      phone: account.phone,
       displayName: account.displayName,
     };
     return true;
