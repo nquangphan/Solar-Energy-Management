@@ -180,7 +180,7 @@ Lịch thanh toán nhiều đợt; ghi nhận đợt → auto chuyển trạng t
 
 ### Epic 10: Nối dây client (chạy TRƯỚC Epic 8 — chèn bởi correct-course 2026-10-22)
 **Thứ tự chạy: Epic 7 → Epic 10 → Epic 8 → Epic 9.** Số 10 chỉ để không đánh số lại Epic 8/9. Thống nhất contract tiếng Anh (đổi route/tham số/field DTO tiếng Việt) TRƯỚC khi client thật dùng; web có client sinh từ `openapi.json` + tầng transport + phiên đăng nhập + composition root + router + adapter HTTP thay fake cho mọi port; mobile có app shell `main.dart` + `android/`/`ios/` + client Dart sinh + điều hướng + adapter; nối callback theo quyền cho nút Thanh toán/Hợp đồng/Hoá đơn ở chi tiết đơn. Không thêm FR mới — làm cho FR-1..FR-29 đã có backend dùng được đầu-cuối. [Source: `sprint-change-proposal-2026-10-22.md`]
-**FRs covered:** FR-22 (đăng nhập thật trên hai client) · đưa FR-1..FR-29 lên client thật · AD-12 (client sinh từ OpenAPI) · AD-5 (FE xử lý envelope một chỗ)
+**FRs covered:** FR-22 (đăng nhập thật trên hai client; từ 10.9 đăng nhập bằng SĐT) · đưa FR-1..FR-29 lên client thật · AD-12 (client sinh từ OpenAPI) · AD-5 (FE xử lý envelope một chỗ)
 
 ### Epic 8: Quản trị — Dashboard, Phân quyền, Audit & Báo cáo lợi nhuận
 Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role, luật không-leo-thang) + form account; màn xem Audit log (gate theo quyền audit.read, không role); báo cáo lợi nhuận gộp (một bảng, bốn cách nhóm: đơn/tháng/sale/nguồn khách, dòng KPI trên cùng, nhãn bắt buộc). (Ghi audit là cross-cutting, nhúng ở E3–E7.)
@@ -739,6 +739,18 @@ As a nhân viên bán hàng/hiện trường, I want tạo báo giá, chốt, ch
 - **Given** ghi thanh toán, **When** gửi, **Then** khoá idempotency truyền nguyên vẹn; retry không ghi trùng (NFR-1).
 - **Given** backend + `pns-postgres` local và emulator Android, **When** smoke đầu-cuối, **Then** đăng nhập → tạo báo giá → chốt → ghi thanh toán → xem HĐ/hoá đơn → chia sẻ PDF thành công; ghi vào Dev Agent Record (mặc định §6.21).
 - **Ghi từ Story 10.7:** nối tab **Đơn hàng** (1), **Kho** (3) và FAB **Tạo** (`CreateQuoteScreen`, dựng `HttpCatalogPort` trong `main.dart` lúc này) qua `AppBottomNavScope` trong `SignedInApp`; thêm route + key vào `kNavRoutes`; landing đổi thành `/orders` khi account có quyền xem đơn (giống web), còn lại `/menu`.
+
+### Story 10.9: Đăng nhập bằng số điện thoại (thay email)
+As a nhân viên, I want đăng nhập bằng số điện thoại của mình, So that không phải nhớ email công ty. [Đại Ca chốt 2026-10-22: **chỉ SĐT**, bỏ đăng nhập bằng email; chạy sau 10.8, trước retro Epic 10]
+**Acceptance Criteria:**
+- **Given** bảng `Account` chỉ có `email`, **When** migration, **Then** thêm cột `phone` (E.164, `@unique`, nullable vì account cũ chưa có số); `email` GIỮ làm thông tin liên hệ, không còn là định danh đăng nhập.
+- **Given** `POST /auth/login`, **When** gửi `{ phone, password }`, **Then** backend chuẩn hoá SĐT bằng đúng helper AD-9 của khách (`backend/src/customers/domain/phone.ts`, chuyển ra `common/` nếu cần dùng chung) rồi mới tra; số không phân giải được ⇒ 400 + `fieldErrors.phone`; sai SĐT/mật khẩu/account chưa có SĐT/inactive ⇒ cùng 401 `AUTH_FAILED_MESSAGE` (không dò được SĐT nào tồn tại); field `email` trong body login bị từ chối (400), không lặng lẽ bỏ qua.
+- **Given** quên/đặt lại mật khẩu, **When** `POST /auth/forgot-password` + `/auth/reset-password`, **Then** định danh cũng là `phone` (cùng chuẩn hoá, cùng body trả giống hệt nhau dù số tồn tại hay không); kênh gửi mã giữ nguyên như hiện tại.
+- **Given** seed, **When** `npx prisma db seed`, **Then** đọc thêm `SEED_ADMIN_PHONE` (bắt buộc cùng `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`); `.env.example` + `backend/README.md` cập nhật; KHÔNG đọc/sửa `backend/.env`.
+- **Given** `GET /me`, **When** gọi, **Then** trả thêm `phone`; `openapi.json` sinh lại, client web + Dart sinh lại (drift-guard xanh).
+- **Given** màn Đăng nhập + Quên mật khẩu web và mobile, **When** dùng, **Then** ô "Số điện thoại" (bàn phím số trên mobile, `autocomplete="tel"` trên web) thay ô email; gửi chuỗi THÔ, client không tự chuẩn hoá (AD-9); lỗi `fieldErrors.phone` hiện dưới ô; bỏ `maskEmail` ở mobile, câu xác nhận không lộ số có tồn tại hay không.
+- **Given** test, **When** 5 lane, **Then** ca unit + e2e login bằng SĐT nhiều dạng (`0912 345 678`, `+84912345678`), ca email-trong-body ⇒ 400, ca account chưa có SĐT ⇒ 401 cùng message; ca DB: hai account trùng SĐT ⇒ unique vi phạm; widget test mobile + vitest web cho ô SĐT; smoke thật đăng nhập bằng SĐT trên web và emulator.
+- **Ngoài phạm vi:** form tạo/sửa account (Epic 8 — form account Epic 8 phải BẮT BUỘC SĐT, ghi vào Story 8.x khi viết); OTP SMS; đăng nhập bằng email song song.
 
 ## Epic 8: Quản trị — Dashboard, Phân quyền & Audit
 _Dashboard doanh thu/đơn theo trạng thái; màn phân quyền (ma trận per-account + áp preset role) + form account; màn xem Audit log (chỉ Super Admin). Ghi audit là cross-cutting, đã emit ở E3–E7. FR-16,17,18,19,20._
