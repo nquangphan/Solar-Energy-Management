@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
 import 'package:pns_mobile/design_system/session/warranty_port.dart';
+import 'package:pns_mobile/design_system/tokens/app_tokens.dart';
 import 'package:pns_mobile/screens/warranty/warranty_lookup_screen.dart';
 
 const String _kSdt = '+84903176968';
@@ -42,10 +43,10 @@ class _LoiPort implements WarrantyPort {
 WarrantyLine _dong({
   required String id,
   required String name,
-  required String trangThai,
+  required WarrantyLineItemDtoWarrantyStatus trangThai,
   required int remainingMonths,
   required int remainingDays,
-  String warrantyEndAt = '2038-02-10T00:00:00.000Z',
+  DateTime? warrantyEndAt,
 }) {
   return WarrantyLine(
     id: id,
@@ -53,8 +54,8 @@ WarrantyLine _dong({
     qty: 2,
     unit: 'tấm',
     warrantyMonths: 60,
-    warrantyStartAt: '2026-02-10T00:00:00.000Z',
-    warrantyEndAt: warrantyEndAt,
+    warrantyStartAt: DateTime.utc(2026, 2, 10),
+    warrantyEndAt: warrantyEndAt ?? DateTime.utc(2038, 2, 10),
     remainingDays: remainingDays,
     remainingMonths: remainingMonths,
     warrantyStatus: trangThai,
@@ -63,9 +64,9 @@ WarrantyLine _dong({
 
 WarrantyLookup _coKetQua(List<WarrantyLine> dong) => WarrantyLookup(
       found: true,
-      sdt: _kSdt,
+      phone: _kSdt,
       customer: const WarrantyCustomer(
-        sdt: _kSdt,
+        phone: _kSdt,
         name: 'Nguyễn Văn A',
         custType: 'CA_NHAN',
       ),
@@ -73,7 +74,7 @@ WarrantyLookup _coKetQua(List<WarrantyLine> dong) => WarrantyLookup(
         WarrantyOrder(
           id: 'ord-2026-014',
           status: 'nghiem_thu',
-          chotAt: '2026-02-10T00:00:00.000Z',
+          confirmedAt: DateTime.utc(2026, 2, 10),
           lineItems: dong,
         ),
       ],
@@ -94,7 +95,7 @@ void main() {
   testWidgets('state rỗng ban đầu: mời nhập SĐT, chưa có bảng nào',
       (WidgetTester tester) async {
     await tester.pumpWidget(_host(const _KetQuaPort(
-      WarrantyLookup(found: false, sdt: _kSdt, orders: <WarrantyOrder>[]),
+      WarrantyLookup(found: false, phone: _kSdt, customer: null, orders: <WarrantyOrder>[]),
     )));
     await tester.pumpAndSettle();
 
@@ -120,7 +121,7 @@ void main() {
   testWidgets('state không tìm thấy: 200 found:false ⇒ câu KHÔNG mời tạo khách',
       (WidgetTester tester) async {
     await tester.pumpWidget(_host(const _KetQuaPort(
-      WarrantyLookup(found: false, sdt: _kSdt, orders: <WarrantyOrder>[]),
+      WarrantyLookup(found: false, phone: _kSdt, customer: null, orders: <WarrantyOrder>[]),
     )));
     await tester.pumpAndSettle();
 
@@ -138,7 +139,7 @@ void main() {
       _dong(
         id: 'l1',
         name: 'Tấm pin JA Solar 580W',
-        trangThai: 'con_han',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.conHan,
         remainingMonths: 138,
         remainingDays: 4224,
       ),
@@ -160,18 +161,18 @@ void main() {
       _dong(
         id: 'l1',
         name: 'Tấm pin JA Solar 580W',
-        trangThai: 'con_han',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.conHan,
         remainingMonths: 60,
         remainingDays: 1826,
       ),
       _dong(
         id: 'l2',
         name: 'Ắc quy lưu trữ 5kWh',
-        trangThai: 'het_han',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.hetHan,
         // Hết hạn ⇒ backend đã kẹp sàn 0; màn KHÔNG được đưa số đó qua formatter.
         remainingMonths: 0,
         remainingDays: -351,
-        warrantyEndAt: '2025-08-01T00:00:00.000Z',
+        warrantyEndAt: DateTime.utc(2025, 8, 1),
       ),
     ]))));
     await tester.pumpAndSettle();
@@ -194,10 +195,10 @@ void main() {
       _dong(
         id: 'l1',
         name: 'Tủ điện AC 3 pha',
-        trangThai: 'sap_het',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.sapHet,
         remainingMonths: 0,
         remainingDays: 26,
-        warrantyEndAt: '2029-01-15T00:00:00.000Z',
+        warrantyEndAt: DateTime.utc(2029, 1, 15),
       ),
     ]))));
     await tester.pumpAndSettle();
@@ -215,10 +216,10 @@ void main() {
       _dong(
         id: 'l1',
         name: 'Tủ điện AC 3 pha',
-        trangThai: 'sap_het',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.sapHet,
         remainingMonths: 0,
         remainingDays: 0,
-        warrantyEndAt: '2026-07-18T00:00:00.000Z',
+        warrantyEndAt: DateTime.utc(2026, 7, 18),
       ),
     ]))));
     await tester.pumpAndSettle();
@@ -240,5 +241,43 @@ void main() {
 
     expect(find.text('Số điện thoại không hợp lệ.'), findsOneWidget);
     expect(find.widgetWithText(AppButton, 'Thử lại'), findsOneWidget);
+  });
+
+  testWidgets('an unknown status from a newer backend renders neutrally, never crashes',
+      (WidgetTester tester) async {
+    await tester.pumpWidget(_host(_KetQuaPort(_coKetQua(<WarrantyLine>[
+      _dong(
+        id: 'l1',
+        name: 'Tấm pin JA Solar 580W',
+        trangThai: WarrantyLineItemDtoWarrantyStatus.fromJson('tam_dung'),
+        remainingMonths: 60,
+        remainingDays: 1826,
+      ),
+    ]))));
+    await tester.pumpAndSettle();
+
+    await _tra(tester);
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final AppChip chip = tester.widget<AppChip>(find.widgetWithText(AppChip, 'Còn 5 năm'));
+    expect(chip.foreground, AppTokens.muted);
+  });
+
+  group('dinhDangNgay', () {
+    test('a UTC midnight prints its own calendar day', () {
+      expect(dinhDangNgay(DateTime.utc(2030, 1, 1)), '01/01/2030');
+      expect(dinhDangNgay(DateTime.parse('2030-01-01T00:00:00Z')), '01/01/2030');
+    });
+
+    test('the same instant held as device-local time still prints the UTC day', () {
+      // 00:00Z is 07:00 in UTC+7; read locally a 17:00Z instant would jump a day.
+      expect(dinhDangNgay(DateTime.parse('2030-01-01T00:00:00Z').toLocal()), '01/01/2030');
+      expect(dinhDangNgay(DateTime.parse('2029-12-31T17:00:00Z').toLocal()), '31/12/2029');
+    });
+
+    test('a missing date is the em dash', () {
+      expect(dinhDangNgay(null), '—');
+    });
   });
 }

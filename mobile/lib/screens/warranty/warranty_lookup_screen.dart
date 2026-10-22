@@ -28,15 +28,16 @@ import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../customers/customer_pick_screen.dart' show kMenuTabIndex;
 
-/// `2038-02-10T00:00:00.000Z` ⇒ `10/02/2038` — twin of `formatNgay()` in
+/// `2038-02-10T00:00:00Z` ⇒ `10/02/2038` — twin of `formatNgay()` in
 /// web/src/screens/warranty/format-ngay.ts, pinned by parity.test.mjs.
 ///
-/// A STRING SLICE, not date arithmetic (QĐ-4): mobile ships no date library, and
-/// `warrantyEndAt` arrives at `00:00:00Z`, so taking `YYYY-MM-DD` off the front
-/// cannot shift the day the way a local-timezone parse would.
-String dinhDangNgay(String? iso) {
-  if (iso == null || iso.length < 10) return '—';
-  final String phanNgay = iso.substring(0, 10);
+/// A STRING SLICE of the UTC ISO form, not date arithmetic (QĐ-4): mobile ships
+/// no date library, and `warrantyEndAt` arrives at `00:00:00Z`, so taking
+/// `YYYY-MM-DD` off its UTC form cannot shift the day the way a device-local
+/// reading (UTC+7) would. Never call `toLocal()` here.
+String dinhDangNgay(DateTime? d) {
+  if (d == null) return '—';
+  final String phanNgay = d.toUtc().toIso8601String().substring(0, 10);
   if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(phanNgay)) return '—';
   return '${phanNgay.substring(8, 10)}/${phanNgay.substring(5, 7)}/${phanNgay.substring(0, 4)}';
 }
@@ -100,7 +101,7 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
   /// both platforms and pinned by parity.test.mjs.
   String _conLai(WarrantyLine line) {
     if (line.remainingMonths >= 1) {
-      return 'Còn ${formatWarrantyMonths(line.remainingMonths)}';
+      return 'Còn ${formatWarrantyMonths(line.remainingMonths.toInt())}';
     }
     if (line.remainingDays > 0) return 'Còn ${line.remainingDays} ngày';
     // `remainingDays == 0` is the expiry day itself, and the line IS still
@@ -110,11 +111,14 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
 
   /// Chip colour + label per status. `het_han` renders a FIXED string: a duration
   /// formatter has no sensible output for an expired line, and the mockup itself
-  /// only prints "Hết hạn".
+  /// only prints "Hết hạn". A status this build does not know (`$unknown`, the
+  /// backend added one) gets the sentence in a neutral colour — never a crash.
   Widget _chipTrangThai(WarrantyLine line) {
     late final String label;
     late final Color mau;
-    switch (line.warrantyStatus) {
+    // The generated enum's wire value: the same three literals as the web twin,
+    // and `$unknown` (json == null) lands in the neutral default.
+    switch (line.warrantyStatus.json) {
       case 'het_han':
         label = 'Hết hạn';
         mau = AppTokens.danger;
@@ -122,11 +126,13 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
         label = _conLai(line);
         mau = AppTokens.warn;
       case 'con_han':
-      default:
         // Same sentence as `sap_het` — the two differ only in colour, which is
         // why the colour is read from the status and never guessed from numbers.
         label = _conLai(line);
         mau = AppTokens.ok;
+      default:
+        label = _conLai(line);
+        mau = AppTokens.muted;
     }
     return AppChip(
       label: label,
@@ -140,7 +146,7 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.space12),
       child: AppFrame(
-        label: 'Đơn ${don.id} · chốt ${dinhDangNgay(don.chotAt)}',
+        label: 'Đơn ${don.id} · chốt ${dinhDangNgay(don.confirmedAt)}',
         // TWO columns, not five like the web twin: a phone row shows the item and
         // its verdict; the duration and the expiry date ride along as the item's
         // meta line (mockup). Squeezing five columns into 320pt would clip the
@@ -159,7 +165,7 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
                   children: <Widget>[
                     AppTableCellText('${line.name} ×${line.qty}', strong: true),
                     AppTableCellText(
-                      '${formatWarrantyMonths(line.warrantyMonths)} · đến ${dinhDangNgay(line.warrantyEndAt)}',
+                      '${formatWarrantyMonths(line.warrantyMonths.toInt())} · đến ${dinhDangNgay(line.warrantyEndAt)}',
                     ),
                   ],
                 ),
@@ -212,7 +218,7 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
               variant: AppCardVariant.teal,
               padding: const EdgeInsets.all(AppTokens.space16),
               child: Text(
-                '${kq.customer!.name} · ${kq.sdt}',
+                '${kq.customer!.name} · ${kq.phone}',
                 style: const TextStyle(
                   color: AppTokens.ink,
                   fontFamily: AppTokens.fontFamily,

@@ -243,8 +243,8 @@ const List<OrderListItem> kDemoOrderRows = <OrderListItem>[
 class FakeOrdersPort implements OrdersPort {
   FakeOrdersPort({
     this.products = kDemoCatalogProducts,
-    this.customers = kDemoCustomers,
-  });
+    List<Customer>? customers,
+  }) : customers = customers ?? kDemoCustomers;
 
   final List<CatalogProduct> products;
   final List<Customer> customers;
@@ -434,7 +434,7 @@ class FakeOrdersPort implements OrdersPort {
     final String needle = _digits(input.customerSdt);
     Customer? customer;
     for (final Customer c in customers) {
-      if (needle.isNotEmpty && _digits(c.sdt).endsWith(needle)) {
+      if (needle.isNotEmpty && _digits(c.phone).endsWith(needle)) {
         customer = c;
         break;
       }

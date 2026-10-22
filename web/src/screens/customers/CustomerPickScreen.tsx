@@ -352,11 +352,14 @@ function messageOf(err: unknown): string {
   return envelope?.message ?? 'Không thực hiện được. Thử lại.';
 }
 
-/** `fieldErrors` from the AD-5 envelope, flattened onto the field they belong to. */
+/**
+ * `fieldErrors` from the AD-5 envelope, flattened onto the field they belong to. The FIRST
+ * message of a field wins — the same rule as the mobile `fieldErrorMap`.
+ */
 function fieldErrorsOf(err: unknown): Record<string, string> {
   const envelope = err as Partial<CustomerPortError>;
   const out: Record<string, string> = {};
-  for (const item of envelope?.fieldErrors ?? []) {
+  for (const item of [...(envelope?.fieldErrors ?? [])].reverse()) {
     out[item.field] = item.message;
   }
   return out;

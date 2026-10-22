@@ -380,7 +380,7 @@ test('step 1 reuses CustomerPickScreen via onSelect — no second lookup UI', ()
   assert.match(stripTsx(web), /ordersPort\.create\(\{ customerPhone: picked\.phone \}\)/, 'web onSelect must create the order from the picked customer');
   assert.match(mobile, /import '\.\.\/customers\/customer_pick_screen\.dart'/, 'mobile must import the Story 3.4 pick screen');
   assert.match(mobile, /CustomerPickScreen\(\s*port: widget\.customersPort/, 'mobile must render the pick screen with the injected port');
-  assert.match(stripDart(mobile), /CreateOrderInput\(customerSdt: picked\.sdt\)/, 'mobile onSelect must create the order from the picked customer');
+  assert.match(stripDart(mobile), /CreateOrderInput\(customerSdt: picked\.phone\)/, 'mobile onSelect must create the order from the picked customer');
 });
 
 // (l) 🔴 SCOPE FLAGS (Story 4.3). The chip stays a STATIC display primitive: the

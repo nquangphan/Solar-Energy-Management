@@ -6,35 +6,19 @@
 // surfaces the UI SHOWS; the backend enforces EVERY request regardless. A hidden
 // nav item is convenience, never a security boundary.
 
-/// The `/me` payload shape — MUST match the backend `MeResponseDto`
-/// (Story 2.5: `{ id, email, displayName, permissions: string[] }`;
-/// `permissions` is sorted, each element a key in
-/// `backend/openapi/permissions.json`).
-///
-/// TODO(app-runtime): when the FE OpenAPI client is generated from
-/// `openapi.json` (AD-12), replace this hand-written model with the generated
-/// `MeResponseDto` type — do not hand-edit the spec.
-class MeResponse {
-  const MeResponse({
-    required this.id,
-    required this.email,
-    required this.displayName,
-    required this.permissions,
-  });
+import '../../api/generated/models/me_response_dto.dart';
 
-  final String id;
-  final String email;
-  final String displayName;
-  final List<String> permissions;
-}
+/// The `/me` payload — the generated `MeResponseDto` (Story 10.7, AD-12):
+/// `{ id, email, displayName, permissions: string[] }`; `permissions` is sorted,
+/// each element a key in `backend/openapi/permissions.json`.
+typedef MeResponse = MeResponseDto;
 
 /// Injectable transport for fetching `/me`. This is a PORT (a one-method
 /// interface), NOT an HTTP client — the seam that lets gating consume `/me`
 /// without the app owning networking/navigation/a token store yet.
 ///
-/// TODO(app-runtime/login-network): the real implementation attaches
-/// `Authorization: Bearer <accessToken>` (Story 2.3) and parses the AD-5 error
-/// envelope. It lands with the app-runtime; until then [FakeMePort] drives tests.
+/// The real implementation is `HttpMePort` (lib/api/http_me_port.dart); [FakeMePort]
+/// drives tests and demos.
 abstract class MePort {
   Future<MeResponse> fetchMe();
 }

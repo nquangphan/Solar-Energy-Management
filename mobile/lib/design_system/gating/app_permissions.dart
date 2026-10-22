@@ -44,15 +44,25 @@ class AppNavLink {
     required this.key,
     required this.label,
     this.icon,
+    this.subtitle,
     this.requires,
+    this.requiresAny,
   });
 
   final String key;
   final String label;
   final String? icon;
 
+  /// Secondary line under the label (the Menu rows); null = label only.
+  final String? subtitle;
+
   /// Permission this link requires; null = always visible.
   final PermissionKey? requires;
+
+  /// Any-of gate: the link survives when the Account holds AT LEAST ONE of these
+  /// keys (web `requiresAny`) — for an action split across several keys, where no
+  /// single key is a correct gate (`orders.view_all` / `orders.view_own`).
+  final List<PermissionKey>? requiresAny;
 }
 
 /// A nav section with gated links (parity with web `NavSection`).
@@ -66,9 +76,10 @@ class AppNavSection {
       AppNavSection(title: title, links: newLinks);
 }
 
-/// Filter a nav tree by permission (UX-DR-22): drop any link whose [requires]
-/// is not in [perms], then drop any section left with zero links (no orphan
-/// group header). Pure — returns a new list, never mutates the input.
+/// Filter a nav tree by permission (UX-DR-22): drop any link whose [AppNavLink.requires]
+/// is not in [perms] or none of whose [AppNavLink.requiresAny] is, then drop any
+/// section left with zero links (no orphan group header). Pure — returns a new
+/// list, never mutates the input. Same two gate shapes as web `filterNav`.
 List<AppNavSection> filterNav(
   List<AppNavSection> sections,
   Set<PermissionKey> perms,
@@ -77,7 +88,9 @@ List<AppNavSection> filterNav(
       .map((section) => section.copyWithLinks(
             section.links
                 .where((link) =>
-                    link.requires == null || can(perms, link.requires!))
+                    (link.requires == null || can(perms, link.requires!)) &&
+                    (link.requiresAny == null ||
+                        link.requiresAny!.any((key) => can(perms, key))))
                 .toList(),
           ))
       .where((section) => section.links.isNotEmpty)

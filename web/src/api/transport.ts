@@ -24,6 +24,7 @@ import type { components } from './generated/schema';
 import type { SessionStore } from './session-store';
 
 type RefreshRequest = components['schemas']['RefreshRequestDto'];
+type LogoutRequest = components['schemas']['LogoutRequestDto'];
 type AuthTokens = components['schemas']['AuthTokensDto'];
 
 /** Routes that authenticate by their body, not by a bearer — a 401 there is an answer, not an expired token. */
@@ -70,6 +71,9 @@ export function createTransport({
   const basePath = new URL(base, 'http://base.invalid').pathname.replace(/\/$/, '');
   // The renewal in flight; resolves to null on success, or the error to reject with.
   let refreshing: Promise<ApiError | null> | null = null;
+  // The session generation that renewal belongs to: a request of a LATER session never joins
+  // it (its outcome is the old session's, and a new session needs its own renewal).
+  let refreshingGeneration = 0;
 
   function routeOf(request: Request): string {
     const path = new URL(request.url).pathname;
@@ -100,6 +104,10 @@ export function createTransport({
   }
 
   async function renew(): Promise<ApiError | null> {
+    // A logout (or another login) while this renewal is in flight owns the session from then
+    // on: the renewal's outcome must neither store tokens into it nor clear it, and the user
+    // who signed out is not told the session expired.
+    const generation = session.getGeneration();
     const refreshToken = session.getRefreshToken();
     let failure = expired();
     if (refreshToken) {
@@ -113,8 +121,15 @@ export function createTransport({
         if (response.ok) {
           const tokens: unknown = await response.json();
           if (isAuthTokens(tokens)) {
+            if (session.getGeneration() !== generation) {
+              revoke(tokens.refreshToken);
+              return failure;
+            }
             // The backend rotates the refresh token: keeping the old one fails the next renewal.
-            session.setTokens({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+            session.setTokens(
+              { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken },
+              { renewal: true },
+            );
             return null;
           }
         } else {
@@ -127,18 +142,34 @@ export function createTransport({
         // Network failure or unreadable body: the session cannot be renewed.
       }
     }
+    if (session.getGeneration() !== generation) return failure;
     session.clear();
     onSessionExpired?.();
     return failure;
   }
 
+  /**
+   * Revokes the session the server issued for a renewal nobody holds any more (a logout or a
+   * sign-in raced it): the logout sent the token this renewal had already rotated, so without
+   * this the new server session would outlive the sign-out. Best effort, nothing to report.
+   */
+  function revoke(refreshToken: string): void {
+    const body: LogoutRequest = { refreshToken };
+    fetchImpl(`${base}/auth/logout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => undefined);
+  }
+
   function renewOnce(): Promise<ApiError | null> {
-    if (!refreshing) {
-      refreshing = renew().finally(() => {
-        refreshing = null;
-      });
-    }
-    return refreshing;
+    if (refreshing && refreshingGeneration === session.getGeneration()) return refreshing;
+    refreshingGeneration = session.getGeneration();
+    const renewal: Promise<ApiError | null> = renew().finally(() => {
+      if (refreshing === renewal) refreshing = null;
+    });
+    refreshing = renewal;
+    return renewal;
   }
 
   return {

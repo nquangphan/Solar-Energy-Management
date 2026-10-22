@@ -15,15 +15,23 @@ export interface SessionTokens {
 export interface SessionStore {
   getAccessToken(): string | null;
   getRefreshToken(): string | null;
-  setTokens(tokens: SessionTokens): void;
+  /**
+   * Bumped when a session starts (login) or ends (clear), not when it is renewed. A renewal
+   * that finishes after the generation moved belongs to a session that is gone.
+   */
+  getGeneration(): number;
+  /** `renewal`: the tokens rotate the CURRENT session (refresh) instead of starting one. */
+  setTokens(tokens: SessionTokens, options?: { renewal?: boolean }): void;
   clear(): void;
 }
 
 export function createSessionStore(storage: () => Storage = () => window.localStorage): SessionStore {
   let accessToken: string | null = null;
+  let generation = 0;
 
   return {
     getAccessToken: () => accessToken,
+    getGeneration: () => generation,
     getRefreshToken() {
       try {
         return storage().getItem(REFRESH_TOKEN_KEY);
@@ -31,7 +39,8 @@ export function createSessionStore(storage: () => Storage = () => window.localSt
         return null;
       }
     },
-    setTokens(tokens) {
+    setTokens(tokens, options) {
+      if (!options?.renewal) generation += 1;
       accessToken = tokens.accessToken;
       try {
         storage().setItem(REFRESH_TOKEN_KEY, tokens.refreshToken);
@@ -40,6 +49,7 @@ export function createSessionStore(storage: () => Storage = () => window.localSt
       }
     },
     clear() {
+      generation += 1;
       accessToken = null;
       try {
         storage().removeItem(REFRESH_TOKEN_KEY);

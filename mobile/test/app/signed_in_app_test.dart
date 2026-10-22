@@ -1,0 +1,400 @@
+// The signed-in app (Story 10.7): Menu gated by /me, the router over the Menu's
+// screens, the bottom nav's Menu tab, back navigation, per-account permissions,
+// a failed /me with retry, and session expiry from a sub-screen — the whole app
+// over the real HTTP adapters with a fake backend.
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pns_mobile/design_system/components/components.dart';
+import 'package:pns_mobile/screens/account/profile_screen.dart';
+import 'package:pns_mobile/screens/auth/login_screen.dart';
+import 'package:pns_mobile/screens/customers/customer_detail_screen.dart';
+import 'package:pns_mobile/screens/customers/customer_list_screen.dart';
+import 'package:pns_mobile/screens/customers/customer_pick_screen.dart';
+import 'package:pns_mobile/screens/menu/menu_screen.dart';
+import 'package:pns_mobile/screens/warranty/warranty_lookup_screen.dart';
+
+import '../api/support/fake_http.dart';
+import 'support/app_harness.dart';
+
+const _customerPerms = ['customers.manage', 'orders.view_own'];
+
+Map<String, Object?> _customer(String phone, String name) => {
+  'phone': phone,
+  'custType': 'CA_NHAN',
+  'name': name,
+  'nationalId': null,
+  'taxCode': null,
+  'address': null,
+  'bankAccount': null,
+  'sourceId': 'src-1',
+  'sourceNote': null,
+  'createdAt': '2026-07-13T00:00:00.000Z',
+  'updatedAt': '2026-07-13T00:00:00.000Z',
+};
+
+/// A backend for two accounts: `a@…` holds [permsA], `b@…` holds [permsB]; each
+/// login hands out a token naming its account, /me answers for that token.
+FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB = const []}) => (r) {
+  switch (r.path) {
+    case '/auth/login':
+      final who = ((r.json as Map)['email'] as String).startsWith('b') ? 'b' : 'a';
+      return jsonBody(200, tokens('access-$who', 'refresh-$who'));
+    case '/auth/refresh':
+      return jsonBody(200, tokens('access-a', 'refresh-a'));
+    case '/auth/logout':
+      return noContent();
+    case '/me':
+      return r.authorization == 'Bearer access-b'
+          ? jsonBody(200, meBody(permsB, displayName: 'Người B', email: 'b@pns.solar'))
+          : jsonBody(200, meBody(permsA, displayName: 'Người A', email: 'a@pns.solar'));
+    case '/customers':
+      return jsonBody(200, {
+        'items': [_customer('+84903176968', 'Nguyễn Văn A')],
+        'total': 1,
+        'page': 1,
+        'pageSize': 20,
+      });
+    case '/customers/%2B84903176968':
+      return jsonBody(200, _customer('+84903176968', 'Nguyễn Văn A'));
+    case '/customer-sources':
+      return jsonBody(200, [
+        {'id': 'src-1', 'name': 'Facebook', 'description': null, 'active': true, 'sortOrder': 1, 'isOther': false},
+      ]);
+    case '/orders/warranty-lookup':
+      return jsonBody(200, {'found': false, 'phone': '+84999999999', 'customer': null, 'orders': []});
+  }
+  return jsonBody(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
+};
+
+Future<TestApp> _signedIn(WidgetTester tester, FakeHandler backend) async {
+  final app = TestApp(backend);
+  app.store.values['pns.refreshToken'] = 'refresh-0';
+  await tester.pumpWidget(app.widget);
+  await settle(tester);
+  return app;
+}
+
+Future<void> _login(WidgetTester tester, String email) async {
+  await tester.enterText(find.byType(TextField).at(0), email);
+  await tester.enterText(find.byType(TextField).at(1), 'secret-1');
+  await tester.tap(find.widgetWithText(AppButton, 'Đăng nhập'));
+  await settle(tester);
+}
+
+Future<void> _logout(WidgetTester tester) async {
+  final logout = find.widgetWithText(AppButton, 'Đăng xuất');
+  await tester.ensureVisible(logout);
+  await tester.tap(logout);
+  await settle(tester);
+}
+
+/// Requests settle in small real-time steps; then the page transition runs to its end.
+Future<void> _navigated(WidgetTester tester) async {
+  await settle(tester);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _tapButton(WidgetTester tester, String label) async {
+  final button = find.widgetWithText(AppButton, label);
+  await tester.ensureVisible(button);
+  await tester.tap(button);
+  await _navigated(tester);
+}
+
+GoRouter _router(WidgetTester tester) => GoRouter.of(tester.element(find.byType(Navigator).last));
+
+String _location(WidgetTester tester) => _router(tester).state.uri.toString();
+
+void main() {
+  testWidgets('the Menu shows a row only for what the account may open — one permission apart', (tester) async {
+    await _signedIn(tester, _backend());
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.text('Khách hàng'), findsOneWidget);
+    expect(find.text('Tra cứu bảo hành'), findsOneWidget);
+    expect(find.text('Hồ sơ'), findsOneWidget);
+    expect(find.text('Người A'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _signedIn(tester, _backend(permsA: ['orders.view_own']));
+    expect(find.text('Khách hàng'), findsNothing);
+    expect(find.text('Tra cứu bảo hành'), findsOneWidget);
+  });
+
+  testWidgets('Khách hàng → a customer with + in the phone → back returns to the list', (tester) async {
+    final app = await _signedIn(tester, _backend());
+    await tester.tap(find.text('Khách hàng'));
+    await _navigated(tester);
+    expect(find.byType(CustomerListScreen), findsOneWidget);
+    expect(find.text('Nguyễn Văn A'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(AppButton, 'Xem'));
+    await _navigated(tester);
+    expect(find.byType(CustomerDetailScreen), findsOneWidget);
+    expect(app.adapter.to('/customers/%2B84903176968'), hasLength(1));
+    expect(_location(tester), '/customers/%2B84903176968');
+
+    await tester.binding.handlePopRoute();
+    await _navigated(tester);
+    expect(find.byType(CustomerListScreen), findsOneWidget);
+    expect(find.byType(CustomerDetailScreen), findsNothing);
+  });
+
+  testWidgets('+ Thêm khách → an unknown phone → create → the new customer\'s detail, over the real adapters', (
+    tester,
+  ) async {
+    final ok = _backend();
+    var stored = false;
+    final app = await _signedIn(tester, (r) {
+      if (r.path == '/customers/lookup') {
+        return jsonBody(200, {'found': false, 'phone': '+84903555777', 'customer': null});
+      }
+      if (r.path == '/customers' && r.method == 'POST') {
+        stored = true;
+        return jsonBody(201, _customer('+84903555777', 'Trần Thị B'));
+      }
+      if (r.path == '/customers' && stored) {
+        return jsonBody(200, {
+          'items': [_customer('+84903176968', 'Nguyễn Văn A'), _customer('+84903555777', 'Trần Thị B')],
+          'total': 2,
+          'page': 1,
+          'pageSize': 20,
+        });
+      }
+      if (r.path == '/customers/%2B84903555777') return jsonBody(200, _customer('+84903555777', 'Trần Thị B'));
+      return ok(r);
+    });
+    await tester.tap(find.text('Khách hàng'));
+    await _navigated(tester);
+    await _tapButton(tester, '+ Thêm khách');
+    // `/customers/lookup` is the pick screen, not a customer whose phone is "lookup".
+    expect(_location(tester), '/customers/lookup');
+    expect(find.byType(CustomerPickScreen), findsOneWidget);
+    expect(app.adapter.to('/customers/lookup'), isEmpty);
+
+    await tester.enterText(find.byType(TextField).first, '0903 555 777');
+    await _tapButton(tester, 'Tra cứu');
+    expect(app.adapter.to('/customers/lookup').single.query, {'phone': '0903 555 777'});
+    await _tapButton(tester, 'Tạo khách hàng mới');
+    await tester.enterText(find.byType(TextField).at(1), 'Trần Thị B');
+    await _tapButton(tester, 'Facebook');
+    await _tapButton(tester, 'Lưu khách hàng');
+
+    final created = app.adapter.requests.singleWhere((r) => r.path == '/customers' && r.method == 'POST');
+    expect(created.json, containsPair('phone', '0903 555 777'));
+    expect(created.json, containsPair('name', 'Trần Thị B'));
+    expect(created.json, containsPair('sourceId', 'src-1'));
+    expect(find.byType(CustomerDetailScreen), findsOneWidget);
+    expect(_location(tester), '/customers/%2B84903555777');
+    expect(app.adapter.to('/customers/%2B84903555777'), hasLength(1));
+
+    // The create form left the stack: Back returns to the list, which re-read and shows the new customer.
+    await tester.binding.handlePopRoute();
+    await _navigated(tester);
+    expect(find.byType(CustomerPickScreen), findsNothing);
+    expect(_location(tester), '/customers');
+    expect(find.descendant(of: find.byType(CustomerListScreen), matching: find.text('Trần Thị B')), findsOneWidget);
+  });
+
+  testWidgets('a duplicate phone on create shows the backend sentence under SĐT, and stays on the form', (
+    tester,
+  ) async {
+    final ok = _backend();
+    final app = await _signedIn(tester, (r) {
+      if (r.path == '/customers/lookup') {
+        return jsonBody(200, {'found': false, 'phone': '+84903555777', 'customer': null});
+      }
+      if (r.path == '/customers' && r.method == 'POST') {
+        return jsonBody(
+          409,
+          envelope(
+            'CONFLICT',
+            'Số điện thoại đã có khách hàng: +84903555777',
+            fieldErrors: [
+              {'field': 'phone', 'code': 'duplicate', 'message': 'Số điện thoại này đã thuộc về một khách hàng khác.'},
+            ],
+          ),
+        );
+      }
+      return ok(r);
+    });
+    await tester.tap(find.text('Khách hàng'));
+    await _navigated(tester);
+    await _tapButton(tester, '+ Thêm khách');
+    await tester.enterText(find.byType(TextField).first, '0903555777');
+    await _tapButton(tester, 'Tra cứu');
+    await _tapButton(tester, 'Tạo khách hàng mới');
+    await tester.enterText(find.byType(TextField).at(1), 'Trần Thị B');
+    await _tapButton(tester, 'Facebook');
+    await _tapButton(tester, 'Lưu khách hàng');
+
+    final fieldError = find.widgetWithText(AppBanner, 'Số điện thoại này đã thuộc về một khách hàng khác.');
+    expect(fieldError, findsOneWidget);
+    expect(tester.getTopLeft(fieldError).dy, lessThan(tester.getTopLeft(find.widgetWithText(AppButton, 'Tra cứu')).dy));
+    expect(find.text('Số điện thoại đã có khách hàng: +84903555777'), findsOneWidget);
+    expect(find.byType(CustomerDetailScreen), findsNothing);
+    expect(_location(tester), '/customers/lookup');
+    expect(app.adapter.requests.where((r) => r.path == '/customers' && r.method == 'POST'), hasLength(1));
+  });
+
+  testWidgets('Hồ sơ shows the /me identity and Cập nhật mật khẩu posts through the password adapter', (tester) async {
+    final ok = _backend();
+    final app = await _signedIn(tester, (r) => r.path == '/auth/change-password' ? noContent() : ok(r));
+    final meCalls = app.adapter.to('/me').length;
+    await tester.tap(find.text('Hồ sơ'));
+    await _navigated(tester);
+    final profile = find.byType(ProfileScreen);
+    expect(profile, findsOneWidget);
+    expect(find.descendant(of: profile, matching: find.text('Người A')), findsWidgets);
+    expect(find.descendant(of: profile, matching: find.text('a@pns.solar')), findsWidgets);
+    // The identity comes from the session's /me, not a second fetch.
+    expect(app.adapter.to('/me'), hasLength(meCalls));
+
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), 'old-pass-1');
+    await tester.enterText(fields.at(1), 'new-pass-22');
+    await tester.enterText(fields.at(2), 'new-pass-22');
+    await _tapButton(tester, 'Cập nhật mật khẩu');
+
+    final change = app.adapter.to('/auth/change-password').single;
+    expect(change.authorization, 'Bearer access-a');
+    expect(change.json, {'currentPassword': 'old-pass-1', 'newPassword': 'new-pass-22'});
+    expect(find.text('Đã đổi mật khẩu. Bạn cần đăng nhập lại.'), findsOneWidget);
+  });
+
+  testWidgets('a path the account may not open, or an unknown one, lands on the Menu', (tester) async {
+    await _signedIn(tester, _backend(permsA: ['orders.view_own']));
+    _router(tester).go('/customers');
+    await _navigated(tester);
+    expect(find.byType(CustomerListScreen), findsNothing);
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(_location(tester), '/menu');
+
+    _router(tester).go('/orders');
+    await _navigated(tester);
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(_location(tester), '/menu');
+
+    // Control: an openable path does open.
+    _router(tester).go('/warranty');
+    await _navigated(tester);
+    expect(find.byType(WarrantyLookupScreen), findsOneWidget);
+  });
+
+  testWidgets('the Menu tab from a sub-screen returns to the Menu; the unwired tabs and the FAB do nothing', (
+    tester,
+  ) async {
+    await _signedIn(tester, _backend());
+    await tester.tap(find.text('Hồ sơ'));
+    await _navigated(tester);
+    expect(find.byType(ProfileScreen), findsOneWidget);
+
+    for (final tab in ['Trang chủ', 'Đơn hàng', 'Kho', 'Tạo']) {
+      await tester.tap(find.text(tab));
+      await _navigated(tester);
+      expect(tester.takeException(), isNull, reason: tab);
+      expect(_location(tester), '/profile', reason: tab);
+    }
+
+    await tester.tap(find.text('Menu'));
+    await _navigated(tester);
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(_location(tester), '/menu');
+  });
+
+  testWidgets('signing out A and in as B gives B\'s permissions, not A\'s', (tester) async {
+    await _signedIn(tester, _backend(permsB: ['orders.view_all']));
+    expect(find.text('Khách hàng'), findsOneWidget);
+
+    await _logout(tester);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    await _login(tester, 'b@pns.solar');
+
+    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.text('Người B'), findsOneWidget);
+    expect(find.text('Khách hàng'), findsNothing);
+    expect(find.text('Tra cứu bảo hành'), findsOneWidget);
+  });
+
+  testWidgets('/me failing shows an error with Thử lại, which asks /me exactly once more', (tester) async {
+    var meCalls = 0;
+    final ok = _backend();
+    final app = await _signedIn(tester, (r) {
+      if (r.path == '/me' && ++meCalls == 1) return jsonBody(500, envelope('INTERNAL', 'Lỗi máy chủ.'));
+      return ok(r);
+    });
+    expect(find.byType(AppErrorState), findsOneWidget);
+    expect(find.widgetWithText(AppButton, 'Đăng xuất'), findsOneWidget);
+    expect(app.adapter.to('/me'), hasLength(1));
+
+    await tester.tap(find.widgetWithText(AppButton, 'Thử lại'));
+    await _navigated(tester);
+    expect(app.adapter.to('/me'), hasLength(2));
+    expect(find.byType(MenuScreen), findsOneWidget);
+  });
+
+  testWidgets('Đăng xuất on the /me error, tapped twice while logout is pending ⇒ one POST /auth/logout', (
+    tester,
+  ) async {
+    final release = Completer<void>();
+    final ok = _backend();
+    final app = await _signedIn(tester, (r) async {
+      if (r.path == '/me') return jsonBody(500, envelope('INTERNAL', 'Lỗi máy chủ.'));
+      if (r.path == '/auth/logout') await release.future;
+      return ok(r);
+    });
+    expect(find.byType(AppErrorState), findsOneWidget);
+    final logout = find.widgetWithText(AppButton, 'Đăng xuất');
+    await tester.tap(logout);
+    await settle(tester);
+    await tester.tap(logout);
+    await settle(tester);
+    // The second tap neither sends again nor jumps ahead of the pending sign-out.
+    expect(find.byType(LoginScreen), findsNothing);
+    release.complete();
+    await _navigated(tester);
+
+    expect(app.adapter.to('/auth/logout'), hasLength(1));
+    expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('session expiry on a sub-screen ⇒ back to Đăng nhập', (tester) async {
+    final app = await _signedIn(tester, _backend());
+    await tester.tap(find.text('Tra cứu bảo hành'));
+    await _navigated(tester);
+    expect(find.byType(WarrantyLookupScreen), findsOneWidget);
+
+    app.expired.value++;
+    await _navigated(tester);
+    expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('Tra cứu bảo hành over the router: the raw phone goes out, found:false is an answer', (tester) async {
+    final app = await _signedIn(tester, _backend());
+    await tester.tap(find.text('Tra cứu bảo hành'));
+    await _navigated(tester);
+    await tester.enterText(find.byType(TextField).first, '0999 999 999');
+    await tester.tap(find.widgetWithText(AppButton, 'Tra cứu'));
+    await _navigated(tester);
+    expect(app.adapter.to('/orders/warranty-lookup').single.query, {'phone': '0999 999 999'});
+    expect(find.text('SĐT chưa có trong hệ thống.'), findsOneWidget);
+  });
+
+  testWidgets('the on-screen keyboard never hides a routed form\'s button (Tra cứu bảo hành)', (tester) async {
+    addTearDown(tester.view.reset);
+    await _signedIn(tester, _backend());
+    await tester.tap(find.text('Tra cứu bảo hành'));
+    await _navigated(tester);
+
+    tester.view.viewInsets = FakeViewPadding(bottom: 300.0 * tester.view.devicePixelRatio);
+    await tester.pump();
+    final button = find.widgetWithText(AppButton, 'Tra cứu');
+    await tester.ensureVisible(button);
+    await tester.pump();
+
+    final visibleBottom = tester.view.physicalSize.height / tester.view.devicePixelRatio - 300.0;
+    expect(tester.getRect(button).bottom, lessThanOrEqualTo(visibleBottom));
+  });
+}

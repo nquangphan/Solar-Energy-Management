@@ -12,7 +12,8 @@
 
 import 'customers_port.dart';
 
-const String _now = '2026-07-13T00:00:00.000Z';
+// Fixed UTC instants (DateTime.utc): a local DateTime would shift by the device offset.
+final DateTime _now = DateTime.utc(2026, 7, 13);
 
 /// Demo catalogue — one source carries `isOther`, which is what reveals `Ghi rõ nguồn`.
 const List<CustomerSource> kDemoCustomerSources = [
@@ -20,27 +21,28 @@ const List<CustomerSource> kDemoCustomerSources = [
     id: 'src-facebook',
     name: 'Facebook',
     description: 'Từ quảng cáo Facebook.',
+    active: true,
     isOther: false,
     sortOrder: 1,
   ),
-  CustomerSource(id: 'src-zalo', name: 'Zalo', isOther: false, sortOrder: 2),
-  CustomerSource(id: 'src-khac', name: 'Khác', isOther: true, sortOrder: 99),
+  CustomerSource(id: 'src-zalo', name: 'Zalo', active: true, isOther: false, sortOrder: 2),
+  CustomerSource(id: 'src-khac', name: 'Khác', active: true, isOther: true, sortOrder: 99),
 ];
 
 /// Demo customers — at least one of each type, one of them on the `isOther` source.
-const List<Customer> kDemoCustomers = [
+final List<Customer> kDemoCustomers = [
   Customer(
-    sdt: '+84903176968',
+    phone: '+84903176968',
     custType: 'CA_NHAN',
     name: 'Nguyễn Văn A',
-    cccd: '079201001234',
+    nationalId: '079201001234',
     address: '12 Nguyễn Huệ, Quận 1, TP.HCM',
     sourceId: 'src-facebook',
     createdAt: _now,
     updatedAt: _now,
   ),
   Customer(
-    sdt: '+84912345678',
+    phone: '+84912345678',
     custType: 'THUONG_MAI',
     name: 'Công ty TNHH Hoà Phát',
     taxCode: '0312345678',
@@ -73,14 +75,14 @@ class FakeCustomersPort implements CustomersPort {
     final String needle = _digits(sdt);
     Customer? found;
     for (final Customer c in _customers) {
-      if (needle.isNotEmpty && _digits(c.sdt).endsWith(needle)) {
+      if (needle.isNotEmpty && _digits(c.phone).endsWith(needle)) {
         found = c;
         break;
       }
     }
     return CustomerLookup(
       found: found != null,
-      sdt: found?.sdt ?? sdt,
+      phone: found?.phone ?? sdt,
       customer: found,
     );
   }
@@ -100,7 +102,7 @@ class FakeCustomersPort implements CustomersPort {
       }
       if (query.isEmpty) return true;
       final bool byName = c.name.toLowerCase().contains(query.toLowerCase());
-      final bool bySdt = needle.isNotEmpty && c.sdt.contains(needle);
+      final bool bySdt = needle.isNotEmpty && c.phone.contains(needle);
       return byName || bySdt;
     }).toList();
 
@@ -123,7 +125,7 @@ class FakeCustomersPort implements CustomersPort {
   Future<Customer> get(String sdt) async {
     final String needle = _digits(sdt);
     for (final Customer c in _customers) {
-      if (_digits(c.sdt).endsWith(needle)) return c;
+      if (_digits(c.phone).endsWith(needle)) return c;
     }
     throw StateError('Không tìm thấy khách hàng: $sdt');
   }
@@ -131,10 +133,10 @@ class FakeCustomersPort implements CustomersPort {
   @override
   Future<Customer> create(CreateCustomerInput input) async {
     final Customer created = Customer(
-      sdt: input.sdt,
-      custType: input.custType,
+      phone: input.phone,
+      custType: input.custType.json ?? '',
       name: input.name,
-      cccd: input.cccd,
+      nationalId: input.nationalId,
       taxCode: input.taxCode,
       address: input.address,
       bankAccount: input.bankAccount,

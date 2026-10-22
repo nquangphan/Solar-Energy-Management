@@ -1,4 +1,5 @@
-// hand-authored — the mobile composition root, the ONLY one (Story 10.6, AD-12).
+// hand-authored — the mobile composition root, the ONLY one (Story 10.6, AD-12;
+// signed-in adapters Story 10.7).
 //
 // Builds session store → transport → generated client → HTTP adapters and hands
 // the ports to the app. The backend URL comes from the build only:
@@ -9,6 +10,10 @@ import 'package:flutter/material.dart';
 
 import 'api/generated/pns_api_client.dart';
 import 'api/http_auth_port.dart';
+import 'api/http_customers_port.dart';
+import 'api/http_me_port.dart';
+import 'api/http_password_port.dart';
+import 'api/http_warranty_port.dart';
 import 'api/session_store.dart';
 import 'api/transport.dart';
 import 'app/pns_app.dart';
@@ -34,8 +39,14 @@ Widget buildApp(String baseUrl, {SecureKeyValueStore? secureStore}) {
     onSessionExpired: () => sessionExpired.value++,
   );
   final client = PnsApiClient(transport.dio);
+  // HttpCatalogPort has no screen behind the router yet (the quote screen is the
+  // Tạo FAB, wired with the orders adapters), so it is not built here.
   return PnsApp(
     auth: HttpAuthPort(client, session, transport),
+    me: HttpMePort(client, transport),
+    password: HttpPasswordPort(client, transport),
+    customers: HttpCustomersPort(client, transport),
+    warranty: HttpWarrantyPort(client, transport),
     sessionExpired: sessionExpired,
   );
 }

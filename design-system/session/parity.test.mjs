@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 import { generatedBody, generatedFields, webAliasDto, webTypeFields } from '../lib/web-contract-types.mjs';
 import { WEB_TO_MOBILE_FIELD, mobileField, mobileMethod } from '../lib/web-mobile-contract-map.mjs';
+import { mobileAliasDto, mobileClassFields, mobileDtoFields } from '../lib/mobile-contract-types.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/session -> repo root
@@ -444,18 +445,71 @@ test('the warranty port is the SAME one-method read contract on both platforms (
   // Every computed field crosses the wire on BOTH twins. A field missing on one
   // side is a screen that would have to compute it locally — the exact thing
   // QĐ-4 forbids.
-  // Web: WarrantyLine IS the generated WarrantyLineItemDto (Story 10.4), so the fields
-  // are read from the spec it aliases. Mobile still declares them by hand until 10.7.
+  // Both: WarrantyLine IS the generated WarrantyLineItemDto (web Story 10.4, mobile 10.7), so
+  // the fields are read from the spec each platform aliases.
   assert.ok(
     webPort.includes("export type WarrantyLine = Schemas['WarrantyLineItemDto'];"),
     'web WarrantyLine must alias the generated WarrantyLineItemDto',
   );
   const lineDto = JSON.parse(readFileSync(resolve(repoRoot, 'backend/openapi/openapi.json'), 'utf8'))
     .components.schemas.WarrantyLineItemDto;
+  const mobLineFields = mobileDtoFields(mobileAliasDto(mobPort, 'WarrantyLine'));
   for (const field of ['warrantyEndAt', 'remainingDays', 'remainingMonths', 'warrantyStatus', 'warrantyStartAt', 'warrantyMonths']) {
     assert.ok(lineDto.properties[field], `WarrantyLineItemDto (web WarrantyLine) missing ${field}`);
-    assert.ok(mobPort.includes(field), `mobile WarrantyLine missing ${field}`);
+    assert.ok(mobLineFields.includes(field), `mobile WarrantyLine missing ${field}`);
   }
+});
+
+test('mobile catalog projections carry only DTO fields and never costPrice (Story 10.7)', () => {
+  // Dart has no Pick<>: CatalogProduct / CatalogGroup / CatalogGroupDetail stay narrow classes
+  // the adapter fills field by field. Each field must exist on the DTO it projects (no invented
+  // field), and costPrice must never be one of them (the picker state must not hold a cost).
+  const mobPort = readFileSync(resolve(mobDir, 'catalog_port.dart'), 'utf8');
+  let compared = 0;
+  for (const [cls, dto] of [
+    ['CatalogProduct', 'ProductResponseDto'],
+    ['CatalogGroup', 'ProductGroupResponseDto'],
+    ['CatalogGroupDetail', 'ProductGroupDetailResponseDto'],
+  ]) {
+    const props = mobileDtoFields(dto);
+    for (const field of mobileClassFields(mobPort, cls)) {
+      assert.ok(props.includes(field), `mobile ${cls}.${field} is not a ${dto} property`);
+      assert.notEqual(field, 'costPrice', `mobile ${cls} must not carry costPrice`);
+      compared += 1;
+    }
+  }
+  assert.ok(compared >= 14, `catalog projection guard compared only ${compared} fields (reader went blind)`);
+  assert.equal(mobileAliasDto(mobPort, 'CatalogGroupItem'), 'ProductGroupItemResponseDto');
+});
+
+test('mobile session ports alias the generated contract types (Story 10.7)', () => {
+  // Same rule as the web ports since 10.4 (AD-12): a port's data type IS the generated DTO.
+  const expected = {
+    'me_port.dart': { MeResponse: 'MeResponseDto' },
+    'customers_port.dart': {
+      Customer: 'CustomerResponseDto',
+      CustomerSource: 'CustomerSourceResponseDto',
+      CustomerLookup: 'CustomerLookupResponseDto',
+      CustomerPage: 'CustomerListResponseDto',
+      CreateCustomerInput: 'CreateCustomerRequestDto',
+    },
+    'warranty_port.dart': {
+      WarrantyCustomer: 'WarrantyCustomerDto',
+      WarrantyLine: 'WarrantyLineItemDto',
+      WarrantyOrder: 'WarrantyOrderDto',
+      WarrantyLookup: 'WarrantyLookupResponseDto',
+    },
+  };
+  let aliased = 0;
+  for (const [file, types] of Object.entries(expected)) {
+    const src = readFileSync(resolve(mobDir, file), 'utf8');
+    for (const [type, dto] of Object.entries(types)) {
+      assert.equal(mobileAliasDto(src, type), dto, `mobile ${type} must alias ${dto}`);
+      assert.ok(!new RegExp(`^class ${type}\\b`, 'm').test(src), `mobile ${file} must not also hand-declare class ${type}`);
+      aliased += 1;
+    }
+  }
+  assert.equal(aliased, 10);
 });
 
 test('the warranty date formatter is a twin helper on BOTH screens (Story 5.9)', () => {

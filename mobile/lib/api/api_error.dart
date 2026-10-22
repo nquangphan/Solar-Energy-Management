@@ -66,3 +66,10 @@ ApiError? parseEnvelope(Object? body, {int? status}) {
     traceId: traceId is String && traceId.isNotEmpty ? traceId : null,
   );
 }
+
+/// `field` → `message` from an [ApiError]'s field errors — the shape the port
+/// exceptions (`CustomerPortException`, `WarrantyPortException`) carry, so each
+/// message lands under the input it names. The first message of a field wins.
+Map<String, String> fieldErrorMap(ApiError e) => {
+      for (final f in (e.fieldErrors ?? const <FieldErrorDto>[]).reversed) f.field: f.message,
+    };

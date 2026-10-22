@@ -6,7 +6,7 @@
 // rule — phone normalisation, permission scoping and every warranty date live on
 // the server (AD-4/AD-9).
 //
-// The dates here are FIXED STRINGS, not computed: this fake must never grow a
+// The dates here are FIXED UTC instants (`DateTime.utc`), not computed: this fake must never grow a
 // second implementation of the warranty rule. It matches on the digits of the
 // stored key so the demo behaves like the real endpoint for a raw-typed number —
 // a DEMO CONVENIENCE, not a normaliser: it never produces a key, only compares.
@@ -19,10 +19,10 @@ const String demoWarrantySdt = '+84903176968';
 
 /// Two orders with warranty — enough to render every status branch on one screen.
 final List<WarrantyOrder> demoWarrantyOrders = <WarrantyOrder>[
-  const WarrantyOrder(
+  WarrantyOrder(
     id: 'ord-2026-014',
     status: 'nghiem_thu',
-    chotAt: '2026-02-10T00:00:00.000Z',
+    confirmedAt: DateTime.utc(2026, 2, 10),
     lineItems: <WarrantyLine>[
       WarrantyLine(
         id: 'line-pin',
@@ -30,11 +30,11 @@ final List<WarrantyOrder> demoWarrantyOrders = <WarrantyOrder>[
         qty: 18,
         unit: 'tấm',
         warrantyMonths: 144,
-        warrantyStartAt: '2026-02-10T00:00:00.000Z',
-        warrantyEndAt: '2038-02-10T00:00:00.000Z',
+        warrantyStartAt: DateTime.utc(2026, 2, 10),
+        warrantyEndAt: DateTime.utc(2038, 2, 10),
         remainingDays: 4224,
         remainingMonths: 138,
-        warrantyStatus: 'con_han',
+        warrantyStatus: WarrantyLineItemDtoWarrantyStatus.conHan,
       ),
       // Added in a later version of the same order — its own start date, which is
       // exactly why warranty is pinned per LINE and not per order (FR-36).
@@ -44,18 +44,18 @@ final List<WarrantyOrder> demoWarrantyOrders = <WarrantyOrder>[
         qty: 1,
         unit: 'bộ',
         warrantyMonths: 60,
-        warrantyStartAt: '2026-05-04T00:00:00.000Z',
-        warrantyEndAt: '2031-05-04T00:00:00.000Z',
+        warrantyStartAt: DateTime.utc(2026, 5, 4),
+        warrantyEndAt: DateTime.utc(2031, 5, 4),
         remainingDays: 1751,
         remainingMonths: 57,
-        warrantyStatus: 'con_han',
+        warrantyStatus: WarrantyLineItemDtoWarrantyStatus.conHan,
       ),
     ],
   ),
-  const WarrantyOrder(
+  WarrantyOrder(
     id: 'ord-2023-101',
     status: 'nghiem_thu',
-    chotAt: '2023-08-01T00:00:00.000Z',
+    confirmedAt: DateTime.utc(2023, 8, 1),
     lineItems: <WarrantyLine>[
       WarrantyLine(
         id: 'line-ac',
@@ -63,11 +63,11 @@ final List<WarrantyOrder> demoWarrantyOrders = <WarrantyOrder>[
         qty: 1,
         unit: 'tủ',
         warrantyMonths: 36,
-        warrantyStartAt: '2023-08-01T00:00:00.000Z',
-        warrantyEndAt: '2026-08-01T00:00:00.000Z',
+        warrantyStartAt: DateTime.utc(2023, 8, 1),
+        warrantyEndAt: DateTime.utc(2026, 8, 1),
         remainingDays: 14,
         remainingMonths: 0,
-        warrantyStatus: 'sap_het',
+        warrantyStatus: WarrantyLineItemDtoWarrantyStatus.sapHet,
       ),
       WarrantyLine(
         id: 'line-pin-cu',
@@ -75,11 +75,11 @@ final List<WarrantyOrder> demoWarrantyOrders = <WarrantyOrder>[
         qty: 2,
         unit: 'bình',
         warrantyMonths: 24,
-        warrantyStartAt: '2023-08-01T00:00:00.000Z',
-        warrantyEndAt: '2025-08-01T00:00:00.000Z',
+        warrantyStartAt: DateTime.utc(2023, 8, 1),
+        warrantyEndAt: DateTime.utc(2025, 8, 1),
         remainingDays: -351,
         remainingMonths: 0,
-        warrantyStatus: 'het_han',
+        warrantyStatus: WarrantyLineItemDtoWarrantyStatus.hetHan,
       ),
     ],
   ),
@@ -98,15 +98,16 @@ class FakeWarrantyPort implements WarrantyPort {
       // "No such customer" is a 200 with an empty answer, never a throw.
       return const WarrantyLookup(
         found: false,
-        sdt: demoWarrantySdt,
+        phone: demoWarrantySdt,
+        customer: null,
         orders: <WarrantyOrder>[],
       );
     }
     return WarrantyLookup(
       found: true,
-      sdt: demoWarrantySdt,
+      phone: demoWarrantySdt,
       customer: const WarrantyCustomer(
-        sdt: demoWarrantySdt,
+        phone: demoWarrantySdt,
         name: 'Nguyễn Văn A',
         custType: 'CA_NHAN',
       ),

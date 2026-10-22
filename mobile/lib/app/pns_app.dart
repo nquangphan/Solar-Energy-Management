@@ -1,22 +1,41 @@
-// hand-authored — the mobile app shell (Story 10.6). Restores the session at
-// start-up, then switches between Đăng nhập and a minimal signed-in surface.
-// It only sees the [AuthPort]: tokens and HTTP stay behind the port.
+// hand-authored — the mobile app shell (Story 10.6, signed-in app Story 10.7).
+// Restores the session at start-up, then switches between Đăng nhập (with Quên
+// mật khẩu) and the signed-in app. It only sees ports: tokens and HTTP stay
+// behind them.
 //
-// Story 10.7 replaces the signed-in surface with go_router + PermissionsProvider.
+// Each sign-in gets a fresh PermissionsProvider (keyed by a counter), so a second
+// account on the same phone never sees the first account's permissions.
 import 'package:flutter/material.dart';
 
-import '../design_system/components/components.dart';
+import '../design_system/session/app_session.dart';
 import '../design_system/session/auth_port.dart';
-import '../design_system/shell/app_phone_frame.dart';
-import '../design_system/tokens/app_tokens.dart';
+import '../design_system/session/customers_port.dart';
+import '../design_system/session/me_port.dart';
+import '../design_system/session/password_port.dart';
+import '../design_system/session/warranty_port.dart';
+import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
+import 'app_chrome.dart';
+import 'signed_in_app.dart';
 
-enum _Phase { restoring, signedOut, signedIn }
+enum _Phase { restoring, signedOut, forgotPassword, signedIn }
 
 class PnsApp extends StatefulWidget {
-  const PnsApp({super.key, required this.auth, this.sessionExpired});
+  const PnsApp({
+    super.key,
+    required this.auth,
+    required this.me,
+    required this.password,
+    required this.customers,
+    required this.warranty,
+    this.sessionExpired,
+  });
 
   final AuthPort auth;
+  final MePort me;
+  final PasswordPort password;
+  final CustomersPort customers;
+  final WarrantyPort warranty;
 
   /// Fires when the transport could not renew the session (refresh refused).
   final Listenable? sessionExpired;
@@ -28,6 +47,10 @@ class PnsApp extends StatefulWidget {
 class _PnsAppState extends State<PnsApp> {
   _Phase _phase = _Phase.restoring;
   bool _loggingOut = false;
+
+  /// Bumped on every entry into the signed-in app (and on a retry of `/me`): the
+  /// permissions provider is rebuilt and fetches `/me` for THIS session.
+  int _signInCount = 0;
 
   @override
   void initState() {
@@ -49,77 +72,80 @@ class _PnsAppState extends State<PnsApp> {
     } catch (_) {
       restored = false;
     }
-    if (mounted) setState(() => _phase = restored ? _Phase.signedIn : _Phase.signedOut);
+    if (!mounted) return;
+    if (restored) {
+      _signIn();
+    } else {
+      setState(() => _phase = _Phase.signedOut);
+    }
   }
 
+  void _signIn() => setState(() {
+        _signInCount++;
+        _phase = _Phase.signedIn;
+      });
+
   void _onSessionExpired() {
-    if (mounted && _phase != _Phase.signedOut) setState(() => _phase = _Phase.signedOut);
+    if (mounted && _phase == _Phase.signedIn) setState(() => _phase = _Phase.signedOut);
   }
 
   Future<void> _logout() async {
     // Offline, the logout call waits out the connect timeout: a second tap must not send a second one.
-    setState(() => _loggingOut = true);
+    if (_loggingOut) return;
+    _loggingOut = true;
     try {
       await widget.auth.logout();
     } finally {
-      if (mounted) {
-        setState(() {
-          _loggingOut = false;
-          _phase = _Phase.signedOut;
-        });
-      }
+      _loggingOut = false;
+      if (mounted) setState(() => _phase = _Phase.signedOut);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_phase == _Phase.signedIn) {
+      return PermissionsProvider(
+        key: ValueKey<int>(_signInCount),
+        port: widget.me,
+        child: SignedInApp(
+          password: widget.password,
+          customers: widget.customers,
+          warranty: widget.warranty,
+          onLogout: _logout,
+          onRetry: () => setState(() => _signInCount++),
+        ),
+      );
+    }
     return MaterialApp(
+      key: const ValueKey<String>('signed-out'),
       debugShowCheckedModeBanner: false,
-      title: 'Phương Nam Solar',
-      home: AppPhoneFrameScope(
-        bare: true,
-        // Scaffold: the Material ancestor TextField (AppField) needs, and it lifts the
-        // body above the on-screen keyboard so the form's lower fields stay reachable.
-        child: Scaffold(backgroundColor: AppTokens.surface, body: _body()),
-      ),
+      title: kAppTitle,
+      home: appPage(_body()),
     );
   }
 
   Widget _body() {
     switch (_phase) {
       case _Phase.restoring:
-        return const AppPhoneFrame(
-          child: Padding(
-            padding: EdgeInsets.all(18.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AppSkeleton(height: 56.0),
-                SizedBox(height: AppTokens.space12),
-                AppSkeleton(),
-                SizedBox(height: AppTokens.space12),
-                AppSkeleton(),
-              ],
-            ),
-          ),
-        );
+      case _Phase.signedIn:
+        return const SessionSkeleton();
       case _Phase.signedOut:
         return LoginScreen(
           port: widget.auth,
-          onLoggedIn: () => setState(() => _phase = _Phase.signedIn),
+          onLoggedIn: _signIn,
+          onForgotPassword: () => setState(() => _phase = _Phase.forgotPassword),
         );
-      case _Phase.signedIn:
-        return AppPhoneFrame(
-          child: Padding(
-            padding: const EdgeInsets.all(18.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const AppBanner(tone: AppBannerTone.info, message: 'Đã đăng nhập.'),
-                const SizedBox(height: AppTokens.space16),
-                AppButton(label: 'Đăng xuất', wide: true, onPressed: _loggingOut ? null : _logout),
-              ],
-            ),
+      case _Phase.forgotPassword:
+        // The Android back button returns to Đăng nhập (this is not a route of its own,
+        // so without this it would close the app).
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) setState(() => _phase = _Phase.signedOut);
+          },
+          child: ForgotPasswordScreen(
+            port: widget.password,
+            onBackToLogin: () => setState(() => _phase = _Phase.signedOut),
           ),
         );
     }

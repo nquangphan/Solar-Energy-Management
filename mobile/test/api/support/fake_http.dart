@@ -32,10 +32,15 @@ class MemoryKeyValueStore implements SecureKeyValueStore {
 }
 
 class RecordedRequest {
-  RecordedRequest(this.method, this.path, this.headers, this.body);
+  RecordedRequest(this.method, this.path, this.headers, this.body, {this.query = const {}});
 
   final String method;
+
+  /// As sent on the wire — percent-escapes kept (`/customers/%2B849…`).
   final String path;
+
+  /// Decoded query parameters, as the server reads them.
+  final Map<String, String> query;
   final Map<String, dynamic> headers;
   final List<int> body;
 
@@ -62,7 +67,8 @@ class FakeAdapter implements HttpClientAdapter {
         bytes.addAll(chunk);
       }
     }
-    final request = RecordedRequest(options.method, options.uri.path, Map.of(options.headers), bytes);
+    final request = RecordedRequest(options.method, options.uri.path, Map.of(options.headers), bytes,
+        query: options.uri.queryParameters);
     requests.add(request);
     return handler(request);
   }

@@ -31,12 +31,14 @@ export class HttpAuthPort implements AuthPort {
 
   async logout(): Promise<void> {
     const refreshToken = this.session.getRefreshToken();
+    // Signed out locally FIRST: a renewal still in flight then sees the session gone and
+    // revokes the token it was issued, instead of storing it while this call is on the wire.
+    this.session.clear();
+    if (!refreshToken) return;
     try {
-      if (refreshToken) await this.client.POST('/auth/logout', { body: { refreshToken } });
+      await this.client.POST('/auth/logout', { body: { refreshToken } });
     } catch {
       // Logout is idempotent server-side and the token expires anyway: signing out locally is what matters.
-    } finally {
-      this.session.clear();
     }
   }
 }

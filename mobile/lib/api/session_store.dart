@@ -38,8 +38,14 @@ class SessionStore {
 
   final SecureKeyValueStore _store;
   String? _accessToken;
+  int _generation = 0;
 
   String? get accessToken => _accessToken;
+
+  /// Bumped when a session starts (login) or ends (clear), not when it is renewed.
+  /// A renewal that finishes after the generation moved belongs to a session that
+  /// is gone and must not write into the current one.
+  int get generation => _generation;
 
   Future<String?> readRefreshToken() async {
     try {
@@ -49,7 +55,9 @@ class SessionStore {
     }
   }
 
-  Future<void> setTokens({required String accessToken, required String refreshToken}) async {
+  /// [renewal]: the tokens rotate the CURRENT session (refresh) instead of starting one.
+  Future<void> setTokens({required String accessToken, required String refreshToken, bool renewal = false}) async {
+    if (!renewal) _generation++;
     _accessToken = accessToken;
     try {
       await _store.write(kRefreshTokenKey, refreshToken);
@@ -59,6 +67,7 @@ class SessionStore {
   }
 
   Future<void> clear() async {
+    _generation++;
     _accessToken = null;
     try {
       await _store.delete(kRefreshTokenKey);

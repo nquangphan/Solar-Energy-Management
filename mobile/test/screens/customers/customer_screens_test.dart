@@ -100,7 +100,7 @@ void main() {
       expect(find.text('Nguyễn Văn A'), findsOneWidget);
 
       await _tap(tester, 'Dùng khách này');
-      expect(picked?.sdt, '+84903176968');
+      expect(picked?.phone, '+84903176968');
     });
 
     testWidgets(
@@ -182,6 +182,99 @@ void main() {
     });
   });
 
+  group('CustomerPickScreen over the generated contract (Story 10.7)', () {
+    const List<CustomerSource> withRetired = <CustomerSource>[
+      CustomerSource(id: 'src-facebook', name: 'Facebook', active: true, isOther: false, sortOrder: 1),
+      CustomerSource(id: 'src-retired', name: 'Hội chợ 2025', active: false, isOther: false, sortOrder: 2),
+    ];
+
+    testWidgets('the create select offers only active sources',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(CustomerPickScreen(port: FakeCustomersPort(sources: withRetired))));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '0999888777');
+      await _tap(tester, 'Tra cứu');
+      await _tap(tester, 'Tạo khách hàng mới');
+
+      expect(find.widgetWithText(AppButton, 'Facebook'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Hội chợ 2025'), findsNothing);
+    });
+
+    testWidgets('a customer filed under a switched-off source still shows its name',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(CustomerDetailScreen(
+        port: FakeCustomersPort(
+          sources: withRetired,
+          customers: <Customer>[
+            Customer(
+              phone: '+84903176968',
+              custType: 'CA_NHAN',
+              name: 'Khách hội chợ',
+              sourceId: 'src-retired',
+              createdAt: DateTime.utc(2026, 7, 13),
+              updatedAt: DateTime.utc(2026, 7, 13),
+            ),
+          ],
+        ),
+        sdt: '+84903176968',
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Hội chợ 2025'), findsOneWidget);
+    });
+
+    testWidgets('a phone field error lands under the SĐT input, verbatim',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(CustomerPickScreen(
+        port: _RejectingPort(
+          const CustomerPortException(
+            'Số điện thoại đã tồn tại.',
+            fieldErrors: {'phone': 'Đã có khách hàng với số điện thoại này.'},
+          ),
+          rejectLookup: false,
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '0999888777');
+      await _tap(tester, 'Tra cứu');
+      await _tap(tester, 'Tạo khách hàng mới');
+      await _tap(tester, 'Facebook');
+      await _tap(tester, 'Lưu khách hàng');
+
+      final Finder fieldError = find.widgetWithText(AppBanner, 'Đã có khách hàng với số điện thoại này.');
+      expect(fieldError, findsOneWidget);
+      // Under the SĐT field, above the Tra cứu button.
+      expect(
+        tester.getTopLeft(fieldError).dy,
+        lessThan(tester.getTopLeft(find.widgetWithText(AppButton, 'Tra cứu')).dy),
+      );
+    });
+
+    testWidgets('a national-id field error lands under the CCCD input',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(_host(CustomerPickScreen(
+        port: _RejectingPort(
+          const CustomerPortException(
+            'Dữ liệu không hợp lệ.',
+            fieldErrors: {'nationalId': 'CCCD phải có 12 chữ số.'},
+          ),
+          rejectLookup: false,
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(find.byType(TextField).first, '0999888777');
+      await _tap(tester, 'Tra cứu');
+      await _tap(tester, 'Tạo khách hàng mới');
+      await _tap(tester, 'Facebook');
+      await _tap(tester, 'Lưu khách hàng');
+
+      expect(find.text('CCCD phải có 12 chữ số.'), findsOneWidget);
+    });
+  });
+
   group('CustomerFacts — each type sees only its own fields (AC-6)', () {
     testWidgets('a Cá nhân shows CCCD and never MST / Tài khoản NH',
         (WidgetTester tester) async {
@@ -218,14 +311,14 @@ void main() {
         'an empty nullable field renders — , never a blank and never "null"',
         (WidgetTester tester) async {
       await tester.pumpWidget(_host(CustomerDetailScreen(
-        port: FakeCustomersPort(customers: const <Customer>[
+        port: FakeCustomersPort(customers: <Customer>[
           Customer(
-            sdt: '+84903176968',
+            phone: '+84903176968',
             custType: 'CA_NHAN',
             name: 'Khách không địa chỉ',
             sourceId: 'src-facebook',
-            createdAt: '2026-07-13T00:00:00.000Z',
-            updatedAt: '2026-07-13T00:00:00.000Z',
+            createdAt: DateTime.utc(2026, 7, 13),
+            updatedAt: DateTime.utc(2026, 7, 13),
           ),
         ]),
         sdt: '+84903176968',
@@ -317,12 +410,12 @@ void main() {
       final List<Customer> many = List<Customer>.generate(
         25,
         (int i) => Customer(
-          sdt: '+8490300${(i + 10).toString().padLeft(4, '0')}',
+          phone: '+8490300${(i + 10).toString().padLeft(4, '0')}',
           custType: 'CA_NHAN',
           name: 'Khách số $i',
           sourceId: 'src-fb',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          updatedAt: '2026-01-01T00:00:00.000Z',
+          createdAt: DateTime.utc(2026, 1, 1),
+          updatedAt: DateTime.utc(2026, 1, 1),
         ),
       );
       await tester.pumpWidget(

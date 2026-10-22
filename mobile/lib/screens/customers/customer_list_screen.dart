@@ -41,7 +41,10 @@ class CustomerListScreen extends StatefulWidget {
 
   final CustomersPort port;
   final void Function(String sdt)? onOpen;
-  final VoidCallback? onAdd;
+
+  /// Opens the create flow; the list reloads when it completes (a customer may
+  /// have been added while this screen sat underneath).
+  final Future<void> Function()? onAdd;
 
   @override
   State<CustomerListScreen> createState() => _CustomerListScreenState();
@@ -77,6 +80,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     super.dispose();
   }
 
+  Future<void> _add() async {
+    await widget.onAdd!();
+    if (mounted) _load();
+  }
+
   Future<void> _load() async {
     final int ticket = ++_latest;
     setState(() => _state = _LoadState.loading);
@@ -91,8 +99,8 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
       if (!mounted || ticket != _latest) return;
       setState(() {
         _items = page.items;
-        _total = page.total;
-        _pageSize = page.pageSize;
+        _total = page.total.toInt();
+        _pageSize = page.pageSize.toInt();
         _state = _LoadState.ready;
       });
     } catch (_) {
@@ -136,7 +144,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               variant: AppButtonVariant.primary,
               label: '+ Thêm khách',
               wide: true,
-              onPressed: widget.onAdd,
+              onPressed: widget.onAdd == null ? null : _add,
             ),
             const SizedBox(height: AppTokens.space16),
             // NOT Expanded: AppMobileShell already hands the body to a
@@ -260,7 +268,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             action: AppButton(
               variant: AppButtonVariant.primary,
               label: '+ Thêm khách',
-              onPressed: widget.onAdd,
+              onPressed: widget.onAdd == null ? null : _add,
             ),
           );
         }
@@ -300,7 +308,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
                 // AppTokens, and `tabular-nums` is what actually matters here: the
                 // digits align, so a mistyped number is visible at a glance.
                 Text(
-                  customer.sdt,
+                  customer.phone,
                   style: const TextStyle(
                     color: AppTokens.muted,
                     fontFamily: AppTokens.fontFamily,
@@ -318,7 +326,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Xem',
-            onPressed: () => widget.onOpen?.call(customer.sdt),
+            onPressed: () => widget.onOpen?.call(customer.phone),
           ),
         ],
       ),

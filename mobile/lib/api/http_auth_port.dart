@@ -35,16 +35,16 @@ class HttpAuthPort implements AuthPort {
   @override
   Future<void> logout() async {
     final refreshToken = await _session.readRefreshToken();
+    // Signed out locally FIRST: a renewal still in flight then sees the session gone and
+    // revokes the token it was issued, instead of storing it while this call is on the wire.
+    await _session.clear();
+    if (refreshToken == null) return;
     try {
-      if (refreshToken != null) {
-        await _transport.call(
-          () => _client.auth.authControllerLogout(body: LogoutRequestDto(refreshToken: refreshToken)),
-        );
-      }
+      await _transport.call(
+        () => _client.auth.authControllerLogout(body: LogoutRequestDto(refreshToken: refreshToken)),
+      );
     } catch (_) {
       // Logout is idempotent server-side and the token expires anyway: signing out locally is what matters.
-    } finally {
-      await _session.clear();
     }
   }
 }

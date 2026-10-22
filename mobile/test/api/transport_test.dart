@@ -7,6 +7,8 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/api/api_error.dart';
+import 'package:pns_mobile/api/generated/pns_api_client.dart';
+import 'package:pns_mobile/api/http_auth_port.dart';
 import 'package:pns_mobile/api/session_store.dart';
 import 'package:pns_mobile/api/transport.dart';
 
@@ -251,5 +253,144 @@ void main() {
     await expectLater(pending, throwsA(isA<DioException>().having((e) => e.type, 'type', DioExceptionType.cancel)));
     expect(h.expiredCalls, 0);
     expect(h.session.accessToken, 'access-1');
+  });
+
+  group('a logout while a refresh is in flight', () {
+    /// GET /orders 401 → refresh held on [gate] → the test signs out → the refresh answers.
+    Future<(_Harness, Future<Object?>, Completer<ResponseBody>)> refreshHeld() async {
+      final gate = Completer<ResponseBody>();
+      final h = _Harness((r) {
+        if (r.path == '/auth/refresh') return gate.future;
+        if (r.path == '/auth/logout') return noContent();
+        if (r.authorization == 'Bearer access-2') return jsonBody(200, {'ok': r.path});
+        return jsonBody(401, envelope('UNAUTHENTICATED', 'Token hết hạn.'));
+      });
+      await h.signIn('access-1', 'refresh-1');
+      final pending = h.get('/orders');
+      while (h.adapter.to('/auth/refresh').isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      await HttpAuthPort(PnsApiClient(h.transport.dio), h.session, h.transport).logout();
+      return (h, pending, gate);
+    }
+
+    test('a late 200 does not bring the session back; nobody is told it expired', () async {
+      final (h, pending, gate) = await refreshHeld();
+      gate.complete(jsonBody(200, tokens('access-2', 'refresh-2')));
+      await expectLater(pending, throwsA(_apiError(status: 401, code: 'UNAUTHENTICATED')));
+      expect(h.session.accessToken, isNull);
+      expect(h.store.values, isEmpty);
+      expect(h.expiredCalls, 0);
+      expect(h.adapter.to('/orders'), hasLength(1));
+      // The server session the late 200 opened is revoked, not left alive with no holder.
+      await pumpEventQueue();
+      expect(h.adapter.to('/auth/logout').map((r) => r.json), [
+        {'refreshToken': 'refresh-1'},
+        {'refreshToken': 'refresh-2'},
+      ]);
+    });
+
+    test('a late refusal reports nothing either', () async {
+      final (h, pending, gate) = await refreshHeld();
+      gate.complete(jsonBody(401, envelope('UNAUTHENTICATED', 'Phiên đã bị thu hồi.')));
+      await expectLater(pending, throwsA(_apiError(status: 401, code: 'UNAUTHENTICATED')));
+      expect(h.store.values, isEmpty);
+      expect(h.expiredCalls, 0);
+      // No new session was opened, so there is nothing more to revoke.
+      await pumpEventQueue();
+      expect(h.adapter.to('/auth/logout'), hasLength(1));
+    });
+
+    test('a sign-in that replaces the session mid-renewal is not overwritten by the late 200', () async {
+      final gate = Completer<ResponseBody>();
+      final h = _Harness((r) => r.path == '/auth/refresh' ? gate.future : jsonBody(401, envelope('UNAUTHENTICATED', 'Token hết hạn.')));
+      await h.signIn('access-1', 'refresh-1');
+      final pending = h.get('/orders');
+      while (h.adapter.to('/auth/refresh').isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      await h.signIn('access-b', 'refresh-b');
+      gate.complete(jsonBody(200, tokens('access-2', 'refresh-2')));
+      await expectLater(pending, throwsA(isA<ApiError>()));
+      expect(h.session.accessToken, 'access-b');
+      expect(h.store.values[kRefreshTokenKey], 'refresh-b');
+      expect(h.expiredCalls, 0);
+    });
+
+    test('a refresh answering while the logout call is still on the wire is revoked, never stored', () async {
+      final refreshGate = Completer<ResponseBody>();
+      final logoutGate = Completer<ResponseBody>();
+      final h = _Harness((r) {
+        if (r.path == '/auth/refresh') return refreshGate.future;
+        if (r.path == '/auth/logout') {
+          return (r.json as Map)['refreshToken'] == 'refresh-1' ? logoutGate.future : noContent();
+        }
+        return jsonBody(401, envelope('UNAUTHENTICATED', 'Token hết hạn.'));
+      });
+      await h.signIn('access-1', 'refresh-1');
+      final pending = h.get('/orders');
+      while (h.adapter.to('/auth/refresh').isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      final loggingOut = HttpAuthPort(PnsApiClient(h.transport.dio), h.session, h.transport).logout();
+      while (h.adapter.to('/auth/logout').isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      refreshGate.complete(jsonBody(200, tokens('access-2', 'refresh-2')));
+      await expectLater(pending, throwsA(isA<ApiError>()));
+      logoutGate.complete(noContent());
+      await loggingOut;
+      await pumpEventQueue();
+      expect(h.adapter.to('/auth/logout').map((r) => r.json), [
+        {'refreshToken': 'refresh-1'},
+        {'refreshToken': 'refresh-2'},
+      ]);
+      expect(h.session.accessToken, isNull);
+      expect(h.store.values, isEmpty);
+      expect(h.expiredCalls, 0);
+    });
+
+    test('a new session never joins the old session\'s renewal', () async {
+      final oldRefresh = Completer<ResponseBody>();
+      final h = _Harness((r) {
+        if (r.path == '/auth/refresh') {
+          if ((r.json as Map)['refreshToken'] == 'refresh-1') return oldRefresh.future;
+          return jsonBody(200, tokens('access-b2', 'refresh-b2'));
+        }
+        if (r.path == '/auth/logout') return noContent();
+        if (r.authorization == 'Bearer access-b2') return jsonBody(200, {'ok': r.path});
+        return jsonBody(401, envelope('UNAUTHENTICATED', 'Token hết hạn.'));
+      });
+      await h.signIn('access-1', 'refresh-1');
+      final old = h.get('/orders');
+      while (h.adapter.to('/auth/refresh').isEmpty) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      await HttpAuthPort(PnsApiClient(h.transport.dio), h.session, h.transport).logout();
+      await h.signIn('access-b', 'refresh-b');
+
+      expect(await h.get('/orders'), {'ok': '/orders'});
+      expect(h.adapter.to('/auth/refresh').map((r) => r.json), [
+        {'refreshToken': 'refresh-1'},
+        {'refreshToken': 'refresh-b'},
+      ]);
+      expect(h.session.accessToken, 'access-b2');
+
+      oldRefresh.complete(jsonBody(200, tokens('access-2', 'refresh-2')));
+      await expectLater(old, throwsA(isA<ApiError>()));
+      expect(h.session.accessToken, 'access-b2');
+      expect(h.store.values[kRefreshTokenKey], 'refresh-b2');
+      expect(h.expiredCalls, 0);
+    });
+
+    test('a new sign-in made meanwhile keeps its own tokens', () async {
+      final (h, pending, gate) = await refreshHeld();
+      await h.signIn('access-b', 'refresh-b');
+      gate.complete(jsonBody(401, envelope('UNAUTHENTICATED', 'Phiên đã bị thu hồi.')));
+      await expectLater(pending, throwsA(isA<ApiError>()));
+      expect(h.session.accessToken, 'access-b');
+      expect(h.store.values[kRefreshTokenKey], 'refresh-b');
+      expect(h.expiredCalls, 0);
+    });
   });
 }

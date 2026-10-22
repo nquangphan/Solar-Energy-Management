@@ -53,7 +53,7 @@ class CustomerPickScreen extends StatefulWidget {
 class _CustomerPickScreenState extends State<CustomerPickScreen> {
   final TextEditingController _sdt = TextEditingController();
   final TextEditingController _name = TextEditingController();
-  final TextEditingController _cccd = TextEditingController();
+  final TextEditingController _nationalId = TextEditingController();
   final TextEditingController _taxCode = TextEditingController();
   final TextEditingController _address = TextEditingController();
   final TextEditingController _bankAccount = TextEditingController();
@@ -82,7 +82,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
   void dispose() {
     _sdt.dispose();
     _name.dispose();
-    _cccd.dispose();
+    _nationalId.dispose();
     _taxCode.dispose();
     _address.dispose();
     _bankAccount.dispose();
@@ -141,11 +141,11 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
       final Customer created = await widget.port.create(
         CreateCustomerInput(
           // Still the raw string — the backend re-normalises it into the key it stores.
-          sdt: _sdt.text,
-          custType: _custType,
+          phone: _sdt.text,
+          custType: CreateCustomerRequestDtoCustType.fromJson(_custType),
           name: _name.text,
-          cccd:
-              _custType == kCaNhan && _cccd.text.isNotEmpty ? _cccd.text : null,
+          nationalId:
+              _custType == kCaNhan && _nationalId.text.isNotEmpty ? _nationalId.text : null,
           taxCode: _custType == kThuongMai && _taxCode.text.isNotEmpty
               ? _taxCode.text
               : null,
@@ -201,6 +201,8 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
                       size: AppFieldSize.large,
                       controller: _sdt,
                     ),
+                    // The create form reuses this phone, so its field error belongs here.
+                    _fieldError('phone'),
                     const SizedBox(height: AppTokens.space12),
                     AppButton(
                       variant: AppButtonVariant.primary,
@@ -372,9 +374,9 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             AppField(
               label: 'CCCD',
               size: AppFieldSize.large,
-              controller: _cccd,
+              controller: _nationalId,
             ),
-            _fieldError('cccd'),
+            _fieldError('nationalId'),
           ],
           const SizedBox(height: AppTokens.space12),
           AppField(
@@ -408,7 +410,9 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-          for (final CustomerSource source in _sources) ...[
+          // A source switched off later still names existing customers (the list
+          // carries it), but a NEW customer cannot be filed under it.
+          for (final CustomerSource source in _sources.where((CustomerSource s) => s.active)) ...[
             const SizedBox(height: AppTokens.space8),
             AppButton(
               variant: source.id == _sourceId
@@ -480,9 +484,9 @@ class CustomerFacts extends StatelessWidget {
         if (commercial)
           _kv('MST', orDash(customer.taxCode))
         else
-          _kv('CCCD', orDash(customer.cccd)),
+          _kv('CCCD', orDash(customer.nationalId)),
         _kv('Địa chỉ', orDash(customer.address)),
-        _kv('SĐT (khoá chính)', customer.sdt),
+        _kv('SĐT (khoá chính)', customer.phone),
         if (commercial) _kv('Tài khoản NH', orDash(customer.bankAccount)),
         _kv('Nguồn khách', orDash(source?.name)),
         if (source != null && source.isOther)

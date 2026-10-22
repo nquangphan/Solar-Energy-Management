@@ -262,7 +262,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   Future<void> _createOrder(Customer picked) async {
     try {
       final Order created = await widget.ordersPort
-          .create(CreateOrderInput(customerSdt: picked.sdt));
+          .create(CreateOrderInput(customerSdt: picked.phone));
       if (!mounted) return;
       setState(() {
         _customer = picked;

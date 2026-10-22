@@ -7,6 +7,14 @@
 // it is Story 3.1/3.6's screens behind `catalog.manage`. And there is NO
 // `costPrice` anywhere in these shapes — the backend strips it for callers
 // without `costs.view`, and the picker has no business rendering it anyway.
+//
+// [CatalogProduct], [CatalogGroup] and [CatalogGroupDetail] are PROJECTIONS of
+// the generated DTOs, not hand copies of them: Dart has no `Pick<>`, and these
+// narrow classes are what keeps `costPrice` out of the picker state (the adapter
+// builds them field by field). Every field must exist on the DTO it projects
+// (design-system guard). [CatalogGroupItem] carries no cost, so it IS the DTO.
+
+import '../../api/generated/models/product_group_item_response_dto.dart';
 
 /// A pickable product — projection of the backend `ProductResponseDto` the picker needs.
 class CatalogProduct {
@@ -49,28 +57,11 @@ class CatalogGroup {
   final bool isActive;
 }
 
-/// One item on a group's checklist (`GET /product-groups/:id`). [isActive] is the
-/// PRODUCT's flag — a product can be deactivated after joining a group, and the
-/// picker must render that item disabled (Story 3.6 contract).
-class CatalogGroupItem {
-  const CatalogGroupItem({
-    required this.productId,
-    required this.name,
-    required this.sku,
-    required this.unit,
-    required this.price,
-    required this.isActive,
-    required this.displayOrder,
-  });
-
-  final String productId;
-  final String name;
-  final String sku;
-  final String unit;
-  final int price;
-  final bool isActive;
-  final int displayOrder;
-}
+/// One item on a group's checklist (`GET /product-groups/:id`) — the generated
+/// `ProductGroupItemResponseDto`. `isActive` is the PRODUCT's flag — a product can
+/// be deactivated after joining a group, and the picker must render that item
+/// disabled (Story 3.6 contract).
+typedef CatalogGroupItem = ProductGroupItemResponseDto;
 
 /// A group + its checklist, ordered by `displayOrder`.
 class CatalogGroupDetail extends CatalogGroup {
@@ -86,11 +77,8 @@ class CatalogGroupDetail extends CatalogGroup {
 }
 
 /// Injectable read-only transport for the quote pickers. A PORT, NOT an HTTP
-/// client (see orders_port.dart).
-///
-/// TODO(app-runtime): real impl calls `GET /products` / `GET /product-groups` /
-/// `GET /product-groups/:id` with the bearer token. Until then [FakeCatalogPort]
-/// drives the guards/demo.
+/// client (see orders_port.dart). The real implementation is `HttpCatalogPort`
+/// (lib/api/http_catalog_port.dart); [FakeCatalogPort] drives tests and demos.
 abstract class CatalogPort {
   /// Active products, optionally filtered by a name/SKU search string.
   Future<List<CatalogProduct>> listProducts({String? search});

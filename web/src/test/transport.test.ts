@@ -14,6 +14,7 @@ import {
   SESSION_EXPIRED_MESSAGE,
 } from '../api/api-error';
 import { createApiClient } from '../api/client';
+import { HttpAuthPort } from '../api/http-auth-port';
 import { REFRESH_TOKEN_KEY, createSessionStore } from '../api/session-store';
 import { createTransport } from '../api/transport';
 import type {
@@ -466,6 +467,153 @@ describe('transport — renewal edge cases', () => {
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
     expect(session.getAccessToken()).toBeNull();
     expect(storage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
+  });
+});
+
+describe('transport — a logout while a refresh is in flight', () => {
+  /** GET /me 401 → refresh held until `release` → the test signs out → the refresh answers. */
+  async function refreshHeld(answer: () => Response | Promise<Response>) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ctx = setup({
+      'GET /me': meNeedsAccess2,
+      'POST /auth/refresh': async () => {
+        await gate;
+        return answer();
+      },
+      'POST /auth/logout': () => new Response(null, { status: 204 }),
+    });
+    const pending = rejection(ctx.client.GET('/me'));
+    await vi.waitFor(() => expect(ctx.handlers['POST /auth/refresh']).toHaveBeenCalledTimes(1));
+    await new HttpAuthPort(ctx.client, ctx.session, ctx.transport).logout();
+    return { ...ctx, pending, release };
+  }
+
+  it('a late 200 does not bring the session back; nobody is told it expired', async () => {
+    const { pending, release, session, storage, handlers, onSessionExpired } = await refreshHeld(() =>
+      refreshOk(new Request(`${BASE}/auth/refresh`)),
+    );
+    release();
+    expect(await pending).toMatchObject({ status: 401, code: 'UNAUTHENTICATED' });
+    expect(session.getAccessToken()).toBeNull();
+    expect(storage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
+    expect(onSessionExpired).toHaveBeenCalledTimes(0);
+    expect(handlers['GET /me']).toHaveBeenCalledTimes(1);
+    // The server session the late 200 opened is revoked, not left alive with no holder.
+    await vi.waitFor(() => expect(handlers['POST /auth/logout']).toHaveBeenCalledTimes(2));
+    const revoked = handlers['POST /auth/logout'].mock.calls[1][0] as Request;
+    expect(await revoked.json()).toEqual({ refreshToken: 'refresh-2' });
+  });
+
+  it('a late refusal reports nothing either', async () => {
+    const { pending, release, storage, handlers, onSessionExpired } = await refreshHeld(() =>
+      json(401, BAD_CREDENTIALS),
+    );
+    release();
+    expect(await pending).toMatchObject({ status: 401, code: 'UNAUTHENTICATED' });
+    expect(storage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
+    expect(onSessionExpired).toHaveBeenCalledTimes(0);
+    // No new session was opened, so there is nothing more to revoke.
+    expect(handlers['POST /auth/logout']).toHaveBeenCalledTimes(1);
+  });
+
+  it('a sign-in that replaces the session mid-renewal is not overwritten by the late 200', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { client, session, storage, handlers, onSessionExpired } = setup({
+      'GET /me': meNeedsAccess2,
+      'POST /auth/refresh': async () => {
+        await gate;
+        return refreshOk(new Request(`${BASE}/auth/refresh`));
+      },
+    });
+    const pending = rejection(client.GET('/me'));
+    await vi.waitFor(() => expect(handlers['POST /auth/refresh']).toHaveBeenCalledTimes(1));
+    session.setTokens({ accessToken: 'access-b', refreshToken: 'refresh-b' });
+    release();
+    expect(await pending).toBeInstanceOf(ApiError);
+    expect(session.getAccessToken()).toBe('access-b');
+    expect(storage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-b');
+    expect(onSessionExpired).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe('transport — renewals that cross a sign-out', () => {
+  function gate() {
+    let release!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return { promise, release };
+  }
+
+  it('a refresh answering while the logout call is still on the wire is revoked, never stored', async () => {
+    const refresh = gate();
+    const logout = gate();
+    const { client, transport, session, storage, handlers, onSessionExpired } = setup({
+      'GET /me': meNeedsAccess2,
+      'POST /auth/refresh': async (request) => {
+        await refresh.promise;
+        return refreshOk(request);
+      },
+      'POST /auth/logout': async (request) => {
+        const { refreshToken } = (await request.clone().json()) as { refreshToken: string };
+        if (refreshToken === 'refresh-1') await logout.promise;
+        return new Response(null, { status: 204 });
+      },
+    });
+    const pending = rejection(client.GET('/me'));
+    await vi.waitFor(() => expect(handlers['POST /auth/refresh']).toHaveBeenCalledTimes(1));
+    const loggingOut = new HttpAuthPort(client, session, transport).logout();
+    await vi.waitFor(() => expect(handlers['POST /auth/logout']).toHaveBeenCalledTimes(1));
+    refresh.release();
+    expect(await pending).toBeInstanceOf(ApiError);
+    logout.release();
+    await loggingOut;
+    await vi.waitFor(() => expect(handlers['POST /auth/logout']).toHaveBeenCalledTimes(2));
+    const sent = await Promise.all(
+      handlers['POST /auth/logout'].mock.calls.map(([request]) => (request as Request).clone().json()),
+    );
+    expect(sent).toEqual([{ refreshToken: 'refresh-1' }, { refreshToken: 'refresh-2' }]);
+    expect(session.getAccessToken()).toBeNull();
+    expect(storage.getItem(REFRESH_TOKEN_KEY)).toBeNull();
+    expect(onSessionExpired).toHaveBeenCalledTimes(0);
+  });
+
+  it("a new session never joins the old session's renewal", async () => {
+    const oldRefresh = gate();
+    const { client, transport, session, storage, handlers, onSessionExpired } = setup({
+      'GET /me': (request) =>
+        request.headers.get('Authorization') === 'Bearer access-b2' ? json(200, ME) : json(401, UNAUTHENTICATED),
+      'POST /auth/refresh': async (request) => {
+        const { refreshToken } = (await request.clone().json()) as { refreshToken: string };
+        if (refreshToken === 'refresh-1') {
+          await oldRefresh.promise;
+          return refreshOk(request);
+        }
+        return json(200, { accessToken: 'access-b2', refreshToken: 'refresh-b2', expiresIn: 900 });
+      },
+      'POST /auth/logout': () => new Response(null, { status: 204 }),
+    });
+    const old = rejection(client.GET('/me'));
+    await vi.waitFor(() => expect(handlers['POST /auth/refresh']).toHaveBeenCalledTimes(1));
+    await new HttpAuthPort(client, session, transport).logout();
+    session.setTokens({ accessToken: 'access-b', refreshToken: 'refresh-b' });
+
+    const { data } = await client.GET('/me');
+    expect(data).toEqual(ME);
+    expect(handlers['POST /auth/refresh']).toHaveBeenCalledTimes(2);
+    expect(session.getAccessToken()).toBe('access-b2');
+
+    oldRefresh.release();
+    expect(await old).toBeInstanceOf(ApiError);
+    expect(session.getAccessToken()).toBe('access-b2');
+    expect(storage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-b2');
+    expect(onSessionExpired).toHaveBeenCalledTimes(0);
   });
 });
 

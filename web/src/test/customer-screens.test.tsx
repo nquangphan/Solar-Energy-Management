@@ -79,4 +79,26 @@ describe('create customer: phone field error', () => {
     expect(await screen.findByText('Tối đa 32 ký tự.')).toBeTruthy();
     expect(customers.create).toHaveBeenCalledTimes(1);
   });
+
+  it('two messages on the same field: the FIRST one shows (same rule as mobile)', async () => {
+    const customers = port();
+    vi.spyOn(customers, 'create').mockRejectedValue({
+      message: 'Dữ liệu không hợp lệ',
+      fieldErrors: [
+        { field: 'phone', message: 'Số điện thoại không hợp lệ.' },
+        { field: 'phone', message: 'Tối đa 32 ký tự.' },
+      ],
+    });
+    render(
+      <PermissionsProvider port={ME}>
+        <CustomerPickScreen port={customers} />
+      </PermissionsProvider>,
+    );
+    fireEvent.change(await screen.findByLabelText('SĐT'), { target: { value: '0900 000 999' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo khách hàng mới' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu khách hàng' }));
+    expect(await screen.findByText('Số điện thoại không hợp lệ.')).toBeTruthy();
+    expect(screen.queryByText('Tối đa 32 ký tự.')).toBeNull();
+  });
 });

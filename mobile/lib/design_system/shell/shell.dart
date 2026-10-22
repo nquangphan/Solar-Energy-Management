@@ -9,6 +9,7 @@
 // 116×22), enforced by the shared mockup-anchored parity guard.
 
 export 'app_bottom_nav.dart';
+export 'app_menu_nav.dart';
 export 'app_mobile_shell.dart';
 export 'app_phone_frame.dart';
 export 'app_tabs.dart';

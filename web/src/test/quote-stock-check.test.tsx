@@ -177,3 +177,23 @@ describe('Quote — early stock warning', () => {
     expect(screen.queryByText('Cần nhập 2')).toBeNull();
   });
 });
+
+describe('Quote — field errors', () => {
+  it('two messages on the same field: the FIRST one shows under it (same rule as mobile)', async () => {
+    const port = new FakeOrdersPort();
+    await seeded(port);
+    await openQuote(port);
+    vi.spyOn(port, 'addLine').mockRejectedValue({
+      code: 'VALIDATION_ERROR',
+      message: 'Dữ liệu không hợp lệ',
+      fieldErrors: [
+        { field: 'unit', message: 'Đơn vị không được để trống.' },
+        { field: 'unit', message: 'Tối đa 20 ký tự.' },
+      ],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Dòng tự do' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm dòng' }));
+    expect(await screen.findByText('Đơn vị không được để trống.')).toBeTruthy();
+    expect(screen.queryByText('Tối đa 20 ký tự.')).toBeNull();
+  });
+});

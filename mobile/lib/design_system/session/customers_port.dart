@@ -2,7 +2,7 @@
 // web/src/design-system/session/customers-port.ts). The seam between the three
 // customer screens and the `/customers` + `/customer-sources` endpoints.
 //
-// THE CLIENT NEVER NORMALISES A PHONE NUMBER (AD-9). Every `sdt` that crosses
+// THE CLIENT NEVER NORMALISES A PHONE NUMBER (AD-9). Every phone that crosses
 // this port OUTBOUND is the RAW string the user typed (`0903 176 968`,
 // `+84903176968`); the backend owns the single normaliser and returns the E.164
 // key. A second normaliser here — even a "harmless" regex — is a second chance to
@@ -12,106 +12,32 @@
 // validity, duplicate blocking, the source/`sourceNote` rule. Nothing here is a
 // security boundary.
 
-/// Mirrors the backend `CustomerResponseDto`. [sdt] is ALWAYS the normalised E.164 key.
-class Customer {
-  const Customer({
-    required this.sdt,
-    required this.custType,
-    required this.name,
-    this.cccd,
-    this.taxCode,
-    this.address,
-    this.bankAccount,
-    required this.sourceId,
-    this.sourceNote,
-    required this.createdAt,
-    required this.updatedAt,
-  });
+import '../../api/generated/models/create_customer_request_dto.dart';
+import '../../api/generated/models/customer_list_response_dto.dart';
+import '../../api/generated/models/customer_lookup_response_dto.dart';
+import '../../api/generated/models/customer_response_dto.dart';
+import '../../api/generated/models/customer_source_response_dto.dart';
 
-  final String sdt;
-  final String custType;
-  final String name;
-  final String? cccd;
-  final String? taxCode;
-  final String? address;
-  final String? bankAccount;
-  final String sourceId;
-  final String? sourceNote;
-  final String createdAt;
-  final String updatedAt;
-}
+export '../../api/generated/models/create_customer_request_dto_cust_type.dart';
 
-/// Mirrors the backend `CustomerSourceResponseDto`.
-class CustomerSource {
-  const CustomerSource({
-    required this.id,
-    required this.name,
-    this.description,
-    required this.isOther,
-    required this.sortOrder,
-  });
+/// The backend `CustomerResponseDto` (generated, Story 10.7). [Customer.phone] is
+/// ALWAYS the normalised E.164 key.
+typedef Customer = CustomerResponseDto;
 
-  final String id;
-  final String name;
-  final String? description;
-  final bool isOther;
-  final int sortOrder;
-}
+/// The backend `CustomerSourceResponseDto`. `active == false` is a source switched
+/// off later: details still resolve its name, the create select leaves it out.
+typedef CustomerSource = CustomerSourceResponseDto;
 
-/// Mirrors `CustomerLookupResponseDto`. [found] == false is a NORMAL 200 result,
-/// not an error — it is the half of the feature that opens "Tạo khách hàng mới".
-/// [sdt] carries the normalised key back even when nothing was found.
-class CustomerLookup {
-  const CustomerLookup({
-    required this.found,
-    required this.sdt,
-    this.customer,
-  });
+/// `CustomerLookupResponseDto`. `found == false` is a NORMAL 200 result, not an
+/// error — it is the half of the feature that opens "Tạo khách hàng mới".
+/// `phone` carries the normalised key back even when nothing was found.
+typedef CustomerLookup = CustomerLookupResponseDto;
 
-  final bool found;
-  final String sdt;
-  final Customer? customer;
-}
+/// `CustomerListResponseDto`. `total` counts the WHOLE filtered set, not this page.
+typedef CustomerPage = CustomerListResponseDto;
 
-/// Mirrors `CustomerListResponseDto`. [total] counts the WHOLE filtered set, not this page.
-class CustomerPage {
-  const CustomerPage({
-    required this.items,
-    required this.total,
-    required this.page,
-    required this.pageSize,
-  });
-
-  final List<Customer> items;
-  final int total;
-  final int page;
-  final int pageSize;
-}
-
-/// Body of `POST /customers`. Contract owned by Story 3.3 — unchanged here.
-class CreateCustomerInput {
-  const CreateCustomerInput({
-    required this.sdt,
-    required this.custType,
-    required this.name,
-    this.cccd,
-    this.taxCode,
-    this.address,
-    this.bankAccount,
-    required this.sourceId,
-    this.sourceNote,
-  });
-
-  final String sdt;
-  final String custType;
-  final String name;
-  final String? cccd;
-  final String? taxCode;
-  final String? address;
-  final String? bankAccount;
-  final String sourceId;
-  final String? sourceNote;
-}
+/// Body of `POST /customers` — the generated `CreateCustomerRequestDto`.
+typedef CreateCustomerInput = CreateCustomerRequestDto;
 
 /// The AD-5 error envelope, raised by a [CustomersPort] when the backend rejects a
 /// call (400 validation, 409 duplicate phone).
@@ -141,10 +67,9 @@ class CustomerPortException implements Exception {
 /// `orders`): `Order` does not exist until Story 4.1, and a UI cannot honestly
 /// render a number no table can back.
 ///
-/// TODO(app-runtime/login-network): the real implementation attaches
-/// `Authorization: Bearer <accessToken>` (Story 2.3) and parses the AD-5 error
-/// envelope into the screens' banner + field errors. Until then [FakeCustomersPort]
-/// drives the guards/demo.
+/// The real implementation is `HttpCustomersPort` (lib/api/http_customers_port.dart),
+/// which turns the AD-5 envelope into a [CustomerPortException]; [FakeCustomersPort]
+/// drives tests and demos.
 abstract class CustomersPort {
   /// Look a customer up by RAW phone. Throws only on an invalid phone (400) — not on "not found".
   Future<CustomerLookup> lookup(String sdt);

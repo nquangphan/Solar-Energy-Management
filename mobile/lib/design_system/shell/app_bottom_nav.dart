@@ -7,7 +7,9 @@
 // Trang chủ · Đơn hàng · [Tạo FAB] · Kho · Menu. The list is an INTERNAL
 // constant, never a prop, so no caller can add/remove/reorder tabs or inject
 // navigation. Taps only EMIT intent (`onSelect`/`onCreateQuote`) — the shell
-// holds no router (AD-1/2).
+// holds no router (AD-1/2). The app supplies the intent handlers once, through
+// [AppBottomNavScope] (Story 10.7), so every screen's bar navigates without the
+// screens knowing a router exists.
 
 import 'package:flutter/widgets.dart';
 
@@ -35,6 +37,29 @@ const List<_Tab> _tabs = [
 /// Resting icon colour for inactive tabs (`.botnav-item .icn`, `#a9bab5`). A
 /// canonical shell literal absent from AppTokens — mirrors the mockup.
 const Color _restIcon = Color(0xFFA9BAB5);
+
+/// Where the signed-in app hands every [AppBottomNav] below it the tab intent
+/// handlers (the web shell does the same through its nav context). A handler
+/// left null keeps that tab inert. A bar's own [AppBottomNav.onSelect] /
+/// [AppBottomNav.onCreateQuote] wins over the scope.
+class AppBottomNavScope extends InheritedWidget {
+  const AppBottomNavScope({
+    super.key,
+    this.onSelect,
+    this.onCreateQuote,
+    required super.child,
+  });
+
+  final ValueChanged<int>? onSelect;
+  final VoidCallback? onCreateQuote;
+
+  static AppBottomNavScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppBottomNavScope>();
+
+  @override
+  bool updateShouldNotify(AppBottomNavScope oldWidget) =>
+      onSelect != oldWidget.onSelect || onCreateQuote != oldWidget.onCreateQuote;
+}
 
 /// Locked 5-tab bottom nav with a raised centre FAB. [activeIndex] tints the
 /// matching ordinary tab (0/1/3/4); index 2 is always the FAB.
@@ -65,6 +90,9 @@ class AppBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assert(_tabs.length == 5, 'botnav is locked to exactly 5 tabs');
+    final scope = AppBottomNavScope.maybeOf(context);
+    final select = onSelect ?? scope?.onSelect;
+    final create = onCreateQuote ?? scope?.onCreateQuote;
     return SizedBox(
       height: _barHeight + _fabRaise,
       child: Stack(
@@ -91,7 +119,7 @@ class AppBottomNav extends StatelessWidget {
                 children: [
                   for (var i = 0; i < _tabs.length; i++)
                     Expanded(
-                      child: i == 2 ? const SizedBox.shrink() : _item(_tabs[i], i),
+                      child: i == 2 ? const SizedBox.shrink() : _item(_tabs[i], i, select),
                     ),
                 ],
               ),
@@ -108,7 +136,7 @@ class AppBottomNav extends StatelessWidget {
                 for (var i = 0; i < _tabs.length; i++)
                   Expanded(
                     child: i == 2
-                        ? Center(child: _fab(_tabs[i]))
+                        ? Center(child: _fab(_tabs[i], create))
                         : const SizedBox.shrink(),
                   ),
               ],
@@ -119,7 +147,7 @@ class AppBottomNav extends StatelessWidget {
     );
   }
 
-  Widget _item(_Tab tab, int index) {
+  Widget _item(_Tab tab, int index, ValueChanged<int>? select) {
     final active = index == activeIndex;
     return Semantics(
       button: true,
@@ -127,7 +155,7 @@ class AppBottomNav extends StatelessWidget {
       label: tab.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onSelect == null ? null : () => onSelect!(index),
+        onTap: select == null ? null : () => select(index),
         child: Padding(
           padding: const EdgeInsets.only(top: 7.0, bottom: 9.0),
           child: Column(
@@ -159,13 +187,13 @@ class AppBottomNav extends StatelessWidget {
   /// nét exception as the AppStepper `current` ring, NOT a BoxShadow. It is
   /// raised above the bar by the overlay `Positioned` in `build` (a layout
   /// offset, not a Transform), so the whole ring stays inside the hit bounds.
-  Widget _fab(_Tab tab) {
+  Widget _fab(_Tab tab, VoidCallback? create) {
     return Semantics(
       button: true,
       label: tab.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: onCreateQuote,
+        onTap: create,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
