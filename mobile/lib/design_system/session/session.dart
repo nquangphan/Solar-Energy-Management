@@ -9,6 +9,8 @@
 
 export 'me_port.dart';
 export 'password_port.dart';
+// Sign-in seam (Story 10.6): tokens never cross it; the HTTP adapter keeps them.
+export 'auth_port.dart';
 export 'customers_port.dart';
 // Orders + catalog-read seam (Story 4.1): the quote screen's transport.
 export 'orders_port.dart';
@@ -38,6 +40,7 @@ export 'app_session_gating_example.dart';
 // fake_password_port.dart). They enforce no security rule; the backend owns all of them.
 export 'fake_me_port.dart';
 export 'fake_password_port.dart';
+export 'fake_auth_port.dart';
 export 'fake_customers_port.dart';
 export 'fake_orders_port.dart';
 export 'fake_catalog_port.dart';

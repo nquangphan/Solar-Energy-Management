@@ -6,6 +6,11 @@
 //
 // Width is fixed at 330 but wrapped in Center/SizedBox so it never blocks the
 // caller's responsive layout — a caller may drop it in a scroll view.
+//
+// The chrome is the MOCKUP's device (Story 10.6): on a real phone the screen
+// already is the device, so the app root sets [AppPhoneFrameScope] `bare` and
+// every screen renders edge-to-edge inside a SafeArea instead. Tests and demos
+// keep the default mockup chrome.
 
 import 'package:flutter/widgets.dart';
 
@@ -14,6 +19,20 @@ import '../tokens/app_tokens.dart';
 /// Dark device body colour (`.phone`/`.notch`, `#0C1512`). A canonical shell
 /// literal — not a design token.
 const Color _body = Color(0xFF0C1512);
+
+/// Tells every [AppPhoneFrame] below it to drop the mockup chrome. Only the
+/// real app root sets `bare: true`.
+class AppPhoneFrameScope extends InheritedWidget {
+  const AppPhoneFrameScope({super.key, required this.bare, required super.child});
+
+  final bool bare;
+
+  static AppPhoneFrameScope? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AppPhoneFrameScope>();
+
+  @override
+  bool updateShouldNotify(AppPhoneFrameScope oldWidget) => bare != oldWidget.bare;
+}
 
 /// Phone device frame: a 330px dark body wrapping a 700px glass that clips its
 /// [child], with a centred notch and a fake status bar ([time] / [status]).
@@ -33,6 +52,9 @@ class AppPhoneFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (AppPhoneFrameScope.maybeOf(context)?.bare ?? false) {
+      return ColoredBox(color: AppTokens.surface, child: SafeArea(child: child));
+    }
     final glass = ClipRRect(
       borderRadius: BorderRadius.circular(32.0),
       child: Container(

@@ -1,9 +1,10 @@
-// hand-authored — Flutter app-screen (Story 1.11). Mobile twin of the web
-// LoginScreen: the Đăng nhập screen composed from shipped design-system widgets
-// (AppField/AppButton/AppCard-less full-screen form/AppBanner/AppIcon) + tokens
-// (AD-13). Presentational StatefulWidget only — validate rỗng/định dạng →
-// AppBanner. KHÔNG BLoC/repository/mạng/router (backend + auth = Epic 2,
-// Story 2.3).
+// hand-authored — Flutter app-screen (Story 1.11, signs in since Story 10.6).
+// Mobile twin of the web LoginScreen: the Đăng nhập screen composed from shipped
+// design-system widgets (AppField/AppButton/AppCard-less full-screen form/
+// AppBanner/AppIcon) + tokens (AD-13). Validates empty/format locally, then
+// signs in through the injected [AuthPort]; the backend's message is shown
+// verbatim in the AppBanner. No token and no network here — the port's HTTP
+// adapter owns both. No router: success is emitted via [onLoggedIn].
 //
 // Auth screen ⇒ no topbar / no bottom-nav: wrapped in AppPhoneFrame DIRECTLY,
 // never AppMobileShell (which adds a topbar + the locked 5-tab bottom-nav) —
@@ -11,13 +12,25 @@
 
 import 'package:flutter/widgets.dart';
 
+import '../../api/api_error.dart';
 import '../../design_system/components/components.dart';
 import '../../design_system/icons/app_icons.dart';
+import '../../design_system/session/auth_port.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/tokens/app_tokens.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.onForgotPassword});
+  const LoginScreen({
+    super.key,
+    required this.port,
+    required this.onLoggedIn,
+    this.onForgotPassword,
+  });
+
+  final AuthPort port;
+
+  /// Emits "signed in" once the port accepted the credentials (Story 10.6).
+  final VoidCallback onLoggedIn;
 
   /// Emits "show the Quên mật khẩu screen" (Story 2.8). No router here (AD-1/2).
   final VoidCallback? onForgotPassword;
@@ -30,6 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _account = TextEditingController();
   final TextEditingController _password = TextEditingController();
   String? _error;
+  bool _busy = false;
 
   @override
   void dispose() {
@@ -38,10 +52,10 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Presentational validation only (AC-2): empty → AppBanner; minimal email format
+  // Local validation first (AC-2): empty → AppBanner; minimal email format
   // (accounts sign in by email only). Same Vietnamese copy as web for label parity.
-  // No network, no token, no router here — mobile sign-in wires in Story 10.6.
-  void _submit() {
+  Future<void> _submit() async {
+    if (_busy) return;
     final String account = _account.text.trim();
     final String password = _password.text.trim();
     if (account.isEmpty || password.isEmpty) {
@@ -53,8 +67,23 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _error = 'Tài khoản phải là email hợp lệ.');
       return;
     }
-    setState(() => _error = null);
-    // Epic 2 (Story 2.3): gọi API đăng nhập + lưu JWT ở đây.
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
+    try {
+      await widget.port.login(email: account, password: _password.text);
+      if (!mounted) return;
+      setState(() => _busy = false);
+      widget.onLoggedIn();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        // A non-ApiError would carry an English runtime message — never show it.
+        _error = e is ApiError ? e.message : kGenericErrorMessage;
+      });
+    }
   }
 
   @override
@@ -94,7 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
               variant: AppButtonVariant.primary,
               wide: true,
               label: 'Đăng nhập',
-              onPressed: _submit,
+              // Busy ⇒ disabled: a second tap never sends a second request.
+              onPressed: _busy ? null : _submit,
             ),
             const SizedBox(height: AppTokens.space16),
             // s-forgot landed ở Story 2.8; tap chỉ EMIT ý định (AD-1/2).

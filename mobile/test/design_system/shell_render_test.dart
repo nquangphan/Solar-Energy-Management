@@ -185,6 +185,30 @@ void main() {
           w.constraints == const BoxConstraints.tightFor(width: 116.0, height: 22.0));
       expect(notch, findsOneWidget);
     });
+
+    testWidgets('a bare scope drops the mockup chrome and keeps the child (Story 10.6)', (tester) async {
+      await tester.pumpWidget(_host(const AppPhoneFrameScope(
+        bare: true,
+        child: AppPhoneFrame(child: Text('Nội dung kính')),
+      )));
+
+      // The frame itself is in the tree — only its chrome is gone.
+      expect(find.byType(AppPhoneFrame), findsOneWidget);
+      expect(find.text('Nội dung kính'), findsOneWidget);
+      expect(find.descendant(of: find.byType(AppPhoneFrame), matching: find.byType(SafeArea)), findsOneWidget);
+      expect(find.text('9:41'), findsNothing);
+      expect(find.text('5G · 82%'), findsNothing);
+      expect(tester.widgetList<SizedBox>(find.byType(SizedBox)).any((b) => b.width == 330.0), isFalse);
+    });
+
+    testWidgets('bare: false keeps the mockup chrome (Story 10.6)', (tester) async {
+      await tester.pumpWidget(_host(const AppPhoneFrameScope(
+        bare: false,
+        child: AppPhoneFrame(child: SizedBox()),
+      )));
+      expect(find.text('9:41'), findsOneWidget);
+      expect(tester.widgetList<SizedBox>(find.byType(SizedBox)).any((b) => b.width == 330.0), isTrue);
+    });
   });
 
   group('AppMobileShell (mirror .pbody/.pscroll)', () {

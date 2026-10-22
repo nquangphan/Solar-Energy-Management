@@ -1,0 +1,11 @@
+# build_runner only touches the generated client (Story 10.6): the hand-written
+# lib/ and test/ trees are never scanned or rewritten.
+targets:
+  $default:
+    builders:
+      json_serializable:
+        generate_for: [lib/api/generated/**]
+      retrofit_generator:
+        generate_for: [lib/api/generated/**]
+      source_gen:combining_builder:
+        generate_for: [lib/api/generated/**]

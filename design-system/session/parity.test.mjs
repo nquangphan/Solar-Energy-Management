@@ -27,6 +27,8 @@ test('the session module ships on BOTH platforms (twin files)', () => {
   const parityFiles = {
     'me-port.ts': 'me_port.dart',
     'password-port.ts': 'password_port.dart',
+    'auth-port.ts': 'auth_port.dart',
+    'fake-auth-port.ts': 'fake_auth_port.dart',
     'customers-port.ts': 'customers_port.dart',
     'fake-customers-port.ts': 'fake_customers_port.dart',
     'orders-port.ts': 'orders_port.dart',
@@ -74,6 +76,42 @@ test('the password port exposes the SAME three methods on both platforms (Story 
   // backend leaked it — the whole reset flow collapses if that is ever allowed.
   assert.match(webPort, /requestResetCode\(email: string\): Promise<\{ expiresInSeconds: number \}>/, 'web requestResetCode must resolve only expiresInSeconds');
   assert.match(mobPort, /Future<int> requestResetCode\(String email\)/, 'mobile requestResetCode must resolve only the code lifetime');
+});
+
+test('the auth port exposes the SAME three methods on both platforms (Story 10.6)', () => {
+  const webPort = readFileSync(resolve(webDir, 'auth-port.ts'), 'utf8');
+  const mobPort = readFileSync(resolve(mobDir, 'auth_port.dart'), 'utf8');
+  assert.match(webPort, /login\(input: \{ email: string; password: string \}\): Promise<void>/, 'web AuthPort.login');
+  assert.match(mobPort, /Future<void> login\(\{required String email, required String password\}\)/, 'mobile AuthPort.login');
+  for (const [name, src, restore, logout] of [
+    ['web', webPort, /restoreSession\(\): Promise<boolean>/, /logout\(\): Promise<void>/],
+    ['mobile', mobPort, /Future<bool> restoreSession\(\)/, /Future<void> logout\(\)/],
+  ]) {
+    assert.match(src, restore, `${name} AuthPort.restoreSession`);
+    assert.match(src, logout, `${name} AuthPort.logout`);
+    // Tokens never cross the port: the HTTP adapter keeps them in the session store.
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+    assert.ok(code.includes('logout'), `${name} AuthPort code vanished after stripping comments`);
+    assert.ok(!/token/i.test(code), `${name} AuthPort must not carry a token`);
+  }
+});
+
+test('the three client error messages are byte-identical on web and mobile (Story 10.6)', () => {
+  const webErrors = readFileSync(resolve(repoRoot, 'web/src/api/api-error.ts'), 'utf8');
+  const mobErrors = readFileSync(resolve(repoRoot, 'mobile/lib/api/api_error.dart'), 'utf8');
+  const pairs = [
+    ['GENERIC_ERROR_MESSAGE', 'kGenericErrorMessage'],
+    ['NETWORK_ERROR_MESSAGE', 'kNetworkErrorMessage'],
+    ['SESSION_EXPIRED_MESSAGE', 'kSessionExpiredMessage'],
+  ];
+  for (const [webName, mobName] of pairs) {
+    const web = webErrors.match(new RegExp(`export const ${webName} = '([^']+)';`));
+    const mob = mobErrors.match(new RegExp(`const String ${mobName} = '([^']+)';`));
+    assert.ok(web, `web ${webName} not found`);
+    assert.ok(mob, `mobile ${mobName} not found`);
+    assert.ok(web[1].length > 0);
+    assert.equal(mob[1], web[1], `${mobName} must equal web ${webName}`);
+  }
 });
 
 test('the customers port exposes the SAME five methods on both platforms (Story 3.4)', () => {

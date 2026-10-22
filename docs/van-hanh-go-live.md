@@ -37,6 +37,10 @@ Báo giá, hợp đồng và hoá đơn đều render PDF bằng Puppeteer, nên
 
 Web đọc địa chỉ backend từ `VITE_API_BASE_URL` lúc **build** (xem `web/.env.example`). Mặc định `/api`: web và backend cùng origin, reverse proxy chuyển `/api/...` sang backend và bỏ tiền tố `/api` (backend không có tiền tố route). Nếu web host ở origin khác thì build web với URL đầy đủ của backend và đặt `CORS_ORIGINS` phía backend bằng đúng origin của web (vd `https://app.example.vn`, nhiều origin cách nhau dấu phẩy — xem `backend/.env.example`). Để trống `CORS_ORIGINS` thì CORS tắt và trình duyệt chặn mọi lời gọi khác origin.
 
+## Mobile gọi backend
+
+App mobile đọc địa chỉ backend lúc **build/run**: `flutter run --dart-define=API_BASE_URL=<URL backend>` (hoặc cùng cờ đó khi build APK). Thiếu cờ thì app hiện "Chưa cấu hình địa chỉ máy chủ" và không gọi mạng. Emulator Android gọi backend trên máy dev qua `http://10.0.2.2:3000`; HTTP thường chỉ được phép ở bản **debug** — bản release phải dùng `https://`. App native không qua CORS nên không cần thêm origin vào `CORS_ORIGINS`.
+
 ## Giá vốn sau go-live
 
 Mỗi phiếu nhập về sau tự tính **bình quân gia quyền** giữa hàng đang có và lô mới, rồi cập nhật giá vốn hiện hành — không phải sửa tay ở danh mục. Phiếu xuất không đổi giá vốn.
