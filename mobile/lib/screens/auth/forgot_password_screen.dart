@@ -6,28 +6,20 @@
 // → login) and NEVER AppMobileShell/AppBottomNav (UX-DR-15).
 //
 // Transport goes through the injected [PasswordPort] — no dio/http here, and no
-// router. The two-step flow lives in widget state.
-//
-// VALIDATION HERE IS UX ONLY (AD-4). The backend owns every real rule: attempt
-// ceiling, single-use, expiry, phone normalization (AD-9 — the RAW number is
-// sent), and the neutral response that hides whether a number is registered.
-// Never branch this UI on "does this account exist" — step 2 never echoes it.
-
-import 'dart:async';
+// router. ForgotPasswordCubit owns the two-step flow, its validation (UX only,
+// AD-4 — the backend owns every real rule) and the resend countdown (Story 11.1);
+// the screen keeps the four text controllers.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../api/api_error.dart';
 import '../../design_system/components/components.dart';
 import '../../design_system/session/password_port.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
-
-final RegExp _codeRe = RegExp(r'^[0-9]{6}$');
-// Mirror of the backend policy (`IsPasswordPolicy`): ≥8 chars, at least one
-// letter and one digit. Presentational only — the backend rejects regardless.
-final RegExp _passwordRe = RegExp(r'^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$');
+import 'forgot_password_cubit.dart';
+import 'forgot_password_state.dart';
 
 /// Seconds → `MM:SS` for the resend countdown.
 String formatCountdown(int seconds) {
@@ -35,8 +27,6 @@ String formatCountdown(int seconds) {
   final ss = (seconds % 60).toString().padLeft(2, '0');
   return '$mm:$ss';
 }
-
-enum _Step { request, verify }
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({
@@ -60,17 +50,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirm = TextEditingController();
 
-  _Step _step = _Step.request;
-  String? _error;
-  String? _phoneError;
-  int _remaining = 0;
-  Timer? _timer;
-
   @override
   void dispose() {
-    // Not optional: a surviving Timer keeps calling setState after the widget is
-    // gone (and `flutter test` fails on the pending timer).
-    _timer?.cancel();
     _phone.dispose();
     _code.dispose();
     _password.dispose();
@@ -78,91 +59,26 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  void _startCountdown(int seconds) {
-    _timer?.cancel();
-    _remaining = seconds;
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      // Stop at zero — a perpetual periodic timer keeps firing setState forever
-      // and leaves a pending timer that outlives the screen.
-      if (_remaining <= 0) {
-        timer.cancel();
-        return;
-      }
-      setState(() => _remaining -= 1);
-    });
-  }
-
-  Future<void> _submitRequest() async {
-    final String phone = _phone.text.trim();
-    if (phone.isEmpty) {
-      setState(() {
-        _error = 'Nhập số điện thoại đã đăng ký.';
-        _phoneError = null;
-      });
-      return;
-    }
-    setState(() {
-      _error = null;
-      _phoneError = null;
-    });
-    try {
-      final int expiresInSeconds = await widget.port.requestResetCode(phone);
-      if (!mounted) return;
-      setState(() => _step = _Step.verify);
-      _startCountdown(expiresInSeconds);
-    } catch (e) {
-      if (!mounted) return;
-      // A number the backend could not parse belongs under its field; anything
-      // else gets the one generic message.
-      final String? fieldMessage = e is ApiError ? _phoneMessageOf(e) : null;
-      setState(() {
-        if (fieldMessage != null) {
-          _phoneError = fieldMessage;
-        } else {
-          _error = 'Không gửi được mã. Thử lại sau.';
-        }
-      });
-    }
-  }
-
-  Future<void> _submitReset() async {
-    final String code = _code.text.trim();
-    final String password = _password.text;
-    if (!_codeRe.hasMatch(code)) {
-      setState(() => _error = 'Mã xác thực gồm đúng 6 chữ số.');
-      return;
-    }
-    if (!_passwordRe.hasMatch(password)) {
-      setState(() => _error = 'Mật khẩu tối thiểu 8 ký tự, có chữ và số.');
-      return;
-    }
-    if (password != _confirm.text) {
-      setState(() => _error = 'Xác nhận mật khẩu không khớp.');
-      return;
-    }
-    setState(() => _error = null);
-    try {
-      await widget.port.resetPassword(
-        phone: _phone.text.trim(),
-        code: code,
-        newPassword: password,
-      );
-      if (!mounted) return;
-      widget.onBackToLogin?.call();
-    } catch (_) {
-      if (!mounted) return;
-      // ONE message for every backend failure — the API deliberately does not say
-      // which branch failed, and neither do we.
-      setState(() => _error = 'Không thể đặt lại mật khẩu. Kiểm tra lại mã và thử lại.');
-    }
+  Future<void> _submitReset(ForgotPasswordCubit cubit) async {
+    final bool reset = await cubit.reset(
+      phone: _phone.text,
+      code: _code.text,
+      password: _password.text,
+      confirm: _confirm.text,
+    );
+    if (reset && mounted) widget.onBackToLogin?.call();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => ForgotPasswordCubit(widget.port),
+      child: BlocBuilder<ForgotPasswordCubit, ForgotPasswordState>(builder: _page),
+    );
+  }
+
+  Widget _page(BuildContext context, ForgotPasswordState state) {
+    final cubit = context.read<ForgotPasswordCubit>();
     return AppPhoneFrame(
       child: Column(
         children: [
@@ -179,17 +95,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Center(child: _stepper()),
+                    Center(child: _stepper(state.step)),
                     const SizedBox(height: AppTokens.space16),
-                    if (_error != null) ...[
+                    if (state.error != null) ...[
                       AppBanner(
                         tone: AppBannerTone.danger,
                         icon: 'ic-alert',
-                        message: _error!,
+                        message: state.error!,
                       ),
                       const SizedBox(height: AppTokens.space12),
                     ],
-                    if (_step == _Step.request) ..._requestStep() else ..._verifyStep(),
+                    if (state.step == ForgotStep.request) ..._requestStep(state, cubit) else ..._verifyStep(state, cubit),
                     const SizedBox(height: AppTokens.space16),
                     Center(
                       child: AppButton(
@@ -208,26 +124,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  /// The FIRST backend message about `phone`, or null (same rule as web).
-  String? _phoneMessageOf(ApiError e) {
-    for (final f in e.fieldErrors ?? const []) {
-      if (f.field == 'phone') return f.message;
-    }
-    return null;
-  }
-
-  Widget _stepper() {
+  Widget _stepper(ForgotStep step) {
     return AppStepper(
       steps: [
         AppStepItem(
           label: 'Gửi mã',
-          state: _step == _Step.request
+          state: step == ForgotStep.request
               ? AppStepState.current
               : AppStepState.done,
         ),
         AppStepItem(
           label: 'Mã & mật khẩu mới',
-          state: _step == _Step.verify
+          state: step == ForgotStep.verify
               ? AppStepState.current
               : AppStepState.upcoming,
         ),
@@ -235,7 +143,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  List<Widget> _requestStep() {
+  List<Widget> _requestStep(ForgotPasswordState state, ForgotPasswordCubit cubit) {
     return [
       AppField(
         label: 'Số điện thoại đã đăng ký',
@@ -244,21 +152,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         placeholder: 'Nhập số điện thoại đã đăng ký',
         keyboardType: TextInputType.phone,
       ),
-      if (_phoneError != null) ...[
+      if (state.phoneError != null) ...[
         const SizedBox(height: AppTokens.space8),
-        AppBanner(tone: AppBannerTone.danger, message: _phoneError!),
+        AppBanner(tone: AppBannerTone.danger, message: state.phoneError!),
       ],
       const SizedBox(height: AppTokens.space16),
       AppButton(
         variant: AppButtonVariant.primary,
         wide: true,
         label: 'Gửi mã',
-        onPressed: _submitRequest,
+        onPressed: () => cubit.requestCode(_phone.text),
       ),
     ];
   }
 
-  List<Widget> _verifyStep() {
+  List<Widget> _verifyStep(ForgotPasswordState state, ForgotPasswordCubit cubit) {
     return [
       const AppBanner(
         tone: AppBannerTone.info,
@@ -294,12 +202,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         variant: AppButtonVariant.primary,
         wide: true,
         label: 'Đặt lại mật khẩu',
-        onPressed: _submitReset,
+        onPressed: () => _submitReset(cubit),
       ),
       const SizedBox(height: AppTokens.space12),
       Center(
         child: Text(
-          'Gửi lại mã sau ${formatCountdown(_remaining)}',
+          'Gửi lại mã sau ${formatCountdown(state.remaining)}',
           style: const TextStyle(
             color: AppTokens.muted,
             fontFamily: AppTokens.fontFamily,

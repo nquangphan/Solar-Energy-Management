@@ -34,6 +34,7 @@ export 'invoices_port.dart';
 // Client-generated idempotency keys for money writes (Story 7.2).
 export 'idempotency_key.dart';
 export 'app_session.dart';
+export 'permissions_cubit.dart';
 export 'app_session_gating_example.dart';
 
 // TEST/DEMO-ONLY — not a real session source (see fake_me_port.dart,

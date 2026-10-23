@@ -10,6 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,8 @@ const MOBILE_DART = resolve(repoRoot, 'mobile/lib/screens/auth/forgot_password_s
 
 const web = readFileSync(WEB_TSX, 'utf8');
 const css = readFileSync(WEB_CSS, 'utf8');
-const mobile = readFileSync(MOBILE_DART, 'utf8');
+// The screen + its cubit/state files: logic that moved to a cubit is still read (Story 11.1).
+const mobile = readMobileScreen(repoRoot, 'mobile/lib/screens/auth/forgot_password_screen.dart');
 
 const stripDart = stripComments;
 const stripTsx = stripComments;
@@ -218,7 +220,7 @@ test('no ad-hoc shadow/gradient/elevation, radius via tokens (Viền nét, UX-DR
 // (g) The login screen now EMITS the intent rather than faking a link (Story 2.8).
 test('login screen hands off to the forgot screen via a callback, not an <a href="#">', () => {
   const loginWeb = readFileSync(resolve(repoRoot, 'web/src/screens/auth/LoginScreen.tsx'), 'utf8');
-  const loginMobile = readFileSync(resolve(repoRoot, 'mobile/lib/screens/auth/login_screen.dart'), 'utf8');
+  const loginMobile = readMobileScreen(repoRoot, 'mobile/lib/screens/auth/login_screen.dart');
   assert.match(loginWeb, /onForgotPassword/, 'LoginScreen.tsx must accept an onForgotPassword callback');
   assert.match(loginMobile, /widget\.onForgotPassword/, 'login_screen.dart must wire onTap to onForgotPassword');
   // Scan CODE only: a comment may quote the old `<a href="#">` / empty `onTap: () {}`

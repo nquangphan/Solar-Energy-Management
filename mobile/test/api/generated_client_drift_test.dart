@@ -62,23 +62,47 @@ void main() {
     expect(parts, greaterThan(0));
   });
 
+  test('the client generators are declared only in the tool/codegen package', () {
+    const generators = {
+      'swagger_parser': '^1.45.0',
+      'build_runner': '^2.15.1',
+      'retrofit_generator': '^10.3.2',
+      'json_serializable': '^6.14.1',
+      'source_helper': '1.3.13',
+    };
+    // Back in mobile/pubspec.yaml they stop resolving next to bloc_test.
+    final mobilePubspec = File('pubspec.yaml').readAsStringSync();
+    for (final name in generators.keys) {
+      expect(RegExp('^\\s+$name:', multiLine: true).hasMatch(mobilePubspec), isFalse,
+          reason: 'mobile/pubspec.yaml declares $name — it belongs in $codegenDir/pubspec.yaml');
+    }
+    final codegenPubspec = File('$codegenDir/pubspec.yaml').readAsStringSync();
+    final devDependencies = codegenPubspec.substring(codegenPubspec.indexOf('\ndev_dependencies:'));
+    generators.forEach((name, constraint) {
+      expect(devDependencies, contains('  $name: $constraint\n'),
+          reason: '$codegenDir/pubspec.yaml must keep $name: $constraint (never downgrade the toolchain)');
+    });
+  });
+
   test(
     'regenerating from the current backend spec gives the committed files byte-for-byte',
     () async {
       final stopwatch = Stopwatch()..start();
       final temp = Directory.systemTemp.createTempSync('pns_api_drift_');
       try {
-        // Same layout as the repo: <temp>/backend/openapi/openapi.json + <temp>/mobile/.
+        // Same layout as the repo: <temp>/backend/openapi/openapi.json, the script
+        // and the generator package. The script needs no mobile package, so
+        // mobile/pubspec.* is not copied.
         final backend = Directory('${temp.path}/backend/openapi')..createSync(recursive: true);
         File(backendSpecPath).copySync('${backend.path}/openapi.json');
         final mobile = Directory('${temp.path}/mobile')..createSync();
-        for (final name in ['pubspec.yaml', 'pubspec.lock', 'swagger_parser.yaml', 'build.yaml', 'analysis_options.yaml']) {
-          File(name).copySync('${mobile.path}/$name');
+        final codegen = Directory('${mobile.path}/$codegenDir')..createSync(recursive: true);
+        for (final name in ['pubspec.yaml', 'pubspec.lock', 'swagger_parser.yaml', 'build.yaml']) {
+          File('$codegenDir/$name').copySync('${codegen.path}/$name');
         }
-        Directory('${mobile.path}/tool').createSync();
         File('tool/generate_api.dart').copySync('${mobile.path}/tool/generate_api.dart');
 
-        await run(flutterTool('flutter'), ['pub', 'get', '--offline'], mobile.path);
+        await run(flutterTool('dart'), ['pub', 'get', '--offline'], codegen.path);
         await run(flutterTool('dart'), ['run', 'tool/generate_api.dart'], mobile.path);
 
         final expected = snapshot(Directory('${mobile.path}/$generatedDir'));

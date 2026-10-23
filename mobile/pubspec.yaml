@@ -1,7 +1,7 @@
 # Phương Nam Solar mobile app (Flutter): design-system widgets, screens, the
 # HTTP client generated from backend/openapi/openapi.json (lib/api/generated,
-# regenerate with `dart run tool/generate_api.dart`) and the app composition
-# root lib/main.dart (Story 10.6).
+# regenerate with `dart run tool/generate_api.dart`; the generators live in the
+# tool/codegen package) and the app composition root lib/main.dart (Story 10.6).
 name: pns_mobile
 description: "Phương Nam Solar — mobile (Flutter)."
 publish_to: none
@@ -32,21 +32,17 @@ dependencies:
   # Signed-in navigation (Story 10.7). 17.2.3 is the last release for Flutter 3.35 /
   # Dart 3.9 (17.3+ needs Dart 3.10).
   go_router: ^17.2.3
+  # Mobile state rule (Story 11.1, AD-12): screen and app state lives in Cubits.
+  flutter_bloc: ^9.1.1
+  equatable: ^3.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   # Static analysis floor (project-context requires analysis_options.yaml).
   flutter_lints: ^4.0.0
-  # Client generator: swagger_parser writes the retrofit/json_serializable
-  # sources, build_runner writes their .g.dart parts (tool/generate_api.dart).
-  swagger_parser: ^1.45.0
-  build_runner: ^2.15.1
-  retrofit_generator: ^10.3.2
-  json_serializable: ^6.14.1
-  # Pin only: source_helper 1.4.0 clashes with json_serializable 6.14.1
-  # (toStringNonNullable defined in two extensions ⇒ build script fails to
-  # compile). Drop the pin once the SDK is >= 3.12 (json_serializable 6.15+).
-  source_helper: 1.3.13
+  # Cubit tests. The client generators sit in tool/codegen/pubspec.yaml: next to
+  # bloc_test (via package:test) they no longer resolve under flutter_test's pins.
+  bloc_test: ^10.0.0
 
 flutter:

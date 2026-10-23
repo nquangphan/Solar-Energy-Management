@@ -2,10 +2,15 @@
 // (Story 10.6, AD-12: the client is generated, contract types are never typed by hand).
 //
 // Run from mobile/: `dart run tool/generate_api.dart`.
+// The generators live in the pure-Dart package tool/codegen/ (Story 11.1: they
+// cannot resolve next to bloc_test in mobile/pubspec.yaml), and build_runner
+// only writes inside its own package, so the client is generated there first.
 //   1. reads ../backend/openapi/openapi.json and writes the derived spec
-//      .dart_tool/pns_api/openapi.mobile.json (see buildMobileSpec);
-//   2. deletes lib/api/generated/ and runs swagger_parser (swagger_parser.yaml);
-//   3. runs build_runner for the json_serializable / retrofit .g.dart parts.
+//      tool/codegen/.dart_tool/pns_api/openapi.mobile.json (see buildMobileSpec);
+//   2. runs `dart pub get` in tool/codegen once, deletes its lib/api/generated/
+//      and runs swagger_parser (tool/codegen/swagger_parser.yaml);
+//   3. runs build_runner there for the json_serializable / retrofit .g.dart parts;
+//   4. replaces lib/api/generated/ with that tree and deletes tool/codegen/lib/.
 // test/api/generated_client_drift_test.dart reruns this in a temp copy and
 // compares every generated file byte-for-byte, so script and guard share ONE path.
 import 'dart:convert';
@@ -17,6 +22,9 @@ final Directory mobileRoot = File.fromUri(Platform.script).parent.parent;
 const String backendSpecPath = '../backend/openapi/openapi.json';
 const String mobileSpecPath = '.dart_tool/pns_api/openapi.mobile.json';
 const String generatedDir = 'lib/api/generated';
+
+/// Generator package, relative to the mobile root.
+const String codegenDir = 'tool/codegen';
 
 /// `paidOn` of RecordPaymentRequestDto and PaymentResponseDto: fewer means the
 /// date rewrite went blind.
@@ -79,13 +87,16 @@ const int minDateRewrites = 2;
   );
 }
 
-Future<void> _run(String executable, List<String> args) async {
+Future<void> _run(String executable, List<String> args, {required String workingDirectory}) async {
   stdout.writeln('> $executable ${args.join(' ')}');
   final process = await Process.start(executable, args,
-      workingDirectory: mobileRoot.path, mode: ProcessStartMode.inheritStdio);
+      workingDirectory: workingDirectory, mode: ProcessStartMode.inheritStdio);
   final code = await process.exitCode;
   if (code != 0) {
     stderr.writeln('generate_api: `${args.join(' ')}` exited with $code');
+    // No half-generated second copy left behind (.gitignore is never committed).
+    final staged = Directory('${mobileRoot.path}/$codegenDir/lib');
+    if (staged.existsSync()) staged.deleteSync(recursive: true);
     exit(code);
   }
 }
@@ -103,15 +114,33 @@ Future<void> main() async {
         '$backendSpecPath, rewrote ${derived.dateRewrites} — paidOn would be generated as DateTime.');
     exit(1);
   }
-  final target = File('${mobileRoot.path}/$mobileSpecPath');
+  final codegen = '${mobileRoot.path}/$codegenDir';
+  final target = File('$codegen/$mobileSpecPath');
   target.parent.createSync(recursive: true);
   target.writeAsStringSync(derived.json);
 
-  final out = Directory('${mobileRoot.path}/$generatedDir');
-  if (out.existsSync()) out.deleteSync(recursive: true);
-
   // `dart run` executes this script, so the same dart runs the generators.
   final dart = Platform.resolvedExecutable;
-  await _run(dart, ['run', 'swagger_parser']);
-  await _run(dart, ['run', 'build_runner', 'build']);
+  if (!File('$codegen/.dart_tool/package_config.json').existsSync()) {
+    await _run(dart, ['pub', 'get'], workingDirectory: codegen);
+  }
+  final staged = Directory('$codegen/$generatedDir');
+  if (staged.existsSync()) staged.deleteSync(recursive: true);
+  await _run(dart, ['run', 'swagger_parser'], workingDirectory: codegen);
+  await _run(dart, ['run', 'build_runner', 'build'], workingDirectory: codegen);
+
+  final out = Directory('${mobileRoot.path}/$generatedDir');
+  if (out.existsSync()) out.deleteSync(recursive: true);
+  _copyTree(staged, out);
+  // A second copy would not be ignored on a fresh clone (.gitignore is never committed).
+  Directory('$codegen/lib').deleteSync(recursive: true);
+}
+
+void _copyTree(Directory from, Directory to) {
+  for (final entity in from.listSync(recursive: true)) {
+    if (entity is! File) continue;
+    final copy = File('${to.path}/${entity.path.substring(from.path.length + 1)}');
+    copy.parent.createSync(recursive: true);
+    entity.copySync(copy.path);
+  }
 }

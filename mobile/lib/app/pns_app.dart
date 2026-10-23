@@ -1,12 +1,12 @@
 // hand-authored — the mobile app shell (Story 10.6, signed-in app Story 10.7,
-// ports as one AppPorts value Story 10.8).
-// Restores the session at start-up, then switches between Đăng nhập (with Quên
-// mật khẩu) and the signed-in app. It only sees ports: tokens and HTTP stay
-// behind them.
+// ports as one AppPorts value Story 10.8, session in SessionCubit Story 11.1).
+// Renders the session phase: Đăng nhập (with Quên mật khẩu) or the signed-in
+// app. It only sees ports: tokens and HTTP stay behind them.
 //
 // Each sign-in gets a fresh PermissionsProvider (keyed by a counter), so a second
 // account on the same phone never sees the first account's permissions.
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../design_system/session/app_session.dart';
 import '../design_system/session/auth_port.dart';
@@ -14,11 +14,11 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/login_screen.dart';
 import 'app_chrome.dart';
 import 'app_ports.dart';
+import 'session_cubit.dart';
+import 'session_state.dart';
 import 'signed_in_app.dart';
 
-enum _Phase { restoring, signedOut, forgotPassword, signedIn }
-
-class PnsApp extends StatefulWidget {
+class PnsApp extends StatelessWidget {
   const PnsApp({
     super.key,
     required this.auth,
@@ -33,76 +33,28 @@ class PnsApp extends StatefulWidget {
   final Listenable? sessionExpired;
 
   @override
-  State<PnsApp> createState() => _PnsAppState();
-}
-
-class _PnsAppState extends State<PnsApp> {
-  _Phase _phase = _Phase.restoring;
-  bool _loggingOut = false;
-
-  /// Bumped on every entry into the signed-in app (and on a retry of `/me`): the
-  /// permissions provider is rebuilt and fetches `/me` for THIS session.
-  int _signInCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    widget.sessionExpired?.addListener(_onSessionExpired);
-    _restore();
-  }
-
-  @override
-  void dispose() {
-    widget.sessionExpired?.removeListener(_onSessionExpired);
-    super.dispose();
-  }
-
-  Future<void> _restore() async {
-    bool restored;
-    try {
-      restored = await widget.auth.restoreSession();
-    } catch (_) {
-      restored = false;
-    }
-    if (!mounted) return;
-    if (restored) {
-      _signIn();
-    } else {
-      setState(() => _phase = _Phase.signedOut);
-    }
-  }
-
-  void _signIn() => setState(() {
-        _signInCount++;
-        _phase = _Phase.signedIn;
-      });
-
-  void _onSessionExpired() {
-    if (mounted && _phase == _Phase.signedIn) setState(() => _phase = _Phase.signedOut);
-  }
-
-  Future<void> _logout() async {
-    // Offline, the logout call waits out the connect timeout: a second tap must not send a second one.
-    if (_loggingOut) return;
-    _loggingOut = true;
-    try {
-      await widget.auth.logout();
-    } finally {
-      _loggingOut = false;
-      if (mounted) setState(() => _phase = _Phase.signedOut);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_phase == _Phase.signedIn) {
+    final Widget phases = BlocBuilder<SessionCubit, SessionState>(builder: _build);
+    final Listenable? expired = sessionExpired;
+    return BlocProvider(
+      create: (_) => SessionCubit(auth, sessionExpired: expired)..restore(),
+      // A cubit's new state reaches BlocBuilder a microtask later. The expiry signal
+      // also rebuilds here, so the frame is scheduled in the same turn as the
+      // signal (as setState did) and that frame already shows Đăng nhập.
+      child: expired == null ? phases : ListenableBuilder(listenable: expired, builder: (_, _) => phases),
+    );
+  }
+
+  Widget _build(BuildContext context, SessionState state) {
+    final session = context.read<SessionCubit>();
+    if (state.phase == SessionPhase.signedIn) {
       return PermissionsProvider(
-        key: ValueKey<int>(_signInCount),
-        port: widget.ports.me,
+        key: ValueKey<int>(state.signInCount),
+        port: ports.me,
         child: SignedInApp(
-          ports: widget.ports,
-          onLogout: _logout,
-          onRetry: () => setState(() => _signInCount++),
+          ports: ports,
+          onLogout: session.logout,
+          onRetry: session.retryPermissions,
         ),
       );
     }
@@ -110,32 +62,32 @@ class _PnsAppState extends State<PnsApp> {
       key: const ValueKey<String>('signed-out'),
       debugShowCheckedModeBanner: false,
       title: kAppTitle,
-      home: appPage(_body()),
+      home: appPage(_body(state.phase, session)),
     );
   }
 
-  Widget _body() {
-    switch (_phase) {
-      case _Phase.restoring:
-      case _Phase.signedIn:
+  Widget _body(SessionPhase phase, SessionCubit session) {
+    switch (phase) {
+      case SessionPhase.restoring:
+      case SessionPhase.signedIn:
         return const SessionSkeleton();
-      case _Phase.signedOut:
+      case SessionPhase.signedOut:
         return LoginScreen(
-          port: widget.auth,
-          onLoggedIn: _signIn,
-          onForgotPassword: () => setState(() => _phase = _Phase.forgotPassword),
+          port: auth,
+          onLoggedIn: session.signedIn,
+          onForgotPassword: session.showForgotPassword,
         );
-      case _Phase.forgotPassword:
+      case SessionPhase.forgotPassword:
         // The Android back button returns to Đăng nhập (this is not a route of its own,
         // so without this it would close the app).
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) setState(() => _phase = _Phase.signedOut);
+            if (!didPop) session.backToLogin();
           },
           child: ForgotPasswordScreen(
-            port: widget.ports.password,
-            onBackToLogin: () => setState(() => _phase = _Phase.signedOut),
+            port: ports.password,
+            onBackToLogin: session.backToLogin,
           ),
         );
     }

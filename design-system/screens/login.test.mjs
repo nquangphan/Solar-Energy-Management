@@ -10,6 +10,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,7 +25,8 @@ const MOBILE_DART = resolve(repoRoot, 'mobile/lib/screens/auth/login_screen.dart
 
 const web = readFileSync(WEB_TSX, 'utf8');
 const css = readFileSync(WEB_CSS, 'utf8');
-const mobile = readFileSync(MOBILE_DART, 'utf8');
+// The screen + its cubit/state files: logic that moved to a cubit is still read (Story 11.1).
+const mobile = readMobileScreen(repoRoot, 'mobile/lib/screens/auth/login_screen.dart');
 
 // (a) COMPOSE from design-system (AC-1): the screen imports the shipped
 // components and uses the canonical size/variant strings — never bare

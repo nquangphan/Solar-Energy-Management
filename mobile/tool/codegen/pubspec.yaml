@@ -1,0 +1,27 @@
+# Client generator package (Story 11.1): pure Dart, no flutter_test, so the
+# codegen toolchain resolves apart from bloc_test in mobile/pubspec.yaml.
+# Driven by `cd mobile && dart run tool/generate_api.dart`; never run by hand.
+name: pns_api_codegen
+publish_to: none
+
+environment:
+  sdk: ^3.8.0
+
+# Same constraints as mobile/pubspec.yaml: retrofit_generator and
+# json_serializable resolve the imports of the files they generate.
+dependencies:
+  dio: ^5.11.1
+  retrofit: ^4.10.0
+  json_annotation: ^4.12.0
+
+dev_dependencies:
+  # swagger_parser writes the retrofit/json_serializable sources, build_runner
+  # writes their .g.dart parts.
+  swagger_parser: ^1.45.0
+  build_runner: ^2.15.1
+  retrofit_generator: ^10.3.2
+  json_serializable: ^6.14.1
+  # Pin only: source_helper 1.4.0 clashes with json_serializable 6.14.1
+  # (toStringNonNullable defined in two extensions ⇒ build script fails to
+  # compile). Drop the pin once the SDK is >= 3.12 (json_serializable 6.15+).
+  source_helper: 1.3.13

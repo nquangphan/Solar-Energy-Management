@@ -12,6 +12,7 @@
 // role is a preset applied at creation, not stored truth (AD-8).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permissions.dart';
@@ -22,11 +23,12 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'menu_cubit.dart';
 
 /// Index of the locked bottom-nav `Menu` tab — this screen IS that tab.
 const int _menuTabIndex = 4;
 
-class MenuScreen extends StatefulWidget {
+class MenuScreen extends StatelessWidget {
   const MenuScreen({super.key, required this.sections, required this.onOpen, required this.onLogout});
 
   /// The menu entries the account may open (already filtered by permission).
@@ -39,24 +41,14 @@ class MenuScreen extends StatefulWidget {
   final Future<void> Function()? onLogout;
 
   @override
-  State<MenuScreen> createState() => _MenuScreenState();
-}
-
-class _MenuScreenState extends State<MenuScreen> {
-  bool _loggingOut = false;
-
-  Future<void> _logout() async {
-    // Offline, the logout call waits out the connect timeout: a second tap must not send a second one.
-    setState(() => _loggingOut = true);
-    try {
-      await widget.onLogout!();
-    } finally {
-      if (mounted) setState(() => _loggingOut = false);
-    }
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => MenuCubit(onLogout),
+      child: BlocBuilder<MenuCubit, bool>(builder: _page),
+    );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _page(BuildContext context, bool loggingOut) {
     final me = PermissionsScope.of(context).me;
     return AppPhoneFrame(
       child: AppMobileShell(
@@ -68,14 +60,14 @@ class _MenuScreenState extends State<MenuScreen> {
             children: [
               _identity(me?.displayName ?? '', me?.email ?? ''),
               const SizedBox(height: AppTokens.space16),
-              for (final section in widget.sections)
+              for (final section in sections)
                 for (final link in section.links) ...[_row(link), const SizedBox(height: AppTokens.space8)],
               const SizedBox(height: AppTokens.space8),
               AppButton(
                 variant: AppButtonVariant.danger,
                 label: 'Đăng xuất',
                 wide: true,
-                onPressed: widget.onLogout == null || _loggingOut ? null : _logout,
+                onPressed: onLogout == null || loggingOut ? null : context.read<MenuCubit>().logout,
               ),
             ],
           ),
@@ -112,7 +104,7 @@ class _MenuScreenState extends State<MenuScreen> {
       label: link.label,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: () => widget.onOpen(link.key),
+        onTap: () => onOpen(link.key),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: AppTokens.tapTargetMin),
           child: AppCard(

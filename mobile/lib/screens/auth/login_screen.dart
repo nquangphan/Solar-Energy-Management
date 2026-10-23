@@ -1,25 +1,26 @@
 // hand-authored — Flutter app-screen (Story 1.11, signs in since Story 10.6).
 // Mobile twin of the web LoginScreen: the Đăng nhập screen composed from shipped
 // design-system widgets (AppField/AppButton/AppCard-less full-screen form/
-// AppBanner/AppIcon) + tokens (AD-13). Validates emptiness locally, then signs
-// in by phone (10.9) through the injected [AuthPort] with the RAW number, only
-// trimmed — the backend alone normalizes it (AD-9). Its message is shown verbatim
-// in the AppBanner; a 400 `fieldErrors.phone` goes right under the phone field.
-// No token and no network here — the port's HTTP adapter owns both. No router:
-// success is emitted via [onLoggedIn].
+// AppBanner/AppIcon) + tokens (AD-13). LoginCubit validates and signs in through
+// the injected [AuthPort] (Story 11.1); the screen keeps only the two text
+// controllers and renders its state: the error in the AppBanner, a 400
+// `fieldErrors.phone` right under the phone field. No token and no network here —
+// the port's HTTP adapter owns both. No router: success is emitted via [onLoggedIn].
 //
 // Auth screen ⇒ no topbar / no bottom-nav: wrapped in AppPhoneFrame DIRECTLY,
 // never AppMobileShell (which adds a topbar + the locked 5-tab bottom-nav) —
 // UX-DR-15.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import '../../api/api_error.dart';
 import '../../design_system/components/components.dart';
 import '../../design_system/icons/app_icons.dart';
 import '../../design_system/session/auth_port.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'login_cubit.dart';
+import 'login_state.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
@@ -44,9 +45,6 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phone = TextEditingController();
   final TextEditingController _password = TextEditingController();
-  String? _error;
-  String? _phoneError;
-  bool _busy = false;
 
   @override
   void dispose() {
@@ -55,46 +53,20 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // Local validation is emptiness only (the number's format is the backend's call,
-  // AD-9). Same Vietnamese copy as web for label parity.
-  Future<void> _submit() async {
-    if (_busy) return;
-    final String phone = _phone.text.trim();
-    final String password = _password.text.trim();
-    if (phone.isEmpty || password.isEmpty) {
-      setState(() {
-        _error = 'Nhập đủ số điện thoại và mật khẩu.';
-        _phoneError = null;
-      });
-      return;
-    }
-    setState(() {
-      _error = null;
-      _phoneError = null;
-      _busy = true;
-    });
-    try {
-      await widget.port.login(phone: phone, password: _password.text);
-      if (!mounted) return;
-      setState(() => _busy = false);
-      widget.onLoggedIn();
-    } catch (e) {
-      if (!mounted) return;
-      final String? fieldMessage = e is ApiError ? _phoneMessageOf(e) : null;
-      setState(() {
-        _busy = false;
-        if (fieldMessage != null) {
-          _phoneError = fieldMessage;
-        } else {
-          // A non-ApiError would carry an English runtime message — never show it.
-          _error = e is ApiError ? e.message : kGenericErrorMessage;
-        }
-      });
-    }
+  Future<void> _submit(LoginCubit cubit) async {
+    final bool signedIn = await cubit.submit(phone: _phone.text, password: _password.text);
+    if (signedIn && mounted) widget.onLoggedIn();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => LoginCubit(widget.port),
+      child: BlocBuilder<LoginCubit, LoginState>(builder: _form),
+    );
+  }
+
+  Widget _form(BuildContext context, LoginState state) {
     return AppPhoneFrame(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 18.0, vertical: 22.0),
@@ -102,11 +74,11 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _brand(),
-            if (_error != null) ...[
+            if (state.error != null) ...[
               AppBanner(
                 tone: AppBannerTone.danger,
                 icon: 'ic-alert',
-                message: _error!,
+                message: state.error!,
               ),
               const SizedBox(height: AppTokens.space12),
             ],
@@ -117,9 +89,9 @@ class _LoginScreenState extends State<LoginScreen> {
               placeholder: 'Nhập số điện thoại',
               keyboardType: TextInputType.phone,
             ),
-            if (_phoneError != null) ...[
+            if (state.phoneError != null) ...[
               const SizedBox(height: AppTokens.space8),
-              AppBanner(tone: AppBannerTone.danger, message: _phoneError!),
+              AppBanner(tone: AppBannerTone.danger, message: state.phoneError!),
             ],
             const SizedBox(height: AppTokens.space12),
             AppField(
@@ -135,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
               wide: true,
               label: 'Đăng nhập',
               // Busy ⇒ disabled: a second tap never sends a second request.
-              onPressed: _busy ? null : _submit,
+              onPressed: state.busy ? null : () => _submit(context.read<LoginCubit>()),
             ),
             const SizedBox(height: AppTokens.space16),
             // s-forgot landed ở Story 2.8; tap chỉ EMIT ý định (AD-1/2).
@@ -157,14 +129,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
-  }
-
-  /// The FIRST backend message about `phone`, or null (same rule as web).
-  String? _phoneMessageOf(ApiError e) {
-    for (final f in e.fieldErrors ?? const []) {
-      if (f.field == 'phone') return f.message;
-    }
-    return null;
   }
 
   Widget _brand() {

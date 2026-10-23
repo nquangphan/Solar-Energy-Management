@@ -1,5 +1,5 @@
-# build_runner only touches the generated client (Story 10.6): the hand-written
-# lib/ and test/ trees are never scanned or rewritten.
+# build_runner only touches the generated client (Story 10.6; runs in
+# tool/codegen/ since Story 11.1, where lib/ holds nothing else).
 targets:
   $default:
     builders:

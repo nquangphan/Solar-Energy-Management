@@ -4,21 +4,22 @@
 // Maps the `/me` payload to the gating permission set and exposes it to the
 // widget tree via an InheritedWidget, so the gating primitives
 // (`filterNav`/`AppGate`/`orderScope`) read the REAL set — replacing the Epic 1
-// `demoPermissions` stub as the session source. InheritedWidget (not
-// flutter_bloc) keeps this dependency-free (YAGNI); a later app-scaffold story
-// may swap it for a Cubit if the app standardises on BLoC.
+// `demoPermissions` stub as the session source. The state is held by
+// PermissionsCubit (Story 11.1); PermissionsScope stays the API that reads it.
 //
 // GATING IS UX ONLY (AD-4): this set decides what the UI shows; the backend
 // enforces every request (Story 2.5). This layer holds NO business logic and
 // touches NO DB (AD-1/2) — it only calls the port and maps the payload.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../gating/app_permissions.dart';
 // Prefixed alias so the `orderScope` getter can call the primitive `orderScope`
 // function without the instance member shadowing it.
 import '../gating/app_permissions.dart' as gating;
 import 'me_port.dart';
+import 'permissions_cubit.dart';
 
 /// Provider status: awaiting `/me`, ready with perms, or the fetch failed.
 enum SessionStatus { loading, ready, error }
@@ -73,7 +74,7 @@ class PermissionsScope extends InheritedWidget {
 /// shows an `AppSkeleton`; on failure `status == error` and the shell shows an
 /// `AppBanner`/`AppErrorState` (design-system widgets — no ad-hoc UI, AD-13). No
 /// caching/persistence (YAGNI): the session is in-memory.
-class PermissionsProvider extends StatefulWidget {
+class PermissionsProvider extends StatelessWidget {
   const PermissionsProvider({
     super.key,
     required this.port,
@@ -85,46 +86,17 @@ class PermissionsProvider extends StatefulWidget {
   final Widget child;
 
   @override
-  State<PermissionsProvider> createState() => _PermissionsProviderState();
-}
-
-class _PermissionsProviderState extends State<PermissionsProvider> {
-  SessionStatus _status = SessionStatus.loading;
-  Set<PermissionKey> _perms = const {};
-  MeResponse? _me;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final me = await widget.port.fetchMe();
-      if (!mounted) return;
-      setState(() {
-        _perms = toPermissionSet(me);
-        _me = me;
-        _status = SessionStatus.ready;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _perms = const {};
-        _me = null;
-        _status = SessionStatus.error;
-      });
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return PermissionsScope(
-      status: _status,
-      perms: _perms,
-      me: _me,
-      child: widget.child,
+    return BlocProvider(
+      create: (_) => PermissionsCubit(port)..load(),
+      child: BlocBuilder<PermissionsCubit, PermissionsState>(
+        builder: (context, state) => PermissionsScope(
+          status: state.status,
+          perms: state.perms,
+          me: state.me,
+          child: child,
+        ),
+      ),
     );
   }
 }
