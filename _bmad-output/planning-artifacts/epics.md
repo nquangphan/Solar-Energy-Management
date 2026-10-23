@@ -821,6 +821,7 @@ As a người có quyền xem dashboard, I want xem doanh thu theo ngày/tuần/
 - **Given** mốc thời gian chọn, **When** xem dashboard, **Then** hiển thị doanh thu theo ngày/tuần/tháng + số lượng đơn + tổng hợp đơn theo từng Trạng thái, dùng KPI + chart component (FR-19, UX-DR-12).
 - **Given** quyền "xem dashboard tài chính", **When** render, **Then** chỉ account có quyền mới thấy số liệu doanh thu; account thiếu quyền vẫn xem được đếm đơn nhưng không thấy tiền (FR-19, UX-DR-22).
 - **Given** dữ liệu tổng hợp, **When** tính, **Then** tính ở backend (`dashboard/`), client chỉ hiển thị (AD-2).
+- _Đã chốt (G-6, 2026-10-22, mặc định thành quyết định):_ **doanh thu = Σ `Payment.amount` theo `paidOn`** (giờ UTC+7 khi gom ngày/tuần/tháng), không theo tổng đơn chốt. Tiền hiển thị qua formatter/Money component có sẵn (`83.010.960 đ`); guard tiền design-system (đã vá TD-76) phủ màn mới.
 
 ### Story 8.2: Màn phân quyền — ma trận per-account + áp preset Role
 As a Admin, I want màn ma trận Quyền theo Account với nút áp preset Role, So that cấp đúng quyền cho từng người nhanh gọn.
@@ -828,6 +829,7 @@ As a Admin, I want màn ma trận Quyền theo Account với nút áp preset Rol
 - **Given** một Account chọn, **When** áp preset Role, **Then** nạp giá trị quyền mặc định rồi cho tick/bỏ từng ô; nguồn chân lý là bộ quyền trên Account, không phải Role (FR-17, AD-8).
 - **Given** sửa quyền một Account, **When** lưu, **Then** KHÔNG ảnh hưởng Account khác cùng Role; đổi định nghĩa preset Role sau này không hồi tố Account đã tạo (FR-17).
 - **Given** ma trận quyền, **When** render, **Then** dùng key từ registry chính tắc (Epic 2), không literal ngoài registry (AD-17).
+- _Ghi chú bắt buộc (H-7 / TD-65):_ ma trận tuỳ chỉnh tạo được tổ hợp gây 403 giữa luồng — `settings.manage` không kèm `customers.manage` (phần nguồn khách ở màn Cấu hình), `quotes.create_edit` không kèm `customers.manage` (`/orders/new` bước tra khách). Story phải xử lý tổ hợp này (cảnh báo phụ thuộc trong ma trận hoặc ẩn/hạ cấp phần màn phụ thuộc) và có test cho cả hai tổ hợp; preset có sẵn không bị ảnh hưởng.
 
 ### Story 8.3: Form tạo/sửa/vô hiệu hoá Account
 As a Admin, I want tạo/sửa/vô hiệu hoá Account và chọn Role preset lúc tạo, So that quản lý người dùng nội bộ.
@@ -836,6 +838,7 @@ As a Admin, I want tạo/sửa/vô hiệu hoá Account và chọn Role preset l�
 - **Given** một Account, **When** vô hiệu hoá, **Then** account không đăng nhập được nhưng dữ liệu/lịch sử giữ nguyên (FR-16).
 - **Given** thay đổi account, **When** lưu, **Then** ghi Audit qua event (FR-16, AD-18).
 - **Given** form tạo/sửa account, **When** lưu, **Then** SĐT BẮT BUỘC (đăng nhập bằng SĐT từ Story 10.9) — chuẩn hoá `normalizeVnPhone` (E.164), unique (`accounts_phone_key`, P2002 ⇒ 409/400 trỏ ô `phone`).
+- _Đã chốt (G-2 / TD-9, mặc định thành quyết định):_ Phase 1 chấp nhận access token cũ sống ≤15 phút sau đổi mật khẩu/đổi quyền/đăng xuất; vô hiệu hoá thì tức thời (JwtAuthGuard kiểm `isActive` mỗi request). Không làm denylist. Ghi vào `backend/CONVENTIONS.md` mục Auth nếu chưa có.
 
 ### Story 8.4: Cấu hình ma trận quyền hành động & duyệt
 As a Admin, I want mỗi quyền chuyển trạng thái và quyền duyệt là một mục ma trận cấu hình được, So that phân quyền linh hoạt không hardcode.
@@ -843,6 +846,7 @@ As a Admin, I want mỗi quyền chuyển trạng thái và quyền duyệt là 
 - **Given** các quyền hành động/duyệt, **When** cấu hình, **Then** mỗi quyền chuyển từng Trạng thái + quyền duyệt (chiết khấu và bước cần duyệt) là entry cấu hình được, không hardcode (FR-18).
 - **Given** phạm vi xem đơn, **When** khai báo, **Then** "xem tất cả đơn" và "đơn của mình" là hai entry tường minh trong registry (FR-18, AD-17).
 - **Given** một chiết khấu, **When** áp, **Then** cần duyệt bởi account có quyền duyệt chiết khấu (không hạn mức tự quyết) (FR-18).
+- _Ghi chú (H-7 / TD-65):_ quyền hành động mới thêm vào ma trận phải khai phụ thuộc quyền đọc mà luồng của nó cần (cùng khuôn xử lý TD-65 ở 8.2), không để lộ 403 giữa luồng.
 
 ### Story 8.5: Màn xem Audit log (gate theo quyền `audit.read`, không theo role)
 As a người có quyền `audit.read`, I want xem nhật ký Audit bất biến, So that có bằng chứng minh bạch mọi hành động.

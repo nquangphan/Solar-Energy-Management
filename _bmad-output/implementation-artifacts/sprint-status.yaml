@@ -342,8 +342,8 @@ action_items:
   - epic: 7
     action: "G-2: Quyết TD-9 — access token cũ sống ≤15 phút sau đổi mật khẩu/đăng xuất"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Deactivate đã tức thời (JwtAuthGuard kiểm isActive mỗi request). Mặc định tuyên bố trước: chấp nhận cửa sổ ≤15 phút ở Phase 1, ghi vào CONVENTIONS#Auth. Phải chốt trước 8.3. Im lặng ⇒ mặc định thành quyết định."
+    status: decided
+    resolution: "Deactivate đã tức thời (JwtAuthGuard kiểm isActive mỗi request). Mặc định tuyên bố trước: chấp nhận cửa sổ ≤15 phút ở Phase 1, ghi vào CONVENTIONS#Auth. Phải chốt trước 8.3. Im lặng ⇒ mặc định thành quyết định. || 2026-10-23: Mặc định thành quyết định (im lặng tới trước 8.3). Ghi vào epics.md 8.3."
   - epic: 7
     action: "G-3: Sửa TD-50 — ContractsService.generate 409 khi trạng thái đổi dưới khoá từ trạng thái chưa đóng băng (khuôn invoices.service.ts 7.4)"
     owner: "Amelia (Dev)"
@@ -407,8 +407,8 @@ action_items:
   - epic: 10
     action: "H-7: Đưa TD-65 (tổ hợp quyền gây 403 giữa luồng: settings.manage hoặc quotes.create_edit thiếu customers.manage) vào bmad-create-story 8.2/8.4"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Tiêu chí: story 8.2 có AC hoặc ghi chú về các tổ hợp này."
+    status: done
+    resolution: "Tiêu chí: story 8.2 có AC hoặc ghi chú về các tổ hợp này. || 2026-10-23: Ghi chú bắt buộc vào epics.md 8.2 + 8.4; create-story mang theo."
   - epic: 10
     action: "H-8: Đồng bộ sổ sách + tài liệu lệch code (spine Deferred codegen + Auth, project-context, backend README, van-hanh-go-live)"
     owner: "Amelia (Dev)"
