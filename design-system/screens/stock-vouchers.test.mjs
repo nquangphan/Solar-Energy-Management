@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { AFTER_FIGURE, BEFORE_FIGURE } from '../lib/money-arithmetic.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -66,8 +67,8 @@ const CMP = '(?:<=|>=|<|>)';
 
 /** The computations only the backend may do — each pattern with why. */
 const BANNED = [
-  [new RegExp(`\\b\\w*${MONEY}\\w*\\s*[*/]`), 'multiply/divide a quantity or a cost (no line total, no average)'],
-  [new RegExp(`[*/]\\s*[\\w.]*${MONEY}`), 'multiply/divide by a quantity or a cost'],
+  [new RegExp(`\\b\\w*${MONEY}\\w*${AFTER_FIGURE}\\s*[*/]`), 'multiply/divide a quantity or a cost (no line total, no average)'],
+  [new RegExp(`[*/]${BEFORE_FIGURE}${MONEY}`), 'multiply/divide by a quantity or a cost'],
   [new RegExp(`\\bqty\\w*\\s*${CMP}`), 'compare a quantity (the stock-out refusal is the backend\'s)'],
   [new RegExp(`${CMP}=?\\s*[\\w.]*\\bonHand\\b`), 'compare against onHand'],
   [new RegExp(`\\bonHand\\s*${CMP}`), 'compare onHand'],
@@ -96,6 +97,8 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
     'if (d.qty >= 1) {}',
     'if (item.onHand < 3) {}',
     'disabled={x > sp.onHand}',
+    'final tien = l.qty.toInt() * gia;',
+    'final tien = gia * (l?.unitCost ?? 0);',
   ];
   for (const sample of samples) {
     assert.ok(

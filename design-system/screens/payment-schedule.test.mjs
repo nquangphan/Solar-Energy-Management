@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { moneyArithmeticBans } from '../lib/money-arithmetic.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -115,8 +116,7 @@ const MONEY = '(?:amount|orderTotal|scheduledTotal|difference|paidTotal|remainin
 
 /** The computations only the backend may do — each pattern with why. */
 const BANNED = [
-  [new RegExp(`\\b\\w*${MONEY}\\w*\\s*[-+*/]\\s*[\\w(]`, 'i'), 'arithmetic on a money figure'],
-  [new RegExp(`[-+*/]\\s*[\\w.]*\\b${MONEY}\\b`), 'arithmetic onto a money figure'],
+  ...moneyArithmeticBans(MONEY),
   [/\.reduce\(|\.fold</, 'summing installments (scheduledTotal is the backend’s)'],
   [/Math\.(?:floor|round|ceil)/, 'rounding money'],
 ];
@@ -168,6 +168,11 @@ test('the banned patterns do catch what they claim (sanity)', () => {
     'Math.floor(orderTotal * 20 / 100)',
     'const left = orderTotal - paidTotal;',
     'final left = installment.amount - installment.paidAmount;',
+    // A cast or a null-aware access between the figure and the operator.
+    'final left = orderTotal.toInt() - x;',
+    'final left = y - (s?.paidTotal ?? 0);',
+    'final left = s!.remainingTotal!.toInt() + y;',
+    'final left = y * s?.scheduledTotal?.toInt();',
   ];
   for (const sample of samples) {
     assert.ok(

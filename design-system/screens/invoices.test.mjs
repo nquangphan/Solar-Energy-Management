@@ -23,6 +23,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { moneyArithmeticBans } from '../lib/money-arithmetic.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { moneyFields } from '../money/money-fields.mjs';
 
@@ -156,8 +157,7 @@ const MONEY =
 
 /** The computations only the backend may do — each pattern with why. */
 const BANNED = [
-  [new RegExp(`\\b\\w*${MONEY}\\w*\\s*[-+*/]\\s*[\\w(]`, 'i'), 'arithmetic on a money figure'],
-  [new RegExp(`[-+*/]\\s*[\\w.]*\\b${MONEY}\\b`), 'arithmetic onto a money figure'],
+  ...moneyArithmeticBans(MONEY),
   [/\.reduce\(|\.fold</, 'summing figures (the backend sends totals)'],
   [/Math\.(?:floor|round|ceil)/, 'rounding money'],
 ];
@@ -226,6 +226,8 @@ test('the banned patterns do catch what they claim (sanity)', () => {
     'final v = subtotal + vatAmount;',
     'const s = list.reduce((a, b) => a + b.total, 0);',
     'Math.round(total / 3)',
+    'final v = i.subtotal.toInt() + vat;',
+    'final v = x - (i?.vatAmount ?? 0);',
   ]) {
     assert.ok(BANNED.some(([p]) => p.test(sample)), `a banned pattern must match: ${sample}`);
   }
