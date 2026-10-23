@@ -8,10 +8,14 @@
 // nullable field that IS theirs but empty renders `—`: the row stays, because
 // "this customer has no address" is information; hiding the row is not.
 //
+// CustomerDetailCubit reads the customer and the source catalogue through the
+// injected [CustomersPort] (Story 11.2); the screen renders its state.
+//
 // There is NO order history and NO "+ Tạo đơn mới": `Order` lands in Story 4.1,
 // and a screen may not show a number no table can back (AC-7).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/customers_port.dart';
@@ -20,11 +24,11 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'customer_detail_cubit.dart';
+import 'customer_detail_state.dart';
 import 'customer_pick_screen.dart';
 
-enum _LoadState { loading, ready, error }
-
-class CustomerDetailScreen extends StatefulWidget {
+class CustomerDetailScreen extends StatelessWidget {
   const CustomerDetailScreen({
     super.key,
     required this.port,
@@ -39,61 +43,36 @@ class CustomerDetailScreen extends StatefulWidget {
   final void Function(String sdt)? onEdit;
 
   @override
-  State<CustomerDetailScreen> createState() => _CustomerDetailScreenState();
-}
-
-class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
-  Customer? _customer;
-  List<CustomerSource> _sources = const [];
-  _LoadState _state = _LoadState.loading;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() => _state = _LoadState.loading);
-    try {
-      final Customer found = await widget.port.get(widget.sdt);
-      final List<CustomerSource> catalogue = await widget.port.listSources();
-      if (!mounted) return;
-      setState(() {
-        _customer = found;
-        _sources = catalogue;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final Customer? customer = _customer;
+    return BlocProvider(
+      create: (_) => CustomerDetailCubit(port, sdt)..load(),
+      child: BlocBuilder<CustomerDetailCubit, CustomerDetailState>(builder: _page),
+    );
+  }
+
+  Widget _page(BuildContext context, CustomerDetailState state) {
+    final Customer? customer = state.customer;
     final String eyebrow = customer?.custType == kThuongMai
         ? 'KHÁCH · THƯƠNG MẠI'
         : 'KHÁCH · CÁ NHÂN';
 
     final Widget body;
-    switch (_state) {
-      case _LoadState.loading:
+    switch (state.status) {
+      case CustomerDetailStatus.loading:
         body = const Center(child: AppSkeleton(width: 200.0));
-      case _LoadState.error:
+      case CustomerDetailStatus.error:
         body = AppErrorState(
           message: 'Không tải được danh sách khách hàng.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: context.read<CustomerDetailCubit>().load,
         );
-      case _LoadState.ready:
+      case CustomerDetailStatus.ready:
         body = SingleChildScrollView(
           child: AppFrame(
             label: 'Thông tin khách',
             child: AppCard(
               padding: const EdgeInsets.all(AppTokens.space16),
-              child: CustomerFacts(customer: customer!, sources: _sources),
+              child: CustomerFacts(customer: customer!, sources: state.sources),
             ),
           ),
         );
@@ -113,7 +92,7 @@ class _CustomerDetailScreenState extends State<CustomerDetailScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
-          onAction: () => widget.onEdit?.call(widget.sdt),
+          onAction: () => onEdit?.call(sdt),
         ),
         bottomNav: const AppBottomNav(activeIndex: kMenuTabIndex),
         body: body,

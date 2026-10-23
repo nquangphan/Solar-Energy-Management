@@ -28,6 +28,7 @@ import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -52,7 +53,8 @@ const stripDart = (s) =>
 
 const webCode = stripTsx(read(WEB_SCREEN));
 const webFormatCode = stripTsx(read(WEB_FORMAT));
-const mobileCode = stripDart(read(MOBILE_SCREEN));
+// The screen with its own cubit/state files (Story 11.2): the lookup moved there.
+const mobileCode = stripDart(readMobileScreen(repoRoot, MOBILE_SCREEN));
 const css = read(WEB_CSS);
 
 /** Every screen-side file a "must not appear" rule scans, comment-stripped. */

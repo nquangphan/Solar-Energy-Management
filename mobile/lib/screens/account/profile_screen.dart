@@ -6,6 +6,10 @@
 // Office screen ⇒ it lives INSIDE the app shell: AppMobileShell with the locked
 // 5-tab AppBottomNav (Menu tab active), unlike the auth screens (UX-DR-15).
 //
+// ProfileCubit validates and changes the password through the injected
+// [PasswordPort] (Story 11.2); the screen keeps the three text controllers and
+// renders its state.
+//
 // Identity comes from the session PermissionsScope, which ALREADY fetched `/me` —
 // this screen does not call `/me` a second time.
 //
@@ -15,6 +19,7 @@
 // `/me` fields render. The rest is Epic 8.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/icons/app_icons.dart';
@@ -25,13 +30,11 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'profile_cubit.dart';
+import 'profile_state.dart';
 
 /// Index of the locked bottom-nav `Menu` tab — the Hồ sơ screen is reached from it.
 const int _menuTabIndex = 4;
-
-// Mirror of the backend policy (`IsPasswordPolicy`): ≥8 chars, at least one letter
-// and one digit. Presentational only — the backend rejects regardless (AD-4).
-final RegExp _passwordRe = RegExp(r'^(?=.*[A-Za-z])(?=.*[0-9]).{8,}$');
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, required this.port});
@@ -47,9 +50,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirm = TextEditingController();
 
-  String? _error;
-  bool _done = false;
-
   @override
   void dispose() {
     _current.dispose();
@@ -58,43 +58,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  void _reset() {
+  void _reset(ProfileCubit cubit) {
     _current.clear();
     _password.clear();
     _confirm.clear();
-    setState(() => _error = null);
+    cubit.clearError();
   }
 
-  Future<void> _submit() async {
-    // Clear a prior success banner so a later validation error can't render the
-    // green "changed" banner alongside the red one.
-    if (_done) setState(() => _done = false);
-    final String current = _current.text.trim();
-    final String password = _password.text;
-    if (current.isEmpty) {
-      setState(() => _error = 'Nhập mật khẩu hiện tại.');
-      return;
-    }
-    if (!_passwordRe.hasMatch(password)) {
-      setState(() => _error = 'Mật khẩu tối thiểu 8 ký tự, có chữ và số.');
-      return;
-    }
-    if (password != _confirm.text) {
-      setState(() => _error = 'Xác nhận mật khẩu không khớp.');
-      return;
-    }
-    setState(() => _error = null);
-    try {
-      await widget.port.changePassword(
-        currentPassword: current,
-        newPassword: password,
-      );
-      if (!mounted) return;
-      _reset();
-      setState(() => _done = true);
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Không đổi được mật khẩu. Kiểm tra mật khẩu hiện tại.');
+  Future<void> _submit(ProfileCubit cubit) async {
+    final bool changed = await cubit.submit(
+      current: _current.text,
+      password: _password.text,
+      confirm: _confirm.text,
+    );
+    if (changed && mounted) {
+      _current.clear();
+      _password.clear();
+      _confirm.clear();
     }
   }
 
@@ -117,17 +97,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           children: [
             _identity(me?.displayName ?? '', me?.email ?? ''),
             const SizedBox(height: AppTokens.space16),
-            _changePassword(),
+            BlocBuilder<ProfileCubit, ProfileState>(builder: _changePassword),
           ],
         ),
       );
     }
 
-    return AppPhoneFrame(
-      child: AppMobileShell(
-        topbar: const AppTopbar(eyebrow: 'TÀI KHOẢN', title: 'Hồ sơ'),
-        bottomNav: const AppBottomNav(activeIndex: _menuTabIndex),
-        body: body,
+    return BlocProvider(
+      create: (_) => ProfileCubit(widget.port),
+      child: AppPhoneFrame(
+        child: AppMobileShell(
+          topbar: const AppTopbar(eyebrow: 'TÀI KHOẢN', title: 'Hồ sơ'),
+          bottomNav: const AppBottomNav(activeIndex: _menuTabIndex),
+          body: body,
+        ),
       ),
     );
   }
@@ -208,24 +191,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _changePassword() {
+  Widget _changePassword(BuildContext context, ProfileState state) {
     return AppFrame(
       label: 'Đổi mật khẩu',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_done) ...[
+          if (state.done) ...[
             const AppBanner(
               tone: AppBannerTone.info,
               message: 'Đã đổi mật khẩu. Bạn cần đăng nhập lại.',
             ),
             const SizedBox(height: AppTokens.space12),
           ],
-          if (_error != null) ...[
+          if (state.error != null) ...[
             AppBanner(
               tone: AppBannerTone.danger,
               icon: 'ic-alert',
-              message: _error!,
+              message: state.error!,
             ),
             const SizedBox(height: AppTokens.space12),
           ],
@@ -265,14 +248,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             variant: AppButtonVariant.primary,
             label: 'Cập nhật mật khẩu',
             wide: true,
-            onPressed: _submit,
+            onPressed: () => _submit(context.read<ProfileCubit>()),
           ),
           const SizedBox(height: AppTokens.space8),
           AppButton(
             variant: AppButtonVariant.ghost,
             label: 'Huỷ',
             wide: true,
-            onPressed: _reset,
+            onPressed: () => _reset(context.read<ProfileCubit>()),
           ),
         ],
       ),

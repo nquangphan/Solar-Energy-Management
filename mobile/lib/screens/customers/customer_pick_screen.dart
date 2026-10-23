@@ -11,10 +11,15 @@
 // Lookup fires on an EXPLICIT action, not per keystroke: the client may not judge
 // whether a half-typed number is "long enough" to send.
 //
+// CustomerPickCubit sends the lookup and the create through the injected
+// [CustomersPort] (Story 11.2); the screen keeps the text controllers and the
+// type/source picks, and renders the cubit's state.
+//
 // `onSelect(customer)` is the entire API this screen leaves for Story 4.1 — it
 // does NOT navigate to an order (no order exists until Epic 4).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/customers_port.dart';
@@ -23,6 +28,8 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'customer_pick_cubit.dart';
+import 'customer_pick_state.dart';
 
 /// Index of the locked bottom-nav `Menu` tab — the customer screens are reached from
 /// it. The 5 tabs are LOCKED (UX-DR-15) and none of them is "Khách": marking `Đơn hàng`
@@ -59,23 +66,17 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
   final TextEditingController _bankAccount = TextEditingController();
   final TextEditingController _sourceNote = TextEditingController();
 
-  CustomerLookup? _result;
-  String? _error;
-  Map<String, String> _fieldErrors = const <String, String>{};
-  bool _creating = false;
-
   String _custType = kCaNhan;
   String _sourceId = '';
-  List<CustomerSource> _sources = const [];
+
+  // Created here rather than by BlocProvider(create:): the State calls it from
+  // `_lookup`/`_create`, so it is closed in dispose (BlocProvider.value does not).
+  late final CustomerPickCubit _cubit = CustomerPickCubit(widget.port);
 
   @override
   void initState() {
     super.initState();
-    widget.port.listSources().then((List<CustomerSource> sources) {
-      if (mounted) setState(() => _sources = sources);
-    }).catchError((Object _) {
-      if (mounted) setState(() => _sources = const <CustomerSource>[]);
-    });
+    _cubit.loadSources();
   }
 
   @override
@@ -87,88 +88,41 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
     _address.dispose();
     _bankAccount.dispose();
     _sourceNote.dispose();
+    _cubit.close();
     super.dispose();
   }
 
   // `isOther` is read from the FLAG the backend sends — never by comparing the
   // source name to a literal. Story 3.5 lets an admin rename a source, and a rule
   // must not collapse because someone edited a label.
-  bool get _needsSourceNote {
-    for (final CustomerSource source in _sources) {
+  bool _needsSourceNote(List<CustomerSource> sources) {
+    for (final CustomerSource source in sources) {
       if (source.id == _sourceId) return source.isOther;
     }
     return false;
   }
 
-  /// The message the BACKEND sent (AD-5) — never one invented here. An invalid phone
-  /// is judged on the server (AD-9), so the sentence explaining it comes from there
-  /// too; the generic line is only for a transport failure, which carries no envelope.
-  void _showError(Object err) {
-    setState(() {
-      _error = err is CustomerPortException
-          ? err.message
-          : 'Không thực hiện được. Thử lại.';
-      _fieldErrors = err is CustomerPortException
-          ? err.fieldErrors
-          : const <String, String>{};
-    });
-  }
-
-  Future<void> _lookup() async {
-    setState(() {
-      _error = null;
-      _fieldErrors = const <String, String>{};
-      _creating = false;
-    });
-    try {
-      // The RAW string, exactly as typed. The backend owns every judgement about it.
-      final CustomerLookup found = await widget.port.lookup(_sdt.text);
-      if (!mounted) return;
-      setState(() => _result = found);
-    } catch (err) {
-      if (!mounted) return;
-      setState(() => _result = null);
-      _showError(err);
-    }
-  }
+  void _lookup() => _cubit.lookup(_sdt.text);
 
   Future<void> _create() async {
-    setState(() {
-      _error = null;
-      _fieldErrors = const <String, String>{};
-    });
-    try {
-      final Customer created = await widget.port.create(
-        CreateCustomerInput(
-          // Still the raw string — the backend re-normalises it into the key it stores.
-          phone: _sdt.text,
-          custType: CreateCustomerRequestDtoCustType.fromJson(_custType),
-          name: _name.text,
-          nationalId:
-              _custType == kCaNhan && _nationalId.text.isNotEmpty ? _nationalId.text : null,
-          taxCode: _custType == kThuongMai && _taxCode.text.isNotEmpty
-              ? _taxCode.text
-              : null,
-          address: _address.text.isNotEmpty ? _address.text : null,
-          bankAccount: _custType == kThuongMai && _bankAccount.text.isNotEmpty
-              ? _bankAccount.text
-              : null,
-          sourceId: _sourceId,
-          sourceNote: _sourceNote.text.isNotEmpty ? _sourceNote.text : null,
-        ),
-      );
-      if (!mounted) return;
-      widget.onSelect?.call(created);
-    } catch (err) {
-      if (!mounted) return;
-      _showError(err);
-    }
+    final Customer? created = await _cubit.create(
+      phone: _sdt.text,
+      custType: _custType,
+      name: _name.text,
+      nationalId: _nationalId.text,
+      taxCode: _taxCode.text,
+      address: _address.text,
+      bankAccount: _bankAccount.text,
+      sourceId: _sourceId,
+      sourceNote: _sourceNote.text,
+    );
+    if (created != null && mounted) widget.onSelect?.call(created);
   }
 
   /// A backend field error, pinned under the input it names (AD-5). Nothing renders
   /// when the backend did not complain about that field.
-  Widget _fieldError(String field) {
-    final String? message = _fieldErrors[field];
+  Widget _fieldError(CustomerPickState state, String field) {
+    final String? message = state.fieldErrors[field];
     if (message == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.space8),
@@ -178,7 +132,14 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final CustomerLookup? result = _result;
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<CustomerPickCubit, CustomerPickState>(builder: _view),
+    );
+  }
+
+  Widget _view(BuildContext context, CustomerPickState state) {
+    final CustomerLookup? result = state.result;
 
     return AppPhoneFrame(
       child: AppMobileShell(
@@ -202,7 +163,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
                       controller: _sdt,
                     ),
                     // The create form reuses this phone, so its field error belongs here.
-                    _fieldError('phone'),
+                    _fieldError(state, 'phone'),
                     const SizedBox(height: AppTokens.space12),
                     AppButton(
                       variant: AppButtonVariant.primary,
@@ -213,25 +174,25 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
                   ],
                 ),
               ),
-              if (_error != null) ...[
+              if (state.error != null) ...[
                 const SizedBox(height: AppTokens.space12),
                 AppBanner(
                   tone: AppBannerTone.danger,
                   icon: 'ic-alert',
-                  message: _error!,
+                  message: state.error!,
                 ),
               ],
-              if (result != null && result.found && !_creating) ...[
+              if (result != null && result.found && !state.creating) ...[
                 const SizedBox(height: AppTokens.space16),
-                _hit(result.customer!),
+                _hit(state, result.customer!),
               ],
-              if (result != null && !result.found && !_creating) ...[
+              if (result != null && !result.found && !state.creating) ...[
                 const SizedBox(height: AppTokens.space16),
                 _miss(),
               ],
-              if (_creating) ...[
+              if (state.creating) ...[
                 const SizedBox(height: AppTokens.space16),
-                _createForm(),
+                _createForm(state),
               ],
             ],
           ),
@@ -240,7 +201,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
     );
   }
 
-  Widget _hit(Customer customer) {
+  Widget _hit(CustomerPickState state, Customer customer) {
     return AppCard(
       variant: AppCardVariant.teal,
       padding: const EdgeInsets.all(AppTokens.space16),
@@ -269,7 +230,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             ],
           ),
           const SizedBox(height: AppTokens.space16),
-          CustomerFacts(customer: customer, sources: _sources),
+          CustomerFacts(customer: customer, sources: state.sources),
           const SizedBox(height: AppTokens.space16),
           AppButton(
             variant: AppButtonVariant.primary,
@@ -282,7 +243,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             variant: AppButtonVariant.ghost,
             label: 'Không phải khách này? Tạo khách hàng mới →',
             wide: true,
-            onPressed: () => setState(() => _creating = true),
+            onPressed: _cubit.startCreate,
           ),
         ],
       ),
@@ -312,14 +273,14 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             variant: AppButtonVariant.primary,
             label: 'Tạo khách hàng mới',
             wide: true,
-            onPressed: () => setState(() => _creating = true),
+            onPressed: _cubit.startCreate,
           ),
         ],
       ),
     );
   }
 
-  Widget _createForm() {
+  Widget _createForm(CustomerPickState state) {
     final bool commercial = _custType == kThuongMai;
     return AppFrame(
       label: 'Tạo khách hàng mới',
@@ -359,7 +320,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             size: AppFieldSize.large,
             controller: _name,
           ),
-          _fieldError('name'),
+          _fieldError(state, 'name'),
           const SizedBox(height: AppTokens.space12),
           // Each type carries its OWN fields. Sending a `taxCode` with a Cá nhân is a
           // 400 from the backend — so the field simply is not offered.
@@ -369,14 +330,14 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
               size: AppFieldSize.large,
               controller: _taxCode,
             ),
-            _fieldError('taxCode'),
+            _fieldError(state, 'taxCode'),
           ] else ...[
             AppField(
               label: 'CCCD',
               size: AppFieldSize.large,
               controller: _nationalId,
             ),
-            _fieldError('nationalId'),
+            _fieldError(state, 'nationalId'),
           ],
           const SizedBox(height: AppTokens.space12),
           AppField(
@@ -391,7 +352,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
               size: AppFieldSize.large,
               controller: _bankAccount,
             ),
-            _fieldError('bankAccount'),
+            _fieldError(state, 'bankAccount'),
           ],
           const SizedBox(height: AppTokens.space12),
           const _MicroLabel('Nguồn khách'),
@@ -412,7 +373,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             ),
           // A source switched off later still names existing customers (the list
           // carries it), but a NEW customer cannot be filed under it.
-          for (final CustomerSource source in _sources.where((CustomerSource s) => s.active)) ...[
+          for (final CustomerSource source in state.sources.where((CustomerSource s) => s.active)) ...[
             const SizedBox(height: AppTokens.space8),
             AppButton(
               variant: source.id == _sourceId
@@ -423,15 +384,15 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
               onPressed: () => setState(() => _sourceId = source.id),
             ),
           ],
-          _fieldError('sourceId'),
-          if (_needsSourceNote) ...[
+          _fieldError(state, 'sourceId'),
+          if (_needsSourceNote(state.sources)) ...[
             const SizedBox(height: AppTokens.space12),
             AppField(
               label: 'Ghi rõ nguồn',
               size: AppFieldSize.large,
               controller: _sourceNote,
             ),
-            _fieldError('sourceNote'),
+            _fieldError(state, 'sourceNote'),
           ],
           const SizedBox(height: AppTokens.space16),
           AppButton(
@@ -445,7 +406,7 @@ class _CustomerPickScreenState extends State<CustomerPickScreen> {
             variant: AppButtonVariant.ghost,
             label: 'Huỷ',
             wide: true,
-            onPressed: () => setState(() => _creating = false),
+            onPressed: _cubit.cancelCreate,
           ),
         ],
       ),

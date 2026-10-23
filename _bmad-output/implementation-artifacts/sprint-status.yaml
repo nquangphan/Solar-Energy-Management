@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (create-story 11.1 ready-for-dev)
+# last_updated: 2026-10-23 (code-review 11.2 done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (code-review 11.1 done)
+last_updated: 2026-10-23 (code-review 11.2 done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -111,7 +111,7 @@ development_status:
   # Epic 11 chạy SAU Epic 10, TRƯỚC Epic 8 (correct-course 2026-10-23, sprint-change-proposal-2026-10-23.md)
   epic-11: in-progress
   11-1-nen-bloc-dependency-guard-man-khong-goi-port-phien-va-man-dang-nhap: done
-  11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: backlog
+  11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: done
   11-3-chuyen-bloc-man-don-hang-va-bao-gia: backlog
   11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: backlog
   epic-11-retrospective: optional

@@ -12,6 +12,7 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { stripComments } from '../lib/strip-comments.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +24,8 @@ const MOBILE_DART = resolve(repoRoot, 'mobile/lib/screens/account/profile_screen
 
 const web = readFileSync(WEB_TSX, 'utf8');
 const css = readFileSync(WEB_CSS, 'utf8');
-const mobile = readFileSync(MOBILE_DART, 'utf8');
+// The screen with its own cubit/state files (Story 11.2): the validation moved there.
+const mobile = readMobileScreen(repoRoot, 'mobile/lib/screens/account/profile_screen.dart');
 
 const stripDart = stripComments;
 const stripTsx = stripComments;
@@ -183,7 +185,10 @@ test('no ad-hoc shadow/gradient/elevation, radius via tokens (Viền nét, UX-DR
 test('the profile screen hardcodes no permission literal (AD-17)', () => {
   const registryLike = /['"][a-z_]+\.[a-z_]+['"]/;
   assert.ok(!registryLike.test(stripTsx(web)), 'ProfileScreen.tsx must not hardcode a permission literal');
-  assert.ok(!registryLike.test(stripDart(mobile)), 'profile_screen.dart must not hardcode a permission literal');
+  // Import specifiers are dropped first, as in customers.test.mjs: `import 'profile_cubit.dart';`
+  // is quoted `word.word` like a registry key, but it is a file path.
+  const mobileBody = stripDart(mobile).replace(/^\s*(?:import|export)\s+[^;]+;/gm, '');
+  assert.ok(!registryLike.test(mobileBody), 'profile_screen.dart must not hardcode a permission literal');
 });
 
 // Anti-empty (E-7): the "must not contain" checks above scan these sources; if a stripper/reader

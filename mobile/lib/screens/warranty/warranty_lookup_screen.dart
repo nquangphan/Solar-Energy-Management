@@ -11,6 +11,8 @@
 // colour and a label.
 //
 // It never normalises the phone either (AD-9): the raw string goes out as typed.
+// WarrantyLookupCubit sends it through the injected [WarrantyPort] (Story 11.2);
+// the screen keeps the phone controller and maps the answer to labels/colours.
 //
 // READ-ONLY (FR-36, Phase 1): no warranty claim, no lifecycle, no reminder. The
 // screen shows the state `sap_het`; it does not notify anyone about it.
@@ -18,6 +20,7 @@
 // LABELS are byte-identical with the web twin (UX-DR-27).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/warranty_port.dart';
@@ -27,6 +30,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../customers/customer_pick_screen.dart' show kMenuTabIndex;
+import 'warranty_lookup_cubit.dart';
+import 'warranty_lookup_state.dart';
 
 /// `2038-02-10T00:00:00Z` ⇒ `10/02/2038` — twin of `formatNgay()` in
 /// web/src/screens/warranty/format-ngay.ts, pinned by parity.test.mjs.
@@ -42,8 +47,6 @@ String dinhDangNgay(DateTime? d) {
   return '${phanNgay.substring(8, 10)}/${phanNgay.substring(5, 7)}/${phanNgay.substring(0, 4)}';
 }
 
-enum _LoadState { idle, loading, ready, error }
-
 class WarrantyLookupScreen extends StatefulWidget {
   const WarrantyLookupScreen({super.key, required this.port});
 
@@ -56,38 +59,14 @@ class WarrantyLookupScreen extends StatefulWidget {
 class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
   final TextEditingController _sdt = TextEditingController();
 
-  _LoadState _state = _LoadState.idle;
-  WarrantyLookup? _ketQua;
-  String _loi = '';
-
   @override
   void dispose() {
     _sdt.dispose();
     super.dispose();
   }
 
-  Future<void> _tra() async {
-    setState(() => _state = _LoadState.loading);
-    try {
-      // The RAW string, exactly as typed — the backend owns the only normaliser.
-      final WarrantyLookup kq = await widget.port.lookup(_sdt.text);
-      if (!mounted) return;
-      setState(() {
-        _ketQua = kq;
-        _state = _LoadState.ready;
-      });
-    } catch (err) {
-      if (!mounted) return;
-      setState(() {
-        // The backend's own words, verbatim: the client owns no rule about what
-        // a valid phone is, so it owns no wording for one either.
-        _loi = err is WarrantyPortException
-            ? err.message
-            : 'Không tra cứu được bảo hành.';
-        _state = _LoadState.error;
-      });
-    }
-  }
+  // The RAW string, exactly as typed — the backend owns the only normaliser.
+  void _tra(BuildContext context) => context.read<WarrantyLookupCubit>().lookup(_sdt.text);
 
   /// How much is left, in the largest unit that still says something true.
   ///
@@ -186,20 +165,19 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
     );
   }
 
-  Widget _than() {
-    final WarrantyLookup? kq = _ketQua;
-    switch (_state) {
-      case _LoadState.idle:
+  Widget _than(BuildContext context, WarrantyLookupState state) {
+    switch (state) {
+      case WarrantyLookupIdle():
         return const AppEmptyState(
           icon: 'ic-phone',
           title: 'Nhập số điện thoại khách để tra cứu bảo hành.',
         );
-      case _LoadState.loading:
+      case WarrantyLookupLoading():
         return const AppSkeleton();
-      case _LoadState.error:
-        return AppErrorState(message: _loi, onRetry: _tra);
-      case _LoadState.ready:
-        if (kq == null || !kq.found) {
+      case WarrantyLookupError(:final String message):
+        return AppErrorState(message: message, onRetry: () => _tra(context));
+      case WarrantyLookupReady(result: final WarrantyLookup kq):
+        if (!kq.found) {
           return const AppEmptyState(
             icon: 'ic-phone',
             title: 'SĐT chưa có trong hệ thống.',
@@ -235,6 +213,13 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => WarrantyLookupCubit(widget.port),
+      child: BlocBuilder<WarrantyLookupCubit, WarrantyLookupState>(builder: _view),
+    );
+  }
+
+  Widget _view(BuildContext context, WarrantyLookupState state) {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: const AppTopbar(
@@ -259,10 +244,10 @@ class _WarrantyLookupScreenState extends State<WarrantyLookupScreen> {
                 variant: AppButtonVariant.primary,
                 label: 'Tra cứu',
                 wide: true,
-                onPressed: _tra,
+                onPressed: () => _tra(context),
               ),
               const SizedBox(height: AppTokens.space16),
-              _than(),
+              _than(context, state),
             ],
           ),
         ),

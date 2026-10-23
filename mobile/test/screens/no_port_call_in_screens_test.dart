@@ -14,11 +14,7 @@ import '../support/dart_source.dart';
 
 /// Screens still calling a port ⇒ the story that migrates them.
 const Map<String, String> notMigrated = {
-  'lib/screens/account/profile_screen.dart': '11.2',
   'lib/screens/contracts/contracts_screen.dart': '11.4',
-  'lib/screens/customers/customer_detail_screen.dart': '11.2',
-  'lib/screens/customers/customer_list_screen.dart': '11.2',
-  'lib/screens/customers/customer_pick_screen.dart': '11.2',
   'lib/screens/inventory/inventory_screen.dart': '11.4',
   'lib/screens/inventory/stock_vouchers_screen.dart': '11.4',
   'lib/screens/invoices/invoice_detail_screen.dart': '11.4',
@@ -29,7 +25,6 @@ const Map<String, String> notMigrated = {
   'lib/screens/orders/order_list_screen.dart': '11.3',
   'lib/screens/orders/order_status_change_screen.dart': '11.3',
   'lib/screens/payments/payment_schedule_screen.dart': '11.4',
-  'lib/screens/warranty/warranty_lookup_screen.dart': '11.2',
 };
 
 /// Held to the rule with no allowlist.

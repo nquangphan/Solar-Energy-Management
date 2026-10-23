@@ -14,9 +14,13 @@
 // sort, count or paginate in memory, and it never inspects the phone string the
 // user typed.
 //
+// CustomerListCubit holds the query, the page and the answer (Story 11.2); the
+// screen keeps the search controller and renders the cubit's state.
+//
 // There is NO "Số đơn" column: `Order` does not exist until Story 4.1 (AC-7).
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/customers_port.dart';
@@ -25,11 +29,9 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'customer_list_cubit.dart';
+import 'customer_list_state.dart';
 import 'customer_pick_screen.dart';
-
-const String _kAll = 'ALL';
-
-enum _LoadState { loading, ready, error }
 
 class CustomerListScreen extends StatefulWidget {
   const CustomerListScreen({
@@ -53,77 +55,27 @@ class CustomerListScreen extends StatefulWidget {
 class _CustomerListScreenState extends State<CustomerListScreen> {
   final TextEditingController _q = TextEditingController();
 
-  String _custType = _kAll;
-  List<Customer> _items = const [];
-  // The backend owns the count and the slicing (AD-1): the screen holds only the
-  // page it asked for and the total it was told, and never counts rows itself.
-  int _page = 1;
-  int _total = 0;
-  int _pageSize = 20;
-  _LoadState _state = _LoadState.loading;
-
-  /// Every keystroke starts a query, and the answers do not necessarily come back in
-  /// the order they were asked. Without this ticket, a slow reply to `090` can land
-  /// AFTER the reply to `0903` and repaint the list with results for a query the user
-  /// has already moved past — the rows would simply be wrong, silently.
-  int _latest = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
   @override
   void dispose() {
     _q.dispose();
     super.dispose();
   }
 
-  Future<void> _add() async {
+  Future<void> _add(CustomerListCubit cubit) async {
     await widget.onAdd!();
-    if (mounted) _load();
-  }
-
-  Future<void> _load() async {
-    final int ticket = ++_latest;
-    setState(() => _state = _LoadState.loading);
-    try {
-      // The query goes to the backend untouched — `0903` is matched there against the
-      // E.164 key, which is a thing only the backend knows how to do (AD-9).
-      final CustomerPage page = await widget.port.list(
-        q: _q.text.isEmpty ? null : _q.text,
-        custType: _custType == _kAll ? null : _custType,
-        page: _page,
-      );
-      if (!mounted || ticket != _latest) return;
-      setState(() {
-        _items = page.items;
-        _total = page.total.toInt();
-        _pageSize = page.pageSize.toInt();
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _latest) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
-  /// Any change to the query or filter invalidates the page number — page 3 of the
-  /// old result set is meaningless against the new one, so every filter change
-  /// returns to page 1.
-  void _reloadFromFirstPage() {
-    _page = 1;
-    _load();
-  }
-
-  void _goToPage(int p) {
-    _page = p;
-    _load();
+    if (mounted) cubit.load();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (_) => CustomerListCubit(widget.port)..load(),
+      child: BlocBuilder<CustomerListCubit, CustomerListState>(builder: _view),
+    );
+  }
+
+  Widget _view(BuildContext context, CustomerListState state) {
+    final CustomerListCubit cubit = context.read<CustomerListCubit>();
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: const AppTopbar(eyebrow: 'KHÁCH HÀNG', title: 'Khách hàng'),
@@ -135,23 +87,23 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
               controller: _q,
               size: AppFieldSize.large,
               placeholder: 'Tìm theo SĐT hoặc tên khách…',
-              onChanged: (_) => _reloadFromFirstPage(),
+              onChanged: (_) => cubit.search(_q.text),
             ),
             const SizedBox(height: AppTokens.space8),
-            _filters(),
+            _filters(cubit, state),
             const SizedBox(height: AppTokens.space8),
             AppButton(
               variant: AppButtonVariant.primary,
               label: '+ Thêm khách',
               wide: true,
-              onPressed: widget.onAdd == null ? null : _add,
+              onPressed: widget.onAdd == null ? null : () => _add(cubit),
             ),
             const SizedBox(height: AppTokens.space16),
             // NOT Expanded: AppMobileShell already hands the body to a
             // SingleChildScrollView, so the height here is unbounded and a flex child
             // has nothing to divide — it throws instead of rendering.
-            _body(),
-            _pager(),
+            _body(cubit, state),
+            _pager(cubit, state),
           ],
         ),
       ),
@@ -160,9 +112,10 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
 
   /// Prev/next pager, byte-identical copy with the web twin. Only exists when there
   /// IS a second page; the buttons disable at the ends by passing a null onPressed.
-  Widget _pager() {
-    if (_state != _LoadState.ready || _items.isEmpty) return const SizedBox.shrink();
-    final int totalPages = _total <= 0 ? 1 : (_total + _pageSize - 1) ~/ _pageSize;
+  Widget _pager(CustomerListCubit cubit, CustomerListState state) {
+    if (state.status != CustomerListStatus.ready || state.items.isEmpty) return const SizedBox.shrink();
+    final int page = state.page;
+    final int totalPages = state.total <= 0 ? 1 : (state.total + state.pageSize - 1) ~/ state.pageSize;
     if (totalPages <= 1) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: AppTokens.space16),
@@ -173,11 +126,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Trước',
-            onPressed: _page <= 1 ? null : () => _goToPage(_page - 1),
+            onPressed: page <= 1 ? null : () => cubit.goToPage(page - 1),
           ),
           const SizedBox(width: AppTokens.space8),
           Text(
-            'Trang $_page/$totalPages',
+            'Trang $page/$totalPages',
             style: const TextStyle(
               color: AppTokens.muted,
               fontFamily: AppTokens.fontFamily,
@@ -191,7 +144,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Sau',
-            onPressed: _page >= totalPages ? null : () => _goToPage(_page + 1),
+            onPressed: page >= totalPages ? null : () => cubit.goToPage(page + 1),
           ),
         ],
       ),
@@ -199,9 +152,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
   }
 
   /// Segmented filter, COMPOSED from AppButton (no segmented widget ships on mobile).
-  Widget _filters() {
+  Widget _filters(CustomerListCubit cubit, CustomerListState state) {
     const List<List<String>> options = [
-      [_kAll, 'Tất cả'],
+      [kAllCustTypes, 'Tất cả'],
       [kCaNhan, 'Cá nhân'],
       [kThuongMai, 'Thương mại'],
     ];
@@ -210,14 +163,11 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         for (final List<String> option in options) ...[
           Expanded(
             child: AppButton(
-              variant: _custType == option[0]
+              variant: state.custType == option[0]
                   ? AppButtonVariant.primary
                   : AppButtonVariant.outline,
               label: option[1],
-              onPressed: () {
-                setState(() => _custType = option[0]);
-                _reloadFromFirstPage();
-              },
+              onPressed: () => cubit.setCustType(option[0]),
             ),
           ),
           if (option[0] != kThuongMai) const SizedBox(width: AppTokens.space8),
@@ -226,9 +176,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
     );
   }
 
-  Widget _body() {
-    switch (_state) {
-      case _LoadState.loading:
+  Widget _body(CustomerListCubit cubit, CustomerListState state) {
+    switch (state.status) {
+      case CustomerListStatus.loading:
         return const Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -245,18 +195,17 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             ),
           ],
         );
-      case _LoadState.error:
+      case CustomerListStatus.error:
         return AppErrorState(
           message: 'Không tải được danh sách khách hàng.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: cubit.load,
         );
-      case _LoadState.ready:
-        if (_items.isEmpty) {
+      case CustomerListStatus.ready:
+        if (state.items.isEmpty) {
           // A filtered view that comes back empty is NOT the same as an empty book:
           // the fix is to change the search, not to add the first customer.
-          final bool searching = _q.text.isNotEmpty || _custType != _kAll;
-          if (searching) {
+          if (state.searching) {
             return const AppEmptyState(
               title: 'Không có khách phù hợp',
               message: 'Thử đổi từ khoá hoặc bỏ bớt bộ lọc.',
@@ -268,7 +217,7 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
             action: AppButton(
               variant: AppButtonVariant.primary,
               label: '+ Thêm khách',
-              onPressed: widget.onAdd == null ? null : _add,
+              onPressed: widget.onAdd == null ? null : () => _add(cubit),
             ),
           );
         }
@@ -276,9 +225,9 @@ class _CustomerListScreenState extends State<CustomerListScreen> {
         return ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _items.length,
+          itemCount: state.items.length,
           separatorBuilder: (_, __) => const SizedBox(height: AppTokens.space8),
-          itemBuilder: (BuildContext context, int i) => _row(_items[i]),
+          itemBuilder: (BuildContext context, int i) => _row(state.items[i]),
         );
     }
   }

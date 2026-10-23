@@ -16,6 +16,7 @@ import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -35,7 +36,8 @@ const WEB_CSS = resolve(repoRoot, 'web/src/screens/customers/customers.css');
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 const web = Object.fromEntries(Object.entries(WEB_FILES).map(([k, v]) => [k, read(v)]));
-const mobile = Object.fromEntries(Object.entries(MOBILE_FILES).map(([k, v]) => [k, read(v)]));
+// Each screen with its own cubit/state files (Story 11.2): the logic moved there.
+const mobile = Object.fromEntries(Object.entries(MOBILE_FILES).map(([k, v]) => [k, readMobileScreen(repoRoot, v)]));
 const css = readFileSync(WEB_CSS, 'utf8');
 
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -244,7 +246,8 @@ test('the list screen paginates through the backend, never in memory (C-9)', () 
   assert.match(stripDart(mobile.list), /port\.list\([\s\S]*?page:\s*_page/, 'mobile list must send `page:` to port.list');
   // A new search or filter must return to page 1.
   assert.match(stripTsx(web.list), /setPage\(1\)/, 'web list must reset to page 1 on a new search/filter');
-  assert.match(stripDart(mobile.list), /_page = 1/, 'mobile list must reset to page 1 on a new search/filter');
+  // A statement, not the field's initialiser: `int _page = 1;` alone would satisfy a bare `/_page = 1/`.
+  assert.match(stripDart(mobile.list), /^\s*_page = 1;/m, 'mobile list must reset to page 1 on a new search/filter');
 });
 
 // (f) VIỀN NÉT — flat borders. No elevation, no gradient, radius from tokens (UX-DR-4).
