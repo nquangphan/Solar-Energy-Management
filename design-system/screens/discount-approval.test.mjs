@@ -17,6 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,7 +32,7 @@ const WEB_CSS = resolve(repoRoot, 'web/src/screens/orders/discount-approval.css'
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 const web = read(WEB_SCREEN);
-const mobile = read(MOBILE_SCREEN);
+const mobile = readMobileScreen(repoRoot, MOBILE_SCREEN);
 const css = readFileSync(WEB_CSS, 'utf8');
 
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -194,12 +195,12 @@ test('the error path keeps the list and the selection: banner + no state reset',
   assert.ok(webResolve, 'web must define handleResolve');
   assert.ok(!/catch[\s\S]*?(?:setItems\(\[\]\)|setSelected\(null\))/.test(webResolve), 'web: a failed resolve must not clear the list or the selection');
   // The mobile catch block records the message only.
-  const mobileResolve = /Future<void> _resolve\(bool approve\)[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
-  assert.ok(mobileResolve, 'mobile must define _resolve');
-  assert.ok(!/catch[\s\S]*?(?:_items = |_selected = null)/.test(mobileResolve), 'mobile: a failed resolve must not clear the list or the selection');
+  const mobileResolve = /Future<bool> resolve\(bool approve, String reasonText\)[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
+  assert.ok(mobileResolve, 'mobile must define resolve (DiscountApprovalCubit)');
+  assert.ok(!/catch[\s\S]*?(?:items:|selected:)/.test(mobileResolve), 'mobile: a failed resolve must not clear the list or the selection');
   // The load-failure state offers a retry.
   assert.match(web, /<ErrorState[\s\S]{0,120}?onRetry=/, 'web must render ErrorState with a retry');
-  assert.match(mobile, /AppErrorState\([\s\S]{0,120}?onRetry: _load/, 'mobile must render AppErrorState with a retry');
+  assert.match(mobile, /AppErrorState\([\s\S]{0,120}?onRetry: _cubit\.load/, 'mobile must render AppErrorState with a retry');
 });
 
 // (o) 🔴 THE STATUS CHIP IS THE CANONICAL choduyet KEY — label "Chờ duyệt" comes

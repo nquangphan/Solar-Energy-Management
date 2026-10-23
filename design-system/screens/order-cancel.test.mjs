@@ -25,6 +25,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generatedBody, webAliasDto } from '../lib/web-contract-types.mjs';
 import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -47,7 +48,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const webCode = stripTsx(read(WEB_DETAIL));
-const mobileCode = stripDart(read(MOBILE_DETAIL));
+const mobileCode = stripDart(readMobileScreen(repoRoot, MOBILE_DETAIL));
 const css = read(WEB_CSS);
 
 /** Both screens, comment-stripped — the surface every "must not appear" rule scans. */

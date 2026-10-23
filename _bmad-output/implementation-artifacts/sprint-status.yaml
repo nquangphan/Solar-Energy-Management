@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (code-review 11.2 done)
+# last_updated: 2026-10-23 (code-review 11.3 done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (code-review 11.2 done)
+last_updated: 2026-10-23 (code-review 11.3 done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -112,7 +112,7 @@ development_status:
   epic-11: in-progress
   11-1-nen-bloc-dependency-guard-man-khong-goi-port-phien-va-man-dang-nhap: done
   11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: done
-  11-3-chuyen-bloc-man-don-hang-va-bao-gia: backlog
+  11-3-chuyen-bloc-man-don-hang-va-bao-gia: done
   11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: backlog
   epic-11-retrospective: optional
   epic-8: backlog
@@ -414,3 +414,18 @@ action_items:
     owner: "Amelia (Dev)"
     status: done
     resolution: "Làm trong retro Epic 10, xem §12 của epic-10-retro-2026-10-23.md."
+  - epic: 11
+    action: "TD-72: Sheet chọn gói (tạo báo giá mobile) — bấm 'Mở checklist' rồi đóng sheet trước khi getGroup trả lời ⇒ setSheetState trên sheet đã đóng ném lỗi, màn bắt lỗi đó và hiện banner chung 'Không thực hiện được. Thử lại.' (và xoá fieldErrors đang hiện) dù không có gì hỏng"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Có từ trước Epic 11, 11.3 giữ nguyên (luật không đổi hành vi; ca widget order_screens_cubit_wiring_test 'a group checklist answered after the sheet closed…' ghim hành vi hiện tại). Tái hiện: Tạo báo giá → chọn khách → 'Chọn gói vật tư' → 'Mở checklist' với getGroup chậm → chạm ngoài đóng sheet → getGroup trả lời ⇒ banner. Hướng sửa: kiểm sheetContext.mounted trước setSheetState, bỏ banner; sửa ca widget kèm."
+  - epic: 11
+    action: "TD-73: Ô tìm danh mục (tạo báo giá mobile) không chặn trả lời sai thứ tự, không debounce — mỗi phím một listProducts; trả lời của chuỗi cũ về sau đè kết quả của chuỗi mới"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Có từ trước Epic 11, 11.3 giữ nguyên (searchProducts không vé). Tái hiện: 'Chọn từ danh mục' → gõ 'In' (listProducts chậm) rồi 'Inverter' (nhanh) ⇒ danh sách cuối là kết quả của 'In'. Hướng sửa: vé trong CreateQuoteCubit.searchProducts (trả null khi cũ) + ca bloc_test hai Completer trả khác nhau."
+  - epic: 11
+    action: "TD-74: Chi tiết đơn mobile vẫn gửi request ảnh sau khi màn đóng — removePhoto gọi listAttachments sau removeAttachment không kiểm isClosed; vòng attachmentBytes đi tiếp sang ảnh sau một ảnh lỗi kể cả khi màn đã đóng"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Có từ trước Epic 11, 11.3 giữ nguyên số request (§6.11). Không emit, người dùng không thấy; chỉ tốn request. Tái hiện: tab Ảnh → xoá ảnh, removeAttachment chậm → rời màn → removeAttachment trả lời ⇒ thêm 1 listAttachments; hoặc attachmentBytes ảnh 1 lỗi sau khi rời màn ⇒ vẫn gọi bytes ảnh 2. Hướng sửa: return khi isClosed trước request kế tiếp + ca test đếm request sau close."

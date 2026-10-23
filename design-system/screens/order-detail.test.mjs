@@ -20,6 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
 import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -31,7 +32,7 @@ const WEB_CSS = 'web/src/screens/orders/order-detail.css';
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 const web = read(WEB_DETAIL);
-const mobile = read(MOBILE_DETAIL);
+const mobile = readMobileScreen(repoRoot, MOBILE_DETAIL);
 const css = read(WEB_CSS);
 
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -150,7 +151,11 @@ test('both screens guard against out-of-order replies with a single batch ticket
     mobileCode.includes('ticket != _latest'),
     'the mobile detail must drop stale replies',
   );
-  assert.ok(mobileCode.includes('!mounted'), 'the mobile detail must not setState after dispose');
+  assert.match(
+    mobileCode,
+    /if \(isClosed \|\| ticket != _latest \|\| silent\) return;/,
+    'the mobile detail must not emit after close, nor over a silent re-read',
+  );
 });
 
 // (d) 🔴 THE LOAD-BEARING RULE (AC-7): NO TRANSITION LOGIC ON THE CLIENT.

@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { STOCK_PAIR } from '../lib/stock-figures.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -35,7 +36,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const WEB_SCREEN = stripTsx(read('web/src/screens/orders/CreateQuoteScreen.tsx'));
-const MOBILE_SCREEN = stripDart(read('mobile/lib/screens/orders/create_quote_screen.dart'));
+const MOBILE_SCREEN = stripDart(readMobileScreen(repoRoot, 'mobile/lib/screens/orders/create_quote_screen.dart'));
 const WEB_ROW = stripTsx(read('web/src/design-system/components/CartLineRow.tsx'));
 const MOBILE_ROW = stripDart(read('mobile/lib/design_system/components/cart_line_row.dart'));
 

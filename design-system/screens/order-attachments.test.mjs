@@ -26,6 +26,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,7 +49,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const web = read(WEB_SCREEN);
-const mobile = read(MOBILE_SCREEN);
+const mobile = readMobileScreen(repoRoot, MOBILE_SCREEN);
 const webCode = stripTsx(web);
 const mobileCode = stripDart(mobile);
 

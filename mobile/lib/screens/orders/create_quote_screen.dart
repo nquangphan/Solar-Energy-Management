@@ -19,8 +19,12 @@
 // per-line label picked from `status`, and one warn banner for short products.
 // A failed read hides the hints — no error banner, the cart is untouched — and
 // "Chốt" never depends on stock (blocking lives at the stock-out step).
+//
+// CreateQuoteCubit makes every port call (Story 11.3); the screen keeps the text
+// controllers and the group sheet's own bookkeeping, and renders the cubit's state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/gating.dart';
@@ -33,6 +37,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../customers/customer_pick_screen.dart';
+import 'create_quote_cubit.dart';
+import 'create_quote_state.dart';
 
 /// Index of the locked bottom-nav `Tạo` tab (UX-DR-15) — this IS the create flow.
 const int kCreateTabIndex = 2;
@@ -74,47 +80,40 @@ class CreateQuoteScreen extends StatefulWidget {
 }
 
 class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
-  Order? _order;
-  Customer? _customer;
+  // Created here rather than by BlocProvider(create:): the sheets and dialogs call
+  // it after an await, from routes outside this screen's provider.
+  late final CreateQuoteCubit _cubit =
+      CreateQuoteCubit(ordersPort: widget.ordersPort, catalogPort: widget.catalogPort);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  Order? get _order => _cubit.state.order;
+  Customer? get _customer => _cubit.state.customer;
 
   /// null = chưa có/preview lỗi → khu tổng hiển thị "—" (không hiển thị số cũ đã sai).
-  OrderTotals? _totals;
-
-  /// Preview là call THỨ HAI sau mỗi mutation và có thể về trễ/đè: mutation liên
-  /// tiếp không được cho tổng cũ đè tổng mới (pattern `_latest` của CustomerListScreen).
-  int _latestTotals = 0;
+  OrderTotals? get _totals => _cubit.state.totals;
 
   /// Backend stock warning of the current lines; null = not loaded / failed ⇒ no hints.
-  OrderStockCheck? _stockCheck;
+  OrderStockCheck? get _stockCheck => _cubit.state.stockCheck;
+  String? get _error => _cubit.state.error;
+  Map<String, String> get _fieldErrors => _cubit.state.fieldErrors;
 
-  /// Same ticket pattern: an answer for older lines never overwrites a newer one.
-  int _latestStock = 0;
+  /// Đang chờ PATCH cờ phạm vi — disable 2 control toggle để tap nhanh không đua response.
+  bool get _scopeBusy => _cubit.state.scopeBusy;
 
-  String? _error;
-  Map<String, String> _fieldErrors = const <String, String>{};
+  /// Đang chờ PATCH metadata (tick VAT / kWp / hạn hiệu lực, Story 4.4).
+  bool get _metaBusy => _cubit.state.metaBusy;
 
-  /// Đang chờ PATCH cờ phạm vi — disable 2 control toggle để tap nhanh không
-  /// đua response (cờ không ảnh hưởng tiền nên không cần ticket như preview).
-  bool _scopeBusy = false;
+  /// Đang chờ port Chốt (Story 4.5).
+  bool get _chotBusy => _cubit.state.confirmBusy;
 
-  /// Đang chờ PATCH metadata (tick VAT / kWp / hạn hiệu lực, Story 4.4) — cùng
-  /// pattern _scopeBusy; tick VAT ảnh hưởng tiền nên sau PATCH phải _refreshTotals.
-  bool _metaBusy = false;
+  /// Đang chờ port Mở lại (Story 4.6).
+  bool get _moLaiBusy => _cubit.state.reviseBusy;
 
-  /// Đang chờ port Chốt (Story 4.5) — cùng khuôn _scopeBusy/_metaBusy; thành
-  /// công thì `editable` tự tắt vì status đổi.
-  bool _chotBusy = false;
+  /// Đang chờ port Áp chiết khấu (Story 4.7).
+  bool get _discountBusy => _cubit.state.discountBusy;
 
-  /// Đang chờ port Mở lại (Story 4.6) — nghịch đảo _chotBusy; thành công thì
-  /// `editable` tự bật lại vì status về 'baogia'.
-  bool _moLaiBusy = false;
-
-  /// Đang chờ port Áp chiết khấu (Story 4.7) — cùng khuôn _chotBusy; thành
-  /// công thì màn tự khoá sửa vì status sang 'choduyet'.
-  bool _discountBusy = false;
-
-  /// Đang chờ exportQuote + share (Story 4.8) — cùng khuôn _chotBusy.
-  bool _shareBusy = false;
+  /// Đang chờ exportQuote + share (Story 4.8).
+  bool get _shareBusy => _cubit.state.shareBusy;
 
   // Dialog Áp chiết khấu (Story 4.7): amount là số nguyên đồng nhập tay
   // (CHUYỂN ĐỔI input — pattern _freeUnitPrice, không phải số học tiền) + lý
@@ -153,21 +152,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     _validityCtl.dispose();
     _discountAmountCtl.dispose();
     _discountNoteCtl.dispose();
+    _cubit.close();
     super.dispose();
-  }
-
-  /// The message the BACKEND sent (AD-5), verbatim — the generic line is only
-  /// for a transport failure, which carries no envelope.
-  void _showError(Object err) {
-    if (!mounted) return;
-    setState(() {
-      _error = err is OrderPortException
-          ? err.message
-          : 'Không thực hiện được. Thử lại.';
-      _fieldErrors = err is OrderPortException
-          ? err.fieldErrors
-          : const <String, String>{};
-    });
   }
 
   /// Products the backend reports short — one warn sentence each.
@@ -176,20 +162,6 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             in _stockCheck?.lines ?? const <OrderStockCheckLine>[])
           if (s.status.json == kStockCheckShort) s,
       ];
-
-  /// Backend stock warning of the lines; a failed read only hides the hints.
-  Future<void> _refreshStockCheck(String orderId) async {
-    final int ticket = ++_latestStock;
-    try {
-      final OrderStockCheck fresh =
-          await widget.ordersPort.getStockCheck(orderId);
-      if (!mounted || ticket != _latestStock) return;
-      setState(() => _stockCheck = fresh);
-    } catch (_) {
-      if (!mounted || ticket != _latestStock) return;
-      setState(() => _stockCheck = null);
-    }
-  }
 
   /// Wording picked from the backend's `status`; the numbers are its numbers.
   AppCartLineStockHint? _stockHintOf(String? productId) {
@@ -203,83 +175,6 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     return null;
   }
 
-  /// MỘT đường code duy nhất cho tổng: echo các dòng backend vừa trả qua
-  /// `previewTotal` — KHÔNG phép tính nào trong màn (AD-16). Lỗi preview →
-  /// totals về "—" + message; KHÔNG xoá giỏ, KHÔNG chặn sửa dòng tiếp.
-  Future<void> _refreshTotals(Order fetched) async {
-    // Every path that re-reads lines comes through here — the stock hint follows them.
-    _refreshStockCheck(fetched.id);
-    final int ticket = ++_latestTotals;
-    // Chiết khấu HIỆU LỰC (Story 4.7): đơn đang chờ duyệt hoặc đã chốt với
-    // approval cho_duyet/dong_y. Đơn 'baogia' KHÔNG echo — sau từ chối hoặc
-    // sau mở-lại, bản đang sửa không mang chiết khấu (muốn giảm phải áp +
-    // duyệt lại).
-    final OrderDiscount? discount = fetched.discount;
-    final bool discountActive = discount != null &&
-        fetched.status != 'baogia' &&
-        (discount.status == kDiscountChoDuyet ||
-            discount.status == kDiscountDongY);
-    try {
-      final OrderTotals fresh = await widget.ordersPort.previewTotal(
-        PreviewTotalInput(
-          lines: fetched.lineItems
-              .map((OrderLine l) =>
-                  PreviewTotalLine(unitPrice: l.unitPrice, qty: l.qty))
-              .toList(),
-          // Echo tick VAT của Đơn (Story 4.4) — như đã echo unitPrice; đơn cũ
-          // vatMode null thì bỏ qua field (backend coi như có VAT). A value this
-          // build does not know is left out too: echoing it would be a 400.
-          vatMode: fetched.vatMode?.json == null
-              ? null
-              : PreviewTotalRequestDtoVatMode.fromJson(fetched.vatMode!.json!),
-          // Echo chiết khấu của Đơn (Story 4.7) — con số backend đã trả.
-          discountAmount: discountActive ? discount.amount : null,
-        ),
-      );
-      if (!mounted || ticket != _latestTotals) return;
-      setState(() => _totals = fresh);
-    } catch (err) {
-      if (!mounted || ticket != _latestTotals) return;
-      setState(() => _totals = null);
-      _showError(err);
-    }
-  }
-
-  /// Re-read the order — the retry path; NEVER resets entered lines on failure.
-  Future<void> _refresh() async {
-    final Order? order = _order;
-    if (order == null) return;
-    try {
-      final Order fresh = await widget.ordersPort.get(order.id);
-      if (!mounted) return;
-      setState(() {
-        _order = fresh;
-        _error = null;
-      });
-      await _refreshTotals(fresh);
-    } catch (err) {
-      _showError(err);
-    }
-  }
-
-  Future<void> _createOrder(Customer picked) async {
-    try {
-      final Order created = await widget.ordersPort
-          .create(CreateOrderInput(customerPhone: picked.phone));
-      if (!mounted) return;
-      setState(() {
-        _customer = picked;
-        _order = created;
-        _error = null;
-      });
-      _syncMetaTexts(created);
-      await _refreshTotals(created);
-    } catch (err) {
-      // Đơn chưa tạo được — ở lại màn pick; message backend nguyên văn.
-      _showError(err);
-    }
-  }
-
   /// Đồng bộ text 2 input metadata từ Đơn — lúc tạo đơn, sau commit, và khi
   /// revert lỗi (KHÔNG setState: controller tự thông báo cho TextField).
   void _syncMetaTexts(Order source) {
@@ -287,244 +182,23 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     _validityCtl.text = source.validityNote ?? '';
   }
 
-  /// PATCH nhóm metadata (Story 4.4): tick VAT / kWp / hạn hiệu lực. Tick VAT
-  /// ĐỔI TIỀN ⇒ sau khi PATCH thành công phải _refreshTotals với order MỚI
-  /// (echo vatMode mới — 3 số tổng đổi tức thì, EXPERIENCE §Realtime). Lỗi →
-  /// banner, GIỮ nguyên giỏ + revert input về giá trị order cũ (bất biến k).
-  Future<void> _updateMeta(UpdateOrderMetaInput input) async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _metaBusy = true);
+  void _resetFreeLineForm() {
+    _freeName.clear();
+    _freeUnit.clear();
+    _freeQty.text = '1';
+    _freeUnitPrice.text = '0';
+    _freeNote.clear();
+  }
+
+  /// Chốt Đơn (Story 4.5, FR-5): the cubit sends it; the frozen order goes to the
+  /// caller. A failure only sets the banner; the cart and the old state stay intact.
+  Future<void> _confirmThenLeave() async {
+    final Order? confirmed = await _cubit.confirmOrder();
+    if (confirmed == null || !mounted) return;
     try {
-      final Order updated =
-          await widget.ordersPort.updateOrderMeta(order.id, input);
-      if (!mounted) return;
-      setState(() {
-        _order = updated;
-        _error = null;
-      });
-      _syncMetaTexts(updated);
-      await _refreshTotals(updated);
-    } catch (err) {
-      _showError(err);
-      _syncMetaTexts(order);
-    } finally {
-      if (mounted) setState(() => _metaBusy = false);
-    }
-  }
-
-  /// Commit kWp khi mất focus: "8,82"/"8.82" → 8.82 — CHUYỂN ĐỔI INPUT, không
-  /// phải số học tiền; rỗng → null (xoá); parse hỏng → giữ nguyên + báo lỗi
-  /// field, KHÔNG gọi port.
-  void _commitKWp() {
-    final Order? order = _order;
-    if (order == null) return;
-    final String raw = _kWpCtl.text.trim();
-    if (raw.isEmpty) {
-      if (order.kWp != null) _updateMeta(const UpdateOrderMetaInput(kWp: null));
-      return;
-    }
-    final double? parsed = double.tryParse(raw.replaceAll(',', '.'));
-    if (parsed == null) {
-      setState(() {
-        _fieldErrors = <String, String>{
-          ..._fieldErrors,
-          'kWp': 'Công suất phải là số (vd 8,82).',
-        };
-      });
-      return;
-    }
-    setState(() {
-      _fieldErrors = Map<String, String>.of(_fieldErrors)..remove('kWp');
-    });
-    if (parsed == order.kWp) return;
-    _updateMeta(UpdateOrderMetaInput(kWp: parsed));
-  }
-
-  /// Commit hạn hiệu lực khi mất focus — rỗng → null (xoá); chỉ PATCH khi đổi.
-  void _commitValidityNote() {
-    final Order? order = _order;
-    if (order == null) return;
-    final String raw = _validityCtl.text.trim();
-    final String? next = raw.isEmpty ? null : raw;
-    if (next == order.validityNote) return;
-    _updateMeta(UpdateOrderMetaInput(validityNote: next));
-  }
-
-  Future<String?> _addCatalogLine(String productId, int qty) async {
-    final Order? order = _order;
-    if (order == null) return null;
-    try {
-      final OrderLine line = await widget.ordersPort
-          .addLine(order.id, AddOrderLineInput(productId: productId, qty: qty));
-      await _refresh();
-      return line.id;
-    } catch (err) {
-      _showError(err);
-      return null;
-    }
-  }
-
-  /// Returns true when the line landed — the sheet closes only then; a backend
-  /// rejection keeps the form open with the backend's fieldErrors pinned on it.
-  Future<bool> _addFreeLine() async {
-    final Order? order = _order;
-    if (order == null) return false;
-    setState(() => _fieldErrors = const <String, String>{});
-    try {
-      await widget.ordersPort.addLine(
-        order.id,
-        AddOrderLineInput(
-          name: _freeName.text,
-          unit: _freeUnit.text,
-          qty: int.tryParse(_freeQty.text) ?? 0,
-          unitPrice: int.tryParse(_freeUnitPrice.text) ?? 0,
-          note: _freeNote.text.isNotEmpty ? _freeNote.text : null,
-        ),
-      );
-      _freeName.clear();
-      _freeUnit.clear();
-      _freeQty.text = '1';
-      _freeUnitPrice.text = '0';
-      _freeNote.clear();
-      await _refresh();
-      return true;
-    } catch (err) {
-      _showError(err);
-      return false;
-    }
-  }
-
-  Future<void> _updateQty(String lineId, num qty) async {
-    final Order? order = _order;
-    if (order == null || qty < 1) return;
-    try {
-      await widget.ordersPort
-          .updateLine(order.id, lineId, UpdateOrderLineInput(qty: qty.toInt()));
-      await _refresh();
-    } catch (err) {
-      _showError(err);
-    }
-  }
-
-  Future<void> _updateUnitPrice(String lineId, num unitPrice) async {
-    final Order? order = _order;
-    if (order == null || unitPrice < 0) return;
-    try {
-      await widget.ordersPort.updateLine(
-          order.id, lineId, UpdateOrderLineInput(unitPrice: unitPrice.toInt()));
-      await _refresh();
-    } catch (err) {
-      _showError(err);
-    }
-  }
-
-  /// Sửa bảo hành theo dòng (Story 4.9): PATCH `warrantyMonths` (số tháng hoặc
-  /// `null` = bỏ bảo hành). Lỗi → banner, GIỮ nguyên giỏ (bất biến k). Không
-  /// ảnh hưởng tiền. Truyền `warrantyMonths` tường minh (tri-state sentinel).
-  Future<void> _updateWarranty(String lineId, int? warrantyMonths) async {
-    final Order? order = _order;
-    if (order == null) return;
-    try {
-      await widget.ordersPort.updateLine(
-          order.id, lineId, UpdateOrderLineInput(warrantyMonths: warrantyMonths));
-      await _refresh();
-    } catch (err) {
-      _showError(err);
-    }
-  }
-
-  Future<void> _removeLine(String lineId) async {
-    final Order? order = _order;
-    if (order == null) return;
-    try {
-      await widget.ordersPort.removeLine(order.id, lineId);
-      await _refresh();
-    } catch (err) {
-      _showError(err);
-    }
-  }
-
-  /// Toggle cờ Thi công/Vận chuyển (Story 4.3): PATCH qua port → thay order
-  /// bằng response. KHÔNG gọi previewTotal — cờ không ảnh hưởng tiền (AD-16
-  /// nguyên vẹn). Lỗi → banner, GIỮ nguyên giỏ + state cờ cũ (bất biến k).
-  Future<void> _toggleScope(UpdateScopeFlagsInput input) async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _scopeBusy = true);
-    try {
-      final Order updated =
-          await widget.ordersPort.updateScopeFlags(order.id, input);
-      if (!mounted) return;
-      setState(() {
-        _order = updated;
-        _error = null;
-      });
-    } catch (err) {
-      _showError(err);
-    } finally {
-      if (mounted) setState(() => _scopeBusy = false);
-    }
-  }
-
-  /// Chốt Đơn (Story 4.5, FR-5): BACKEND đóng băng giá bằng snapshot và đổi
-  /// status — màn chỉ render Order trả về (`editable` tự tắt, nút Chốt biến
-  /// mất). KHÔNG toast hô hào (voice EXPERIENCE) — chip trạng thái đổi là đủ.
-  /// Lỗi → banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
-  Future<void> _confirmOrder() async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _chotBusy = true);
-    try {
-      final Order confirmed = await widget.ordersPort.confirmOrder(order.id);
-      if (!mounted) return;
-      setState(() {
-        _order = confirmed;
-        _error = null;
-      });
       widget.onDone?.call(confirmed);
     } catch (err) {
-      _showError(err);
-    } finally {
-      if (mounted) setState(() => _chotBusy = false);
-    }
-  }
-
-  /// Chia sẻ báo giá (Story 4.8, FR-21): exportQuote qua port → XFile ×2 →
-  /// native share [ảnh, pdf] — ảnh đứng TRƯỚC (UX-DR-21 share sheet ưu tiên
-  /// ảnh). KHÔNG dialog xác nhận — share không đổi dữ liệu đơn (UX-DR-20
-  /// native share đi thẳng). Lỗi port → banner + giỏ/state NGUYÊN VẸN (bất
-  /// biến k); user huỷ share sheet KHÔNG phải lỗi (share fn nuốt dismissed).
-  Future<void> _shareQuote() async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _shareBusy = true);
-    try {
-      final QuoteExportFiles files =
-          await widget.ordersPort.exportQuote(order.id);
-      final AppShareFn share = widget.shareImpl ?? platformShareXFiles;
-      await share(
-        <XFile>[
-          XFile.fromData(
-            files.image.bytes,
-            mimeType: files.image.mimeType,
-            name: files.image.fileName,
-          ),
-          XFile.fromData(
-            files.pdf.bytes,
-            mimeType: files.pdf.mimeType,
-            name: files.pdf.fileName,
-          ),
-        ],
-        title: files.image.fileName,
-        fileNames: <String>[files.image.fileName, files.pdf.fileName],
-      );
-      if (!mounted) return;
-      setState(() => _error = null);
-    } catch (err) {
-      _showError(err);
-    } finally {
-      if (mounted) setState(() => _shareBusy = false);
+      _cubit.reportError(err);
     }
   }
 
@@ -538,33 +212,9 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         consequence:
             'Chốt sẽ đóng băng giá của mọi dòng theo danh mục hiện tại — sửa giá sau này cần tạo bản mới.',
         confirmTone: AppButtonVariant.primary,
-        onConfirm: _confirmOrder,
+        onConfirm: _confirmThenLeave,
       ),
     );
-  }
-
-  /// Mở lại Đơn đã chốt (Story 4.6, FR-6): BACKEND sinh bản update mới (bản cũ
-  /// nằm nguyên trong lịch sử) và đưa status về 'baogia' — màn chỉ render Order
-  /// trả về (`editable` tự bật lại, nút Chốt hiện lại thế chỗ). KHÔNG toast.
-  /// Lỗi → banner + giỏ + state cũ NGUYÊN VẸN (bất biến k).
-  Future<void> _reviseOrder() async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _moLaiBusy = true);
-    try {
-      final Order revised = await widget.ordersPort.reviseOrder(order.id);
-      if (!mounted) return;
-      setState(() {
-        _order = revised;
-        _error = null;
-      });
-      _syncMetaTexts(revised);
-      await _refreshTotals(revised);
-    } catch (err) {
-      _showError(err);
-    } finally {
-      if (mounted) setState(() => _moLaiBusy = false);
-    }
   }
 
   /// Dialog xác nhận Mở lại — hành động có hệ quả (UX-DR-20), tone primary
@@ -578,38 +228,9 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
         consequence:
             'Mở lại sẽ tạo bản cập nhật mới — giá các dòng tính lại theo danh mục hiện tại cho tới khi chốt lại; bản đã chốt vẫn nằm trong lịch sử.',
         confirmTone: AppButtonVariant.primary,
-        onConfirm: _reviseOrder,
+        onConfirm: _cubit.reviseOrder,
       ),
     );
-  }
-
-  /// Áp chiết khấu + gửi duyệt (Story 4.7, FR-18): BACKEND chuyển đơn sang
-  /// 'choduyet' và ghi hồ sơ duyệt — màn chỉ render Order trả về (`editable`
-  /// tự tắt, banner chờ duyệt hiện). KHÔNG toast. Lỗi → banner + giỏ + state
-  /// cũ NGUYÊN VẸN (bất biến k).
-  Future<void> _applyDiscount() async {
-    final Order? order = _order;
-    if (order == null) return;
-    setState(() => _discountBusy = true);
-    try {
-      final Order applied = await widget.ordersPort.applyDiscount(
-        order.id,
-        ApplyDiscountInput(
-          amount: int.tryParse(_discountAmountCtl.text) ?? 0,
-          note: _discountNoteCtl.text.isNotEmpty ? _discountNoteCtl.text : null,
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _order = applied;
-        _error = null;
-      });
-      await _refreshTotals(applied);
-    } catch (err) {
-      _showError(err);
-    } finally {
-      if (mounted) setState(() => _discountBusy = false);
-    }
   }
 
   /// Dialog Áp chiết khấu (Story 4.7): MỘT dialog duy nhất (không chồng 2 tầng
@@ -650,7 +271,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             variant: AppButtonVariant.primary,
             onPressed: () {
               Navigator.of(context).pop();
-              _applyDiscount();
+              _cubit.applyDiscount(amountText: _discountAmountCtl.text, note: _discountNoteCtl.text);
             },
           ),
         ],
@@ -661,12 +282,12 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   /// Tick = thêm một dòng THƯỜNG trỏ Product thật; untick = gỡ đúng dòng vừa thêm.
   Future<void> _tickGroupItem(String productId, bool checked) async {
     if (checked) {
-      final String? lineId = await _addCatalogLine(productId, 1);
+      final String? lineId = await _cubit.addCatalogLine(productId, 1);
       if (lineId != null) _addedByProduct[productId] = lineId;
       return;
     }
     final String? lineId = _addedByProduct.remove(productId);
-    if (lineId != null) await _removeLine(lineId);
+    if (lineId != null) await _cubit.removeLine(lineId);
   }
 
   // ---------- pickers (Sheet — lựa chọn nhanh, UX-DR-20; chồng tối đa 1 cấp) ----------
@@ -682,14 +303,9 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   }
 
   Future<void> _openCatalogPicker() async {
-    List<CatalogProduct> products;
-    try {
-      products = await widget.catalogPort.listProducts();
-    } catch (err) {
-      _showError(err);
-      return;
-    }
-    if (!mounted) return;
+    final List<CatalogProduct>? opened = await _cubit.openCatalog();
+    if (opened == null || !mounted) return;
+    List<CatalogProduct> products = opened;
     await showAppSheet<void>(
       context: context,
       child: AppSheet(
@@ -704,10 +320,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                 AppField(
                   label: 'Tìm theo tên hoặc SKU',
                   onChanged: (String q) {
-                    widget.catalogPort
-                        .listProducts(search: q.isEmpty ? null : q)
-                        .then((List<CatalogProduct> fresh) {
-                      setSheetState(() => products = fresh);
+                    _cubit.searchProducts(q).then((List<CatalogProduct>? fresh) {
+                      if (fresh != null) setSheetState(() => products = fresh);
                     }).catchError((Object _) {});
                   },
                 ),
@@ -737,7 +351,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                           AppButton(
                             label: 'Thêm',
                             size: AppButtonSize.sm,
-                            onPressed: () => _addCatalogLine(product.id, 1),
+                            onPressed: () => _cubit.addCatalogLine(product.id, 1),
                           ),
                         ],
                       ),
@@ -753,14 +367,8 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
   }
 
   Future<void> _openGroupPicker() async {
-    List<CatalogGroup> groups;
-    try {
-      groups = await widget.catalogPort.listGroups();
-    } catch (err) {
-      _showError(err);
-      return;
-    }
-    if (!mounted) return;
+    final List<CatalogGroup>? groups = await _cubit.openGroups();
+    if (groups == null || !mounted) return;
     _addedByProduct.clear();
     _sheetGroupDetail = null;
     await showAppSheet<void>(
@@ -789,14 +397,14 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                               label: 'Mở checklist',
                               size: AppButtonSize.sm,
                               onPressed: () async {
+                                final CatalogGroupDetail? fresh =
+                                    await _cubit.openGroup(group.id);
+                                if (fresh == null) return;
                                 try {
-                                  final CatalogGroupDetail fresh = await widget
-                                      .catalogPort
-                                      .getGroup(group.id);
                                   setSheetState(
                                       () => _sheetGroupDetail = fresh);
                                 } catch (err) {
-                                  _showError(err);
+                                  _cubit.reportError(err);
                                 }
                               },
                             ),
@@ -885,7 +493,14 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   label: 'Thêm dòng',
                   variant: AppButtonVariant.primary,
                   onPressed: () async {
-                    final bool ok = await _addFreeLine();
+                    final bool ok = await _cubit.addFreeLine(
+                      name: _freeName.text,
+                      unit: _freeUnit.text,
+                      qtyText: _freeQty.text,
+                      unitPriceText: _freeUnitPrice.text,
+                      note: _freeNote.text,
+                      onAccepted: _resetFreeLineForm,
+                    );
                     if (!sheetContext.mounted) return;
                     if (ok) {
                       Navigator.of(sheetContext).pop();
@@ -921,6 +536,22 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      // The two metadata inputs are rewritten when the cubit says so — after the
+      // order is created, after a metadata PATCH (a refused one rewrites them
+      // from the old order) and after reopening.
+      child: BlocListener<CreateQuoteCubit, CreateQuoteState>(
+        listenWhen: (CreateQuoteState a, CreateQuoteState b) => a.metaSyncSeq != b.metaSyncSeq,
+        listener: (BuildContext context, CreateQuoteState s) => _syncMetaTexts(s.metaSyncFrom!),
+        child: BlocBuilder<CreateQuoteCubit, CreateQuoteState>(
+          builder: (BuildContext context, CreateQuoteState _) => _view(),
+        ),
+      ),
+    );
+  }
+
+  Widget _view() {
     final Order? order = _order;
 
     // BƯỚC 1 — chọn khách: màn pick TỰ HOST shell riêng, nên khi chưa có đơn nó
@@ -930,7 +561,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
     if (order == null) {
       final Widget pick = CustomerPickScreen(
         port: widget.customersPort,
-        onSelect: (Customer picked) => _createOrder(picked),
+        onSelect: (Customer picked) => _cubit.createOrder(picked),
       );
       if (_error == null) return pick;
       return Column(
@@ -999,14 +630,14 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                       label: 'Thi công',
                       checked: order.scopeConstruction,
                       disabled: !editable || _scopeBusy,
-                      onChanged: (bool checked) => _toggleScope(
+                      onChanged: (bool checked) => _cubit.toggleScope(
                           UpdateScopeFlagsInput(scopeConstruction: checked)),
                     ),
                     AppCheckbox(
                       label: 'Vận chuyển',
                       checked: order.scopeDelivery,
                       disabled: !editable || _scopeBusy,
-                      onChanged: (bool checked) => _toggleScope(
+                      onChanged: (bool checked) => _cubit.toggleScope(
                           UpdateScopeFlagsInput(scopeDelivery: checked)),
                     ),
                     const SizedBox(height: AppTokens.space8),
@@ -1015,7 +646,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     // là CHUYỂN ĐỔI input ("8,82" → 8.82), không phải số học tiền.
                     Focus(
                       onFocusChange: (bool has) {
-                        if (!has) _commitKWp();
+                        if (!has) _cubit.commitKWp(_kWpCtl.text);
                       },
                       child: AppField(
                         label: 'Công suất (kWp)',
@@ -1034,7 +665,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                     const SizedBox(height: AppTokens.space8),
                     Focus(
                       onFocusChange: (bool has) {
-                        if (!has) _commitValidityNote();
+                        if (!has) _cubit.commitValidityNote(_validityCtl.text);
                       },
                       child: AppField(
                         label: 'Hiệu lực báo giá',
@@ -1047,7 +678,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
             ),
             if (_error != null) ...[
               const SizedBox(height: AppTokens.space8),
-              AppErrorState(message: _error!, onRetry: _refresh),
+              AppErrorState(message: _error!, onRetry: _cubit.refresh),
             ],
             // Banner trạng thái chiết khấu (Story 4.7): trong 'choduyet' màn
             // read-only (editable tắt) — banner nói rõ đang chờ ai; sau từ
@@ -1132,14 +763,14 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                                   : AppWarrantyMode.input,
                           warrantyEditable: editable,
                           onWarrantyChange: (int? months) =>
-                              _updateWarranty(line.id, months),
+                              _cubit.updateWarranty(line.id, months),
                           flag: line.isFlexible ? kFlagLinhDong : null,
                           stockHint: _stockHintOf(line.productId),
                           zebra: entry.key.isOdd,
-                          onQtyChange: (num qty) => _updateQty(line.id, qty),
+                          onQtyChange: (num qty) => _cubit.updateQty(line.id, qty),
                           onUnitPriceChange: (num price) =>
-                              _updateUnitPrice(line.id, price),
-                          onDelete: () => _removeLine(line.id),
+                              _cubit.updateUnitPrice(line.id, price),
+                          onDelete: () => _cubit.removeLine(line.id),
                         );
                       },
                     ),
@@ -1189,7 +820,7 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                           label: 'Tính VAT',
                           checked: order.vatMode?.json != 'khong_vat',
                           disabled: !editable || _metaBusy,
-                          onChanged: (bool checked) => _updateMeta(
+                          onChanged: (bool checked) => _cubit.updateMeta(
                             UpdateOrderMetaInput(
                                 vatMode: checked ? 'co_vat' : 'khong_vat'),
                           ),
@@ -1306,7 +937,10 @@ class _CreateQuoteScreenState extends State<CreateQuoteScreen> {
                   child: AppButton(
                     label: 'Chia sẻ báo giá',
                     variant: AppButtonVariant.ghost,
-                    onPressed: _shareBusy ? null : _shareQuote,
+                    onPressed: _shareBusy
+                        ? null
+                        : () => _cubit.shareQuote(
+                            widget.shareImpl ?? platformShareXFiles),
                   ),
                 ),
               ),

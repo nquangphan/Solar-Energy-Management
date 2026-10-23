@@ -37,10 +37,14 @@
 // "Phiếu xuất": the order's ONE stock-out. Whether it can be issued
 // now (`canIssue`) is the backend's answer; the frame only shows for callers who
 // hold a key that reads it (UX only — the backend gates the read too).
+//
+// OrderDetailCubit makes every port call (Story 11.3); the screen keeps the open
+// tab and the photos picked but not sent, and renders the cubit's state.
 
 import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permission_keys.g.dart';
@@ -55,12 +59,9 @@ import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../inventory/stock_vouchers_screen.dart' show ngayGio;
 import 'discount_approval_screen.dart' show kOrdersTabIndex;
+import 'order_detail_cubit.dart';
+import 'order_detail_state.dart';
 import 'stock_issue_preview.dart';
-
-/// `notFound` is its own state, NOT a flavour of `error`: "this order does not
-/// exist, or is not yours" is an answer, and pressing "Thử lại" on an answer
-/// just asks the same question again (UX-DR-19).
-enum _LoadState { loading, ready, error, notFound }
 
 const String _kTabThongTin = 'thong-tin';
 const String _kTabLichSu = 'lich-su';
@@ -127,87 +128,58 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
-  Order? _order;
-  List<OrderLifecycleStep> _steps = const <OrderLifecycleStep>[];
-  List<OrderNextStep> _buocKeTiep = const <OrderNextStep>[];
+  String _tab = _kTabThongTin;
+
+  /// Photos picked for the Ảnh tab, not sent yet.
+  List<XFile> _anhDaChon = const <XFile>[];
+
+  // Created here rather than by BlocProvider(create:): the dialogs, the sheet and
+  // the reload after a pushed screen closes all call it after an await, from
+  // routes outside this screen's provider.
+  late final OrderDetailCubit _cubit =
+      OrderDetailCubit(widget.port, widget.orderId, loadsStockIssue: _canSeeStockIssue);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  Order? get _order => _cubit.state.order;
+  List<OrderLifecycleStep> get _steps => _cubit.state.steps;
+  List<OrderNextStep> get _buocKeTiep => _cubit.state.nextSteps;
 
   /// Backend-computed (AD-2/AD-4). The screen never asks "is the status one of
   /// these three" — that rule lives in the transition table.
-  bool _coTheHuy = false;
-  List<OrderVersionItem> _versions = const <OrderVersionItem>[];
-  _LoadState _state = _LoadState.loading;
-  String _tab = _kTabThongTin;
+  bool get _coTheHuy => _cubit.state.canCancel;
+  List<OrderVersionItem> get _versions => _cubit.state.versions;
+  OrderDetailStatus get _state => _cubit.state.status;
+  List<AttachmentItem> get _anh => _cubit.state.photos;
+  Map<String, Uint8List> get _photoBytes => _cubit.state.photoBytes;
+  OrderDetailStatus get _anhState => _cubit.state.photosStatus;
+  OrderStockIssueView? get _stockIssue => _cubit.state.stockIssue;
 
-  /// Three requests, ONE ticket for the whole batch: they are one screenful of
-  /// one order, so a stale batch must be discarded as a batch.
-  int _latest = 0;
+  bool get _canSeeStockIssue =>
+      widget.perms.contains(AppPermissionKeys.inventoryManage) ||
+      widget.perms.contains(AppPermissionKeys.deliveryConfirm);
 
-  // ---- Tab Ảnh (Story 5.6) -------------------------------------------------
-  // Loaded LAZILY, on first open of the tab: photos are the heaviest thing on
-  // this screen and most visits never open it. Folding them into [_load] would
-  // make every detail view pay for a panel nobody asked for.
-  List<AttachmentItem> _anh = const <AttachmentItem>[];
-  final Map<String, Uint8List> _photoBytes = <String, Uint8List>{};
-  _LoadState _anhState = _LoadState.loading;
-  bool _anhDaMo = false;
-  List<XFile> _anhDaChon = const <XFile>[];
-  int _anhLatest = 0;
+  @override
+  void initState() {
+    super.initState();
+    _cubit.load();
+    if (_canSeeStockIssue) _cubit.loadStockIssue();
+  }
 
-  Future<void> _loadAnh() async {
-    final int ticket = ++_anhLatest;
-    setState(() {
-      _anhState = _LoadState.loading;
-      // The previous batch is dead the moment a reload starts. Keeping it means
-      // a deleted photo's bytes stay resident for the life of the screen — at
-      // 10 MB a photo that adds up on a phone.
-      _photoBytes.clear();
-    });
-    try {
-      final List<AttachmentItem> danhSach =
-          await widget.port.listAttachments(widget.orderId);
-      if (!mounted || ticket != _anhLatest) return;
-      setState(() {
-        _anh = danhSach;
-        _anhState = _LoadState.ready;
-      });
-      // Bytes come through the authenticated proxy, ONE call per photo; the
-      // gallery widget never fetches (AD-3). A photo whose bytes fail simply
-      // keeps the placeholder glyph — one broken image must not blank the tab.
-      for (final AttachmentItem item in danhSach) {
-        try {
-          final Uint8List bytes =
-              await widget.port.attachmentBytes(widget.orderId, item.id);
-          if (!mounted || ticket != _anhLatest) return;
-          setState(() => _photoBytes[item.id] = bytes);
-        } catch (_) {
-          // placeholder glyph stands in
-        }
-      }
-    } catch (_) {
-      if (!mounted || ticket != _anhLatest) return;
-      setState(() => _anhState = _LoadState.error);
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
   void _moTab(String key) {
     setState(() => _tab = key);
-    if (key == _kTabAnh && !_anhDaMo) {
-      _anhDaMo = true;
-      _loadAnh();
-    }
+    if (key == _kTabAnh) _cubit.openPhotos();
   }
 
   Future<void> _guiAnh() async {
     if (_anhDaChon.isEmpty) return;
-    final List<XFile> gui = _anhDaChon;
-    try {
-      await widget.port.addAttachments(widget.orderId, gui);
-      if (!mounted) return;
+    if (await _cubit.addPhotos(_anhDaChon) && mounted) {
       setState(() => _anhDaChon = const <XFile>[]);
-      await _loadAnh();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _anhState = _LoadState.error);
     }
   }
 
@@ -223,7 +195,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       child: AppConfirmDialog(
         title: 'Xoá ảnh',
         consequence: 'Ảnh sẽ bị xoá vĩnh viễn và không khôi phục được.',
-        onConfirm: () => _removePhoto(attachmentId),
+        onConfirm: () => _cubit.removePhoto(attachmentId),
       ),
     );
   }
@@ -239,46 +211,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final bool? daHuy = await showAppDialog<bool>(
       context: context,
       child: _HuyDonDialog(
-        onConfirm: (String reason) => widget.port.cancel(widget.orderId, reason),
+        onConfirm: (String reason) => _cubit.cancel(reason),
       ),
     );
     if (daHuy != true || !mounted) return;
     // Status, `cancelReason` and the lifecycle all changed — reload rather than
     // patch local state, so the screen keeps showing one truth.
-    await _load();
-  }
-
-  Future<void> _removePhoto(String attachmentId) async {
-    try {
-      await widget.port.removeAttachment(widget.orderId, attachmentId);
-      await _loadAnh();
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _anhState = _LoadState.error);
-    }
-  }
-
-  // ---- Phiếu xuất ---------------------------------------------
-  OrderStockIssueView? _stockIssue;
-  int _stockIssueLatest = 0;
-
-  bool get _canSeeStockIssue =>
-      widget.perms.contains(AppPermissionKeys.inventoryManage) ||
-      widget.perms.contains(AppPermissionKeys.deliveryConfirm);
-
-  /// A failed read leaves the frame out rather than blanking the screen: the
-  /// stock-out is one panel of the order, not the order.
-  Future<void> _loadStockIssue() async {
-    final int ticket = ++_stockIssueLatest;
-    try {
-      final OrderStockIssueView view =
-          await widget.port.getStockIssue(widget.orderId);
-      if (!mounted || ticket != _stockIssueLatest) return;
-      setState(() => _stockIssue = view);
-    } catch (_) {
-      if (!mounted || ticket != _stockIssueLatest) return;
-      setState(() => _stockIssue = null);
-    }
+    await _cubit.load();
   }
 
   Future<void> _openIssueSheet() async {
@@ -288,73 +227,33 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       context: context,
       child: _StockIssueSheet(
         view: view,
-        onConfirm: () => widget.port.issueStock(widget.orderId),
-        onReload: () async {
-          try {
-            return await widget.port.getStockIssue(widget.orderId);
-          } catch (_) {
-            return null;
-          }
-        },
+        onConfirm: _cubit.issueStock,
+        onReload: _cubit.stockIssueForSheet,
       ),
     );
     if (issued != true || !mounted) return;
-    await _loadStockIssue();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-    if (_canSeeStockIssue) _loadStockIssue();
+    await _cubit.loadStockIssue();
   }
 
   /// Runs an action that opens a writing screen, then reads everything it may
-  /// have changed: the order and lifecycle, the stock-out ("Đã giao" issues it)
-  /// and, once opened, the photos (a transition can attach some).
+  /// have changed (see [OrderDetailCubit.reloadAfterReturn]).
   Future<void> _openThenReload(Future<void> Function() open) async {
     await open();
     if (!mounted) return;
-    _load(showSkeleton: false);
-    if (_canSeeStockIssue) _loadStockIssue();
-    if (_anhDaMo) _loadAnh();
-  }
-
-  /// [showSkeleton] false = a refresh behind the order already on screen: no
-  /// skeleton flash, and a failed refresh keeps the last good view.
-  Future<void> _load({bool showSkeleton = true}) async {
-    final int ticket = ++_latest;
-    final bool silent = !showSkeleton && _state == _LoadState.ready;
-    if (!silent) setState(() => _state = _LoadState.loading);
-    try {
-      final List<Object> results = await Future.wait(<Future<Object>>[
-        widget.port.get(widget.orderId),
-        widget.port.getLifecycle(widget.orderId),
-        widget.port.listVersions(widget.orderId),
-      ]);
-      if (!mounted || ticket != _latest) return;
-      setState(() {
-        _order = results[0] as Order;
-        final OrderLifecycle vongDoi = results[1] as OrderLifecycle;
-        _steps = vongDoi.steps;
-        _buocKeTiep = vongDoi.nextSteps;
-        _coTheHuy = vongDoi.canCancel;
-        _versions = results[2] as List<OrderVersionItem>;
-        _state = _LoadState.ready;
-      });
-    } catch (error) {
-      if (!mounted || ticket != _latest || silent) return;
-      // Branch on the envelope CODE, never on the message text (AD-5).
-      final bool khongThay =
-          error is OrderPortException && error.code == 'NOT_FOUND';
-      setState(
-        () => _state = khongThay ? _LoadState.notFound : _LoadState.error,
-      );
-    }
+    _cubit.reloadAfterReturn();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<OrderDetailCubit, OrderDetailState>(
+        builder: (BuildContext context, OrderDetailState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(
@@ -373,7 +272,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case OrderDetailStatus.loading:
         return const Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -394,19 +293,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
           ],
         );
-      case _LoadState.error:
+      case OrderDetailStatus.error:
         return AppErrorState(
           message: 'Không tải được chi tiết đơn.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.notFound:
+      case OrderDetailStatus.notFound:
         return AppErrorState(
           message: 'Không tìm thấy đơn này.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case OrderDetailStatus.ready:
         final Order? order = _order;
         if (order == null) return const SizedBox.shrink();
         return Column(
@@ -683,7 +582,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Widget _anhTab() {
     switch (_anhState) {
-      case _LoadState.loading:
+      case OrderDetailStatus.loading:
         return const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -692,14 +591,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             AppSkeleton(),
           ],
         );
-      case _LoadState.error:
-      case _LoadState.notFound:
+      case OrderDetailStatus.error:
+      case OrderDetailStatus.notFound:
         return AppErrorState(
           message: 'Không tải được ảnh của đơn.',
           retryLabel: 'Thử lại',
-          onRetry: _loadAnh,
+          onRetry: _cubit.loadPhotos,
         );
-      case _LoadState.ready:
+      case OrderDetailStatus.ready:
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[

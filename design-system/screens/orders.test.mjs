@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +41,7 @@ const PORT_FILES = [
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 const web = read(WEB_SCREEN);
-const mobile = read(MOBILE_SCREEN);
+const mobile = readMobileScreen(repoRoot, MOBILE_SCREEN);
 const css = readFileSync(WEB_CSS, 'utf8');
 
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -417,9 +418,9 @@ test('scope chips render read-only, Thiết bị has no toggle, and toggling nev
   const webToggleBody = /async function handleScopeToggle[\s\S]*?\n  \}/.exec(webCode)?.[0];
   assert.ok(webToggleBody, 'web must define handleScopeToggle');
   assert.ok(!/previewTotal|refreshTotals/.test(webToggleBody), 'web handleScopeToggle must not re-preview totals — flags carry no money');
-  const mobileToggleBody = /Future<void> _toggleScope[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
-  assert.ok(mobileToggleBody, 'mobile must define _toggleScope');
-  assert.ok(!/previewTotal|_refreshTotals/.test(mobileToggleBody), 'mobile _toggleScope must not re-preview totals — flags carry no money');
+  const mobileToggleBody = /Future<void> toggleScope\(UpdateScopeFlagsInput input\)[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
+  assert.ok(mobileToggleBody, 'mobile must define toggleScope (CreateQuoteCubit)');
+  assert.ok(!/previewTotal|_refreshTotals/.test(mobileToggleBody), 'mobile toggleScope must not re-preview totals — flags carry no money');
 });
 
 // (m) 🔴 ORDER METADATA (Story 4.4). Three rules a wrong .tsx would break silently:
@@ -443,9 +444,9 @@ test('VAT % is a backend value, the meta path re-previews totals, the echo carri
   const webMetaBody = /async function handleMetaUpdate[\s\S]*?\n  \}/.exec(webCode)?.[0];
   assert.ok(webMetaBody, 'web must define handleMetaUpdate');
   assert.match(webMetaBody, /refreshTotals\(/, 'web handleMetaUpdate must re-preview totals — the VAT tick changes money');
-  const mobileMetaBody = /Future<void> _updateMeta[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
-  assert.ok(mobileMetaBody, 'mobile must define _updateMeta');
-  assert.match(mobileMetaBody, /_refreshTotals\(/, 'mobile _updateMeta must re-preview totals — the VAT tick changes money');
+  const mobileMetaBody = /Future<void> updateMeta\(UpdateOrderMetaInput input\)[\s\S]*?\n  \}/.exec(mobileCode)?.[0];
+  assert.ok(mobileMetaBody, 'mobile must define updateMeta (CreateQuoteCubit)');
+  assert.match(mobileMetaBody, /_refreshTotals\(/, 'mobile updateMeta must re-preview totals — the VAT tick changes money');
 
   // The preview echo carries the order's vatMode (like unitPrice — echo, never invent).
   assert.match(webCode, /previewTotal\(\{[\s\S]{0,400}?vatMode: fetched\.vatMode/, 'web refreshTotals must echo the order vatMode');
@@ -482,10 +483,11 @@ test('no screen self-assigns the confirmed status — it only renders the Order 
 // message and offers retry — it never resets the order state.
 test('the error path keeps entered lines: error state + retry, no order reset', () => {
   assert.match(web, /<ErrorState message=\{error\} onRetry=/, 'web must render ErrorState with a retry');
-  assert.match(mobile, /AppErrorState\(message: _error!, onRetry: _refresh\)/, 'mobile must render AppErrorState with a retry');
+  assert.match(mobile, /AppErrorState\(message: _error!, onRetry: _cubit\.refresh\)/, 'mobile must render AppErrorState with a retry');
   // The catch blocks only record the message — they must not null the order out.
   assert.ok(!/catch[^}]*setOrder\(null\)/.test(stripTsx(web)), 'web: a failed call must not reset the order');
   assert.ok(!/catch[^}]*_order = null/.test(stripDart(mobile)), 'mobile: a failed call must not reset the order');
+  assert.ok(!/catch[^}]*order: null/.test(stripDart(mobile)), 'mobile: a failed call must not reset the order (cubit copyWith)');
   // Step 1 has NO ErrorState yet — a failed create must surface a banner right
   // on the pick view, or the tap fails in total silence (review fix H1).
   assert.match(

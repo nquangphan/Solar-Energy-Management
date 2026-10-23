@@ -12,8 +12,13 @@
 //
 // A network failure NEVER wipes the list or the selection: the error path only
 // sets a banner — it never resets state (bất biến k).
+//
+// DiscountApprovalCubit sends the list and the decision through the injected
+// [OrdersPort] (Story 11.3); the screen keeps the reason field and renders the
+// cubit's state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/orders_port.dart';
@@ -22,6 +27,8 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'discount_approval_cubit.dart';
+import 'discount_approval_state.dart';
 
 /// Index of the bottom-nav `Đơn hàng` tab — duyệt chiết khấu là việc của đơn.
 const int kOrdersTabIndex = 1;
@@ -35,83 +42,40 @@ class DiscountApprovalScreen extends StatefulWidget {
   State<DiscountApprovalScreen> createState() => _DiscountApprovalScreenState();
 }
 
-enum _LoadState { loading, ready, error }
-
 class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
-  List<DiscountPendingItem> _items = const <DiscountPendingItem>[];
-  _LoadState _state = _LoadState.loading;
-
-  /// Item đang xem chi tiết — null = chưa chọn (chỉ thấy danh sách).
-  DiscountPendingItem? _selected;
-  String? _error;
-
   /// Lý do duyệt/từ chối — BẮT BUỘC khi từ chối, chặn client-side (không gọi port).
   final TextEditingController _reasonCtl = TextEditingController();
-  String? _reasonError;
-  bool _resolveBusy = false;
+
+  // Created here rather than by BlocProvider(create:): the dialogs call it after
+  // an await, from a route outside this screen's provider.
+  late final DiscountApprovalCubit _cubit = DiscountApprovalCubit(widget.ordersPort);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  List<DiscountPendingItem> get _items => _cubit.state.items;
+  DiscountApprovalStatus get _state => _cubit.state.status;
+  DiscountPendingItem? get _selected => _cubit.state.selected;
+  String? get _error => _cubit.state.error;
+  String? get _reasonError => _cubit.state.reasonError;
+  bool get _resolveBusy => _cubit.state.resolveBusy;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
   @override
   void dispose() {
     _reasonCtl.dispose();
+    _cubit.close();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _state = _LoadState.loading);
-    try {
-      final List<DiscountPendingItem> fresh =
-          await widget.ordersPort.listPendingDiscounts();
-      if (!mounted) return;
-      setState(() {
-        _items = fresh;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
-  /// Quyết định duyệt/từ chối (FR-18): port gọi backend — backend đổi status,
-  /// ghi hồ sơ, publish event; màn chỉ reload danh sách + bỏ chọn. KHÔNG toast
-  /// — item biến khỏi danh sách là tín hiệu. Lỗi → banner + danh sách + lựa
-  /// chọn NGUYÊN VẸN (bất biến k).
-  Future<void> _resolve(bool approve) async {
-    final DiscountPendingItem? selected = _selected;
-    if (selected == null) return;
-    setState(() => _resolveBusy = true);
-    try {
-      await widget.ordersPort.resolveDiscount(
-        selected.orderId,
-        ResolveDiscountInput(
-          approve: approve,
-          reason: _reasonCtl.text.isNotEmpty ? _reasonCtl.text : null,
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _selected = null;
-        _reasonError = null;
-        _error = null;
-      });
-      _reasonCtl.clear();
-      await _load();
-    } catch (err) {
-      if (!mounted) return;
-      setState(() {
-        _error = err is OrderPortException
-            ? err.message
-            : 'Không thực hiện được. Thử lại.';
-      });
-    } finally {
-      if (mounted) setState(() => _resolveBusy = false);
-    }
+  /// Approve/reject decision (FR-18): the cubit sends it, drops the selection and
+  /// reloads the list. No toast — the item leaving the list is the signal. A
+  /// failure only sets the banner; the list, the selection and the typed reason stay.
+  Future<void> _decide(bool approve) async {
+    if (await _cubit.resolve(approve, _reasonCtl.text) && mounted) _reasonCtl.clear();
   }
 
   /// Dialog hệ quả Đồng ý (UX-DR-20) — Huỷ (nút, X, barrier, back) = đóng,
@@ -124,7 +88,7 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
         consequence:
             'Đồng ý chiết khấu cho phép chốt đơn với giá đã giảm; thao tác được ghi Audit log.',
         confirmTone: AppButtonVariant.primary,
-        onConfirm: () => _resolve(true),
+        onConfirm: () => _decide(true),
       ),
     );
   }
@@ -133,19 +97,17 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
   /// có lý do mới mở dialog hệ quả (tone danger — default của AppConfirmDialog).
   Future<void> _openRejectDialog() async {
     if (_reasonCtl.text.trim().isEmpty) {
-      setState(() {
-        _reasonError = 'Lý do là bắt buộc khi từ chối chiết khấu.';
-      });
+      _cubit.requireReason();
       return;
     }
-    setState(() => _reasonError = null);
+    _cubit.clearReasonError();
     await showAppDialog<void>(
       context: context,
       child: AppConfirmDialog(
         title: 'Từ chối',
         consequence:
             'Từ chối sẽ trả đơn về Báo giá; lý do từ chối được ghi Audit log.',
-        onConfirm: () => _resolve(false),
+        onConfirm: () => _decide(false),
       ),
     );
   }
@@ -174,6 +136,15 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<DiscountApprovalCubit, DiscountApprovalState>(
+        builder: (BuildContext context, DiscountApprovalState _) => _page(),
+      ),
+    );
+  }
+
+  Widget _page() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: const AppTopbar(eyebrow: 'ĐƠN HÀNG', title: 'Duyệt chiết khấu'),
@@ -185,24 +156,24 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
               AppBanner(tone: AppBannerTone.danger, message: _error!),
               const SizedBox(height: AppTokens.space8),
             ],
-            if (_state == _LoadState.loading) ...[
+            if (_state == DiscountApprovalStatus.loading) ...[
               const AppSkeleton(),
               const SizedBox(height: AppTokens.space8),
               const AppSkeleton(),
               const SizedBox(height: AppTokens.space8),
               const AppSkeleton(),
             ],
-            if (_state == _LoadState.error)
+            if (_state == DiscountApprovalStatus.error)
               AppErrorState(
                 message: 'Không tải được danh sách chờ duyệt.',
-                onRetry: _load,
+                onRetry: _cubit.load,
               ),
-            if (_state == _LoadState.ready && _items.isEmpty)
+            if (_state == DiscountApprovalStatus.ready && _items.isEmpty)
               const AppEmptyState(
                 icon: 'ic-orders',
                 title: 'Không có chiết khấu nào đang chờ duyệt.',
               ),
-            if (_state == _LoadState.ready && _items.isNotEmpty)
+            if (_state == DiscountApprovalStatus.ready && _items.isNotEmpty)
               AppFrame(
                 label: 'Chờ duyệt chiết khấu',
                 child: Column(
@@ -211,11 +182,10 @@ class _DiscountApprovalScreenState extends State<DiscountApprovalScreen> {
                       .map(
                         (DiscountPendingItem item) => GestureDetector(
                           behavior: HitTestBehavior.opaque,
-                          onTap: () => setState(() {
-                            _selected = item;
-                            _reasonError = null;
+                          onTap: () {
+                            _cubit.select(item);
                             _reasonCtl.clear();
-                          }),
+                          },
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
                                 vertical: AppTokens.space8),

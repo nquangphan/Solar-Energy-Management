@@ -16,6 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
 import { STOCK_PAIR } from '../lib/stock-figures.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,7 +56,8 @@ const PORTS = [
 
 const screens = [
   ...WEB.map((rel) => [rel, stripTsx(read(rel))]),
-  ...MOBILE.map((rel) => [rel, stripDart(read(rel))]),
+  // A screen is read with its own cubit/state; the stateless preview widget alone.
+  ...MOBILE.map((rel) => [rel, stripDart(rel.endsWith('_screen.dart') ? readMobileScreen(repoRoot, rel) : read(rel))]),
 ];
 const allCode = [...screens, ...PORTS];
 /**

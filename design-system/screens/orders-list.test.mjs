@@ -16,6 +16,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,7 +31,7 @@ const WEB_CSS = 'web/src/screens/orders/orders-list.css';
 const read = (rel) => readFileSync(resolve(repoRoot, rel), 'utf8');
 
 const web = read(WEB_LIST);
-const mobile = read(MOBILE_LIST);
+const mobile = readMobileScreen(repoRoot, MOBILE_LIST);
 const css = read(WEB_CSS);
 
 const stripTsx = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -110,7 +111,11 @@ test('the list talks to the network only through the injected OrdersPort (AD-1/A
 test('both screens guard against out-of-order responses (stale-response ticket)', () => {
   assert.match(stripTsx(web), /latest\.current/, 'web list must carry the race ticket');
   assert.match(stripDart(mobile), /ticket != _latest/, 'mobile list must carry the race ticket');
-  assert.match(stripDart(mobile), /!mounted/, 'mobile list must not setState after dispose');
+  // Both the answer and the failure must check: one shared line would let either branch emit after close.
+  assert.ok(
+    (stripDart(mobile).match(/if \(isClosed \|\| ticket != _latest\) return;/g) ?? []).length >= 2,
+    'mobile list must not emit after close, on the answer AND on the failure',
+  );
 });
 
 // (c.3) PAGINATION runs through the BACKEND (AD-1) and resets on a filter change.
@@ -122,7 +127,7 @@ test('the list paginates through the backend, never in memory', () => {
   assert.match(stripTsx(web), /port\.list\(\{[\s\S]*?\bpage\b[\s\S]*?\}\)/, 'web list must send `page` to port.list');
   assert.match(stripDart(mobile), /port\.list\([\s\S]*?page:\s*_page/, 'mobile list must send `page:` to port.list');
   assert.match(stripTsx(web), /setPage\(1\)/, 'web list must reset to page 1 on a filter change');
-  assert.match(stripDart(mobile), /_page = 1/, 'mobile list must reset to page 1 on a filter change');
+  assert.match(stripDart(mobile), /^\s*_page = 1;/m, 'mobile list must reset to page 1 on a filter change');
 });
 
 // (d) THE NAV GATE IS WEB-ONLY, and that asymmetry is a DECISION, not an oversight.

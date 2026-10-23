@@ -23,8 +23,13 @@
 // enough is the backend's 409, placed under the row it names.
 //
 // LABELS are byte-identical with the web twin (UX-DR-27).
+//
+// OrderStatusChangeCubit reads the steps, the preview and sends the transition
+// through the injected [OrdersPort] (Story 11.3); the screen keeps the picked
+// photos and renders the cubit's state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/orders_port.dart';
@@ -34,9 +39,9 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import 'discount_approval_screen.dart' show kOrdersTabIndex;
+import 'order_status_change_cubit.dart';
+import 'order_status_change_state.dart';
 import 'stock_issue_preview.dart';
-
-enum _LoadState { loading, ready, error }
 
 /// The photo ceiling the backend enforces. Mirrored here only to stop the picker
 /// offering an eleventh tile — the refusal itself stays server-side.
@@ -83,92 +88,40 @@ class OrderStatusChangeScreen extends StatefulWidget {
 }
 
 class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
-  List<OrderNextStep> _steps = const <OrderNextStep>[];
-  String? _chon;
   final List<_AnhDaChon> _anh = <_AnhDaChon>[];
-  _LoadState _state = _LoadState.loading;
-  bool _dangGui = false;
-  String? _loiGui;
-  Map<int, String> _lineErrors = const <int, String>{};
-  OrderStockIssueView? _stockIssue;
+  int _seq = 0;
+
+  // Created here rather than by BlocProvider(create:): `_gui` reads its answer
+  // after an await and then calls back into the router.
+  late final OrderStatusChangeCubit _cubit = OrderStatusChangeCubit(widget.port, widget.orderId);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  OrderStatusChangeStatus get _state => _cubit.state.status;
+  List<OrderNextStep> get _steps => _cubit.state.steps;
+  String? get _chon => _cubit.state.selected;
+  bool get _dangGui => _cubit.state.sending;
+  String? get _loiGui => _cubit.state.sendError;
+  Map<int, String> get _lineErrors => _cubit.state.lineErrors;
+  OrderStockIssueView? get _stockIssue => _cubit.state.stockIssue;
 
   /// The "Đã giao" preview's own load state (null = no preview for this step).
-  _LoadState? _previewState;
-
-  int _latest = 0;
-  int _seq = 0;
-  int _stockIssueTicket = 0;
+  OrderStatusChangeStatus? get _previewState => _cubit.state.previewStatus;
 
   bool get _willIssue {
     final OrderStockIssueView? v = _stockIssue;
     return v != null && !v.issued && v.lines.isNotEmpty;
   }
 
-  /// Picks a step — everything that belonged to the previous step goes. The
-  /// stock-out preview belongs to "Đã giao" only, and the button waits for it:
-  /// the button says what will happen.
-  void _selectStep(String? event) {
-    ++_stockIssueTicket;
-    setState(() {
-      _chon = event;
-      _stockIssue = null;
-      _lineErrors = const <int, String>{};
-      _loiGui = null;
-      _previewState = null;
-    });
-    if (event == kEventDelivered) _loadPreview();
-  }
-
-  /// Loads the "Đã giao" preview; a late answer for a step the user already
-  /// left is dropped (ticket). A failure offers a retry, never a silent label.
-  void _loadPreview() {
-    final int ticket = ++_stockIssueTicket;
-    setState(() => _previewState = _LoadState.loading);
-    widget.port.getStockIssue(widget.orderId).then(
-      (OrderStockIssueView view) {
-        if (!mounted || ticket != _stockIssueTicket) return;
-        setState(() {
-          _stockIssue = view;
-          _previewState = _LoadState.ready;
-        });
-      },
-      onError: (Object _) {
-        if (!mounted || ticket != _stockIssueTicket) return;
-        setState(() => _previewState = _LoadState.error);
-      },
-    );
-  }
-
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
-  Future<void> _load() async {
-    final int ticket = ++_latest;
-    setState(() => _state = _LoadState.loading);
-    try {
-      final OrderLifecycle vongDoi = await widget.port.getLifecycle(
-        widget.orderId,
-      );
-      // `mounted` before every setState after an await (lesson from 5.4): the
-      // screen can be popped while the request is in flight.
-      if (!mounted || ticket != _latest) return;
-      setState(() {
-        _steps = vongDoi.nextSteps;
-        _state = _LoadState.ready;
-      });
-      // Preselect only when there is exactly one choice: with two open
-      // branches (thi công / giao hàng) a default would make a consequential
-      // decision for the user, and both are one tap from committing.
-      _selectStep(
-        vongDoi.nextSteps.length == 1 ? vongDoi.nextSteps.first.event : null,
-      );
-    } catch (_) {
-      if (!mounted || ticket != _latest) return;
-      setState(() => _state = _LoadState.error);
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
   void _addPhotos(List<XFile> files) {
@@ -193,42 +146,21 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
   }
 
   Future<void> _gui() async {
-    final String? chon = _chon;
-    if (chon == null) return;
-    setState(() {
-      _dangGui = true;
-      _loiGui = null;
-      _lineErrors = const <int, String>{};
-    });
-    try {
-      final StatusChangeResult ketQua = await widget.port.transition(
-        widget.orderId,
-        chon,
-        _anh.map((_AnhDaChon a) => a.file).toList(),
-      );
-      if (!mounted) return;
-      setState(() => _dangGui = false);
-      widget.onDone?.call(ketQua.status.json ?? '');
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _dangGui = false;
-        // The backend owns the status/permission rules, so it owns the words for
-        // them: its message is rendered verbatim. Screen copy is the fallback
-        // for transport failures the backend never saw.
-        _loiGui = error is OrderPortException
-            ? error.message
-            : 'Không chuyển được trạng thái.';
-        _lineErrors = rowErrors(error);
-      });
-      // The refusal may be about stock that moved since the preview was read —
-      // show the current numbers next to the backend's row messages.
-      if (chon == kEventDelivered) _loadPreview();
-    }
+    final String? status = await _cubit.submit(_anh.map((_AnhDaChon a) => a.file).toList());
+    if (status != null && mounted) widget.onDone?.call(status);
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<OrderStatusChangeCubit, OrderStatusChangeState>(
+        builder: (BuildContext context, OrderStatusChangeState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(
@@ -247,7 +179,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case OrderStatusChangeStatus.loading:
         return const Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -266,13 +198,13 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
             ),
           ],
         );
-      case _LoadState.error:
+      case OrderStatusChangeStatus.error:
         return AppErrorState(
           message: 'Không chuyển được trạng thái.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case OrderStatusChangeStatus.ready:
         if (_steps.isEmpty) {
           return const AppFrame(
             label: 'Bước kế tiếp',
@@ -308,17 +240,17 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
                 ),
               ),
             ],
-            if (_previewState == _LoadState.loading &&
+            if (_previewState == OrderStatusChangeStatus.loading &&
                 _stockIssue == null) ...<Widget>[
               const SizedBox(height: AppTokens.space16),
               const AppSkeleton(width: 200.0),
             ],
-            if (_previewState == _LoadState.error) ...<Widget>[
+            if (_previewState == OrderStatusChangeStatus.error) ...<Widget>[
               const SizedBox(height: AppTokens.space16),
               AppErrorState(
                 message: 'Không tải được phiếu xuất kho.',
                 retryLabel: 'Thử lại',
-                onRetry: _loadPreview,
+                onRetry: _cubit.loadPreview,
               ),
             ],
             if (_willIssue) ...<Widget>[
@@ -366,7 +298,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
       button: true,
       selected: daChon,
       child: GestureDetector(
-        onTap: _dangGui ? null : () => _selectStep(step.event),
+        onTap: _dangGui ? null : () => _cubit.selectStep(step.event),
         child: Container(
           margin: const EdgeInsets.only(bottom: AppTokens.space8),
           padding: const EdgeInsets.all(AppTokens.space8),
@@ -427,7 +359,7 @@ class _OrderStatusChangeScreenState extends State<OrderStatusChangeScreen> {
           onPressed: _chon == null ||
                   _dangGui ||
                   (_chon == kEventDelivered &&
-                      _previewState != _LoadState.ready) ||
+                      _previewState != OrderStatusChangeStatus.ready) ||
                   // "Đã giao" would issue stock the backend already says is short.
                   (_willIssue && _stockIssue!.blocked)
               ? null

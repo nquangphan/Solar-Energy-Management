@@ -28,6 +28,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { generatedFields, webAliasDto } from '../lib/web-contract-types.mjs';
 import { mobileAliasDto, mobileDtoSource } from '../lib/mobile-contract-types.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -48,7 +49,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const web = read(WEB_SCREEN);
-const mobile = read(MOBILE_SCREEN);
+const mobile = readMobileScreen(repoRoot, MOBILE_SCREEN);
 const css = read(WEB_CSS);
 
 const webCode = stripTsx(web);
@@ -199,7 +200,7 @@ test('neither screen builds an object key', () => {
 // (f) THE BUTTON IS HIDDEN, NOT GREYED, WHEN THERE IS NO STEP (UX-DR-22, AC-11).
 test('both detail screens gate the button on a NON-EMPTY buocKeTiep', () => {
   const webDetail = stripTsx(read('web/src/screens/orders/OrderDetailScreen.tsx'));
-  const mobileDetail = stripDart(read('mobile/lib/screens/orders/order_detail_screen.dart'));
+  const mobileDetail = stripDart(readMobileScreen(repoRoot, 'mobile/lib/screens/orders/order_detail_screen.dart'));
   assert.match(webDetail, /buocKeTiep\.length > 0/, 'web detail must render the button only when a step exists');
   assert.match(mobileDetail, /_buocKeTiep\.isNotEmpty/, 'mobile detail must render the button only when a step exists');
   // ABSENT, not disabled: a greyed control invites a click that can never work.

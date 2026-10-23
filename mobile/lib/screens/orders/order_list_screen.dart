@@ -20,8 +20,13 @@
 // (FR-10), i.e. a derived filter over the same list.
 //
 // No money math here (AD-10/16) and no totals column.
+//
+// OrderListCubit sends every query through the injected [OrdersPort] (Story
+// 11.3); the screen wires the reload signal and the navigation callbacks to it
+// and renders its state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permissions.dart';
@@ -32,11 +37,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import 'discount_approval_screen.dart' show kOrdersTabIndex;
-
-const String _kAll = 'ALL';
-const String _kFollowUp = 'FOLLOW_UP';
-
-enum _LoadState { loading, ready, error }
+import 'order_list_cubit.dart';
+import 'order_list_state.dart';
 
 class OrderListScreen extends StatefulWidget {
   const OrderListScreen({
@@ -78,88 +80,60 @@ class OrderListScreen extends StatefulWidget {
 }
 
 class _OrderListScreenState extends State<OrderListScreen> {
-  String _filter = _kAll;
-  List<OrderListItem> _items = const [];
-  // The backend owns the count and the slicing (AD-1): the screen holds only the
-  // page it asked for and the total it was told, and never counts rows itself.
-  int _page = 1;
-  int _total = 0;
-  int _pageSize = 20;
-  _LoadState _state = _LoadState.loading;
+  // Created here rather than by BlocProvider(create:): the reload signal needs the
+  // same instance from initState to dispose, and the navigation callbacks reload
+  // it after an await.
+  late final OrderListCubit _cubit = OrderListCubit(widget.port);
 
-  /// Answers do not necessarily come back in the order they were asked. Without
-  /// this ticket, a slow reply to an earlier filter can land AFTER the reply to
-  /// the current one and repaint the list with rows the user already moved past
-  /// — they would simply be wrong, silently.
-  int _latest = 0;
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  String get _filter => _cubit.state.filter;
+  List<OrderListItem> get _items => _cubit.state.items;
+  int get _page => _cubit.state.page;
+  int get _total => _cubit.state.total;
+  int get _pageSize => _cubit.state.pageSize;
+  OrderListStatus get _state => _cubit.state.status;
 
   @override
   void initState() {
     super.initState();
-    widget.reloadSignal?.addListener(_load);
-    _load();
+    widget.reloadSignal?.addListener(_cubit.load);
+    _cubit.load();
   }
 
   @override
   void didUpdateWidget(OrderListScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.reloadSignal != widget.reloadSignal) {
-      oldWidget.reloadSignal?.removeListener(_load);
-      widget.reloadSignal?.addListener(_load);
+      oldWidget.reloadSignal?.removeListener(_cubit.load);
+      widget.reloadSignal?.addListener(_cubit.load);
     }
   }
 
   @override
   void dispose() {
-    widget.reloadSignal?.removeListener(_load);
+    widget.reloadSignal?.removeListener(_cubit.load);
+    _cubit.close();
     super.dispose();
-  }
-
-  Future<void> _load() async {
-    final int ticket = ++_latest;
-    setState(() => _state = _LoadState.loading);
-    try {
-      // `followUp` and `status` are mutually exclusive — the filter row picks
-      // exactly one of the three shapes, so the two never travel together.
-      final OrderPage page = await widget.port.list(
-        followUp: _filter == _kFollowUp ? true : null,
-        status: (_filter == _kAll || _filter == _kFollowUp) ? null : _filter,
-        page: _page,
-      );
-      if (!mounted || ticket != _latest) return;
-      setState(() {
-        _items = page.items;
-        _total = page.total.toInt();
-        _pageSize = page.pageSize.toInt();
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _latest) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
-  /// Any filter change invalidates the page number — page 3 of the old result set
-  /// is meaningless against the new one, so every change returns to page 1.
-  void _reloadFromFirstPage() {
-    _page = 1;
-    _load();
-  }
-
-  void _goToPage(int p) {
-    _page = p;
-    _load();
   }
 
   /// Runs a navigation that may change orders, then reads the page again — a
   /// screen pushed on top keeps this one alive with its old rows.
   Future<void> _openThenReload(Future<void> Function() open) async {
     await open();
-    if (mounted) _load();
+    if (mounted) _cubit.load();
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<OrderListCubit, OrderListState>(
+        builder: (BuildContext context, OrderListState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: const AppTopbar(eyebrow: 'ĐƠN HÀNG', title: 'Đơn hàng'),
@@ -207,8 +181,8 @@ class _OrderListScreenState extends State<OrderListScreen> {
   /// would overflow rather than reflow.
   Widget _filters() {
     final List<List<String>> options = [
-      const [_kAll, 'Tất cả'],
-      const [_kFollowUp, 'Follow-up'],
+      const [kOrderFilterAll, 'Tất cả'],
+      const [kOrderFilterFollowUp, 'Follow-up'],
       for (final StatusKey key in StatusKey.values)
         [key.name, kStatusLabels[key]!],
     ];
@@ -223,10 +197,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                 : AppButtonVariant.outline,
             size: AppButtonSize.sm,
             label: option[1],
-            onPressed: () {
-              setState(() => _filter = option[0]);
-              _reloadFromFirstPage();
-            },
+            onPressed: () => _cubit.setFilter(option[0]),
           ),
       ],
     );
@@ -235,7 +206,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   /// Prev/next pager, byte-identical copy with the web twin. Only exists when
   /// there IS a second page; the buttons disable at the ends via null onPressed.
   Widget _pager() {
-    if (_state != _LoadState.ready || _items.isEmpty) {
+    if (_state != OrderListStatus.ready || _items.isEmpty) {
       return const SizedBox.shrink();
     }
     final int totalPages =
@@ -250,7 +221,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Trước',
-            onPressed: _page <= 1 ? null : () => _goToPage(_page - 1),
+            onPressed: _page <= 1 ? null : () => _cubit.goToPage(_page - 1),
           ),
           const SizedBox(width: AppTokens.space8),
           Text(
@@ -268,7 +239,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             variant: AppButtonVariant.ghost,
             size: AppButtonSize.sm,
             label: 'Sau',
-            onPressed: _page >= totalPages ? null : () => _goToPage(_page + 1),
+            onPressed: _page >= totalPages ? null : () => _cubit.goToPage(_page + 1),
           ),
         ],
       ),
@@ -277,7 +248,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case OrderListStatus.loading:
         return const Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -298,17 +269,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
           ],
         );
-      case _LoadState.error:
+      case OrderListStatus.error:
         return AppErrorState(
           message: 'Không tải được danh sách đơn.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case OrderListStatus.ready:
         if (_items.isEmpty) {
           // A filtered view that comes back empty is NOT the same as an empty
           // book: the fix is to change the filter, not to create the first order.
-          if (_filter != _kAll) {
+          if (_filter != kOrderFilterAll) {
             return const AppEmptyState(
               title: 'Không có đơn phù hợp',
               message: 'Thử đổi bộ lọc.',

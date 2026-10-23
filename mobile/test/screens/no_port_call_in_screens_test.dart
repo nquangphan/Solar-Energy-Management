@@ -19,11 +19,6 @@ const Map<String, String> notMigrated = {
   'lib/screens/inventory/stock_vouchers_screen.dart': '11.4',
   'lib/screens/invoices/invoice_detail_screen.dart': '11.4',
   'lib/screens/invoices/invoices_screen.dart': '11.4',
-  'lib/screens/orders/create_quote_screen.dart': '11.3',
-  'lib/screens/orders/discount_approval_screen.dart': '11.3',
-  'lib/screens/orders/order_detail_screen.dart': '11.3',
-  'lib/screens/orders/order_list_screen.dart': '11.3',
-  'lib/screens/orders/order_status_change_screen.dart': '11.3',
   'lib/screens/payments/payment_schedule_screen.dart': '11.4',
 };
 
