@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (code-review 11.4 done)
+# last_updated: 2026-10-23 (epic-11 retrospective done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (code-review 11.4 done)
+last_updated: 2026-10-23 (epic-11 retrospective done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -114,7 +114,7 @@ development_status:
   11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: done
   11-3-chuyen-bloc-man-don-hang-va-bao-gia: done
   11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: done
-  epic-11-retrospective: optional
+  epic-11-retrospective: done
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
@@ -378,7 +378,7 @@ action_items:
     action: "H-1: Push 22 commit (Epic 7 + Epic 10) sau 5 lane xanh"
     owner: "Đại Ca (Project Lead)"
     status: open
-    resolution: "Tiêu chí: git status -sb không còn ahead. Retro 2026-10-23: 4 lane hermetic xanh (2547 + 506 + 447 + 747), lane DB 325 xanh ở 10.9."
+    resolution: "Tiêu chí: git status -sb không còn ahead. Retro 2026-10-23: 4 lane hermetic xanh (2547 + 506 + 447 + 747), lane DB 325 xanh ở 10.9. Retro Epic 11 (2026-10-23): CHƯA push, nay ahead 29 (Epic 7 + 10 + 11); mobile 1327 + design-system 510 xanh trong phiên retro."
   - epic: 10
     action: "H-2: Rate-limit 3 route công khai /auth/login, /auth/forgot-password, /auth/reset-password (TD-62, gộp item epic 2)"
     owner: "Đại Ca (quyết) + Amelia (Dev)"
@@ -397,8 +397,8 @@ action_items:
   - epic: 10
     action: "H-5: Luật guard mới — ship kèm mutant xoá thứ thật cần bảo vệ + danh sách biến thể theo nền tảng (TS alias/intersection/Pick/Omit/globalThis/.call; Dart Image.network/NetworkImage; parity literal đứng riêng)"
     owner: "Amelia (Dev) + Trợ Lý"
-    status: open
-    resolution: "Căn cứ: 7/9 story Epic 10 có finding 'guard mù' ở review (retro §3.1). Tiêu chí: một dòng trong file chỉ dẫn dev của story-automator hoặc CONVENTIONS.md mục guard, trước commit đầu 8.1."
+    status: done
+    resolution: "Đóng ở retro Epic 11: áp cho guard port + text-guard của Epic 11 (proposal §6.13/§6.14, bảng đột biến ở 4/4 story); luật ghi vào _bmad-output/project-context.md mục Testing. Căn cứ: 7/9 story Epic 10 có finding 'guard mù' ở review (retro §3.1). Tiêu chí: một dòng trong file chỉ dẫn dev của story-automator hoặc CONVENTIONS.md mục guard, trước commit đầu 8.1."
   - epic: 10
     action: "H-6: Refresh lỗi 5xx/mạng không xoá phiên (TD-64) trên web + mobile"
     owner: "Amelia (Dev)"
@@ -439,3 +439,38 @@ action_items:
     owner: "Amelia (Dev)"
     status: open
     resolution: "Có từ 10.8 (regex BANNED dòng 118-119: `\\b\\w*MONEY\\w*\\s*[-+*/]` đòi toán tử đứng ngay sau tên field; `[-+*/]\\s*[\\w.]*\\bMONEY\\b` không cho `(`/`?`). Review 11.4 phát hiện khi đột biến, không sửa trong story refactor. Tái hiện: chèn `final int left = (state.schedule?.orderTotal.toInt() ?? 0) - (state.schedule?.paidTotal.toInt() ?? 0);` vào payment_schedule_cubit.dart ⇒ `node --test screens/payment-schedule.test.mjs` vẫn xanh. Hướng sửa: cho phép chuỗi gọi/truy cập (`(?:\\??\\.\\w+(?:\\(\\))?)*`) và `?? 0)` giữa field và toán tử, thêm 2 mẫu trên vào ca sanity; soát cùng mẫu ở contracts/invoices/stock-vouchers."
+  - epic: 11
+    action: "I-1: Sửa guard tiền mù (TD-76) ở design-system/screens/payment-schedule.test.mjs và soát cùng mẫu ở contracts/invoices/stock-vouchers"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Hạn: trước commit đầu 8.1 (8.1 doanh thu, 8.6 lợi nhuận hiển thị tiền). Tiêu chí: `orderTotal.toInt() - x` và `y - (s?.paidTotal ?? 0)` thành ca sanity; chèn vào cubit ⇒ ĐỎ; bản sạch xanh."
+  - epic: 11
+    action: "I-2: Trả TD-72..75 (sheet gói báo giá, ô tìm danh mục không vé, request ảnh sau khi đóng, Tồn kho không vé) bằng một lô bmad-quick-dev"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: trước go-live, không chặn Epic 8. Tiêu chí: mỗi TD đảo ca test đang ghim hành vi cũ thành hành vi đúng; mutant bỏ vé/isClosed ⇒ ĐỎ."
+  - epic: 11
+    action: "I-3: Xác nhận lệch 11.4 — không mở hộp chia sẻ PDF hợp đồng/hoá đơn sau khi người dùng đã rời màn"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: giữ hành vi mới (chứng từ vẫn sinh, vào lại bấm Tải PDF/Xuất PDF). Muốn bản cũ: đổi 3 dòng + đảo 3 ca test. Im lặng tới commit đầu 8.1 ⇒ mặc định thành quyết định."
+  - epic: 11
+    action: "I-4: Checklist test cubit cho màn mới (seed mọi field khác mặc định, kỳ vọng field-by-field không qua copyWith, fake trả khác nhau mỗi lần, đóng sớm cả nhánh lỗi, ca tháo màn + wiring)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 11: _bmad-output/project-context.md mục Testing."
+  - epic: 11
+    action: "I-5: Đóng H-5 bằng một dòng luật guard (biến thể + đột biến thứ thật bảo vệ; neo dương khớp câu lệnh, không khớp khai báo/chuỗi con)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 11: _bmad-output/project-context.md mục Testing."
+  - epic: 11
+    action: "I-6: Smoke chỉ chạm tiến trình của chính nó — ghi adb devices + cổng đang nghe trước/sau, chỉ tắt đúng serial/PID mình khởi động"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: smoke 11.4 — emulator kidy_cam_fix (dự án khác) không còn chạy sau khi dọn, nguyên nhân chưa rõ. Đại Ca xác nhận có cần khởi động lại."
+  - epic: 11
+    action: "I-7: Đồng bộ sổ sách + tài liệu lệch code (project-context codegen package + luật test, spine Deferred codegen)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 11, xem §12 của epic-11-retro-2026-10-23.md."
