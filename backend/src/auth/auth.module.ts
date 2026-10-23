@@ -6,7 +6,6 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { ChangePasswordController } from './change-password.controller';
 import { PasswordResetService } from './password-reset.service';
-import { PasswordService } from './password.service';
 import { AUTH_CONFIG, loadAuthConfig } from './auth.config';
 import { MeController } from './me.controller';
 import { JwtAuthGuard } from './jwt-auth.guard';
@@ -30,6 +29,9 @@ import { PermissionsGuard } from './permissions.guard';
  * Story 2.8 — `PasswordResetService` + `ChangePasswordController`. `EventBus` inject được
  * mà KHÔNG import gì (EventsModule `@Global`); tuyệt đối KHÔNG import `AuditModule`/
  * `NotificationsModule` ở đây — producer chỉ biết cái port (AD-18).
+ *
+ * `PasswordService` is registered by `AccountsModule` (account creation hashes the initial
+ * password there) and injected here through that import.
  */
 @Module({
   imports: [
@@ -46,7 +48,6 @@ import { PermissionsGuard } from './permissions.guard';
   providers: [
     AuthService,
     PasswordResetService,
-    PasswordService,
     { provide: AUTH_CONFIG, useFactory: loadAuthConfig },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },

@@ -42,6 +42,48 @@ async function openAccount(port: AccountsPort, name: RegExp) {
 }
 
 describe('PermissionsScreen', () => {
+  it('"Tạo account" is in the topbar when the screen can open the form, absent otherwise', async () => {
+    const onCreate = vi.fn();
+    render(
+      <PermissionsProvider port={ME}>
+        <PermissionsScreen port={new FakeAccountsPort()} onCreate={onCreate} />
+      </PermissionsProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Tạo account/ }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    renderScreen(new FakeAccountsPort());
+    await screen.findByRole('button', { name: /Trần Văn A/ });
+    expect(screen.queryByRole('button', { name: /Tạo account/ })).toBeNull();
+  });
+
+  it('"Sửa account" shows only on an editable account and opens it', async () => {
+    const onEdit = vi.fn();
+    render(
+      <PermissionsProvider port={ME}>
+        <PermissionsScreen port={new FakeAccountsPort()} onEdit={onEdit} />
+      </PermissionsProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: /Chủ vận hành/ }));
+    expect(screen.queryByRole('button', { name: 'Sửa account' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Trần Văn A/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa account' }));
+    expect(onEdit).toHaveBeenCalledWith(WORKER.id);
+  });
+
+  it('selectAccountId selects that account once the list loads (coming back from the form)', async () => {
+    render(
+      <PermissionsProvider port={ME}>
+        <PermissionsScreen port={new FakeAccountsPort()} selectAccountId={INACTIVE.id} />
+      </PermissionsProvider>,
+    );
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: /Lê Thị C/ }).getAttribute('aria-pressed')).toBe('true'),
+    );
+    expect(ticked()).toEqual([...INACTIVE.permissions]);
+  });
+
   it('the list shows name, phone, preset label or Tuỳ chỉnh, and Đã vô hiệu', async () => {
     renderScreen(new FakeAccountsPort());
     const row = await screen.findByRole('button', { name: /Trần Văn A/ });

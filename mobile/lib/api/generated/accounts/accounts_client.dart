@@ -6,8 +6,10 @@ import 'package:dio/dio.dart';
 import 'package:retrofit/retrofit.dart';
 
 import '../models/account_permission_summary_dto.dart';
+import '../models/create_account_request_dto.dart';
 import '../models/permission_options_response_dto.dart';
 import '../models/update_account_permissions_request_dto.dart';
+import '../models/update_account_request_dto.dart';
 
 part 'accounts_client.g.dart';
 
@@ -18,6 +20,11 @@ abstract class AccountsClient {
   @GET('/accounts')
   Future<List<AccountPermissionSummaryDto>> accountsControllerList();
 
+  @POST('/accounts')
+  Future<AccountPermissionSummaryDto> accountsControllerCreate({
+    @Body() required CreateAccountRequestDto body,
+  });
+
   @GET('/accounts/permission-options')
   Future<PermissionOptionsResponseDto> accountsControllerPermissionOptions();
 
@@ -25,5 +32,11 @@ abstract class AccountsClient {
   Future<AccountPermissionSummaryDto> accountsControllerUpdatePermissions({
     @Path('id') required String id,
     @Body() required UpdateAccountPermissionsRequestDto body,
+  });
+
+  @PUT('/accounts/{id}')
+  Future<AccountPermissionSummaryDto> accountsControllerUpdate({
+    @Path('id') required String id,
+    @Body() required UpdateAccountRequestDto body,
   });
 }

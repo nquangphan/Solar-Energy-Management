@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Param, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
+  ApiConflictResponse,
+  ApiCreatedResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
@@ -15,14 +17,19 @@ import { RequirePermissions } from '../auth/require-permissions.decorator';
 import { ErrorEnvelopeDto } from '../common/errors/dto/error-envelope.dto';
 import { UUID_PARAM } from '../common/validation/uuid-param';
 import { AccountPermissionsService } from './account-permissions.service';
+import { AccountsService } from './accounts.service';
 import { PERM, type PermissionKey } from './domain/permission-registry';
+import type { RolePreset } from './domain/role-presets';
 import { AccountPermissionSummaryDto } from './dto/account-permission-summary.dto';
+import { CreateAccountRequestDto } from './dto/create-account-request.dto';
 import { PermissionOptionsResponseDto } from './dto/permission-options-response.dto';
 import { UpdateAccountPermissionsRequestDto } from './dto/update-account-permissions-request.dto';
+import { UpdateAccountRequestDto } from './dto/update-account-request.dto';
 
 /**
  * Permissions screen (FR-17): list accounts with their permission set, the options the caller
- * can grant, and replace one account's set. Every handler requires `permissions.manage`; the
+ * can grant, and replace one account's set. Account form (FR-16): create an account from a role
+ * preset and replace an account's profile / active flag. Every handler requires `permissions.manage`; the
  * caller's own permissions are always resolved fresh from the DB by the service, never from
  * the JWT. Errors are `AppException`s — `AllExceptionsFilter` builds the envelope (AD-5).
  */
@@ -30,7 +37,10 @@ import { UpdateAccountPermissionsRequestDto } from './dto/update-account-permiss
 @ApiBearerAuth()
 @Controller('accounts')
 export class AccountsController {
-  constructor(private readonly accountPermissions: AccountPermissionsService) {}
+  constructor(
+    private readonly accountPermissions: AccountPermissionsService,
+    private readonly accounts: AccountsService,
+  ) {}
 
   @Get()
   @RequirePermissions(PERM.permissionsManage)
@@ -97,5 +107,78 @@ export class AccountsController {
       body.permissions as PermissionKey[],
     );
     return this.accountPermissions.summary(account.id, id);
+  }
+
+  @Post()
+  @RequirePermissions(PERM.permissionsManage)
+  @ApiCreatedResponse({
+    type: AccountPermissionSummaryDto,
+    description: 'Account mới kèm bộ quyền preset đã nạp.',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu/sai field: họ tên, SĐT, email, mật khẩu, preset (VALIDATION_ERROR, fieldErrors).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu permissions.manage, hoặc preset có quyền người gọi không có (FORBIDDEN).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email).',
+  })
+  async create(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Body() body: CreateAccountRequestDto,
+  ): Promise<AccountPermissionSummaryDto> {
+    return this.accounts.create(account.id, {
+      displayName: body.displayName,
+      phone: body.phone,
+      email: body.email,
+      password: body.password,
+      preset: body.preset as RolePreset,
+      isActive: body.isActive,
+    });
+  }
+
+  @Put(':id')
+  @RequirePermissions(PERM.permissionsManage)
+  @ApiOkResponse({
+    type: AccountPermissionSummaryDto,
+    description: 'Account sau khi lưu hồ sơ / trạng thái (bộ quyền không đổi).',
+  })
+  @ApiBadRequestResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'id không phải UUID, thiếu/sai field, hoặc gửi kèm mật khẩu (VALIDATION_ERROR, fieldErrors).',
+  })
+  @ApiForbiddenResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'Thiếu permissions.manage, tự sửa tài khoản của mình, hoặc account mang quyền người gọi không có (FORBIDDEN).',
+  })
+  @ApiNotFoundResponse({
+    type: ErrorEnvelopeDto,
+    description: 'Không có account này (NOT_FOUND).',
+  })
+  @ApiConflictResponse({
+    type: ErrorEnvelopeDto,
+    description:
+      'SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email).',
+  })
+  async update(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Param('id', UUID_PARAM) id: string,
+    @Body() body: UpdateAccountRequestDto,
+  ): Promise<AccountPermissionSummaryDto> {
+    return this.accounts.update(account.id, id, {
+      displayName: body.displayName,
+      phone: body.phone,
+      email: body.email,
+      isActive: body.isActive,
+    });
   }
 }

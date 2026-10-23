@@ -45,6 +45,7 @@ import '../screens/orders/order_detail_screen.dart';
 import '../screens/orders/order_list_screen.dart';
 import '../screens/orders/order_status_change_screen.dart';
 import '../screens/payments/payment_schedule_screen.dart';
+import '../screens/permissions/account_form_screen.dart';
 import '../screens/permissions/account_list_screen.dart';
 import '../screens/permissions/account_permissions_screen.dart';
 import '../screens/warranty/warranty_lookup_screen.dart';
@@ -168,12 +169,40 @@ class _SignedInAppState extends State<SignedInApp> {
             port: ports.accounts,
             // The list reads again when the matrix closes (it may have saved).
             onOpen: (accountId) => context.push(permissionAccountPath(accountId)),
+            // The form pops with the new id, then its matrix opens: a pushReplacement would
+            // drop this future, and the list would never read again.
+            onCreate: () async {
+              final String? created = await context.push<String>(kAccountNewPath);
+              if (created != null && context.mounted) await context.push(permissionAccountPath(created));
+            },
+          ),
+        ),
+        // The form routes before `/permissions/:id`, which would otherwise read `new` as an id.
+        GoRoute(
+          path: kAccountNewPath,
+          builder: (context, state) => AccountFormScreen(
+            port: ports.accounts,
+            onDone: (accountId) => context.pop(accountId),
+            onBack: () => back(context),
+          ),
+        ),
+        GoRoute(
+          path: '$kPermissionsPath/:id/edit',
+          builder: (context, state) => AccountFormScreen(
+            port: ports.accounts,
+            accountId: id(state),
+            onDone: (accountId) => context.pop(accountId),
+            onBack: () => back(context),
           ),
         ),
         GoRoute(
           path: '$kPermissionsPath/:id',
-          builder: (context, state) =>
-              AccountPermissionsScreen(port: ports.accounts, accountId: id(state), onBack: () => back(context)),
+          builder: (context, state) => AccountPermissionsScreen(
+            port: ports.accounts,
+            accountId: id(state),
+            onBack: () => back(context),
+            onEdit: () => context.push(accountEditPath(id(state))),
+          ),
         ),
         GoRoute(
           path: kProfilePath,

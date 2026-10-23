@@ -119,4 +119,38 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    '"+ Tạo" only when the screen can open the form; the list reads again when it completes',
+    (tester) async {
+      final port = FakeAccountsPort();
+      await tester.pumpWidget(_host(AccountListScreen(port: port)));
+      await tester.pumpAndSettle();
+      expect(find.text('+ Tạo'), findsNothing);
+
+      final Completer<void> closed = Completer<void>();
+      var opened = 0;
+      final again = FakeAccountsPort();
+      await tester.pumpWidget(
+        _host(
+          AccountListScreen(
+            key: const ValueKey<String>('with-create'),
+            port: again,
+            onCreate: () {
+              opened++;
+              return closed.future;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('+ Tạo'));
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+      expect(again.listCalls, 1);
+      closed.complete();
+      await tester.pumpAndSettle();
+      expect(again.listCalls, 2);
+    },
+  );
 }

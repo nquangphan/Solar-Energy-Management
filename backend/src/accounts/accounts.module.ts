@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPermissionsService } from './account-permissions.service';
 import { AccountsController } from './accounts.controller';
+import { PasswordService } from '../auth/password.service';
 
 /**
  * AccountsModule — export `AccountsService` cho `AuthModule` import. `PrismaService`
@@ -11,7 +12,7 @@ import { AccountsController } from './accounts.controller';
  */
 @Module({
   controllers: [AccountsController],
-  providers: [AccountsService, AccountPermissionsService],
-  exports: [AccountsService, AccountPermissionsService],
+  providers: [AccountsService, AccountPermissionsService, PasswordService],
+  exports: [AccountsService, AccountPermissionsService, PasswordService],
 })
 export class AccountsModule {}

@@ -18,6 +18,7 @@ import 'package:pns_mobile/screens/customers/customer_pick_screen.dart';
 import 'package:pns_mobile/screens/dashboard/dashboard_screen.dart';
 import 'package:pns_mobile/screens/menu/menu_screen.dart';
 import 'package:pns_mobile/screens/orders/order_list_screen.dart';
+import 'package:pns_mobile/screens/permissions/account_form_screen.dart';
 import 'package:pns_mobile/screens/permissions/account_list_screen.dart';
 import 'package:pns_mobile/screens/permissions/account_permissions_screen.dart';
 import 'package:pns_mobile/screens/warranty/warranty_lookup_screen.dart';
@@ -39,6 +40,19 @@ Map<String, Object?> _customer(String phone, String name) => {
   'sourceNote': null,
   'createdAt': '2026-07-13T00:00:00.000Z',
   'updatedAt': '2026-07-13T00:00:00.000Z',
+};
+
+Map<String, Object?> _account(String id, String name) => {
+  'id': id,
+  'displayName': name,
+  'phone': '+84900000002',
+  'email': '$id@pns.solar',
+  'isActive': true,
+  'permissions': ['catalog.view'],
+  'matchingPreset': null,
+  'matchingPresetLabel': null,
+  'editable': true,
+  'readOnlyReason': null,
 };
 
 /// A backend for two accounts: `0911…` (A) holds [permsA], `0922…` (B) holds [permsB]; each
@@ -76,26 +90,19 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
     case '/dashboard/summary':
       return jsonBody(200, dashboardBody());
     case '/accounts':
-      return jsonBody(200, [
-        {
-          'id': 'acc-worker',
-          'displayName': 'Bình Thợ',
-          'phone': '+84900000002',
-          'email': 'w@pns.solar',
-          'isActive': true,
-          'permissions': ['catalog.view'],
-          'matchingPreset': null,
-          'matchingPresetLabel': null,
-          'editable': true,
-          'readOnlyReason': null,
-        },
-      ]);
+      // POST creates `acc-new`; the list always carries it so its matrix can open.
+      if (r.method == 'POST') return jsonBody(201, _account('acc-new', 'Người Mới'));
+      return jsonBody(200, [_account('acc-worker', 'Bình Thợ'), _account('acc-new', 'Người Mới')]);
+    case '/accounts/acc-worker':
+      return jsonBody(200, _account('acc-worker', 'Bình Sửa'));
     case '/accounts/permission-options':
       return jsonBody(200, {
         'permissions': [
           {'key': 'catalog.view', 'label': 'Xem danh mục vật tư', 'group': 'catalog', 'requires': [], 'grantable': true},
         ],
-        'presets': [],
+        'presets': [
+          {'key': 'THO_KS', 'label': 'Thợ khảo sát', 'permissions': ['catalog.view']},
+        ],
       });
   }
   return jsonBody(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
@@ -188,6 +195,62 @@ void main() {
     await _navigated(tester);
     expect(find.byType(AccountListScreen), findsOneWidget);
     expect(app.adapter.to('/accounts'), hasLength(3), reason: 'list, matrix, list again');
+  });
+
+  testWidgets('+ Tạo opens /permissions/new (never an account id); saving lands on the new matrix; Sửa account edits', (
+    tester,
+  ) async {
+    final app = await _signedIn(tester, _backend(permsA: ['permissions.manage']));
+    await tester.tap(find.text('Phân quyền'));
+    await _navigated(tester);
+    await tester.tap(find.text('+ Tạo'));
+    await _navigated(tester);
+    expect(_location(tester), '/permissions/new');
+    expect(find.byType(AccountFormScreen), findsOneWidget);
+    expect(find.byType(AccountPermissionsScreen), findsNothing);
+
+    await tester.enterText(find.byType(TextField).at(0), 'Người Mới');
+    await tester.enterText(find.byType(TextField).at(1), '0912 345 678');
+    await tester.enterText(find.byType(TextField).at(2), 'moi@pns.solar');
+    await tester.enterText(find.byType(TextField).at(3), 'MatKhau123');
+    final picker = find.byKey(const ValueKey<String>('preset-picker'));
+    await tester.ensureVisible(picker);
+    await tester.tap(picker);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(AppButton, 'Thợ khảo sát').last);
+    await tester.pumpAndSettle();
+    await _tapButton(tester, 'Lưu account');
+
+    expect((app.adapter.requests.where((r) => r.method == 'POST' && r.path == '/accounts').single.json as Map)['phone'],
+        '0912 345 678');
+    expect(_location(tester), '/permissions/acc-new');
+    expect(find.text('Quyền · Người Mới'), findsOneWidget);
+    final listReads = app.adapter.to('/accounts').where((r) => r.method == 'GET').length;
+    await tester.binding.handlePopRoute();
+    await _navigated(tester);
+    expect(_location(tester), '/permissions');
+    expect(app.adapter.to('/accounts').where((r) => r.method == 'GET').length, greaterThan(listReads),
+        reason: 'the list reads again when the flow closes');
+
+    await tester.tap(find.text('Bình Thợ'));
+    await _navigated(tester);
+    await _tapButton(tester, 'Sửa account');
+    expect(_location(tester), '/permissions/acc-worker/edit');
+    expect(find.text('Sửa tài khoản'), findsOneWidget);
+    await _tapButton(tester, 'Lưu account');
+    expect(app.adapter.requests.where((r) => r.method == 'PUT' && r.path == '/accounts/acc-worker'), hasLength(1));
+    expect(_location(tester), '/permissions/acc-worker');
+    expect(find.byType(AccountPermissionsScreen), findsOneWidget);
+  });
+
+  testWidgets('the account form routes follow the Phân quyền gate', (tester) async {
+    await _signedIn(tester, _backend(permsA: ['orders.view_own']), toMenu: false);
+    for (final path in ['/permissions/new', '/permissions/acc-worker/edit']) {
+      _router(tester).go(path);
+      await _navigated(tester);
+      expect(find.byType(AccountFormScreen), findsNothing, reason: path);
+      expect(_location(tester), '/dashboard', reason: path);
+    }
   });
 
   testWidgets('Khách hàng → a customer with + in the phone → back returns to the list', (tester) async {

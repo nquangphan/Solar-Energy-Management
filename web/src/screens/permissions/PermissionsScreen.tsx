@@ -6,7 +6,8 @@
 // grant in full. The screen displays them and holds no escalation rule of its own.
 // Applying a preset only loads its values into the draft; nothing is sent until Lưu.
 // The dependency warning reads each permission's `requires` from the backend; the
-// backend refuses the same gaps with a 400 anyway.
+// backend refuses the same gaps with a 400 anyway. "Tạo account" / "Sửa account" open
+// the account form (Story 8.3); coming back selects the account it saved.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -21,6 +22,7 @@ import {
   Skeleton,
 } from '../../design-system/components';
 import { filterNav } from '../../design-system/gating/permissions';
+import { Icon } from '../../design-system/icons/Icon';
 import type {
   AccountPermissionSummary,
   AccountsPort,
@@ -35,6 +37,12 @@ import './permissions.css';
 
 export interface PermissionsScreenProps {
   port: AccountsPort;
+  /** Opens the account form in create mode; absent ⇒ no "Tạo account" action. */
+  onCreate?: () => void;
+  /** Opens the account form for an editable account; absent ⇒ no "Sửa account" button. */
+  onEdit?: (accountId: string) => void;
+  /** Selected once the list loads — the account the form just created or saved. */
+  selectAccountId?: string;
 }
 
 type LoadState = 'loading' | 'ready' | 'error';
@@ -59,7 +67,7 @@ export function dependencyWarnings(options: readonly PermissionOption[], draft: 
     );
 }
 
-export function PermissionsScreen({ port }: PermissionsScreenProps) {
+export function PermissionsScreen({ port, onCreate, onEdit, selectAccountId }: PermissionsScreenProps) {
   const { perms } = usePermissions();
   const [state, setState] = useState<LoadState>('loading');
   const [accounts, setAccounts] = useState<AccountPermissionSummary[]>([]);
@@ -81,12 +89,17 @@ export function PermissionsScreen({ port }: PermissionsScreenProps) {
       if (ticket !== loadTicket.current) return;
       setAccounts(list);
       setOptions(opts);
+      const toSelect = list.find((a) => a.id === selectAccountId);
+      if (toSelect !== undefined) {
+        setSelectedId(toSelect.id);
+        setDraft(new Set(toSelect.permissions));
+      }
       setState('ready');
     } catch {
       if (ticket !== loadTicket.current) return;
       setState('error');
     }
-  }, [port]);
+  }, [port, selectAccountId]);
 
   useEffect(() => {
     void load();
@@ -141,7 +154,20 @@ export function PermissionsScreen({ port }: PermissionsScreenProps) {
     <WebShell
       url="app.phuongnamsolar.vn"
       sidebar={<Sidebar sections={filterNav(SIDEBAR_NAV, perms)} activeKey="permissions" />}
-      topbar={<Topbar eyebrow="QUẢN TRỊ" title="Phân quyền & tài khoản" />}
+      topbar={
+        <Topbar
+          eyebrow="QUẢN TRỊ"
+          title="Phân quyền & tài khoản"
+          action={
+            onCreate && (
+              <>
+                <Icon name="ic-plus" size={15} /> Tạo account
+              </>
+            )
+          }
+          onAction={onCreate}
+        />
+      }
     >
       <div className="perm-wrap">
         {state === 'loading' && (
@@ -190,6 +216,17 @@ export function PermissionsScreen({ port }: PermissionsScreenProps) {
                   <b>{selected.displayName}</b>
                   <span className="ktype">{selected.matchingPresetLabel ?? 'Tuỳ chỉnh'}</span>
                   <span className="perm-spacer" />
+                  {onEdit && selected.editable && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      disabled={saving}
+                      onClick={() => onEdit(selected.id)}
+                    >
+                      Sửa account
+                    </Button>
+                  )}
                   <Button
                     variant="accent"
                     size="sm"

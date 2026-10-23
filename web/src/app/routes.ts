@@ -60,6 +60,12 @@ export function orderInvoicePath(id: string, invoiceId: string): string {
 /** Child route of `inventory`: the Phiếu kho screen, which also needs `inventory.manage`. */
 export const STOCK_VOUCHERS_PATH = '/inventory/vouchers';
 
+/** Child routes of `permissions` (they inherit its gate): the account form. `new` is matched before `:id/edit`. */
+export const ACCOUNT_NEW_PATH = '/permissions/new';
+export function accountEditPath(id: string): string {
+  return `${NAV_ROUTES.permissions}/${encodeURIComponent(id)}/edit`;
+}
+
 /** Signed-out routes. */
 export const LOGIN_PATH = '/login';
 export const FORGOT_PASSWORD_PATH = '/forgot-password';

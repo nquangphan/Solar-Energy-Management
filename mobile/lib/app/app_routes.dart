@@ -31,6 +31,10 @@ String customerPath(String phone) => '$kCustomersPath/${Uri.encodeComponent(phon
 /// One account's permission matrix (Phân quyền).
 String permissionAccountPath(String id) => '$kPermissionsPath/${Uri.encodeComponent(id)}';
 
+/// The account form (children of `permissions`, same gate); `new` is registered before `/permissions/:id`.
+const String kAccountNewPath = '$kPermissionsPath/new';
+String accountEditPath(String id) => '${permissionAccountPath(id)}/edit';
+
 String orderPath(String id) => '$kOrdersPath/${Uri.encodeComponent(id)}';
 String orderTransitionPath(String id) => '${orderPath(id)}/transition';
 String orderPaymentsPath(String id) => '${orderPath(id)}/payments';

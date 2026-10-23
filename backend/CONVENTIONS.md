@@ -132,7 +132,7 @@ Ba route: `POST /auth/forgot-password` + `POST /auth/reset-password` (công khai
 
 **Giới hạn đã biết (đừng giấu, đừng coi là đã xử):**
 
-- **Thu hồi phiên KHÔNG tức thì:** access JWT là stateless ⇒ sau reset/change, access token cũ **vẫn hợp lệ tối đa `ACCESS_TOKEN_TTL`** (mặc định 15 phút). Thu hồi tức thì cần denylist / kiểm DB mỗi request.
+- **Thu hồi phiên KHÔNG tức thì (G-2 / TD-9 đã chốt):** access JWT là stateless ⇒ Phase 1 chấp nhận access token cũ sống ≤ `ACCESS_TOKEN_TTL` (15') sau đổi mật khẩu / đổi quyền / đăng xuất; không denylist. Riêng **vô hiệu hoá là tức thì**: `JwtAuthGuard` kiểm `isActive` mỗi request, và `AccountsService.update` thu hồi mọi phiên của account cùng transaction (Story 8.3) nên kích hoạt lại không làm sống lại refresh token cũ.
 - **Không có rate-limit IP** trên 3 endpoint công khai. Trần attempt + cooldown + response trung tính chặn **đoán mã** và **enumeration**, **không** chặn spam/DoS.
 - **Mã chưa tới tay người dùng:** chưa có kênh email/SMS; `NotificationDispatcher` bản đầu chỉ log. Luồng Quên mật khẩu chưa dùng được self-service.
 - **Cooldown mã reset KHÔNG atomic (đua):** `requestResetCode` là read-then-write (`findFirst(live)` → `create`), chưa có ràng buộc DB ⇒ N request `forgot-password` đồng thời cùng SĐT có thể tạo N mã sống, làm yếu phòng thủ của mã 6 số (mỗi mã có trần attempt riêng). Trần-attempt và single-use *đã* atomic; chỉ cooldown thì chưa. **Cần fix khi mở kênh gửi mã** (cùng B-8): partial unique index `(account_id) WHERE consumed_at IS NULL` + xử lý P2002 như "đang có mã sống". Chưa khai thác được end-to-end vì mã chưa có kênh gửi.

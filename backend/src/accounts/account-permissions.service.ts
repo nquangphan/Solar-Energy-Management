@@ -128,7 +128,7 @@ export class AccountPermissionsService {
         throw new AppException(
           ErrorCode.FORBIDDEN,
           403,
-          `Không thể sửa account mang quyền bạn không có: ${blocking.join(', ')}`,
+          blockingMessage(blocking),
         );
       }
 
@@ -137,7 +137,7 @@ export class AccountPermissionsService {
         throw new AppException(
           ErrorCode.FORBIDDEN,
           403,
-          `Không thể cấp quyền bạn không có: ${cannotGrant.join(', ')}`,
+          cannotGrantMessage(cannotGrant),
         );
       }
 
@@ -252,6 +252,14 @@ export class AccountPermissionsService {
     return { permissions, presets };
   }
 }
+
+/** Rule #2 refusal — shared with the account profile save (`AccountsService.update`). */
+export const blockingMessage = (keys: readonly PermissionKey[]): string =>
+  `Không thể sửa account mang quyền bạn không có: ${keys.join(', ')}`;
+
+/** Rule #1 refusal — shared with account creation from a preset (`AccountsService.create`). */
+export const cannotGrantMessage = (keys: readonly PermissionKey[]): string =>
+  `Không thể cấp quyền bạn không có: ${keys.join(', ')}`;
 
 const UNKNOWN_PERMISSION = 'UNKNOWN_PERMISSION';
 const PERMISSION_DEPENDENCY = 'PERMISSION_DEPENDENCY';

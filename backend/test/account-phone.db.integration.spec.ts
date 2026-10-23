@@ -74,7 +74,13 @@ describeDb('accounts.phone constraints (real Postgres)', () => {
   it('findByPhone returns the owner of the number and never a phone-less account', async () => {
     await prisma.account.create({ data: account('none', null) });
     const owner = await prisma.account.create({ data: account('own', PHONE) });
-    const accounts = new AccountsService(prisma as unknown as PrismaService);
+    // Only the read path is exercised: the write collaborators are never reached.
+    const accounts = new AccountsService(
+      prisma as unknown as PrismaService,
+      null as never,
+      null as never,
+      null as never,
+    );
 
     expect((await accounts.findByPhone(PHONE))?.id).toBe(owner.id);
     expect(await accounts.findByPhone('+84900000778')).toBeNull();

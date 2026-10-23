@@ -78,6 +78,26 @@ void main() {
     );
 
     blocTest<AccountPermissionsCubit, AccountPermissionsState>(
+      'silent: the matrix stays until the reply replaces it (no loading state)',
+      build: () => AccountPermissionsCubit(port, _id),
+      seed: () => _seed(),
+      act: (cubit) async {
+        final f = cubit.load(silent: true);
+        port.lists.last.complete([_saved]);
+        port.options.last.complete(_options);
+        await f;
+      },
+      expect: () => [
+        AccountPermissionsState(
+          status: AccountPermissionsStatus.ready,
+          account: _saved,
+          options: _options,
+          draft: {..._saved.permissions},
+        ),
+      ],
+    );
+
+    blocTest<AccountPermissionsCubit, AccountPermissionsState>(
       'an id missing from the list ⇒ error',
       build: () => AccountPermissionsCubit(port, _id),
       act: (cubit) async {

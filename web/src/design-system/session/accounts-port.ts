@@ -24,6 +24,22 @@ export type PermissionOption = Schemas['PermissionOptionDto'];
 /** One role preset — default values only, never stored on the account (`RolePresetOptionDto`). */
 export type RolePresetOption = Schemas['RolePresetOptionDto'];
 
+/** Body of `POST /accounts` (`CreateAccountRequestDto`): `phone` raw as typed, `preset` loaded server-side. */
+export type CreateAccountInput = Schemas['CreateAccountRequestDto'];
+
+/** Body of `PUT /accounts/{id}` (`UpdateAccountRequestDto`): all four fields, no password. */
+export type UpdateAccountInput = Schemas['UpdateAccountRequestDto'];
+
+/**
+ * The AD-5 error envelope the port rejects with. The account form renders `message`
+ * verbatim and pins `fieldErrors` under the matching input — the client owns none of
+ * these rules, so it owns no words for them.
+ */
+export interface AccountsPortError {
+  message: string;
+  fieldErrors?: { field: string; message: string }[];
+}
+
 /** Injectable transport for the Phân quyền screen — a PORT, not an HTTP client. */
 export interface AccountsPort {
   listAccounts(): Promise<AccountPermissionSummary[]>;
@@ -34,4 +50,16 @@ export interface AccountsPort {
    * escalation), 404.
    */
   updatePermissions(id: string, permissions: string[]): Promise<AccountPermissionSummary>;
+  /**
+   * Creates an account and loads its preset. Rejects with the AD-5 error: 400
+   * (`fieldErrors` on displayName/phone/email/password/preset), 403 (a preset the caller
+   * cannot grant in full), 409 (`fieldErrors.phone` / `.email` taken).
+   */
+  createAccount(input: CreateAccountInput): Promise<AccountPermissionSummary>;
+  /**
+   * Replaces the profile and active flag (`isActive: false` deactivates and revokes every
+   * session). Rejects with the AD-5 error: 400 (`fieldErrors`), 403 (self, escalation),
+   * 404, 409 (`fieldErrors.phone` / `.email` taken).
+   */
+  updateAccount(id: string, input: UpdateAccountInput): Promise<AccountPermissionSummary>;
 }

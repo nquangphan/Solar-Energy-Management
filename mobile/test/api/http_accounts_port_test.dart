@@ -170,4 +170,115 @@ void main() {
       ),
     );
   });
+
+  test(
+    'createAccount POSTs the raw phone, the preset key and the flag to /accounts',
+    () async {
+      final (s, port) = await _port((_) => jsonBody(201, _summary()));
+      final result = await port.createAccount(
+        const CreateAccountInput(
+          displayName: 'Bình',
+          phone: '0912 345 678',
+          email: 'b@x.test',
+          password: 'MatKhau123',
+          preset: RolePreset.thoKs,
+          isActive: true,
+        ),
+      );
+      expect(result.id, 'acc-2');
+      final request = s.adapter.requests.single;
+      expect([request.method, request.path], ['POST', '/accounts']);
+      expect(request.json, {
+        'displayName': 'Bình',
+        'phone': '0912 345 678',
+        'email': 'b@x.test',
+        'password': 'MatKhau123',
+        'preset': 'THO_KS',
+        'isActive': true,
+      });
+    },
+  );
+
+  test(
+    'updateAccount PUTs exactly the four fields to /accounts/{id}',
+    () async {
+      final (s, port) = await _port((_) => jsonBody(200, _summary()));
+      await port.updateAccount(
+        'acc-2',
+        const UpdateAccountInput(
+          displayName: 'Bình',
+          phone: '0912 345 679',
+          email: 'b@x.test',
+          isActive: false,
+        ),
+      );
+      final request = s.adapter.requests.single;
+      expect([request.method, request.path], ['PUT', '/accounts/acc-2']);
+      expect(request.json, {
+        'displayName': 'Bình',
+        'phone': '0912 345 679',
+        'email': 'b@x.test',
+        'isActive': false,
+      });
+    },
+  );
+
+  test(
+    '409 on the phone ⇒ AccountsPortException with fieldErrors.phone',
+    () async {
+      const sentence = 'Số điện thoại đã thuộc tài khoản khác.';
+      final (_, port) = await _port(
+        (_) => jsonBody(
+          409,
+          envelope(
+            'CONFLICT',
+            sentence,
+            fieldErrors: [
+              {'field': 'phone', 'code': 'isUnique', 'message': sentence},
+            ],
+          ),
+        ),
+      );
+      await expectLater(
+        port.updateAccount(
+          'acc-2',
+          const UpdateAccountInput(
+            displayName: 'Bình',
+            phone: '0912 345 679',
+            email: 'b@x.test',
+            isActive: true,
+          ),
+        ),
+        throwsA(
+          isA<AccountsPortException>()
+              .having((e) => e.message, 'message', sentence)
+              .having((e) => e.fieldErrors, 'fieldErrors', {'phone': sentence}),
+        ),
+      );
+    },
+  );
+
+  test(
+    'createAccount with the backend unreachable ⇒ the network sentence',
+    () async {
+      final (_, port) = await _port(refuseConnection);
+      await expectLater(
+        port.createAccount(
+          const CreateAccountInput(
+            displayName: 'Bình',
+            phone: '0912 345 678',
+            email: 'b@x.test',
+            password: 'MatKhau123',
+            preset: RolePreset.keToan,
+            isActive: true,
+          ),
+        ),
+        throwsA(
+          isA<AccountsPortException>()
+              .having((e) => e.message, 'message', kNetworkErrorMessage)
+              .having((e) => e.fieldErrors, 'fieldErrors', isEmpty),
+        ),
+      );
+    },
+  );
 }

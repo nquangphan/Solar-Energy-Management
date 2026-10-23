@@ -118,7 +118,12 @@ void main() {
     });
 
     test('Phân quyền and one account follow permissions.manage only', () {
-      for (final path in [kPermissionsPath, permissionAccountPath('acc-1')]) {
+      for (final path in [
+        kPermissionsPath,
+        permissionAccountPath('acc-1'),
+        kAccountNewPath,
+        accountEditPath('acc-1'),
+      ]) {
         expect(isOpenable(path, {'permissions.manage'}), isTrue, reason: path);
         expect(isOpenable(path, {'settings.manage', 'orders.view_all'}), isFalse, reason: path);
       }
@@ -132,6 +137,11 @@ void main() {
 
   test('permissionAccountPath escapes the id into one segment', () {
     expect(permissionAccountPath('a/b'), '/permissions/a%2Fb');
+  });
+
+  test('the account form paths: new, and edit under the escaped id', () {
+    expect(kAccountNewPath, '/permissions/new');
+    expect(accountEditPath('a/b'), '/permissions/a%2Fb/edit');
   });
 
   test('order paths escape their ids into one segment each', () {

@@ -8,6 +8,9 @@
 // backend (AD-2); the dependency banner displays the `requires` data it sends,
 // and Lưu stays disabled while a gap is left — the backend refuses it too.
 //
+// "Sửa account" opens the account form (Story 8.3) for an editable account; the
+// matrix reads again, without a skeleton, when it closes.
+//
 // AccountPermissionsCubit reads and saves through the injected [AccountsPort];
 // the screen only renders its state and forwards taps.
 
@@ -31,11 +34,15 @@ class AccountPermissionsScreen extends StatefulWidget {
     required this.port,
     required this.accountId,
     this.onBack,
+    this.onEdit,
   });
 
   final AccountsPort port;
   final String accountId;
   final VoidCallback? onBack;
+
+  /// Opens the account form; the matrix reads again when it completes.
+  final Future<void> Function()? onEdit;
 
   @override
   State<AccountPermissionsScreen> createState() =>
@@ -53,6 +60,11 @@ class _AccountPermissionsScreenState extends State<AccountPermissionsScreen> {
   void dispose() {
     _cubit.close();
     super.dispose();
+  }
+
+  Future<void> _edit() async {
+    await widget.onEdit?.call();
+    if (mounted) _cubit.load(silent: true);
   }
 
   Future<void> _pickPreset(List<RolePresetOption> presets) async {
@@ -179,6 +191,15 @@ class _AccountPermissionsScreenState extends State<AccountPermissionsScreen> {
           ),
         ),
         gap,
+        if (editable && widget.onEdit != null) ...[
+          AppButton(
+            variant: AppButtonVariant.ghost,
+            label: 'Sửa account',
+            wide: true,
+            onPressed: state.saving ? null : _edit,
+          ),
+          gap,
+        ],
         if (editable && options.presets.isNotEmpty) ...[
           AppButton(
             variant: AppButtonVariant.accent,

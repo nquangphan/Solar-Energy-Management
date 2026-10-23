@@ -86,3 +86,54 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Account form (Story 8.3, mockup s-account-form): one card, max 520px. */
+.acct-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  max-width: 520px;
+}
+
+.acct-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+}
+
+/* Field-level backend error, pinned under its input (AD-5). The words are the server's. */
+.acct-field-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+/* The preset picker: a button standing in for the select the design system does not have. */
+.acct-preset {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.acct-flags {
+  display: flex;
+  gap: 8px;
+}
+
+/* A bare hit area around a display-only ScopeFlag; the flag draws itself. */
+.acct-flag {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.acct-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

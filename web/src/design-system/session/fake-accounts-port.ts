@@ -6,7 +6,13 @@
 
 import { PERMISSION_KEYS as K } from '../gating/permission-keys.generated';
 
-import type { AccountPermissionSummary, AccountsPort, PermissionOptions } from './accounts-port';
+import type {
+  AccountPermissionSummary,
+  AccountsPort,
+  CreateAccountInput,
+  PermissionOptions,
+  UpdateAccountInput,
+} from './accounts-port';
 
 const THO_KS = [
   K.quotesCreateEdit,
@@ -149,6 +155,8 @@ export const DEMO_ACCOUNTS: AccountPermissionSummary[] = [
 
 export class FakeAccountsPort implements AccountsPort {
   readonly saved: { id: string; permissions: string[] }[] = [];
+  readonly created: CreateAccountInput[] = [];
+  readonly updated: { id: string; input: UpdateAccountInput }[] = [];
   private listCalls = 0;
 
   constructor(
@@ -180,5 +188,29 @@ export class FakeAccountsPort implements AccountsPort {
       matchingPreset: null,
       matchingPresetLabel: null,
     });
+  }
+
+  createAccount(input: CreateAccountInput): Promise<AccountPermissionSummary> {
+    this.created.push(input);
+    const preset = this.options.presets.find((p) => p.key === input.preset);
+    // A fresh id per call, so two creates are distinguishable.
+    return Promise.resolve({
+      id: `new-${this.created.length}`,
+      displayName: input.displayName,
+      phone: input.phone,
+      email: input.email,
+      isActive: input.isActive,
+      permissions: [...(preset?.permissions ?? [])].sort(),
+      matchingPreset: preset?.key ?? null,
+      matchingPresetLabel: preset?.label ?? null,
+      editable: true,
+      readOnlyReason: null,
+    });
+  }
+
+  updateAccount(id: string, input: UpdateAccountInput): Promise<AccountPermissionSummary> {
+    this.updated.push({ id, input });
+    const account = this.accounts.find((a) => a.id === id) ?? this.accounts[0];
+    return Promise.resolve({ ...account, ...input });
   }
 }

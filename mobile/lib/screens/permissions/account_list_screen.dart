@@ -2,7 +2,8 @@
 // #s-permissions; twin of the web PermissionsScreen's left column). Menu →
 // Phân quyền: every account with its preset label ("Tuỳ chỉnh" when none
 // matches) and "Đã vô hiệu" for a disabled one. Tapping a row opens its
-// permission matrix; the list reads again when that screen closes.
+// permission matrix; the list reads again when that screen closes. "Tạo"
+// opens the account form (Story 8.3); the list reads again when it is done.
 //
 // AccountListCubit reads through the injected [AccountsPort]; the screen only
 // renders its state and forwards taps.
@@ -27,12 +28,21 @@ const String kCustomPresetLabel = 'Tuỳ chỉnh';
 const int kPermissionsTabIndex = 4;
 
 class AccountListScreen extends StatefulWidget {
-  const AccountListScreen({super.key, required this.port, this.onOpen});
+  const AccountListScreen({
+    super.key,
+    required this.port,
+    this.onOpen,
+    this.onCreate,
+  });
 
   final AccountsPort port;
 
   /// Opens one account's matrix; the list reads again when it completes.
   final Future<void> Function(String id)? onOpen;
+
+  /// Opens the account form (then the new account's matrix); the list reads
+  /// again when it completes. Absent ⇒ no "Tạo" action.
+  final Future<void> Function()? onCreate;
 
   @override
   State<AccountListScreen> createState() => _AccountListScreenState();
@@ -53,6 +63,11 @@ class _AccountListScreenState extends State<AccountListScreen> {
     if (mounted) _cubit.load();
   }
 
+  Future<void> _create() async {
+    await widget.onCreate?.call();
+    if (mounted) _cubit.load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider.value(
@@ -64,9 +79,11 @@ class _AccountListScreenState extends State<AccountListScreen> {
   Widget _view(BuildContext context, AccountListState state) {
     return AppPhoneFrame(
       child: AppMobileShell(
-        topbar: const AppTopbar(
+        topbar: AppTopbar(
           eyebrow: 'QUẢN TRỊ',
           title: 'Phân quyền & tài khoản',
+          action: widget.onCreate == null ? null : const Text('+ Tạo'),
+          onAction: widget.onCreate == null ? null : _create,
         ),
         bottomNav: const AppBottomNav(activeIndex: kPermissionsTabIndex),
         body: _body(state),

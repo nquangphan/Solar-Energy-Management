@@ -14,6 +14,13 @@ class HeldAccountsPort implements AccountsPort {
   final List<(String, List<String>)> updateCalls = <(String, List<String>)>[];
   final List<Completer<AccountPermissionSummary>> updates =
       <Completer<AccountPermissionSummary>>[];
+  final List<CreateAccountInput> createCalls = <CreateAccountInput>[];
+  final List<(String, UpdateAccountInput)> updateAccountCalls =
+      <(String, UpdateAccountInput)>[];
+
+  /// One completer per create/update-account call, in call order.
+  final List<Completer<AccountPermissionSummary>> accountWrites =
+      <Completer<AccountPermissionSummary>>[];
 
   @override
   Future<List<AccountPermissionSummary>> listAccounts() {
@@ -37,6 +44,25 @@ class HeldAccountsPort implements AccountsPort {
     updateCalls.add((id, permissions));
     final c = Completer<AccountPermissionSummary>();
     updates.add(c);
+    return c.future;
+  }
+
+  @override
+  Future<AccountPermissionSummary> createAccount(CreateAccountInput input) {
+    createCalls.add(input);
+    final c = Completer<AccountPermissionSummary>();
+    accountWrites.add(c);
+    return c.future;
+  }
+
+  @override
+  Future<AccountPermissionSummary> updateAccount(
+    String id,
+    UpdateAccountInput input,
+  ) {
+    updateAccountCalls.add((id, input));
+    final c = Completer<AccountPermissionSummary>();
+    accountWrites.add(c);
     return c.future;
   }
 }

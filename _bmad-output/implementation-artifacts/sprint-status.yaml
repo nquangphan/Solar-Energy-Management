@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (story 8.2 review)
+# last_updated: 2026-10-23 (story 8.3 review)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (story 8.2 review)
+last_updated: 2026-10-23 (story 8.3 review)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -118,7 +118,7 @@ development_status:
   epic-8: in-progress
   8-1-dashboard-van-hanh: done
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: done
-  8-3-form-tao-sua-vo-hieu-hoa-account: backlog
+  8-3-form-tao-sua-vo-hieu-hoa-account: done
   8-4-cau-hinh-ma-tran-quyen-hanh-dong-duyet: backlog
   8-5-man-xem-audit-log-chi-super-admin: backlog
   8-6-bao-cao-loi-nhuan-gop: backlog

@@ -305,6 +305,70 @@
         "tags": [
           "accounts"
         ]
+      },
+      "post": {
+        "operationId": "AccountsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Account mới kèm bộ quyền preset đã nạp.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPermissionSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Thiếu/sai field: họ tên, SĐT, email, mật khẩu, preset (VALIDATION_ERROR, fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu permissions.manage, hoặc preset có quyền người gọi không có (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
       }
     },
     "/accounts/permission-options": {
@@ -399,6 +463,91 @@
           },
           "404": {
             "description": "Không có account này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/accounts/{id}": {
+      "put": {
+        "operationId": "AccountsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account sau khi lưu hồ sơ / trạng thái (bộ quyền không đổi).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPermissionSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID, thiếu/sai field, hoặc gửi kèm mật khẩu (VALIDATION_ERROR, fieldErrors).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu permissions.manage, tự sửa tài khoản của mình, hoặc account mang quyền người gọi không có (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có account này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5895,6 +6044,81 @@
         },
         "required": [
           "permissions"
+        ]
+      },
+      "CreateAccountRequestDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Họ tên hiển thị.",
+            "example": "Trần Văn A"
+          },
+          "phone": {
+            "type": "string",
+            "description": "SĐT đăng nhập dạng THÔ — backend chuẩn hoá về E.164. Không hợp lệ ⇒ 400, trùng ⇒ 409.",
+            "example": "0912 345 678"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email liên hệ (backend trim + lowercase). Trùng ⇒ 409.",
+            "example": "a.tran@phuongnamsolar.vn"
+          },
+          "password": {
+            "type": "string",
+            "description": "Mật khẩu ban đầu — tối thiểu 8 ký tự, có chữ và số.",
+            "example": "MatKhau123"
+          },
+          "preset": {
+            "description": "Preset nạp bộ quyền mặc định lúc tạo. Preset người gọi không cấp trọn được ⇒ 403.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RolePreset"
+              }
+            ]
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = tạo ở trạng thái tạm khoá."
+          }
+        },
+        "required": [
+          "displayName",
+          "phone",
+          "email",
+          "password",
+          "preset",
+          "isActive"
+        ]
+      },
+      "UpdateAccountRequestDto": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "description": "Họ tên hiển thị.",
+            "example": "Trần Văn A"
+          },
+          "phone": {
+            "type": "string",
+            "description": "SĐT đăng nhập dạng THÔ — backend chuẩn hoá về E.164. Không hợp lệ ⇒ 400, trùng ⇒ 409.",
+            "example": "0912 345 678"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email liên hệ (backend trim + lowercase). Trùng ⇒ 409.",
+            "example": "a.tran@phuongnamsolar.vn"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = vô hiệu hoá (thu hồi mọi phiên)."
+          }
+        },
+        "required": [
+          "displayName",
+          "phone",
+          "email",
+          "isActive"
         ]
       },
       "FeatureFlagResponseDto": {

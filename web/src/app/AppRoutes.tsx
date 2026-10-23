@@ -3,7 +3,7 @@
 // and never builds an adapter itself (AD-12).
 import { useMemo } from 'react';
 import type { ReactElement } from 'react';
-import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router';
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router';
 
 import { Button, Card, ErrorState, Skeleton } from '../design-system/components';
 import { can, PERMISSION_KEYS } from '../design-system/gating';
@@ -47,10 +47,12 @@ import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
 import { OrderStatusChangeScreen } from '../screens/orders/OrderStatusChangeScreen';
 import { PaymentScheduleScreen } from '../screens/payments/PaymentScheduleScreen';
+import { AccountFormScreen } from '../screens/permissions/AccountFormScreen';
 import { PermissionsScreen } from '../screens/permissions/PermissionsScreen';
 import { CustomerSourceConfigScreen } from '../screens/settings/CustomerSourceConfigScreen';
 import { WarrantyLookupScreen } from '../screens/warranty/WarrantyLookupScreen';
 import {
+  ACCOUNT_NEW_PATH,
   AVAILABLE_NAV_KEYS,
   CUSTOMER_LOOKUP_PATH,
   DISCOUNT_APPROVALS_PATH,
@@ -59,6 +61,7 @@ import {
   NAV_ROUTES,
   ORDER_NEW_PATH,
   STOCK_VOUCHERS_PATH,
+  accountEditPath,
   customerPath,
   landingPath,
   openableKeys,
@@ -360,7 +363,45 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
             <CustomerSourceConfigScreen port={ports.customerSources} settingsPort={ports.settings} />,
           )}
         />
-        <Route path={NAV_ROUTES.permissions} element={gate('permissions', <PermissionsScreen port={ports.accounts} />)} />
+        <Route
+          path={NAV_ROUTES.permissions}
+          element={gate(
+            'permissions',
+            <PermissionsRoute
+              port={ports.accounts}
+              onCreate={() => navigate(ACCOUNT_NEW_PATH)}
+              onEdit={(id) => navigate(accountEditPath(id))}
+            />,
+          )}
+        />
+        {/* Children of Phân quyền (same gate); the static `new` is declared before `:id/edit`. */}
+        <Route
+          path={ACCOUNT_NEW_PATH}
+          element={gate(
+            'permissions',
+            <AccountFormScreen
+              port={ports.accounts}
+              onDone={(id) => navigate(NAV_ROUTES.permissions, { state: { selectAccountId: id } })}
+              onCancel={() => navigate(NAV_ROUTES.permissions)}
+            />,
+          )}
+        />
+        <Route
+          path={`${NAV_ROUTES.permissions}/:id/edit`}
+          element={gate(
+            'permissions',
+            <ParamsRoute
+              render={({ id = '' }) => (
+                <AccountFormScreen
+                  port={ports.accounts}
+                  accountId={id}
+                  onDone={(saved) => navigate(NAV_ROUTES.permissions, { state: { selectAccountId: saved } })}
+                  onCancel={() => navigate(NAV_ROUTES.permissions, { state: { selectAccountId: id } })}
+                />
+              )}
+            />,
+          )}
+        />
         <Route
           path={NAV_ROUTES.profile}
           element={gate('profile', <ProfileScreen port={ports.password} onLogout={onLogout} />)}
@@ -374,6 +415,16 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
 /** Hands the route's (decoded) params to `render` — the order screens take their ids as props. */
 function ParamsRoute({ render }: { render: (params: Readonly<Partial<Record<string, string>>>) => ReactElement }) {
   return render(useParams());
+}
+
+/**
+ * Phân quyền reads the account to select from the navigation state the account form leaves
+ * behind (create/edit ⇒ back to the matrix of that account). The screen itself stays router-free.
+ */
+function PermissionsRoute(props: { port: AccountsPort; onCreate: () => void; onEdit: (id: string) => void }) {
+  const state = useLocation().state as { selectAccountId?: unknown } | null;
+  const selectAccountId = typeof state?.selectAccountId === 'string' ? state.selectAccountId : undefined;
+  return <PermissionsScreen {...props} selectAccountId={selectAccountId} />;
 }
 
 /** The router hands back the decoded segment, so `%2B84…` arrives as `+84…`. */

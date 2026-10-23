@@ -8,6 +8,7 @@ import { AppRoutes, SignedOutRoutes } from '../app/AppRoutes';
 import type { AppPorts } from '../app/AppRoutes';
 import { AVAILABLE_NAV_KEYS, NAV_ROUTES } from '../app/routes';
 import {
+  DEMO_ACCOUNTS,
   FakeAccountsPort,
   FakeAuthPort,
   FakeCatalogPort,
@@ -144,6 +145,69 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(navLabels()).not.toContain('Phân quyền');
     expect(listWithout).not.toHaveBeenCalled();
+  });
+
+  it('the account form routes inherit the Phân quyền gate; /permissions/new is never an account id', async () => {
+    const without = ports(ALL_PERMISSIONS.filter((key) => key !== 'permissions.manage'));
+    const options = vi.spyOn(without.accounts, 'getPermissionOptions');
+    const list = vi.spyOn(without.accounts, 'listAccounts');
+    for (const path of ['/permissions/new', '/permissions/6f1c2a4e-0b7d-4c1a-9d3e-2f5a8b7c9d10/edit']) {
+      renderAt(path, without);
+      await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
+      expect(screen.getByTestId('path').textContent, path).toBe('/dashboard');
+      cleanup();
+    }
+    expect(options).not.toHaveBeenCalled();
+    expect(list).not.toHaveBeenCalled();
+
+    const withPerm = ports(ALL_PERMISSIONS);
+    const listWith = vi.spyOn(withPerm.accounts, 'listAccounts');
+    renderAt('/permissions/new', withPerm);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Tạo tài khoản mới'));
+    expect(listWith).not.toHaveBeenCalled();
+  });
+
+  it('"+ Tạo account" → save ⇒ back on /permissions with the new account selected; "Sửa account" opens its edit route', async () => {
+    const appPorts = ports(ALL_PERMISSIONS);
+    renderAt('/permissions', appPorts);
+    fireEvent.click(await screen.findByRole('button', { name: /Tạo account/ }));
+    expect(screen.getByTestId('path').textContent).toBe('/permissions/new');
+    await screen.findByLabelText('Họ tên');
+    fireEvent.change(screen.getByLabelText('Họ tên'), { target: { value: 'Trần Văn A' } });
+    fireEvent.change(screen.getByLabelText('Số điện thoại (dùng đăng nhập)'), { target: { value: '0912 345 678' } });
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@local.test' } });
+    fireEvent.change(screen.getByLabelText('Mật khẩu ban đầu'), { target: { value: 'MatKhau123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Chọn preset' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Thợ khảo sát' }));
+    // The fake answers `new-1`; point it at a listed account so the matrix can select it.
+    vi.spyOn(appPorts.accounts, 'createAccount').mockResolvedValue({
+      ...DEMO_ACCOUNTS[0],
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu account' }));
+
+    await vi.waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/permissions'));
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: /Trần Văn A/ }).getAttribute('aria-pressed')).toBe('true'),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa account' }));
+    expect(screen.getByTestId('path').textContent).toBe(`/permissions/${DEMO_ACCOUNTS[0].id}/edit`);
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Sửa tài khoản'));
+  });
+
+  it('leaving the edit form — saved or cancelled — lands on /permissions with that account selected', async () => {
+    const edited = DEMO_ACCOUNTS[1];
+    for (const leave of ['Lưu account', 'Huỷ']) {
+      renderAt(`/permissions/${edited.id}/edit`, ports(ALL_PERMISSIONS));
+      await screen.findByLabelText('Họ tên');
+      fireEvent.change(screen.getByLabelText('Số điện thoại (dùng đăng nhập)'), { target: { value: '0912 345 670' } });
+      fireEvent.click(screen.getByRole('button', { name: leave }));
+
+      await vi.waitFor(() => expect(screen.getByTestId('path').textContent, leave).toBe('/permissions'));
+      await vi.waitFor(() =>
+        expect(screen.getByRole('button', { name: /Lê Thị C/ }).getAttribute('aria-pressed'), leave).toBe('true'),
+      );
+      cleanup();
+    }
   });
 
   it('"/" lands on Trang chủ (/dashboard) for every account: it is first in the sidebar and needs no permission', async () => {

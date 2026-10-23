@@ -134,6 +134,13 @@ class FakeAccountsPort implements AccountsPort {
   /// When set, the next [updatePermissions] throws it.
   Object? updateError;
 
+  final List<CreateAccountInput> createCalls = <CreateAccountInput>[];
+  final List<(String, UpdateAccountInput)> updateAccountCalls =
+      <(String, UpdateAccountInput)>[];
+
+  /// When set, the next [createAccount] / [updateAccount] throws it.
+  Object? accountError;
+
   @override
   Future<List<AccountPermissionSummary>> listAccounts() async {
     listCalls++;
@@ -181,6 +188,62 @@ class FakeAccountsPort implements AccountsPort {
       permissions: <String>[...permissions]..sort(),
       matchingPreset: null,
       matchingPresetLabel: null,
+    );
+    accounts = <AccountPermissionSummary>[
+      for (final AccountPermissionSummary a in accounts) a.id == id ? saved : a,
+    ];
+    return saved;
+  }
+
+  @override
+  Future<AccountPermissionSummary> createAccount(
+    CreateAccountInput input,
+  ) async {
+    createCalls.add(input);
+    final Object? error = accountError;
+    if (error != null) {
+      accountError = null;
+      throw error;
+    }
+    final RolePresetOption? preset = options.presets
+        .where((p) => p.key == input.preset)
+        .firstOrNull;
+    // A fresh id per call, so two creates are distinguishable.
+    final AccountPermissionSummary created = demoAccount(
+      id: 'new-${createCalls.length}',
+      displayName: input.displayName,
+      phone: input.phone,
+      isActive: input.isActive,
+      permissions: <String>[...?preset?.permissions]..sort(),
+      matchingPreset: preset?.key,
+      matchingPresetLabel: preset?.label,
+    );
+    accounts = <AccountPermissionSummary>[...accounts, created];
+    return created;
+  }
+
+  @override
+  Future<AccountPermissionSummary> updateAccount(
+    String id,
+    UpdateAccountInput input,
+  ) async {
+    updateAccountCalls.add((id, input));
+    final Object? error = accountError;
+    if (error != null) {
+      accountError = null;
+      throw error;
+    }
+    final AccountPermissionSummary current = accounts.firstWhere(
+      (a) => a.id == id,
+    );
+    final AccountPermissionSummary saved = demoAccount(
+      id: id,
+      displayName: input.displayName,
+      phone: input.phone,
+      isActive: input.isActive,
+      permissions: current.permissions,
+      matchingPreset: current.matchingPreset,
+      matchingPresetLabel: current.matchingPresetLabel,
     );
     accounts = <AccountPermissionSummary>[
       for (final AccountPermissionSummary a in accounts) a.id == id ? saved : a,

@@ -23,9 +23,11 @@ class AccountPermissionsCubit extends Cubit<AccountPermissionsState> {
 
   int _ticket = 0;
 
-  Future<void> load() async {
+  /// [silent]: keep the current matrix on screen until the reply (coming back
+  /// from the account form) instead of the loading skeleton.
+  Future<void> load({bool silent = false}) async {
     final int ticket = ++_ticket;
-    emit(const AccountPermissionsState());
+    if (!silent) emit(const AccountPermissionsState());
     try {
       final (
         List<AccountPermissionSummary> accounts,

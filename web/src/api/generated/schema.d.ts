@@ -139,7 +139,7 @@ export interface paths {
         };
         get: operations["AccountsController_list"];
         put?: never;
-        post?: never;
+        post: operations["AccountsController_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -171,6 +171,22 @@ export interface paths {
         };
         get?: never;
         put: operations["AccountsController_updatePermissions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AccountsController_update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1232,6 +1248,51 @@ export interface components {
              *     ]
              */
             permissions: string[];
+        };
+        CreateAccountRequestDto: {
+            /**
+             * @description Họ tên hiển thị.
+             * @example Trần Văn A
+             */
+            displayName: string;
+            /**
+             * @description SĐT đăng nhập dạng THÔ — backend chuẩn hoá về E.164. Không hợp lệ ⇒ 400, trùng ⇒ 409.
+             * @example 0912 345 678
+             */
+            phone: string;
+            /**
+             * @description Email liên hệ (backend trim + lowercase). Trùng ⇒ 409.
+             * @example a.tran@phuongnamsolar.vn
+             */
+            email: string;
+            /**
+             * @description Mật khẩu ban đầu — tối thiểu 8 ký tự, có chữ và số.
+             * @example MatKhau123
+             */
+            password: string;
+            /** @description Preset nạp bộ quyền mặc định lúc tạo. Preset người gọi không cấp trọn được ⇒ 403. */
+            preset: components["schemas"]["RolePreset"];
+            /** @description false = tạo ở trạng thái tạm khoá. */
+            isActive: boolean;
+        };
+        UpdateAccountRequestDto: {
+            /**
+             * @description Họ tên hiển thị.
+             * @example Trần Văn A
+             */
+            displayName: string;
+            /**
+             * @description SĐT đăng nhập dạng THÔ — backend chuẩn hoá về E.164. Không hợp lệ ⇒ 400, trùng ⇒ 409.
+             * @example 0912 345 678
+             */
+            phone: string;
+            /**
+             * @description Email liên hệ (backend trim + lowercase). Trùng ⇒ 409.
+             * @example a.tran@phuongnamsolar.vn
+             */
+            email: string;
+            /** @description false = vô hiệu hoá (thu hồi mọi phiên). */
+            isActive: boolean;
         };
         FeatureFlagResponseDto: {
             /** @description Tên cờ chính tắc (khoá chính). Chỉ những cờ trong registry mới tồn tại. */
@@ -3265,6 +3326,57 @@ export interface operations {
             };
         };
     };
+    AccountsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccountRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Account mới kèm bộ quyền preset đã nạp. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPermissionSummaryDto"];
+                };
+            };
+            /** @description Thiếu/sai field: họ tên, SĐT, email, mật khẩu, preset (VALIDATION_ERROR, fieldErrors). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu permissions.manage, hoặc preset có quyền người gọi không có (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
     AccountsController_permissionOptions: {
         parameters: {
             query?: never;
@@ -3338,6 +3450,68 @@ export interface operations {
             };
             /** @description Không có account này (NOT_FOUND). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    AccountsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Account sau khi lưu hồ sơ / trạng thái (bộ quyền không đổi). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPermissionSummaryDto"];
+                };
+            };
+            /** @description id không phải UUID, thiếu/sai field, hoặc gửi kèm mật khẩu (VALIDATION_ERROR, fieldErrors). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu permissions.manage, tự sửa tài khoản của mình, hoặc account mang quyền người gọi không có (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Không có account này (NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email). */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

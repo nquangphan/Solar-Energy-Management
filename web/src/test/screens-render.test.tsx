@@ -44,6 +44,7 @@ import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen'
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { AccountFormScreen } from '../screens/permissions/AccountFormScreen';
 import { PermissionsScreen } from '../screens/permissions/PermissionsScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
@@ -280,7 +281,29 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(screen.getByText('Áp preset role')).toBeTruthy();
     expect(screen.getByLabelText('Tạo/sửa báo giá')).toBeTruthy();
   });
+
+  it('AccountFormScreen — create mode: profile fields, password, preset picker, status flags', async () => {
+    renderScreen(<AccountFormScreen port={new FakeAccountsPort()} onDone={() => {}} onCancel={() => {}} />);
+    expect(await screen.findByLabelText('Số điện thoại (dùng đăng nhập)')).toBeTruthy();
+    expect(screen.getByLabelText('Mật khẩu ban đầu')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Chọn preset' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Kích hoạt/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('AccountFormScreen — edit mode: the account loaded from the port, no password, no preset', async () => {
+    renderScreen(
+      <AccountFormScreen
+        port={new FakeAccountsPort()}
+        accountId="6f1c2a4e-0b7d-4c1a-9d3e-2f5a8b7c9d10"
+        onDone={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(((await screen.findByLabelText('Họ tên')) as HTMLInputElement).value).toBe('Trần Văn A');
+    expect(screen.queryByLabelText('Mật khẩu ban đầu')).toBeNull();
+    expect(screen.queryByText('Role preset')).toBeNull();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 21;
+const SCREEN_COUNT = 22;

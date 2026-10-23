@@ -4,6 +4,8 @@
 // disable Lưu; a non-grantable box and a read-only account cannot be changed; a
 // refused save shows the backend sentence and keeps the ticks; torn down while
 // pending.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
@@ -275,6 +277,67 @@ void main() {
       again.options.last.complete(demoOptions());
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    '"Sửa account" only on an editable account; coming back reads again without a skeleton',
+    (tester) async {
+      _tall(tester);
+      final readOnly = FakeAccountsPort(
+        accounts: [
+          demoAccount(
+            editable: false,
+            readOnlyReason: 'Đây là tài khoản của bạn.',
+          ),
+        ],
+      );
+      await tester.pumpWidget(
+        _host(
+          AccountPermissionsScreen(
+            port: readOnly,
+            accountId: kDemoWorkerId,
+            onEdit: () async {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(AppButton, 'Sửa account'), findsNothing);
+
+      final port = HeldAccountsPort();
+      final Completer<void> closed = Completer<void>();
+      var opened = 0;
+      await tester.pumpWidget(
+        _host(
+          AccountPermissionsScreen(
+            key: const ValueKey<String>('editable'),
+            port: port,
+            accountId: kDemoWorkerId,
+            onEdit: () {
+              opened++;
+              return closed.future;
+            },
+          ),
+        ),
+      );
+      port.lists.last.complete([demoAccount()]);
+      port.options.last.complete(demoOptions());
+      await tester.pumpAndSettle();
+      final edit = find.widgetWithText(AppButton, 'Sửa account');
+      await tester.ensureVisible(edit);
+      await tester.tap(edit);
+      await tester.pumpAndSettle();
+      expect(opened, 1);
+
+      closed.complete();
+      await tester.pump();
+      expect(port.lists, hasLength(2));
+      expect(find.byType(AppSkeleton), findsNothing);
+      expect(find.text('Quyền · Bình Thợ'), findsOneWidget);
+      port.lists.last.complete([demoAccount(displayName: 'Bình Mới')]);
+      port.options.last.complete(demoOptions());
+      await tester.pumpAndSettle();
+      expect(find.text('Quyền · Bình Mới'), findsOneWidget);
     },
   );
 }

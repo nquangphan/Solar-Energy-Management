@@ -855,6 +855,17 @@ As a Admin, I want tạo/sửa/vô hiệu hoá Account và chọn Role preset l�
 - **Given** thay đổi account, **When** lưu, **Then** ghi Audit qua event (FR-16, AD-18).
 - **Given** form tạo/sửa account, **When** lưu, **Then** SĐT BẮT BUỘC (đăng nhập bằng SĐT từ Story 10.9) — chuẩn hoá `normalizeVnPhone` (E.164), unique (`accounts_phone_key`, P2002 ⇒ 409/400 trỏ ô `phone`).
 - _Đã chốt (G-2 / TD-9, mặc định thành quyết định):_ Phase 1 chấp nhận access token cũ sống ≤15 phút sau đổi mật khẩu/đổi quyền/đăng xuất; vô hiệu hoá thì tức thời (JwtAuthGuard kiểm `isActive` mỗi request). Không làm denylist. Ghi vào `backend/CONVENTIONS.md` mục Auth nếu chưa có.
+- _Quyết định giữa story (2026-10-23, Story 8.3):_
+  - **Email bắt buộc trong form** (mockup chỉ có tên/SĐT/preset/trạng thái): `accounts.email` là NOT NULL `@unique` và `/me` + Hồ sơ đọc `email: string`; cho nullable kéo theo migration + đổi contract. Backend trim + lowercase như seed; trùng ⇒ 409 `fieldErrors.email`.
+  - **Mật khẩu ban đầu do admin đặt lúc tạo** (chính sách 8 ký tự, có chữ và số — câu backend). Form sửa không có ô mật khẩu; gửi `password` trong `PUT` ⇒ 400 (không lặng lẽ bỏ). Admin đặt lại mật khẩu người khác ngoài phạm vi.
+  - **Tạo nhận `preset`, không nhận bộ quyền:** `POST /accounts { displayName, phone, email, password, preset, isActive }` — backend nạp `ROLE_PRESETS[preset]` cùng transaction; preset người gọi không cấp trọn ⇒ 403 (luật #1). Tạo xong đáp vào ma trận quyền của account mới (web `/permissions` chọn sẵn qua state điều hướng; mobile pop form rồi push ma trận).
+  - **Sửa = `PUT /accounts/{id}` đủ 4 field** (`displayName, phone, email, isActive`), bộ quyền không đổi. Không tự sửa/vô hiệu hoá chính mình (403 "Không thể tự sửa tài khoản của chính mình."); account mang quyền người gọi không có ⇒ 403 (luật #2); nút "Sửa account" theo `editable` của `GET /accounts`.
+  - **Vô hiệu hoá = `isActive: false` trong form sửa:** MỖI lần lưu ở trạng thái tạm khoá (không chỉ lúc chuyển kích hoạt → khoá) thu hồi mọi phiên còn sống của account cùng transaction — account bị khoá bằng đường khác vẫn có thể còn phiên; kích hoạt lại không làm sống lại refresh token cũ; không xoá gì khác.
+  - **Quyền người gọi kiểm lại dưới khoá:** sau khi khoá, actor phải còn `permissions.manage` (đọc qua `tx`), không thì 403 "Không đủ quyền thực hiện" — một lần thu `permissions.manage` commit trong lúc chờ khoá thắng, kể cả khi actor vẫn cấp được preset / target mang ít quyền hơn.
+  - **Email trim trước khi validate** (`@Transform` ở DTO): dấu cách thừa từ bàn phím không thành "Email không hợp lệ.".
+  - **Trùng SĐT/email nhận diện bằng tra lại sau P2002** (không đọc `meta` của Prisma 7, không kiểm trước khi ghi) ⇒ 409 `fieldErrors.phone` / `.email` cả khi hai lần tạo đồng thời.
+  - **Một event mỗi lần lưu:** `AccountCreated` (`after` = hồ sơ + bộ quyền + preset) / `AccountUpdated` (`before` đọc dưới khoá, `after`); payload không mật khẩu/hash/token.
+  - **Route form:** web `/permissions/new`, `/permissions/:id/edit`; mobile cùng đường dẫn, khai trước `/permissions/:id`; cả hai thừa gate Phân quyền. Trạng thái chọn bằng hai cờ `ScopeFlag`/`AppScopeFlag` đặt trong phần tử bấm được của màn (primitive giữ nguyên cờ hiển thị).
 
 ### Story 8.4: Cấu hình ma trận quyền hành động & duyệt
 As a Admin, I want mỗi quyền chuyển trạng thái và quyền duyệt là một mục ma trận cấu hình được, So that phân quyền linh hoạt không hardcode.
