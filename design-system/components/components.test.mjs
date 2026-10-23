@@ -258,6 +258,7 @@ test('all data/feedback selectors and variants exist (AC-1/2/3/4)', () => {
     '.stepper', '.step', '.step .node', '.step .bul', '.step .st-label', '.step .bar',
     '.step.done', '.step.current', '.step.gate',
     '.kpis', '.kpi', '.kpi .k-l', '.kpi .k-v', '.kpi .k-d', '.kpi.accent',
+    '.chart', '.chart .bar', '.chart .bar b', '.chart .bar span',
   ];
   for (const sel of required) {
     assert.ok(css.includes(sel), `components.css missing selector: ${sel}`);

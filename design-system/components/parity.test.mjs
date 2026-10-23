@@ -193,7 +193,7 @@ test('mobile chip widgets stay read-only — never a control (AC-5, UX-DR-23)', 
 });
 
 test('every web component has a matching Flutter widget file (parity coverage)', () => {
-  // 23 components (web index.ts) → the Dart file that mirrors each. If a widget
+  // 24 components (web index.ts) → the Dart file that mirrors each. If a widget
   // ships on web but not mobile (or vice versa) this list catches it.
   const parityFiles = {
     Button: 'button.dart',
@@ -207,6 +207,7 @@ test('every web component has a matching Flutter widget file (parity coverage)',
     Table: 'table.dart',
     Stepper: 'stepper.dart',
     Kpi: 'kpi.dart',
+    BarChart: 'bar_chart.dart',
     Money: 'money_text.dart',
     Banner: 'banner.dart',
     CartLineRow: 'cart_line_row.dart',
@@ -233,7 +234,7 @@ test('the mobile widget classes carry the App-prefixed parity names', () => {
   const barrel = readFileSync(resolve(mobileDir, 'components.dart'), 'utf8');
   const names = [
     'AppButton', 'AppCard', 'AppFrame', 'AppField', 'AppChip', 'AppStatusChip',
-    'AppCustomerTypeChip', 'AppScopeFlag', 'AppTable', 'AppStepper', 'AppKpi',
+    'AppCustomerTypeChip', 'AppScopeFlag', 'AppTable', 'AppStepper', 'AppKpi', 'AppBarChart',
     'AppBanner', 'AppCartLineRow', 'AppDialog', 'AppConfirmDialog', 'AppSheet',
     'AppSkeleton', 'AppEmptyState', 'AppErrorState', 'AppShareButton',
     'AppImageUpload', 'AppAttachmentGallery', 'AppCheckbox',

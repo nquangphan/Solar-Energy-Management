@@ -14,6 +14,7 @@ import type {
   ContractsPort,
   CustomerSourcesPort,
   CustomersPort,
+  DashboardPort,
   InventoryPort,
   InvoicesPort,
   MePort,
@@ -34,6 +35,7 @@ import { ContractsScreen } from '../screens/contracts/ContractsScreen';
 import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen';
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
+import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { InvoiceDetailScreen } from '../screens/invoices/InvoiceDetailScreen';
@@ -84,6 +86,7 @@ export interface AppPorts {
   payments: PaymentsPort;
   contracts: ContractsPort;
   invoices: InvoicesPort;
+  dashboard: DashboardPort;
 }
 
 export interface SignedOutRoutesProps {
@@ -181,6 +184,7 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
   return (
     <SidebarNavContext.Provider value={nav}>
       <Routes>
+        <Route path={NAV_ROUTES.home} element={gate('home', <DashboardScreen port={ports.dashboard} />)} />
         <Route
           path={NAV_ROUTES.orders}
           element={gate(

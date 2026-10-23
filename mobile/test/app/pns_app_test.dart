@@ -19,6 +19,7 @@ import 'package:pns_mobile/design_system/session/fake_contracts_port.dart';
 import 'package:pns_mobile/design_system/session/fake_customers_port.dart';
 import 'package:pns_mobile/design_system/session/fake_inventory_port.dart';
 import 'package:pns_mobile/design_system/session/fake_invoices_port.dart';
+import 'package:pns_mobile/design_system/session/fake_dashboard_port.dart';
 import 'package:pns_mobile/design_system/session/fake_me_port.dart';
 import 'package:pns_mobile/design_system/session/fake_orders_port.dart';
 import 'package:pns_mobile/design_system/session/fake_password_port.dart';
@@ -27,6 +28,7 @@ import 'package:pns_mobile/design_system/session/fake_stock_vouchers_port.dart';
 import 'package:pns_mobile/design_system/session/fake_warranty_port.dart';
 import 'package:pns_mobile/screens/auth/forgot_password_screen.dart';
 import 'package:pns_mobile/screens/auth/login_screen.dart';
+import 'package:pns_mobile/screens/dashboard/dashboard_screen.dart';
 import 'package:pns_mobile/screens/menu/menu_screen.dart';
 
 import '../api/support/fake_http.dart';
@@ -59,6 +61,8 @@ ResponseBody _backend(RecordedRequest r) {
       return jsonBody(200, {'expiresInSeconds': 300});
     case '/me':
       return jsonBody(200, meBody(['customers.manage']));
+    case '/dashboard/summary':
+      return jsonBody(200, dashboardBody());
   }
   return jsonBody(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
 }
@@ -78,7 +82,7 @@ void main() {
     expect(find.text('9:41'), findsNothing);
   });
 
-  testWidgets('sign in ⇒ Menu; Menu → Đăng xuất ⇒ POST /auth/logout, store empty, back to Đăng nhập',
+  testWidgets('sign in ⇒ Trang chủ; Menu → Đăng xuất ⇒ POST /auth/logout, store empty, back to Đăng nhập',
       (tester) async {
     final app = TestApp(_backend);
     await tester.pumpWidget(app.widget);
@@ -88,9 +92,11 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), 'secret-1');
     await tester.tap(find.widgetWithText(AppButton, 'Đăng nhập'));
     await _settle(tester);
-    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.byType(DashboardScreen), findsOneWidget);
     expect(app.store.values[kRefreshTokenKey], 'refresh-1');
 
+    await openMenuTab(tester);
+    expect(find.byType(MenuScreen), findsOneWidget);
     await tester.tap(find.widgetWithText(AppButton, 'Đăng xuất'));
     await _settle(tester);
     expect(find.byType(LoginScreen), findsOneWidget);
@@ -99,14 +105,14 @@ void main() {
     expect(app.session.accessToken, isNull);
   });
 
-  testWidgets('a valid stored refresh token at start-up ⇒ straight to the Menu', (tester) async {
+  testWidgets('a valid stored refresh token at start-up ⇒ straight to Trang chủ', (tester) async {
     final app = TestApp(_backend);
     app.store.values[kRefreshTokenKey] = 'refresh-0';
     await tester.pumpWidget(app.widget);
     expect(find.byType(AppSkeleton), findsWidgets);
     await _settle(tester);
 
-    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.byType(DashboardScreen), findsOneWidget);
     expect(find.byType(LoginScreen), findsNothing);
     expect(app.adapter.to('/auth/refresh'), hasLength(1));
   });
@@ -126,7 +132,7 @@ void main() {
     app.store.values[kRefreshTokenKey] = 'refresh-0';
     await tester.pumpWidget(app.widget);
     await _settle(tester);
-    expect(find.byType(MenuScreen), findsOneWidget);
+    expect(find.byType(DashboardScreen), findsOneWidget);
 
     app.expired.value++;
     await tester.pump();
@@ -173,6 +179,7 @@ void main() {
     app.store.values[kRefreshTokenKey] = 'refresh-0';
     await tester.pumpWidget(app.widget);
     await _settle(tester);
+    await openMenuTab(tester);
     expect(find.byType(MenuScreen), findsOneWidget);
 
     app.adapter.handler = refuseConnection;
@@ -225,6 +232,7 @@ void main() {
         payments: FakePaymentsPort(),
         contracts: FakeContractsPort(),
         invoices: FakeInvoicesPort(),
+        dashboard: FakeDashboardPort(),
       ),
     ));
     await _settle(tester);
@@ -259,6 +267,7 @@ void main() {
     app.store.values[kRefreshTokenKey] = 'refresh-0';
     await tester.pumpWidget(app.widget);
     await _settle(tester);
+    await openMenuTab(tester);
 
     final logout = find.widgetWithText(AppButton, 'Đăng xuất');
     await tester.tap(logout);

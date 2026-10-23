@@ -930,6 +930,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DashboardController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2811,6 +2827,47 @@ export interface components {
             lines: components["schemas"]["InvoiceLineDto"][];
             /** @description File PDF đã xuất; null khi chưa xuất. */
             pdf: components["schemas"]["InvoicePdfResponseDto"] | null;
+        };
+        DashboardStatusCountDto: {
+            /**
+             * @example baogia
+             * @enum {string}
+             */
+            status: "baogia" | "choduyet" | "dachot" | "dacoc" | "thicong" | "nghiemthu" | "danggiao" | "dagiao" | "hoanthanh" | "huy";
+            /**
+             * @description Số đơn đang ở trạng thái này.
+             * @example 12
+             */
+            count: number;
+        };
+        DashboardSummaryResponseDto: {
+            /**
+             * @example month
+             * @enum {string}
+             */
+            period: "day" | "week" | "month";
+            /**
+             * @description Ngày đầu kỳ (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.
+             * @example 2026-10-01
+             */
+            from: string;
+            /**
+             * @description Ngày cuối kỳ = hôm nay (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.
+             * @example 2026-10-23
+             */
+            to: string;
+            /**
+             * @description Tổng tiền đã thu trong kỳ (theo ngày thu) của toàn công ty — số nguyên đồng. null khi thiếu quyền dashboard.finance_view.
+             * @example 1240000000
+             */
+            revenue: number | null;
+            /**
+             * @description Số đơn tạo trong kỳ, trong phạm vi xem đơn của người gọi. null khi thiếu cả orders.view_all lẫn orders.view_own.
+             * @example 37
+             */
+            newOrderCount: number | null;
+            /** @description Số đơn hiện tại theo từng trạng thái (không lọc theo kỳ), đủ mọi trạng thái theo thứ tự quy trình, trong phạm vi xem đơn của người gọi. null khi thiếu cả orders.view_all lẫn orders.view_own. */
+            ordersByStatus: components["schemas"]["DashboardStatusCountDto"][] | null;
         };
     };
     responses: never;
@@ -6588,6 +6645,47 @@ export interface operations {
             };
             /** @description Không có đơn với id này hoặc ngoài phạm vi (NOT_FOUND, cùng message đơn không tồn tại); hoặc hoá đơn không tồn tại / không thuộc đơn này — "Không tìm thấy hoá đơn." (NOT_FOUND). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    DashboardController_summary: {
+        parameters: {
+            query?: {
+                /** @description Kỳ tính tới hôm nay (giờ Việt Nam): day = hôm nay, week = thứ Hai → hôm nay, month = ngày 1 → hôm nay. Bỏ trống ⇒ month. */
+                period?: "day" | "week" | "month";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Doanh thu của kỳ (null khi thiếu dashboard.finance_view), số đơn tạo trong kỳ và số đơn theo trạng thái (null khi thiếu quyền xem đơn). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardSummaryResponseDto"];
+                };
+            };
+            /** @description period không thuộc day/week/month (VALIDATION_ERROR). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu cả orders.view_all, orders.view_own lẫn dashboard.finance_view (FORBIDDEN). */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

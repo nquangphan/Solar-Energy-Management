@@ -2,7 +2,8 @@
 // adapters with a stateful fake backend: the three permission-gated buttons of an
 // order (same fixture, only the permissions differ), the child-route gates, the
 // tabs and the Tạo FAB, and the screens underneath reading again when a writing
-// screen on top of them closes.
+// screen on top of them closes. Sign-in lands on Trang chủ (Story 8.1); an account
+// that may see orders then opens the Đơn hàng tab, where these cases start.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -10,6 +11,7 @@ import 'package:pns_mobile/design_system/components/components.dart';
 import 'package:pns_mobile/design_system/session/orders_port.dart';
 import 'package:pns_mobile/design_system/shell/app_bottom_nav.dart';
 import 'package:pns_mobile/screens/contracts/contracts_screen.dart';
+import 'package:pns_mobile/screens/dashboard/dashboard_screen.dart';
 import 'package:pns_mobile/screens/inventory/inventory_screen.dart';
 import 'package:pns_mobile/screens/inventory/stock_vouchers_screen.dart';
 import 'package:pns_mobile/screens/invoices/invoice_detail_screen.dart';
@@ -133,6 +135,7 @@ class _Backend {
           return jsonBody(200, invoiceDetailJson());
       }
     }
+    if (r.path == '/dashboard/summary') return jsonBody(200, dashboardBody());
     if (r.path == '/stock-items') return jsonBody(200, stockListJson());
     if (r.path == '/stock-vouchers') return jsonBody(200, voucherListJson());
     if (r.path == '/products' || r.path == '/product-groups' || r.path == '/customer-sources') {
@@ -142,12 +145,18 @@ class _Backend {
   };
 }
 
+/// Signed in: lands on Trang chủ, then opens the Đơn hàng tab when [perms] may see orders.
 Future<(TestApp, _Backend)> _signedIn(WidgetTester tester, List<String> perms) async {
   final backend = _Backend(perms);
   final app = TestApp(backend.handler());
   app.store.values['pns.refreshToken'] = 'refresh-0';
   await tester.pumpWidget(app.widget);
   await _navigated(tester);
+  expect(find.byType(DashboardScreen), findsOneWidget);
+  expect(_location(tester), '/dashboard');
+  if (perms.contains('orders.view_all') || perms.contains('orders.view_own')) {
+    await _tap(tester, _tab('Đơn hàng'));
+  }
   return (app, backend);
 }
 
@@ -183,7 +192,7 @@ Future<void> _openOrder(WidgetTester tester) async {
 
 void main() {
   testWidgets(
-    'full account: lands on the list; the order shows Thanh toán/Hợp đồng/Hoá đơn, each opens its screen for this order, back returns',
+    'full account: Đơn hàng tab opens the list; the order shows Thanh toán/Hợp đồng/Hoá đơn, each opens its screen for this order, back returns',
     (tester) async {
       await _signedIn(tester, _full);
       expect(find.byType(OrderListScreen), findsOneWidget);
@@ -243,7 +252,7 @@ void main() {
     for (final path in ['/orders/o1/contracts', '/orders/o1/invoices', '/orders/o1/invoices/inv-1']) {
       _router(tester).go(path);
       await _navigated(tester);
-      expect(_location(tester), '/orders', reason: path);
+      expect(_location(tester), '/dashboard', reason: path);
       expect(find.byType(ContractsScreen), findsNothing);
       expect(find.byType(InvoicesScreen), findsNothing);
     }
@@ -255,7 +264,7 @@ void main() {
     await _signedIn(tester, ['orders.view_all']);
     _router(tester).go('/orders/new');
     await _navigated(tester);
-    expect(_location(tester), '/orders');
+    expect(_location(tester), '/dashboard');
     expect(find.byType(CreateQuoteScreen), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
@@ -285,7 +294,7 @@ void main() {
   });
 
   testWidgets(
-    'tabs: Đơn hàng and Kho open their screens from the Menu, Trang chủ stays put; Phiếu kho needs inventory.manage',
+    'tabs: Đơn hàng, Kho and Trang chủ open their screens from the Menu; Phiếu kho needs inventory.manage',
     (tester) async {
       await _signedIn(tester, ['orders.view_all', 'inventory.manage']);
       await _tap(tester, _tab('Menu'));
@@ -294,7 +303,8 @@ void main() {
       expect(find.byType(InventoryScreen), findsOneWidget);
       expect(_location(tester), '/inventory');
       await _tap(tester, _tab('Trang chủ'));
-      expect(_location(tester), '/inventory');
+      expect(find.byType(DashboardScreen), findsOneWidget);
+      expect(_location(tester), '/dashboard');
       await _tap(tester, _tab('Đơn hàng'));
       expect(find.byType(OrderListScreen), findsOneWidget);
       expect(_location(tester), '/orders');
@@ -302,10 +312,10 @@ void main() {
       await _navigated(tester);
       expect(find.byType(StockVouchersScreen), findsOneWidget);
 
-      // quotes.create_edit opens Tồn kho but not Phiếu kho; with no order key it lands on the Menu.
+      // quotes.create_edit opens Tồn kho but not Phiếu kho; it stays on Trang chủ.
       await tester.pumpWidget(const SizedBox());
       await _signedIn(tester, ['quotes.create_edit']);
-      expect(find.byType(MenuScreen), findsOneWidget);
+      expect(find.byType(DashboardScreen), findsOneWidget);
       await _tap(tester, _tab('Kho'));
       expect(find.byType(InventoryScreen), findsOneWidget);
       // Not from the landing page: a tab the account may not open leaves it where it is.
@@ -314,7 +324,7 @@ void main() {
       _router(tester).go('/inventory/vouchers');
       await _navigated(tester);
       expect(find.byType(StockVouchersScreen), findsNothing);
-      expect(_location(tester), '/menu');
+      expect(_location(tester), '/dashboard');
     },
   );
 
@@ -327,7 +337,7 @@ void main() {
       _router(tester).go('/orders/discount-approvals');
       await _navigated(tester);
       expect(find.byType(DiscountApprovalScreen), findsNothing);
-      expect(_location(tester), '/orders');
+      expect(_location(tester), '/dashboard');
 
       await tester.pumpWidget(const SizedBox());
       await _signedIn(tester, ['orders.view_all', 'discounts.approve', 'quotes.create_edit']);

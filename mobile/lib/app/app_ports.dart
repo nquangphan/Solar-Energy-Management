@@ -5,6 +5,7 @@
 import '../design_system/session/catalog_port.dart';
 import '../design_system/session/contracts_port.dart';
 import '../design_system/session/customers_port.dart';
+import '../design_system/session/dashboard_port.dart';
 import '../design_system/session/inventory_port.dart';
 import '../design_system/session/invoices_port.dart';
 import '../design_system/session/me_port.dart';
@@ -27,6 +28,7 @@ class AppPorts {
     required this.payments,
     required this.contracts,
     required this.invoices,
+    required this.dashboard,
   });
 
   final MePort me;
@@ -40,4 +42,5 @@ class AppPorts {
   final PaymentsPort payments;
   final ContractsPort contracts;
   final InvoicesPort invoices;
+  final DashboardPort dashboard;
 }

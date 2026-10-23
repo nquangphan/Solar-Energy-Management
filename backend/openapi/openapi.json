@@ -5202,6 +5202,68 @@
           "invoices"
         ]
       }
+    },
+    "/dashboard/summary": {
+      "get": {
+        "operationId": "DashboardController_summary",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "description": "Kỳ tính tới hôm nay (giờ Việt Nam): day = hôm nay, week = thứ Hai → hôm nay, month = ngày 1 → hôm nay. Bỏ trống ⇒ month.",
+            "schema": {
+              "default": "month",
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doanh thu của kỳ (null khi thiếu dashboard.finance_view), số đơn tạo trong kỳ và số đơn theo trạng thái (null khi thiếu quyền xem đơn).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummaryResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "period không thuộc day/week/month (VALIDATION_ERROR).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu cả orders.view_all, orders.view_own lẫn dashboard.finance_view (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "dashboard"
+        ]
+      }
     }
   },
   "info": {
@@ -9069,6 +9131,88 @@
           "seller",
           "lines",
           "pdf"
+        ]
+      },
+      "DashboardStatusCountDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "baogia",
+              "choduyet",
+              "dachot",
+              "dacoc",
+              "thicong",
+              "nghiemthu",
+              "danggiao",
+              "dagiao",
+              "hoanthanh",
+              "huy"
+            ],
+            "example": "baogia"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Số đơn đang ở trạng thái này.",
+            "example": 12
+          }
+        },
+        "required": [
+          "status",
+          "count"
+        ]
+      },
+      "DashboardSummaryResponseDto": {
+        "type": "object",
+        "properties": {
+          "period": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month"
+            ],
+            "example": "month"
+          },
+          "from": {
+            "type": "string",
+            "description": "Ngày đầu kỳ (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.",
+            "example": "2026-10-01"
+          },
+          "to": {
+            "type": "string",
+            "description": "Ngày cuối kỳ = hôm nay (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.",
+            "example": "2026-10-23"
+          },
+          "revenue": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Tổng tiền đã thu trong kỳ (theo ngày thu) của toàn công ty — số nguyên đồng. null khi thiếu quyền dashboard.finance_view.",
+            "example": 1240000000
+          },
+          "newOrderCount": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Số đơn tạo trong kỳ, trong phạm vi xem đơn của người gọi. null khi thiếu cả orders.view_all lẫn orders.view_own.",
+            "example": 37
+          },
+          "ordersByStatus": {
+            "nullable": true,
+            "description": "Số đơn hiện tại theo từng trạng thái (không lọc theo kỳ), đủ mọi trạng thái theo thứ tự quy trình, trong phạm vi xem đơn của người gọi. null khi thiếu cả orders.view_all lẫn orders.view_own.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DashboardStatusCountDto"
+            }
+          }
+        },
+        "required": [
+          "period",
+          "from",
+          "to",
+          "revenue",
+          "newOrderCount",
+          "ordersByStatus"
         ]
       }
     }

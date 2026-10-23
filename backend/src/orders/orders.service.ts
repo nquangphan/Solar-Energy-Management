@@ -1867,6 +1867,17 @@ export class OrdersService {
   }
 
   /**
+   * The order scope clause for read-only aggregates in other modules (the dashboard counts). It
+   * returns THIS clause, so a count can never drift from what `GET /orders` lets the caller see.
+   */
+  scopeWhere(
+    callerAccountId: string,
+    permissions: ReadonlySet<string>,
+  ): Prisma.OrderWhereInput[] {
+    return this.dieuKienPhamVi(callerAccountId, permissions);
+  }
+
+  /**
    * Cửa phạm vi cho service KHÁC trong module (`QuoteExportService`) phải chặn đơn ngoài phạm vi
    * TRƯỚC khi chạm R2, mà không cần dựng cả view như `getScoped()` (live-resolve giá từng dòng).
    * Cùng mệnh đề, cùng 404 với `findScopedOrThrow`.
@@ -2982,16 +2993,9 @@ export class OrdersService {
     const pageSize = query.pageSize ?? 20;
 
     const where: Prisma.OrderWhereInput = {};
-    const dieuKien: Prisma.OrderWhereInput[] = [];
-
-    if (!quyen.has(PERM.ordersViewAll)) {
-      dieuKien.push({
-        OR: [
-          { ownerAccountId: callerAccountId },
-          { assigneeAccountId: callerAccountId },
-        ],
-      });
-    }
+    const dieuKien: Prisma.OrderWhereInput[] = [
+      ...this.dieuKienPhamVi(callerAccountId, quyen),
+    ];
 
     if (query.followUp === true) {
       dieuKien.push({ status: TRANG_THAI_BAO_GIA });

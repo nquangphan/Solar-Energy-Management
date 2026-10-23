@@ -7,6 +7,7 @@ import 'package:pns_mobile/api/http_auth_port.dart';
 import 'package:pns_mobile/api/http_catalog_port.dart';
 import 'package:pns_mobile/api/http_contracts_port.dart';
 import 'package:pns_mobile/api/http_customers_port.dart';
+import 'package:pns_mobile/api/http_dashboard_port.dart';
 import 'package:pns_mobile/api/http_inventory_port.dart';
 import 'package:pns_mobile/api/http_invoices_port.dart';
 import 'package:pns_mobile/api/http_me_port.dart';
@@ -45,6 +46,7 @@ class TestApp {
         payments: HttpPaymentsPort(client, transport),
         contracts: HttpContractsPort(client, transport),
         invoices: HttpInvoicesPort(client, transport),
+        dashboard: HttpDashboardPort(client, transport),
       ),
       sessionExpired: expired,
     );
@@ -71,3 +73,22 @@ Map<String, Object?> meBody(
   String displayName = 'Nhân viên A',
   String email = 'nv@pns.solar',
 }) => {'id': 'acc-$email', 'email': email, 'phone': null, 'displayName': displayName, 'permissions': permissions};
+
+/// `GET /dashboard/summary` body: the landing page (Trang chủ, Story 8.1) reads it
+/// right after sign-in, so every signed-in backend answers it.
+Map<String, Object?> dashboardBody({int? revenue}) => {
+  'period': 'month',
+  'from': '2026-10-01',
+  'to': '2026-10-23',
+  'revenue': revenue,
+  'newOrderCount': 3,
+  'ordersByStatus': [
+    {'status': 'baogia', 'count': 3},
+  ],
+};
+
+/// Taps the Menu tab of the bottom nav: sign-in lands on Trang chủ, Đăng xuất lives in the Menu.
+Future<void> openMenuTab(WidgetTester tester) async {
+  await tester.tap(find.text('Menu'));
+  await settle(tester);
+}

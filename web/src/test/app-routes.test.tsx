@@ -13,6 +13,7 @@ import {
   FakeContractsPort,
   FakeCustomerSourcesPort,
   FakeCustomersPort,
+  FakeDashboardPort,
   FakeInventoryPort,
   FakeInvoicesPort,
   FakeMePort,
@@ -55,6 +56,7 @@ function ports(permissions: string[]): AppPorts {
     payments: new FakePaymentsPort(),
     contracts: new FakeContractsPort(),
     invoices: new FakeInvoicesPort(),
+    dashboard: new FakeDashboardPort(),
   };
 }
 
@@ -82,15 +84,15 @@ function navLabels(): string[] {
 }
 
 describe('AppRoutes', () => {
-  it('an orders.view_own account sees Đơn hàng + Tra cứu bảo hành + Hồ sơ, and /customers lands on /orders', async () => {
+  it('an orders.view_own account sees Trang chủ + Đơn hàng + Tra cứu bảo hành + Hồ sơ, and /customers lands on /dashboard', async () => {
     renderAt('/customers', ports(['orders.view_own']));
     expect(await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' })).toBeTruthy();
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
-    // The order list rendered instead of the customer list.
-    expect(topbarTitle()).toContain('Đơn hàng');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    // The dashboard rendered instead of the customer list.
+    expect(topbarTitle()).toContain('Tổng quan vận hành');
     expect(topbarTitle()).not.toContain('Khách hàng');
-    expect(navLabels()).toEqual(['Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
-    for (const hidden of ['Khách hàng', 'Cấu hình', 'Kho', 'Trang chủ', 'Danh mục', 'Phân quyền', 'Audit']) {
+    expect(navLabels()).toEqual(['Trang chủ', 'Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
+    for (const hidden of ['Khách hàng', 'Cấu hình', 'Kho', 'Danh mục', 'Phân quyền', 'Audit']) {
       expect(navLabels()).not.toContain(hidden);
     }
   });
@@ -98,7 +100,7 @@ describe('AppRoutes', () => {
   it('/settings without settings.manage does not render the config screen', async () => {
     renderAt('/settings', ports(['orders.view_own']));
     await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(screen.queryByText('Nguồn khách hàng')).toBeNull();
   });
 
@@ -123,32 +125,21 @@ describe('AppRoutes', () => {
     expect(await screen.findByText('Nguồn khách hàng')).toBeTruthy();
   });
 
-  it('"/" lands on the first openable route in sidebar order', async () => {
-    renderAt('/', ports(ALL_PERMISSIONS));
-    await screen.findByText('Khách hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
+  it('"/" lands on Trang chủ (/dashboard) for every account: it is first in the sidebar and needs no permission', async () => {
+    for (const permissions of [ALL_PERMISSIONS, ['orders.view_own'], ['customers.manage', 'settings.manage'], []]) {
+      renderAt('/', ports(permissions));
+      await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
+      expect(screen.getByTestId('path').textContent, permissions.join(',')).toBe('/dashboard');
+      await vi.waitFor(() => expect(topbarTitle()).toContain('Tổng quan vận hành'));
+      cleanup();
+    }
   });
 
-  it('"/" for an orders.view_own account lands on /orders (Đơn hàng comes first in the sidebar)', async () => {
-    renderAt('/', ports(['orders.view_own']));
-    await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
-  });
-
-  it('"/" for an account without any order key still lands on its first route (/customers)', async () => {
-    renderAt('/', ports(['customers.manage', 'settings.manage']));
-    await screen.findByText('Khách hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/customers');
-  });
-
-  it('an account with no business permission lands on /profile from "/" and from an unknown path', async () => {
-    renderAt('/', ports([]));
-    await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/profile');
-    cleanup();
+  it('an unknown path lands on /dashboard too, even with no business permission', async () => {
     renderAt('/no-such-page', ports([]));
     await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/profile');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    expect(navLabels()).toEqual(['Trang chủ', 'Hồ sơ']);
   });
 
   it('the customer child routes inherit the customers gate: neither renders nor calls the port', async () => {
@@ -157,7 +148,7 @@ describe('AppRoutes', () => {
       const get = vi.spyOn(appPorts.customers, 'get');
       renderAt(path, appPorts);
       await screen.findByText('Tra cứu bảo hành', { selector: 'a.navlink' });
-      expect(screen.getByTestId('path').textContent).toBe('/orders');
+      expect(screen.getByTestId('path').textContent).toBe('/dashboard');
       expect(topbarTitle()).not.toContain('Tra cứu theo số điện thoại');
       expect(get).toHaveBeenCalledTimes(0);
       cleanup();
@@ -261,7 +252,7 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
     expect(schedule).toHaveBeenCalledWith(third.id);
   });
 
-  it('orders.view_own only: Thanh toán but no Hợp đồng / Hoá đơn, and typing their URL lands on /orders', async () => {
+  it('orders.view_own only: Thanh toán but no Hợp đồng / Hoá đơn, and typing their URL lands on /dashboard', async () => {
     const { id } = await openDetail(['orders.view_own']);
     expect(screen.queryByRole('button', { name: 'Hợp đồng' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Hoá đơn' })).toBeNull();
@@ -274,7 +265,7 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
       const invoice = vi.spyOn(appPorts.invoices, 'getInvoice');
       renderAt(path, appPorts);
       await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
-      expect(screen.getByTestId('path').textContent, path).toBe('/orders');
+      expect(screen.getByTestId('path').textContent, path).toBe('/dashboard');
       expect(topbarTitle()).not.toContain('Sinh hợp đồng');
       expect(topbarTitle()).not.toContain('Hoá đơn bán hàng');
       expect(contracts).toHaveBeenCalledTimes(0);
@@ -288,7 +279,7 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
     const without = ports(['orders.view_own']);
     renderAt('/orders/new', without);
     await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(topbarTitle()).not.toContain(QUOTE_STEP_1);
     cleanup();
 
@@ -346,11 +337,11 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
 
     renderAt('/orders/discount-approvals', without);
     await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(pending).toHaveBeenCalledTimes(0);
   });
 
-  it('Kho: quotes.create_edit sees the stock but not Phiếu kho, and /inventory/vouchers lands back on /inventory', async () => {
+  it('Kho: quotes.create_edit sees the stock but not Phiếu kho, and /inventory/vouchers lands on /dashboard', async () => {
     renderAt('/inventory', ports(['quotes.create_edit']));
     await vi.waitFor(() => expect(topbarTitle()).toContain('Tồn kho'));
     expect(navLabels()).toContain('Kho');
@@ -360,8 +351,8 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
     const appPorts = ports(['quotes.create_edit']);
     const vouchers = vi.spyOn(appPorts.stockVouchers, 'listVouchers');
     renderAt('/inventory/vouchers', appPorts);
-    await vi.waitFor(() => expect(topbarTitle()).toContain('Tồn kho'));
-    expect(screen.getByTestId('path').textContent).toBe('/inventory');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Tổng quan vận hành'));
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(vouchers).toHaveBeenCalledTimes(0);
   });
 
@@ -372,10 +363,10 @@ describe('AppRoutes — orders and inventory (Story 10.5)', () => {
     await vi.waitFor(() => expect(topbarTitle()).toContain('Phiếu kho'));
   });
 
-  it('a KE_TOAN-like account (orders + payments + invoices, no customers.manage) lands on /orders', async () => {
+  it('a KE_TOAN-like account (orders + payments + invoices, no customers.manage) lands on /dashboard', async () => {
     renderAt('/', ports(['orders.view_all', 'payments.record', 'invoices.manage']));
     await screen.findByText('Đơn hàng', { selector: 'a.navlink' });
-    expect(screen.getByTestId('path').textContent).toBe('/orders');
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(navLabels()).not.toContain('Khách hàng');
   });
 });

@@ -34,6 +34,15 @@ function me(permissions: string[], displayName = 'Tài khoản A') {
 const OWN_ORDERS = me(['orders.view_own']);
 const CUSTOMER_STAFF = me(['customers.manage', 'orders.view_own'], 'Tài khoản B');
 const EMPTY_PAGE = { items: [], total: 0, page: 1, pageSize: 20 };
+/** Dashboard answer for an account without the finance permission (revenue withheld). */
+const DASHBOARD = {
+  period: 'month',
+  from: '2026-10-01',
+  to: '2026-10-23',
+  revenue: null,
+  newOrderCount: 3,
+  ordersByStatus: [{ status: 'baogia', count: 3 }],
+};
 
 /** Boots main.tsx at `path` with `routes` ("METHOD /path" under /api) as the backend. */
 async function boot(routes: Record<string, Handler>, storedRefreshToken?: string, path = '/') {
@@ -89,16 +98,16 @@ describe('composition root (main.tsx)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(0);
   });
 
-  it('sign-in loads /me and opens the first screen the permissions allow', async () => {
+  it('sign-in loads /me and lands on Trang chủ (/dashboard)', async () => {
     const { handlers, localStorage } = await boot({
       'POST /auth/login': () => json(200, TOKENS),
       'GET /me': () => json(200, OWN_ORDERS),
-      'GET /orders': () => json(200, EMPTY_PAGE),
+      'GET /dashboard/summary': () => json(200, DASHBOARD),
     });
     await signIn();
-    await waitFor(() => expect(topbarTitle()).toContain('Đơn hàng'));
-    expect(window.location.pathname).toBe('/orders');
-    expect(navLabels()).toEqual(['Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
+    await waitFor(() => expect(topbarTitle()).toContain('Tổng quan vận hành'));
+    expect(window.location.pathname).toBe('/dashboard');
+    expect(navLabels()).toEqual(['Trang chủ', 'Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
     expect(handlers['POST /auth/login']).toHaveBeenCalledTimes(1);
     // Measured: 2. StrictMode mounts the new PermissionsProvider, unmounts and mounts it
     // again in development, so its effect fetches twice; the first answer is discarded
@@ -107,7 +116,7 @@ describe('composition root (main.tsx)', () => {
     expect(localStorage.getItem(REFRESH_TOKEN_KEY)).toBe('refresh-1');
   });
 
-  it('an orders.view_all account lands on /orders and the list comes from GET /orders over fetch', async () => {
+  it('the dashboard comes from GET /dashboard/summary; Đơn hàng in the sidebar loads GET /orders over fetch', async () => {
     const row = {
       id: 'o1',
       status: 'baogia',
@@ -122,8 +131,16 @@ describe('composition root (main.tsx)', () => {
       'POST /auth/login': () => json(200, TOKENS),
       'GET /me': () => json(200, me(['orders.view_all', 'payments.record', 'invoices.manage'])),
       'GET /orders': () => json(200, { items: [row], total: 1, page: 1, pageSize: 20 }),
+      'GET /dashboard/summary': () => json(200, { ...DASHBOARD, revenue: 1_240_000_000 }),
     });
     await signIn();
+    expect(await screen.findByText('1.240.000.000 đ')).toBeTruthy();
+    expect(window.location.pathname).toBe('/dashboard');
+    const summary = handlers['GET /dashboard/summary'].mock.calls.map(([request]) => request as Request);
+    expect(summary[0].headers.get('authorization')).toBe('Bearer access-1');
+    expect(new URL(summary[0].url).search).toBe('?period=month');
+
+    fireEvent.click(screen.getByText('Đơn hàng', { selector: 'a.navlink' }));
     expect(await screen.findByText('Nguyễn Văn A')).toBeTruthy();
     expect(window.location.pathname).toBe('/orders');
     const listed = handlers['GET /orders'].mock.calls.map(([request]) => request as Request);
@@ -177,7 +194,7 @@ describe('composition root (main.tsx)', () => {
         'POST /auth/refresh': () => json(200, RENEWED),
         'GET /me': () =>
           fail ? json(500, { code: 'INTERNAL', message: 'Lỗi máy chủ', traceId: 't' }) : json(200, OWN_ORDERS),
-        'GET /orders': () => json(200, EMPTY_PAGE),
+        'GET /dashboard/summary': () => json(200, DASHBOARD),
       },
       'refresh-1',
     );
@@ -186,7 +203,7 @@ describe('composition root (main.tsx)', () => {
     expect(screen.getByRole('button', { name: 'Đăng xuất' })).toBeTruthy();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-    await waitFor(() => expect(topbarTitle()).toContain('Đơn hàng'));
+    await waitFor(() => expect(topbarTitle()).toContain('Tổng quan vận hành'));
     expect(handlers['GET /me'].mock.calls.length).toBeGreaterThan(failedCalls);
   });
 
@@ -290,7 +307,7 @@ describe('composition root (main.tsx)', () => {
         'POST /auth/logout': () => new Response(null, { status: 204 }),
         'GET /me': () => json(200, account),
         'GET /customers': () => json(200, EMPTY_PAGE),
-        'GET /orders': () => json(200, EMPTY_PAGE),
+        'GET /dashboard/summary': () => json(200, DASHBOARD),
       },
       'refresh-1',
       '/profile',
@@ -302,8 +319,10 @@ describe('composition root (main.tsx)', () => {
 
     account = CUSTOMER_STAFF;
     await signIn('0987654321');
-    await waitFor(() => expect(navLabels()).toEqual(['Đơn hàng', 'Khách hàng', 'Tra cứu bảo hành', 'Hồ sơ']));
-    expect(window.location.pathname).toBe('/orders');
+    await waitFor(() =>
+      expect(navLabels()).toEqual(['Trang chủ', 'Đơn hàng', 'Khách hàng', 'Tra cứu bảo hành', 'Hồ sơ']),
+    );
+    expect(window.location.pathname).toBe('/dashboard');
     expect(handlers['GET /me'].mock.calls.length).toBeGreaterThan(callsForA);
   });
 

@@ -44,6 +44,10 @@ export type { KpiProps } from './Kpi';
 export { Banner } from './Banner';
 export type { BannerProps, BannerTone } from './Banner';
 
+// Count chart (Story 8.1): one column per item, scaled on counts only.
+export { BarChart } from './BarChart';
+export type { BarChartProps, BarChartItem } from './BarChart';
+
 // Money display: the ONE formatter (`83.010.960 đ`) and the component that
 // applies it with the `mono` token. Screens never print a raw money number.
 export { Money } from './Money';

@@ -254,6 +254,60 @@ void main() {
     });
   });
 
+  group('AppBarChart (mirror .chart)', () {
+    List<double> barHeights(WidgetTester tester) => tester
+        .widgetList<Container>(find.byType(Container))
+        .where((c) =>
+            c.decoration is BoxDecoration &&
+            (c.decoration! as BoxDecoration).color == AppTokens.teal)
+        .map((c) => c.constraints!.maxHeight)
+        .toList();
+
+    testWidgets('one column per item with its label and count, in order',
+        (tester) async {
+      await tester.pumpWidget(_host(const SizedBox(
+        width: 300,
+        child: AppBarChart(items: [
+          AppBarChartItem(label: 'Báo giá', value: 12),
+          AppBarChartItem(label: 'Chờ duyệt', value: 4),
+        ]),
+      )));
+      expect(find.text('Báo giá'), findsOneWidget);
+      expect(find.text('Chờ duyệt'), findsOneWidget);
+      expect(find.text('12'), findsOneWidget);
+      expect(find.text('4'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.text('Báo giá')).dx,
+        lessThan(tester.getTopLeft(find.text('Chờ duyệt')).dx),
+      );
+    });
+
+    testWidgets('columns scale against the largest count (120 − 14 px area)',
+        (tester) async {
+      await tester.pumpWidget(_host(const SizedBox(
+        width: 300,
+        child: AppBarChart(items: [
+          AppBarChartItem(label: 'a', value: 8),
+          AppBarChartItem(label: 'b', value: 2),
+          AppBarChartItem(label: 'c', value: 0),
+        ]),
+      )));
+      expect(barHeights(tester), [106.0, 106.0 * 25 / 100, 106.0 * 2 / 100]);
+    });
+
+    testWidgets('all zeros ⇒ minimum height, no NaN', (tester) async {
+      await tester.pumpWidget(_host(const SizedBox(
+        width: 300,
+        child: AppBarChart(items: [
+          AppBarChartItem(label: 'a', value: 0),
+          AppBarChartItem(label: 'b', value: 0),
+        ]),
+      )));
+      expect(barHeights(tester), [106.0 * 2 / 100, 106.0 * 2 / 100]);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
   group('list-state widgets', () {
     testWidgets('skeleton fills surface2 with 6px radius', (tester) async {
       await tester.pumpWidget(_host(const AppSkeleton(width: 100)));

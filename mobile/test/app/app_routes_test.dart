@@ -6,29 +6,38 @@ import 'package:pns_mobile/app/app_routes.dart';
 
 void main() {
   group('openableKeys', () {
-    test('no permission ⇒ only Hồ sơ', () => expect(openableKeys({}), {'profile'}));
-    test('customers.manage ⇒ + customers', () => expect(openableKeys({'customers.manage'}), {'customers', 'profile'}));
+    // Trang chủ needs no permission (web SIDEBAR_NAV `home` has no requires).
+    test('no permission ⇒ only Trang chủ + Hồ sơ', () => expect(openableKeys({}), {'home', 'profile'}));
+    test('customers.manage ⇒ + customers', () {
+      expect(openableKeys({'customers.manage'}), {'home', 'customers', 'profile'});
+    });
     test('orders.view_own ⇒ + orders, warranty', () {
-      expect(openableKeys({'orders.view_own'}), {'orders', 'warranty', 'profile'});
+      expect(openableKeys({'orders.view_own'}), {'home', 'orders', 'warranty', 'profile'});
     });
     test('orders.view_all ⇒ + orders, warranty', () {
-      expect(openableKeys({'orders.view_all'}), {'orders', 'warranty', 'profile'});
+      expect(openableKeys({'orders.view_all'}), {'home', 'orders', 'warranty', 'profile'});
     });
     test('quotes.create_edit alone ⇒ + inventory, not orders', () {
-      expect(openableKeys({'quotes.create_edit'}), {'inventory', 'profile'});
+      expect(openableKeys({'quotes.create_edit'}), {'home', 'inventory', 'profile'});
     });
-    test('inventory.manage ⇒ + inventory', () => expect(openableKeys({'inventory.manage'}), {'inventory', 'profile'}));
+    test('inventory.manage ⇒ + inventory', () {
+      expect(openableKeys({'inventory.manage'}), {'home', 'inventory', 'profile'});
+    });
   });
 
   group('landingPath', () {
-    test('the order list when the account may see orders', () {
-      expect(landingPath({'orders.view_own'}), kOrdersPath);
-      expect(landingPath({'customers.manage', 'orders.view_all'}), kOrdersPath);
+    test('Trang chủ for every account, like the web', () {
+      for (final perms in <Set<String>>[
+        {},
+        {'orders.view_own'},
+        {'customers.manage', 'orders.view_all'},
+        {'quotes.create_edit'},
+      ]) {
+        expect(landingPath(perms), kHomePath, reason: '$perms');
+      }
     });
-    test('the Menu otherwise', () {
-      expect(landingPath({}), kMenuPath);
-      expect(landingPath({'customers.manage'}), kMenuPath);
-      expect(landingPath({'quotes.create_edit'}), kMenuPath);
+    test('Trang chủ is openable without any permission', () {
+      expect(isOpenable(kHomePath, {}), isTrue);
     });
   });
 

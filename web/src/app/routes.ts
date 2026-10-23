@@ -10,6 +10,7 @@ import { SIDEBAR_NAV } from '../design-system/shell';
 
 /** Every nav key the web has a screen for, with the path that opens it. */
 export const NAV_ROUTES = {
+  home: '/dashboard',
   orders: '/orders',
   customers: '/customers',
   inventory: '/inventory',

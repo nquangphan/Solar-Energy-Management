@@ -207,6 +207,8 @@ test('index.ts re-exports the full data/feedback layer (Story 1.5)', () => {
     'Banner',
     'BannerProps',
     'BannerTone',
+    'BarChart',
+    'BarChartProps',
   ];
   for (const name of required) {
     assert.ok(barrel.includes(name), `index.ts must export ${name}`);

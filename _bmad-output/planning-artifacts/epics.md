@@ -822,6 +822,14 @@ As a người có quyền xem dashboard, I want xem doanh thu theo ngày/tuần/
 - **Given** quyền "xem dashboard tài chính", **When** render, **Then** chỉ account có quyền mới thấy số liệu doanh thu; account thiếu quyền vẫn xem được đếm đơn nhưng không thấy tiền (FR-19, UX-DR-22).
 - **Given** dữ liệu tổng hợp, **When** tính, **Then** tính ở backend (`dashboard/`), client chỉ hiển thị (AD-2).
 - _Đã chốt (G-6, 2026-10-22, mặc định thành quyết định):_ **doanh thu = Σ `Payment.amount` theo `paidOn`** (giờ UTC+7 khi gom ngày/tuần/tháng), không theo tổng đơn chốt. Tiền hiển thị qua formatter/Money component có sẵn (`83.010.960 đ`); guard tiền design-system (đã vá TD-76) phủ màn mới.
+- _Quyết định giữa story (2026-10-23, Story 8.1):_
+  - **Trang chủ là màn đáp sau đăng nhập** cho MỌI account: web route `/dashboard` (mục sidebar `home`, không cần quyền), mobile tab Trang chủ (index 0) mở Dashboard. Mọi đường bị gate/không tồn tại cũng đáp về `/dashboard` (trước: Đơn hàng hoặc Menu/Hồ sơ).
+  - **Một endpoint, một kỳ:** `GET /dashboard/summary?period=day|week|month` (mặc định `month`), mở cho ai có ít nhất một trong `orders.view_all`, `orders.view_own`, `dashboard.finance_view`; mỗi khối tự `null` theo quyền của nó (backend không gửi số). Thiếu cả ba ⇒ 403 ⇒ màn hiện "Không có số liệu cho tài khoản này" (không thử lại).
+  - **Kỳ:** Ngày = hôm nay VN; **Tuần bắt đầu thứ Hai**; Tháng = ngày 1 → hôm nay VN; response trả `from`/`to`.
+  - **Doanh thu toàn công ty**, không thu hẹp theo phạm vi đơn: ai có quyền tài chính thấy mọi khoản thu. Số đơn mới + đơn theo trạng thái dùng CHÍNH mệnh đề phạm vi của `GET /orders`.
+  - **`ordersByStatus` là ảnh chụp hiện tại**, không lọc theo kỳ (đủ 10 trạng thái, thiếu ⇒ 0); "Đơn mới" mới lọc theo kỳ.
+  - **Bỏ khỏi Phase này:** delta "▲ % so kỳ trước" và khối "Đơn gần đây" của mockup (không có AC; delta là phép tính tiền phải làm ở backend; "Đơn gần đây" đã có ở màn Đơn hàng). Muốn thêm là story/thay đổi riêng.
+  - Tiền hiển thị đủ chữ số (`1.240.000.000 đ`), không rút gọn "1,24 tỷ" như mockup. Mobile chọn kỳ bằng `AppTabs` (chưa có seg control Flutter), nhãn trùng web.
 
 ### Story 8.2: Màn phân quyền — ma trận per-account + áp preset Role
 As a Admin, I want màn ma trận Quyền theo Account với nút áp preset Role, So that cấp đúng quyền cho từng người nhanh gọn.

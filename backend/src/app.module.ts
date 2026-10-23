@@ -15,6 +15,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { InvoicesModule } from './invoices/invoices.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 /**
  * Root module.
@@ -58,6 +59,9 @@ import { InvoicesModule } from './invoices/invoices.module';
  *
  * Story 7.4 — `InvoicesModule`: internal sales invoice of an order (FR-27), stored as a snapshot
  * and served as `/orders/{id}/invoices`; it imports `OrdersModule`, never the other way round.
+ *
+ * Story 8.1 — `DashboardModule`: operations dashboard (FR-19), read-only `/dashboard/summary`; it
+ * imports `OrdersModule` for the order scope clause, never the other way round.
  */
 @Module({
   imports: [
@@ -77,6 +81,7 @@ import { InvoicesModule } from './invoices/invoices.module';
     PaymentsModule,
     ContractsModule,
     InvoicesModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

@@ -20,6 +20,7 @@ import {
   FakeCatalogPort,
   FakeCustomerSourcesPort,
   FakeCustomersPort,
+  FakeDashboardPort,
   FakeInventoryPort,
   FakeMePort,
   FakeOrdersPort,
@@ -41,6 +42,7 @@ import { LoginScreen } from '../screens/auth/LoginScreen';
 import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen';
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
+import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { ContractsScreen } from '../screens/contracts/ContractsScreen';
@@ -259,7 +261,16 @@ describe('smoke render — mọi màn web/src/screens', () => {
     );
     expect(await screen.findByText('HOÁ ĐƠN BÁN HÀNG')).toBeTruthy();
   });
+
+  it('DashboardScreen — revenue, new orders and the status chart loaded from the port', async () => {
+    renderScreen(<DashboardScreen port={new FakeDashboardPort()} />);
+    expect(await screen.findByText('1.240.000.000 đ')).toBeTruthy();
+    expect(screen.getByText('Doanh thu tháng này')).toBeTruthy();
+    expect(screen.getByText('Đơn mới tháng này')).toBeTruthy();
+    expect(screen.getByText('Đơn theo trạng thái')).toBeTruthy();
+    expect(screen.getByText('Hoàn thành')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 19;
+const SCREEN_COUNT = 20;

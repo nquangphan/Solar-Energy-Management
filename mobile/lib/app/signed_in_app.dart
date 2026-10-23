@@ -33,6 +33,7 @@ import '../screens/contracts/contracts_screen.dart';
 import '../screens/customers/customer_detail_screen.dart';
 import '../screens/customers/customer_list_screen.dart';
 import '../screens/customers/customer_pick_screen.dart';
+import '../screens/dashboard/dashboard_screen.dart';
 import '../screens/inventory/inventory_screen.dart';
 import '../screens/inventory/stock_vouchers_screen.dart';
 import '../screens/invoices/invoice_detail_screen.dart';
@@ -50,6 +51,7 @@ import 'app_ports.dart';
 import 'app_routes.dart';
 
 /// Indexes of the locked bottom-nav tabs that open a screen.
+const int _homeTab = 0;
 const int _ordersTab = 1;
 const int _inventoryTab = 3;
 const int _menuTab = 4;
@@ -88,11 +90,15 @@ class _SignedInAppState extends State<SignedInApp> {
   /// The same for Tồn kho when the Kho tab is tapped over Phiếu kho.
   final ValueNotifier<int> _inventoryReload = ValueNotifier<int>(0);
 
+  /// The same for Trang chủ when its tab is tapped again: the figures read again.
+  final ValueNotifier<int> _homeReload = ValueNotifier<int>(0);
+
   @override
   void dispose() {
     _router?.dispose();
     _ordersReload.dispose();
     _inventoryReload.dispose();
+    _homeReload.dispose();
     super.dispose();
   }
 
@@ -109,6 +115,11 @@ class _SignedInAppState extends State<SignedInApp> {
       initialLocation: landing,
       redirect: (context, state) => isOpenable(state.uri.path, perms) ? null : landing,
       routes: [
+        GoRoute(
+          path: kHomePath,
+          builder: (context, state) =>
+              DashboardScreen(port: ports.dashboard, reloadSignal: _homeReload),
+        ),
         GoRoute(
           path: kMenuPath,
           builder: (context, state) => MenuScreen(
@@ -270,11 +281,12 @@ class _SignedInAppState extends State<SignedInApp> {
   }
 
   /// A tab the account may not open does nothing: the bar is locked to five tabs
-  /// (UX-DR-15), so it cannot be hidden. Trang chủ has no screen yet (Epic 8).
+  /// (UX-DR-15), so it cannot be hidden.
   void _selectTab(int index) {
     final router = _router;
     if (router == null) return;
     final String? path = switch (index) {
+      _homeTab => kHomePath,
       _ordersTab => kOrdersPath,
       _inventoryTab => kInventoryPath,
       _menuTab => kMenuPath,
@@ -285,6 +297,7 @@ class _SignedInAppState extends State<SignedInApp> {
     // without completing the futures its reload waits on, so rebuild it instead.
     if (index == _ordersTab) _ordersReload.value++;
     if (index == _inventoryTab) _inventoryReload.value++;
+    if (index == _homeTab) _homeReload.value++;
     router.go(path);
   }
 

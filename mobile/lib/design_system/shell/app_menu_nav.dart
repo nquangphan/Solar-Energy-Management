@@ -40,6 +40,8 @@ const List<AppNavSection> kMobileMenu = [
 /// landing page. Keys and gates match the web `SIDEBAR_NAV` entries with the same
 /// key (design-system guard).
 const List<AppNavLink> kMobileTabLinks = [
+  // No permission, like the web sidebar: the backend withholds each dashboard block.
+  AppNavLink(key: 'home', label: 'Trang chủ'),
   AppNavLink(
     key: 'orders',
     label: 'Đơn hàng',

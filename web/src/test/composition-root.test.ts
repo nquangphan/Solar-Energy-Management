@@ -99,11 +99,11 @@ describe('composition root (main.tsx)', () => {
     expect(productionPath.some(([path]) => path.startsWith('../app/'))).toBe(true);
   });
 
-  it('main.tsx really builds the transport, wraps the PermissionsProvider and builds all 14 adapters', () => {
+  it('main.tsx really builds the transport, wraps the PermissionsProvider and builds all 15 adapters', () => {
     const code = codeOnly(sources[MAIN]);
     expect(code).toMatch(/(?<!function\s+)\bcreateTransport\s*\(/);
     expect(code).toMatch(/<PermissionsProvider\b/);
-    expect(code.match(/\bnew\s+Http\w+Port\s*\(/g) ?? []).toHaveLength(14);
+    expect(code.match(/\bnew\s+Http\w+Port\s*\(/g) ?? []).toHaveLength(15);
   });
 
   it('recognises every fake shape (patterns not blind)', () => {

@@ -26,6 +26,9 @@ export 'table.dart'
 export 'stepper.dart' show AppStepper, AppStepItem, AppStepState;
 export 'kpi.dart' show AppKpi;
 
+// Count chart (mirror Story 8.1 BarChart): one column per item, counts only.
+export 'bar_chart.dart' show AppBarChart, AppBarChartItem;
+
 // Money display: the ONE formatter (`83.010.960 đ`) and the widget that applies
 // it with the `mono` token. Screens never print a raw money number.
 export 'money_text.dart' show MoneyText, formatVnd;

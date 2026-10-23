@@ -1,0 +1,30 @@
+/* hand-authored — screen-local layout for Trang chủ (Story 8.1).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class (AD-13). The KPI grid reuses `.kpis` (4 → 2 columns). */
+
+.db-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+}
+
+.db-range {
+  margin-left: auto;
+}
+
+.db-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.db-kpis {
+  margin-bottom: 2px;
+}
+
+/* Mockup s-home: the chart frame carries room for the labels under the columns. */
+.db-chart {
+  padding: 20px 16px 30px;
+}

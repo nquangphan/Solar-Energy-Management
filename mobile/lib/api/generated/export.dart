@@ -14,6 +14,7 @@ export 'inventory/inventory_client.dart';
 export 'payments/payments_client.dart';
 export 'contracts/contracts_client.dart';
 export 'invoices/invoices_client.dart';
+export 'dashboard/dashboard_client.dart';
 // Data classes
 export 'models/health_response_dto.dart';
 export 'models/login_request_dto.dart';
@@ -122,10 +123,13 @@ export 'models/invoice_seller_dto.dart';
 export 'models/invoice_line_dto.dart';
 export 'models/invoice_pdf_response_dto.dart';
 export 'models/invoice_detail_response_dto.dart';
+export 'models/dashboard_status_count_dto.dart';
+export 'models/dashboard_summary_response_dto.dart';
 export 'models/cust_type.dart';
 export 'models/status.dart';
 export 'models/enum0.dart';
 export 'models/type.dart';
+export 'models/period.dart';
 export 'models/health_response_dto_status.dart';
 export 'models/health_response_dto_database.dart';
 export 'models/create_customer_request_dto_cust_type.dart';
@@ -154,6 +158,8 @@ export 'models/auto_transition_result_dto_event.dart';
 export 'models/auto_transition_result_dto_outcome.dart';
 export 'models/contract_response_dto_contract_type.dart';
 export 'models/contracts_overview_response_dto_contract_type.dart';
+export 'models/dashboard_status_count_dto_status.dart';
+export 'models/dashboard_summary_response_dto_period.dart';
 // Root client
 export 'pns_api_client.dart';
 

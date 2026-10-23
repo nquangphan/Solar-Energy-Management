@@ -7,6 +7,7 @@ import '../design_system/gating/app_permission_keys.g.dart';
 import '../design_system/gating/app_permissions.dart';
 import '../design_system/shell/app_menu_nav.dart';
 
+const String kHomePath = '/dashboard';
 const String kMenuPath = '/menu';
 const String kCustomersPath = '/customers';
 const String kCustomerLookupPath = '/customers/lookup';
@@ -37,6 +38,7 @@ String orderInvoicePath(String id, String invoiceId) =>
 /// Nav key (Menu entry or bottom-nav tab) → the screen it opens. An entry
 /// without a route here is not shown.
 const Map<String, String> kNavRoutes = {
+  'home': kHomePath,
   'orders': kOrdersPath,
   'inventory': kInventoryPath,
   'customers': kCustomersPath,
@@ -73,10 +75,9 @@ Set<String> openableKeys(Set<PermissionKey> perms) => {
       if (kNavRoutes.containsKey(link.key)) link.key,
 };
 
-/// Where a signed-in session starts: the order list when the account may see
-/// orders (like the web), otherwise the Menu.
-String landingPath(Set<PermissionKey> perms) =>
-    openableKeys(perms).contains('orders') ? kOrdersPath : kMenuPath;
+/// Where a signed-in session starts: Trang chủ (like the web). It needs no
+/// permission; the dashboard itself shows only the blocks the backend sends.
+String landingPath(Set<PermissionKey> perms) => kHomePath;
 
 /// Whether [location] (a path) may be shown to [perms]: the Menu always, any other
 /// path only under a route the account may open, plus the child route's own

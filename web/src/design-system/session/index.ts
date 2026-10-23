@@ -123,6 +123,14 @@ export type {
   InvoicePdfInfo,
   InvoiceSeller,
 } from './invoices-port';
+// Dashboard seam (Story 8.1): READ-ONLY — the backend computes every figure and
+// sends `null` for a block the caller may not see; the screen only renders them.
+export type {
+  DashboardPort,
+  DashboardSummary,
+  DashboardStatusCount,
+  DashboardPeriod,
+} from './dashboard-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -176,6 +184,7 @@ export {
   DEMO_INVOICE_SUMMARY,
   DEMO_INVOICE_DETAIL,
 } from './fake-invoices-port';
+export { FakeDashboardPort, DEMO_DASHBOARD_SUMMARY } from './fake-dashboard-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

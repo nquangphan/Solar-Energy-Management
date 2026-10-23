@@ -13,6 +13,7 @@ import 'api/http_auth_port.dart';
 import 'api/http_catalog_port.dart';
 import 'api/http_contracts_port.dart';
 import 'api/http_customers_port.dart';
+import 'api/http_dashboard_port.dart';
 import 'api/http_inventory_port.dart';
 import 'api/http_invoices_port.dart';
 import 'api/http_me_port.dart';
@@ -61,6 +62,7 @@ Widget buildApp(String baseUrl, {SecureKeyValueStore? secureStore}) {
       payments: HttpPaymentsPort(client, transport),
       contracts: HttpContractsPort(client, transport),
       invoices: HttpInvoicesPort(client, transport),
+      dashboard: HttpDashboardPort(client, transport),
     ),
     sessionExpired: sessionExpired,
   );
