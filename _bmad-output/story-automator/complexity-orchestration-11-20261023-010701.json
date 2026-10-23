@@ -1,0 +1,52 @@
+{
+  "stories": [
+    {
+      "storyId": "11.1",
+      "title": "Nền BLoC: dependency, guard màn không gọi port, phiên và màn đăng nhập",
+      "complexity": {
+        "score": 7,
+        "level": "High",
+        "reasons": [
+          "Mobile state refactor",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "11.2",
+      "title": "Chuyển BLoC màn khách hàng, bảo hành, hồ sơ",
+      "complexity": {
+        "score": 4,
+        "level": "Medium",
+        "reasons": [
+          "Mobile state refactor",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "11.3",
+      "title": "Chuyển BLoC màn đơn hàng và báo giá",
+      "complexity": {
+        "score": 5,
+        "level": "Medium",
+        "reasons": [
+          "Mobile state refactor",
+          "Integration testing required"
+        ]
+      }
+    },
+    {
+      "storyId": "11.4",
+      "title": "Chuyển BLoC màn thanh toán, kho, hợp đồng, hoá đơn và khoá guard",
+      "complexity": {
+        "score": 6,
+        "level": "Medium",
+        "reasons": [
+          "Mobile state refactor",
+          "Integration testing required"
+        ]
+      }
+    }
+  ]
+}
