@@ -1,7 +1,7 @@
 ---
 project_name: Phương Nam Solar — Phase 1
 type: project-context
-updated: 2026-10-22
+updated: 2026-10-23
 status: complete
 optimized_for_llm: true
 sections_completed: [stack, architecture-invariants, api-contract, coding-style, scout, testing, workflow, gotchas]
@@ -17,7 +17,7 @@ sources:
 
 App quản lý nội bộ công ty NLMT (báo giá, đơn, thi công/giao hàng, tồn kho, phân quyền, thông báo). 3 client tách biệt: **Backend NestJS API** · **Web React** · **Mobile Flutter**. Solo dev.
 
-**Nguồn chân lý (đọc trước khi làm):** PRD (37 FR) · `ARCHITECTURE-SPINE.md` (AD-1..21) · `DESIGN.md`+`EXPERIENCE.md` (UI/hành vi) · `epics.md` (10 epic/79 story). Khi mâu thuẫn: **spine thắng** cho kiến trúc/dữ liệu, **DESIGN/EXPERIENCE thắng** cho UI/hành vi.
+**Nguồn chân lý (đọc trước khi làm):** PRD (37 FR) · `ARCHITECTURE-SPINE.md` (AD-1..21) · `DESIGN.md`+`EXPERIENCE.md` (UI/hành vi) · `epics.md` (11 epic/83 story). Khi mâu thuẫn: **spine thắng** cho kiến trúc/dữ liệu, **DESIGN/EXPERIENCE thắng** cho UI/hành vi.
 
 ## Technology Stack & Versions
 
@@ -61,7 +61,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 
 - **Lint/format bắt buộc:** ESLint + Prettier (TS backend/web); `dart format` + `analysis_options.yaml` (Flutter). Không mỗi người/file một kiểu.
 - **Naming/format:** entity PascalCase · bảng snake_case số nhiều · file/route kebab-case · ID UUID v4 (trừ `Customer` PK = SĐT E.164) · ngày ISO-8601 UTC (client hiển thị UTC+7) · tiền integer đồng.
-- **Kiến trúc code:** Backend = NestJS module theo domain (`orders`, `customers`, `products`, `inventory`, `payments`, `accounts`, `notifications`…). Mobile = màn `StatefulWidget` + scope `InheritedWidget` (phiên, quyền, bottom-nav) + port/adapter ráp ở `main.dart`; KHÔNG dùng BLoC (0 dependency bloc — kế hoạch ban đầu ghi "Clean Architecture + BLoC" nhưng Epic 10 không áp dụng; áp hay bỏ là quyết định mở của Đại Ca trước Epic 9, retro Epic 10 H-4). Web = React function components + hooks.
+- **Kiến trúc code:** Backend = NestJS module theo domain (`orders`, `customers`, `products`, `inventory`, `payments`, `accounts`, `notifications`…). Mobile = **BLoC bắt buộc** (`flutter_bloc` + `bloc_test`; Đại Ca chốt 2026-10-23, đóng H-4): màn chỉ render state + gửi sự kiện, **chỉ cubit/bloc gọi port**; cubit nhận port qua constructor (`main.dart` → `AppPorts` → constructor màn → `BlocProvider`), không service locator; Cubit mặc định, Bloc khi cần event; state bất biến (`sealed`/`final class` + `Equatable`); `TextEditingController`/`FocusNode`/cuộn được ở lại `State`. Màn cũ chuyển ở **Epic 11** (trước Epic 8); tới khi 11.4 xong, màn trong allowlist của guard `no_port_call_in_screens_test.dart` vẫn là `StatefulWidget` gọi port. Scope `InheritedWidget` của design system (`AppPhoneFrameScope`, `AppBottomNavScope`, `PermissionsScope` làm API đọc quyền) giữ nguyên. Port/adapter vẫn ráp ở `main.dart` (AD-12). Web = React function components + hooks.
 - **Design-system SSOT + generator (Epic 1 đã dựng):** `design-system/tokens/design-tokens.json` và `design-system/icons/icons.json` là **nguồn chân lý duy nhất**; generator zero-dep `build-tokens.mjs`/`build-icons.mjs` derive **mọi** output web (`web/src/design-system/…`) + mobile (`mobile/lib/design_system/…`). **KHÔNG sửa tay file generated** (vd `app_tokens.dart`, `tokens.ts/css`, `sprite.ts`) — sửa SSOT rồi `cd design-system && npm run build`; drift-guard byte-for-byte sẽ fail nếu output cũ. Thêm token/a11y (vd `tapTargetMin`) đi qua SSOT+generator, không hardcode.
 
 ### Scout-before-code — kiểm tra tồn tại + ảnh hưởng
@@ -74,7 +74,7 @@ Hạ tầng VPS · online-only · ~20 user nội bộ · giao diện tiếng Vi�
 
 - Bắt buộc test cho phần dễ sai/tiền bạc: **pricing/VAT, `applyTransition` (gate cờ+quyền), permission resolve, snapshot giá, ghi nhận thanh toán, chặn tồn**.
 - Backend: unit cho domain + e2e cho endpoint quan trọng (chốt, `preview-total`, chuyển trạng thái). FE: test component design-system + luồng critical (giỏ hàng, chốt).
-- **Design-system guard (Epic 1):** chạy `cd design-system && npm test` (`node --test "**/*.test.mjs"`) — drift-guard (output generated không cũ) + source-guard (bất biến: cấm số học tiền client, cấm upload R2, cấm đổi status, read-only chip, Viền nét 0 shadow) + parity byte-for-byte web↔Flutter. Guard quét TOÀN VĂN file như text → **tránh viết chuỗi bị cấm (`shadow`/`gradient`/`box-shadow:`/`var(--r)`/`.toUpperCase()`) trong comment** (false-positive tái diễn). Mobile: `cd mobile && flutter test` + `flutter analyze`.
+- **Design-system guard (Epic 1):** chạy `cd design-system && npm test` (`node --test "**/*.test.mjs"`) — drift-guard (output generated không cũ) + source-guard (bất biến: cấm số học tiền client, cấm upload R2, cấm đổi status, read-only chip, Viền nét 0 shadow) + parity byte-for-byte web↔Flutter. Guard quét TOÀN VĂN file như text → **tránh viết chuỗi bị cấm (`shadow`/`gradient`/`box-shadow:`/`var(--r)`/`.toUpperCase()`) trong comment** (false-positive tái diễn). Mobile: `cd mobile && flutter test` + `flutter analyze`; logic cubit test bằng `bloc_test`; text-guard design-system đọc file màn mobile phải đọc cả `*_cubit.dart`/`*_state.dart` của màn đó (không thì assert phủ định mù khi code dời sang cubit).
 - **Backend:** `cd backend && npm test` — lane **hermetic** (mock Prisma, không cần Postgres): unit + e2e + **12 source-guard kiến trúc** ở `backend/test/no-*.spec.ts` (`no-bare-parse-uuid-pipe`, `no-vietnamese-api-contract`, `no-manual-prisma-client`, `no-controller-error-envelope`, `no-permission-literal-outside-registry`, `no-direct-side-effect-outside-eventbus`, `no-handler-without-require-permissions`, `no-fabricated-actor-permissions`, `no-hard-delete-customer-source`, `no-order-status-write-outside-transition`, `no-unscoped-order-write`, `no-stock-write-in-cancel`) + `audit-log-append-only` + `naming-convention` + guard theo module + drift-guard byte-for-byte cho `openapi.json` và `permissions.json`. **Mọi source-guard phải có assert chống-guard-rỗng** (`assertCodeNotBlind` / `length > 0`).
 - **Lane DB (Postgres thật):** `cd backend && npm run test:db` — chạy MỌI `*.db.integration.spec.ts` (`npm test` loại chúng qua `testPathIgnorePatterns`). Máy dev: container `pns-postgres` cổng 5433, `npx prisma migrate deploy` trước. Unique/FK/CHECK/`FOR UPDATE`/idempotency **chỉ đo được ở lane này** — mock không chứng minh được. CHECK constraint viết tay trong migration (Prisma không model CHECK). CI tự chạy đang TẮT (Đại Ca chốt): cổng = 5 lane chạy trên máy (backend, test:db, design-system, web, mobile) trước mỗi push.
 - **Test đồng thời:** ca "CHỜ khoá" phải để tx giữ khoá **GHI** đúng thứ primitive đọc (tx chỉ giữ khoá trần có thể bị lệnh khác chặn hộ ⇒ xanh giả khi gỡ `FOR UPDATE`); mỗi nguồn của tập khoá cần một ca interleaving riêng.

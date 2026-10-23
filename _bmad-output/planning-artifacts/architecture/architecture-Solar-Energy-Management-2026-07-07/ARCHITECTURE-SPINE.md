@@ -7,7 +7,7 @@ paradigm: layered client-server (backend là chủ sở hữu duy nhất của D
 scope: 'Phase 1 — app quản lý nội bộ Phương Nam Solar: Web (React) + Mobile (Flutter) là REST client thuần; Backend (NestJS) sở hữu DB + toàn bộ business logic; file/ảnh trên Cloudflare R2; design system per-platform là deliverable đầu tiên; push/notifications qua Firebase FCM (mobile) + hộp thư in-app. Governs FR-1..FR-37.'
 status: final
 created: '2026-07-07'
-updated: '2026-07-07'
+updated: '2026-10-23'
 binds: [FR-1, FR-2, FR-3, FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24, FR-25, FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33, FR-34, FR-35, FR-36, FR-37]
 sources:
   - ../../prds/prd-Solar-Energy-Management-2026-07-06/prd.md
@@ -123,6 +123,7 @@ flowchart TD
 - **Prevents:** lệch contract giữa backend và client; sửa tay spec làm spec lệch code; mobile không được ràng vào contract; session không revoke được.
 - **Rule:** API là REST. OpenAPI spec được **SINH TỪ backend NestJS** (code là chân lý, spec là **build artifact**), được **versioned + publish** làm **hợp đồng cross-repo DUY NHẤT**; **CẢ web LẪN mobile** đều sinh/validate client dựa trên spec này (mobile cũng vậy, không chỉ web). **Cấm sửa tay** spec. Auth dùng JWT access token (ngắn hạn) + refresh token; `/me` trả effective permission set.
 - **Luật client (correct-course 2026-10-22, Epic 10):** mỗi client có **MỘT composition root** (web `web/src/main.tsx`, mobile `mobile/lib/main.dart`) là nơi DUY NHẤT ráp port với adapter HTTP. Adapter dựng trên **client sinh từ `openapi.json`** (cấm khai tay type contract); client sinh có drift-guard (sinh lại phải ra đúng byte). **Chỉ tầng transport** được gọi mạng; envelope AD-5 parse ở đúng một chỗ trong transport; làm mới access token (một lần cho mọi request đang chờ) cũng chỉ ở transport. Fake port chỉ dùng trong test/demo, không được import từ composition root. Route, tham số và field DTO là tiếng Anh; enum value nghiệp vụ giữ nguyên. [Source: `sprint-change-proposal-2026-10-22.md`]
+- **Luật state mobile (correct-course 2026-10-23, Epic 11):** state của màn mobile do **`flutter_bloc`** quản (Đại Ca chốt: BLoC bắt buộc, đóng H-4 retro Epic 10). Màn (widget) chỉ **render state và gửi sự kiện** (gọi method cubit hoặc `add` event); **chỉ cubit/bloc gọi port**. Cubit nhận port **qua constructor**: port đi từ composition root `mobile/lib/main.dart` → `AppPorts` → `PnsApp`/`SignedInApp` → widget màn → `BlocProvider(create: …)`; không service locator, không bloc toàn cục cho state màn. Cubit không chạm mạng (vẫn port → adapter → transport). Cubit mặc định, Bloc khi cần event; state bất biến (`Equatable`, `sealed` khi pha khác nhau). Logic cubit test bằng `bloc_test`; guard `mobile/test/screens/no_port_call_in_screens_test.dart` khoá luật (màn cũ chuyển ở Epic 11, allowlist rỗng từ 11.4; màn Epic 8/9 dựng BLoC từ đầu). [Source: `sprint-change-proposal-2026-10-23.md`]
 
 ### AD-13 — Design-system-first: một tầng design system trước mọi màn `[ADOPTED]`
 
@@ -206,6 +207,7 @@ flowchart TD
 | Prisma ORM `[ASSUMPTION]` | 7.8.0 |
 | React (Web) | 19.2.7 |
 | Flutter (Mobile) | 3.44 |
+| flutter_bloc (Mobile state, AD-12 luật state mobile) | 9.1.1 (+ bloc 9.2.1, equatable 3.0.0; dev bloc_test 10.0.0 — kiểm `flutter pub` trên Flutter 3.35.0 / Dart 3.9.0 thật trên máy, 2026-10-23) |
 | Object storage | Cloudflare R2 (S3-compatible) |
 | firebase-admin (Node, backend push) | 14.1.0 |
 | Flutter Firebase — firebase_core | 4.11.0 |

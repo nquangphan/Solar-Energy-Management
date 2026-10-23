@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (retrospective epic 10)
+# last_updated: 2026-10-23 (correct-course, chèn Epic 11 BLoC trước Epic 8)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (retrospective epic 10)
+last_updated: 2026-10-23 (correct-course, chèn Epic 11 BLoC trước Epic 8)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -108,6 +108,13 @@ development_status:
   10-8-mobile-adapter-don-kho-tien-chung-tu-va-nut-chi-tiet-don-theo-quyen: done
   10-9-dang-nhap-bang-so-dien-thoai: done
   epic-10-retrospective: done
+  # Epic 11 chạy SAU Epic 10, TRƯỚC Epic 8 (correct-course 2026-10-23, sprint-change-proposal-2026-10-23.md)
+  epic-11: backlog
+  11-1-nen-bloc-dependency-guard-man-khong-goi-port-phien-va-man-dang-nhap: backlog
+  11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: backlog
+  11-3-chuyen-bloc-man-don-hang-va-bao-gia: backlog
+  11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: backlog
+  epic-11-retrospective: optional
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: backlog
@@ -385,8 +392,8 @@ action_items:
   - epic: 10
     action: "H-4: Quyết kiến trúc state mobile trước Epic 9 — áp BLoC hay giữ StatefulWidget + InheritedWidget + port"
     owner: "Đại Ca (Project Lead) + Winston (Architect)"
-    status: open
-    resolution: "Mặc định tuyên bố trước: giữ khuôn hiện tại (747 test trên nó, 0 dependency bloc). project-context.md đã ghi đúng thực tế. Im lặng tới bmad-create-story 9.1 ⇒ mặc định thành quyết định."
+    status: done
+    resolution: "Đại Ca quyết 2026-10-23: BLoC bắt buộc (flutter_bloc + bloc_test), chuyển hết màn cũ trước Epic 8 (Epic 11, chạy E10 → E11 → E8 → E9). Thay mặc định cũ (giữ StatefulWidget). Xem sprint-change-proposal-2026-10-23.md."
   - epic: 10
     action: "H-5: Luật guard mới — ship kèm mutant xoá thứ thật cần bảo vệ + danh sách biến thể theo nền tảng (TS alias/intersection/Pick/Omit/globalThis/.call; Dart Image.network/NetworkImage; parity literal đứng riêng)"
     owner: "Amelia (Dev) + Trợ Lý"
