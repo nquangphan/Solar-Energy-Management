@@ -23,6 +23,9 @@ void main() {
     test('inventory.manage ⇒ + inventory', () {
       expect(openableKeys({'inventory.manage'}), {'home', 'inventory', 'profile'});
     });
+    test('permissions.manage ⇒ + permissions', () {
+      expect(openableKeys({'permissions.manage'}), {'home', 'permissions', 'profile'});
+    });
   });
 
   group('landingPath', () {
@@ -113,11 +116,22 @@ void main() {
       expect(isOpenable(kStockVouchersPath, {'quotes.create_edit'}), isFalse);
       expect(isOpenable(kStockVouchersPath, {'inventory.manage'}), isTrue);
     });
+
+    test('Phân quyền and one account follow permissions.manage only', () {
+      for (final path in [kPermissionsPath, permissionAccountPath('acc-1')]) {
+        expect(isOpenable(path, {'permissions.manage'}), isTrue, reason: path);
+        expect(isOpenable(path, {'settings.manage', 'orders.view_all'}), isFalse, reason: path);
+      }
+    });
   });
 
   test('customerPath escapes the phone into one segment', () {
     expect(customerPath('+84903176968'), '/customers/%2B84903176968');
     expect(customerPath('0903/176'), '/customers/0903%2F176');
+  });
+
+  test('permissionAccountPath escapes the id into one segment', () {
+    expect(permissionAccountPath('a/b'), '/permissions/a%2Fb');
   });
 
   test('order paths escape their ids into one segment each', () {

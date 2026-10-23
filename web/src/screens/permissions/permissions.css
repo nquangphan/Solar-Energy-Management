@@ -1,0 +1,88 @@
+/* hand-authored — screen-local layout for Phân quyền & tài khoản (Story 8.2).
+
+   LAYOUT ONLY. Every colour comes from the token layer or a shipped
+   design-system class (AD-13). Mockup s-permissions: account list | checklist card. */
+
+.perm-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+}
+
+.perm-grid {
+  display: grid;
+  grid-template-columns: 230px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.perm-accounts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 6px 6px;
+}
+
+/* A selectable row: the selected one carries the teal border of the mockup. */
+.perm-account {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.perm-account[aria-pressed="true"] {
+  border-color: var(--teal);
+}
+
+.perm-inactive {
+  color: var(--danger);
+}
+
+.perm-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border-bottom: 1.5px solid var(--line);
+}
+
+.perm-spacer {
+  flex: 1;
+}
+
+.perm-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.perm-checklist {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 20px;
+}
+
+.perm-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 720px) {
+  .perm-grid,
+  .perm-checklist {
+    grid-template-columns: 1fr;
+  }
+}

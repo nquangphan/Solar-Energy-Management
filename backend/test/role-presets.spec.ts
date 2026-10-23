@@ -1,5 +1,8 @@
 import {
   ROLE_PRESETS,
+  ROLE_PRESET_KEYS,
+  ROLE_PRESET_LABELS,
+  matchingPreset,
   type RolePreset,
 } from '../src/accounts/domain/role-presets';
 import {
@@ -229,6 +232,48 @@ describe('role-presets (AC-3)', () => {
   it('mỗi preset khớp CHÍNH XÁC ma trận quyền — không thừa, không thiếu MỘT key nào', () => {
     for (const name of presetNames) {
       expect(new Set(ROLE_PRESETS[name])).toEqual(new Set(MA_TRAN_QUYEN[name]));
+    }
+  });
+
+  describe('matchingPreset', () => {
+    it('each preset set matches its own preset', () => {
+      for (const name of presetNames) {
+        expect(matchingPreset(new Set(ROLE_PRESETS[name]))).toBe(name);
+      }
+    });
+
+    it('a preset set with one key removed or added ⇒ null (custom)', () => {
+      for (const name of presetNames) {
+        const keys = ROLE_PRESETS[name];
+        expect(matchingPreset(new Set(keys.slice(1)))).toBeNull();
+        const extra = PERMISSION_KEYS.find((key) => !keys.includes(key));
+        if (extra) {
+          expect(matchingPreset(new Set([...keys, extra]))).toBeNull();
+        }
+      }
+    });
+
+    it('no two presets share the same set (at most one can match)', () => {
+      const signatures = presetNames.map((name) =>
+        [...ROLE_PRESETS[name]].sort().join(','),
+      );
+      expect(new Set(signatures).size).toBe(presetNames.length);
+    });
+
+    it('empty set ⇒ null', () => {
+      expect(matchingPreset(new Set())).toBeNull();
+    });
+  });
+
+  it('ROLE_PRESET_KEYS covers every preset exactly once, Super Admin last', () => {
+    expect([...ROLE_PRESET_KEYS].sort()).toEqual([...presetNames].sort());
+    expect(new Set(ROLE_PRESET_KEYS).size).toBe(ROLE_PRESET_KEYS.length);
+    expect(ROLE_PRESET_KEYS[ROLE_PRESET_KEYS.length - 1]).toBe('SUPER_ADMIN');
+  });
+
+  it('ROLE_PRESET_LABELS has a non-empty label for every preset', () => {
+    for (const name of presetNames) {
+      expect(ROLE_PRESET_LABELS[name].trim().length).toBeGreaterThan(0);
     }
   });
 });

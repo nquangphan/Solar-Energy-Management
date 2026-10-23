@@ -8,6 +8,7 @@ import { AppRoutes, SignedOutRoutes } from '../app/AppRoutes';
 import type { AppPorts } from '../app/AppRoutes';
 import { AVAILABLE_NAV_KEYS, NAV_ROUTES } from '../app/routes';
 import {
+  FakeAccountsPort,
   FakeAuthPort,
   FakeCatalogPort,
   FakeContractsPort,
@@ -57,6 +58,7 @@ function ports(permissions: string[]): AppPorts {
     contracts: new FakeContractsPort(),
     invoices: new FakeInvoicesPort(),
     dashboard: new FakeDashboardPort(),
+    accounts: new FakeAccountsPort(),
   };
 }
 
@@ -123,6 +125,25 @@ describe('AppRoutes', () => {
     fireEvent.click(screen.getByText('Cấu hình', { selector: 'a.navlink' }));
     expect(screen.getByTestId('path').textContent).toBe('/settings');
     expect(await screen.findByText('Nguồn khách hàng')).toBeTruthy();
+  });
+
+  it('Phân quyền: permissions.manage shows the link and opens /permissions; without it the link is hidden and the URL lands on /dashboard', async () => {
+    const appPorts = ports(ALL_PERMISSIONS);
+    const list = vi.spyOn(appPorts.accounts, 'listAccounts');
+    renderAt('/profile', appPorts);
+    fireEvent.click(await screen.findByText('Phân quyền', { selector: 'a.navlink' }));
+    expect(screen.getByTestId('path').textContent).toBe('/permissions');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Phân quyền & tài khoản'));
+    expect(list).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const without = ports(ALL_PERMISSIONS.filter((key) => key !== 'permissions.manage'));
+    const listWithout = vi.spyOn(without.accounts, 'listAccounts');
+    renderAt('/permissions', without);
+    await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    expect(navLabels()).not.toContain('Phân quyền');
+    expect(listWithout).not.toHaveBeenCalled();
   });
 
   it('"/" lands on Trang chủ (/dashboard) for every account: it is first in the sidebar and needs no permission', async () => {

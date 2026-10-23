@@ -106,3 +106,45 @@ export const ROLE_PRESETS: Record<RolePreset, readonly PermissionKey[]> = {
   // Cột "Kho/Giao": giao hàng, nhập/xuất kho; KHÔNG view_all → view_own.
   KHO_GIAO: [PERM.deliveryConfirm, PERM.inventoryManage, PERM.ordersViewOwn],
 };
+
+/**
+ * Display order of presets on the Permissions screen: the role columns of the mockup, then
+ * Super Admin last. Covers every `RolePreset` (unit test).
+ */
+export const ROLE_PRESET_KEYS: readonly RolePreset[] = [
+  'THO_KS',
+  'THI_CONG',
+  'KE_TOAN',
+  'KHO_GIAO',
+  'QUAN_LY',
+  'ADMIN',
+  'SUPER_ADMIN',
+];
+
+/** Vietnamese preset names shown on the Permissions screen. */
+export const ROLE_PRESET_LABELS: Record<RolePreset, string> = {
+  THO_KS: 'Thợ khảo sát',
+  THI_CONG: 'Đội thi công',
+  KE_TOAN: 'Kế toán',
+  KHO_GIAO: 'Kho/Giao hàng',
+  QUAN_LY: 'Quản lý/Sếp',
+  ADMIN: 'Admin',
+  SUPER_ADMIN: 'Super Admin',
+};
+
+/**
+ * The preset whose permission set equals `perms` exactly, or `null` ("custom"). An account
+ * stores no role (AD-8) — this is only a label derived from what the account holds. No two
+ * presets share a set (unit test), so at most one can match.
+ */
+export function matchingPreset(
+  perms: ReadonlySet<PermissionKey>,
+): RolePreset | null {
+  for (const preset of ROLE_PRESET_KEYS) {
+    const keys = ROLE_PRESETS[preset];
+    if (keys.length === perms.size && keys.every((key) => perms.has(key))) {
+      return preset;
+    }
+  }
+  return null;
+}

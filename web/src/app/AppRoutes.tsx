@@ -9,6 +9,7 @@ import { Button, Card, ErrorState, Skeleton } from '../design-system/components'
 import { can, PERMISSION_KEYS } from '../design-system/gating';
 import type { PermissionKey } from '../design-system/gating';
 import type {
+  AccountsPort,
   AuthPort,
   CatalogPort,
   ContractsPort,
@@ -46,6 +47,7 @@ import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
 import { OrderStatusChangeScreen } from '../screens/orders/OrderStatusChangeScreen';
 import { PaymentScheduleScreen } from '../screens/payments/PaymentScheduleScreen';
+import { PermissionsScreen } from '../screens/permissions/PermissionsScreen';
 import { CustomerSourceConfigScreen } from '../screens/settings/CustomerSourceConfigScreen';
 import { WarrantyLookupScreen } from '../screens/warranty/WarrantyLookupScreen';
 import {
@@ -87,6 +89,7 @@ export interface AppPorts {
   contracts: ContractsPort;
   invoices: InvoicesPort;
   dashboard: DashboardPort;
+  accounts: AccountsPort;
 }
 
 export interface SignedOutRoutesProps {
@@ -357,6 +360,7 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
             <CustomerSourceConfigScreen port={ports.customerSources} settingsPort={ports.settings} />,
           )}
         />
+        <Route path={NAV_ROUTES.permissions} element={gate('permissions', <PermissionsScreen port={ports.accounts} />)} />
         <Route
           path={NAV_ROUTES.profile}
           element={gate('profile', <ProfileScreen port={ports.password} onLogout={onLogout} />)}

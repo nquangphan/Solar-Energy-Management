@@ -18,6 +18,8 @@ import 'package:pns_mobile/screens/customers/customer_pick_screen.dart';
 import 'package:pns_mobile/screens/dashboard/dashboard_screen.dart';
 import 'package:pns_mobile/screens/menu/menu_screen.dart';
 import 'package:pns_mobile/screens/orders/order_list_screen.dart';
+import 'package:pns_mobile/screens/permissions/account_list_screen.dart';
+import 'package:pns_mobile/screens/permissions/account_permissions_screen.dart';
 import 'package:pns_mobile/screens/warranty/warranty_lookup_screen.dart';
 
 import '../api/support/fake_http.dart';
@@ -73,6 +75,28 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
       return jsonBody(200, {'found': false, 'phone': '+84999999999', 'customer': null, 'orders': []});
     case '/dashboard/summary':
       return jsonBody(200, dashboardBody());
+    case '/accounts':
+      return jsonBody(200, [
+        {
+          'id': 'acc-worker',
+          'displayName': 'Bình Thợ',
+          'phone': '+84900000002',
+          'email': 'w@pns.solar',
+          'isActive': true,
+          'permissions': ['catalog.view'],
+          'matchingPreset': null,
+          'matchingPresetLabel': null,
+          'editable': true,
+          'readOnlyReason': null,
+        },
+      ]);
+    case '/accounts/permission-options':
+      return jsonBody(200, {
+        'permissions': [
+          {'key': 'catalog.view', 'label': 'Xem danh mục vật tư', 'group': 'catalog', 'requires': [], 'grantable': true},
+        ],
+        'presets': [],
+      });
   }
   return jsonBody(404, envelope('NOT_FOUND', 'Không tìm thấy.'));
 };
@@ -138,6 +162,32 @@ void main() {
     await _signedIn(tester, _backend(permsA: ['orders.view_own']));
     expect(find.text('Khách hàng'), findsNothing);
     expect(find.text('Tra cứu bảo hành'), findsOneWidget);
+  });
+
+  testWidgets('Phân quyền shows only with permissions.manage; an account opens and Back re-reads the list', (
+    tester,
+  ) async {
+    await _signedIn(tester, _backend());
+    expect(find.text('Phân quyền'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox());
+    final app = await _signedIn(tester, _backend(permsA: ['permissions.manage']));
+    await tester.tap(find.text('Phân quyền'));
+    await _navigated(tester);
+    expect(find.byType(AccountListScreen), findsOneWidget);
+    expect(_location(tester), '/permissions');
+    expect(app.adapter.to('/accounts'), hasLength(1));
+
+    await tester.tap(find.text('Bình Thợ'));
+    await _navigated(tester);
+    expect(find.byType(AccountPermissionsScreen), findsOneWidget);
+    expect(_location(tester), '/permissions/acc-worker');
+    expect(find.text('Quyền · Bình Thợ'), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await _navigated(tester);
+    expect(find.byType(AccountListScreen), findsOneWidget);
+    expect(app.adapter.to('/accounts'), hasLength(3), reason: 'list, matrix, list again');
   });
 
   testWidgets('Khách hàng → a customer with + in the phone → back returns to the list', (tester) async {

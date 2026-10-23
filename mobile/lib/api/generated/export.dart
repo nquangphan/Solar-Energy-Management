@@ -5,6 +5,7 @@
 // Clients
 export 'health/health_client.dart';
 export 'auth/auth_client.dart';
+export 'accounts/accounts_client.dart';
 export 'feature_flags/feature_flags_client.dart';
 export 'catalog/catalog_client.dart';
 export 'customers/customers_client.dart';
@@ -28,6 +29,12 @@ export 'models/forgot_password_response_dto.dart';
 export 'models/reset_password_request_dto.dart';
 export 'models/change_password_request_dto.dart';
 export 'models/me_response_dto.dart';
+export 'models/role_preset.dart';
+export 'models/account_permission_summary_dto.dart';
+export 'models/permission_option_dto.dart';
+export 'models/role_preset_option_dto.dart';
+export 'models/permission_options_response_dto.dart';
+export 'models/update_account_permissions_request_dto.dart';
 export 'models/feature_flag_response_dto.dart';
 export 'models/toggle_feature_flag_request_dto.dart';
 export 'models/create_product_request_dto.dart';

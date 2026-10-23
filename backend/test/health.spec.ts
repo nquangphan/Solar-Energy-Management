@@ -56,9 +56,10 @@ describe('GET /health (e2e)', () => {
   });
 
   it('KHÔNG expose route nghiệp vụ nào ngoài /health (skeleton chỉ có hạ tầng)', async () => {
-    // Chứng minh scope skeleton: chưa có domain endpoint (accounts/orders…) leak vào.
+    // An unknown path is a 404, not swallowed by the auth guard. (`/accounts` was the probe
+    // until it became a real route.)
     const server = app.getHttpServer() as Server;
-    await request(server).get('/accounts').expect(404);
+    await request(server).get('/no-such-route').expect(404);
   });
 });
 

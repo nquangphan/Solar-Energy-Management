@@ -15,6 +15,7 @@ const String kWarrantyPath = '/warranty';
 const String kProfilePath = '/profile';
 const String kOrdersPath = '/orders';
 const String kInventoryPath = '/inventory';
+const String kPermissionsPath = '/permissions';
 
 /// Child routes of `orders`; the static ones are registered before `/orders/:id`.
 const String kOrderNewPath = '/orders/new';
@@ -26,6 +27,9 @@ const String kStockVouchersPath = '/inventory/vouchers';
 /// A customer's detail. The phone is escaped: an E.164 `+` (or a stray `/`)
 /// stays inside one path segment; the router hands the screen the decoded value.
 String customerPath(String phone) => '$kCustomersPath/${Uri.encodeComponent(phone)}';
+
+/// One account's permission matrix (Phân quyền).
+String permissionAccountPath(String id) => '$kPermissionsPath/${Uri.encodeComponent(id)}';
 
 String orderPath(String id) => '$kOrdersPath/${Uri.encodeComponent(id)}';
 String orderTransitionPath(String id) => '${orderPath(id)}/transition';
@@ -43,6 +47,7 @@ const Map<String, String> kNavRoutes = {
   'inventory': kInventoryPath,
   'customers': kCustomersPath,
   'warranty': kWarrantyPath,
+  'permissions': kPermissionsPath,
   'profile': kProfilePath,
 };
 

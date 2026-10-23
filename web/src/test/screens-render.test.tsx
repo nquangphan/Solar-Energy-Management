@@ -17,6 +17,7 @@ import type { MockInstance } from 'vitest';
 import { PERMISSION_KEYS } from '../design-system/gating/permission-keys.generated';
 import {
   DEMO_ME,
+  FakeAccountsPort,
   FakeCatalogPort,
   FakeCustomerSourcesPort,
   FakeCustomersPort,
@@ -43,6 +44,7 @@ import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen'
 import { CustomerListScreen } from '../screens/customers/CustomerListScreen';
 import { CustomerPickScreen } from '../screens/customers/CustomerPickScreen';
 import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { PermissionsScreen } from '../screens/permissions/PermissionsScreen';
 import { InventoryScreen } from '../screens/inventory/InventoryScreen';
 import { StockVouchersScreen } from '../screens/inventory/StockVouchersScreen';
 import { ContractsScreen } from '../screens/contracts/ContractsScreen';
@@ -270,7 +272,15 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(screen.getByText('Đơn theo trạng thái')).toBeTruthy();
     expect(screen.getByText('Hoàn thành')).toBeTruthy();
   });
+
+  it('PermissionsScreen — the account list loaded from the port, then one account’s checklist', async () => {
+    renderScreen(<PermissionsScreen port={new FakeAccountsPort()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Trần Văn A/ }));
+    expect(screen.getByText('Quyền của account')).toBeTruthy();
+    expect(screen.getByText('Áp preset role')).toBeTruthy();
+    expect(screen.getByLabelText('Tạo/sửa báo giá')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 20;
+const SCREEN_COUNT = 21;

@@ -45,6 +45,8 @@ import '../screens/orders/order_detail_screen.dart';
 import '../screens/orders/order_list_screen.dart';
 import '../screens/orders/order_status_change_screen.dart';
 import '../screens/payments/payment_schedule_screen.dart';
+import '../screens/permissions/account_list_screen.dart';
+import '../screens/permissions/account_permissions_screen.dart';
 import '../screens/warranty/warranty_lookup_screen.dart';
 import 'app_chrome.dart';
 import 'app_ports.dart';
@@ -159,6 +161,19 @@ class _SignedInAppState extends State<SignedInApp> {
         GoRoute(
           path: kWarrantyPath,
           builder: (context, state) => WarrantyLookupScreen(port: ports.warranty),
+        ),
+        GoRoute(
+          path: kPermissionsPath,
+          builder: (context, state) => AccountListScreen(
+            port: ports.accounts,
+            // The list reads again when the matrix closes (it may have saved).
+            onOpen: (accountId) => context.push(permissionAccountPath(accountId)),
+          ),
+        ),
+        GoRoute(
+          path: '$kPermissionsPath/:id',
+          builder: (context, state) =>
+              AccountPermissionsScreen(port: ports.accounts, accountId: id(state), onBack: () => back(context)),
         ),
         GoRoute(
           path: kProfilePath,

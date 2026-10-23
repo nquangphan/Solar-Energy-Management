@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountPermissionsService } from './account-permissions.service';
+import { AccountsController } from './accounts.controller';
 
 /**
  * AccountsModule — export `AccountsService` cho `AuthModule` import. `PrismaService`
@@ -9,6 +10,7 @@ import { AccountPermissionsService } from './account-permissions.service';
  * `/me` + guard) import được.
  */
 @Module({
+  controllers: [AccountsController],
   providers: [AccountsService, AccountPermissionsService],
   exports: [AccountsService, AccountPermissionsService],
 })

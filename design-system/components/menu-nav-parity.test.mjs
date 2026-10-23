@@ -76,7 +76,9 @@ test('the readers resolve both nav tables (not blind)', () => {
   assert.ok(Object.keys(webPerm).length >= 8, 'web PERM read with too few keys');
   assert.ok(Object.keys(mobilePerm).length >= 8, 'mobile AppPermissionKeys read with too few keys');
   assert.ok(Object.keys(webNav).length >= 8, `SIDEBAR_NAV read with ${Object.keys(webNav).length} entries`);
-  assert.deepEqual(Object.keys(mobileNav).sort(), ['customers', 'profile', 'warranty']);
+  assert.deepEqual(Object.keys(mobileNav).sort(), ['customers', 'permissions', 'profile', 'warranty']);
+  // Phân quyền (Story 8.2) is gated on the same key on both sides.
+  assert.equal(mobileNav.permissions.requires, 'permissions.manage');
   assert.deepEqual(Object.keys(mobileTabs).sort(), ['home', 'inventory', 'orders']);
   // Trang chủ needs no permission on either side (Story 8.1).
   assert.deepEqual(mobileTabs.home, { requires: null, requiresAny: null });

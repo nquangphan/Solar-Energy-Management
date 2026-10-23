@@ -16,6 +16,7 @@ export const NAV_ROUTES = {
   inventory: '/inventory',
   warranty: '/warranty',
   settings: '/settings',
+  permissions: '/permissions',
   profile: '/profile',
 } as const;
 

@@ -130,6 +130,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/permission-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AccountsController_permissionOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["AccountsController_updatePermissions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/feature-flags": {
         parameters: {
             query?: never;
@@ -1094,6 +1142,93 @@ export interface components {
              * @example [
              *       "audit.read",
              *       "orders.view_all"
+             *     ]
+             */
+            permissions: string[];
+        };
+        /**
+         * @description Preset có bộ quyền trùng khít bộ quyền của account; null = tuỳ chỉnh. Account không lưu role.
+         * @enum {string}
+         */
+        RolePreset: "THO_KS" | "THI_CONG" | "KE_TOAN" | "KHO_GIAO" | "QUAN_LY" | "ADMIN" | "SUPER_ADMIN";
+        AccountPermissionSummaryDto: {
+            /** @example 6f1c2a4e-0b7d-4c1a-9d3e-2f5a8b7c9d10 */
+            id: string;
+            /** @example Trần Văn A */
+            displayName: string;
+            /**
+             * @description SĐT đăng nhập (E.164). null với account cũ chưa có số.
+             * @example +84901234567
+             */
+            phone: string | null;
+            /** @example a.tran@phuongnamsolar.vn */
+            email: string;
+            /** @description false = account đã vô hiệu. */
+            isActive: boolean;
+            /**
+             * @description Bộ quyền đang lưu trên account (sorted).
+             * @example [
+             *       "catalog.view",
+             *       "customers.manage"
+             *     ]
+             */
+            permissions: string[];
+            /** @description Preset có bộ quyền trùng khít bộ quyền của account; null = tuỳ chỉnh. Account không lưu role. */
+            matchingPreset: components["schemas"]["RolePreset"] | null;
+            /**
+             * @description Nhãn tiếng Việt của matchingPreset (kể cả preset người gọi không cấp được); null = tuỳ chỉnh.
+             * @example Thợ khảo sát
+             */
+            matchingPresetLabel: string | null;
+            /** @description Người gọi có sửa được quyền của account này không (không phải chính mình, và account không mang quyền người gọi không có). */
+            editable: boolean;
+            /**
+             * @description Lý do chỉ đọc khi editable = false; null khi sửa được.
+             * @example Đây là tài khoản của bạn.
+             */
+            readOnlyReason: string | null;
+        };
+        PermissionOptionDto: {
+            /** @example quotes.create_edit */
+            key: string;
+            /** @example Tạo/sửa báo giá */
+            label: string;
+            /** @example quotes */
+            group: string;
+            /**
+             * @description Quyền phải có kèm thì quyền này mới dùng được (thiếu ⇒ lưu bị từ chối).
+             * @example [
+             *       "customers.manage",
+             *       "catalog.view"
+             *     ]
+             */
+            requires: string[];
+            /** @description Người gọi cấp được quyền này không (luật không-leo-thang). */
+            grantable: boolean;
+        };
+        RolePresetOptionDto: {
+            key: components["schemas"]["RolePreset"];
+            /** @example Thợ khảo sát */
+            label: string;
+            /**
+             * @example [
+             *       "catalog.view"
+             *     ]
+             */
+            permissions: string[];
+        };
+        PermissionOptionsResponseDto: {
+            /** @description Mọi quyền trong registry, xếp theo nhóm. */
+            permissions: components["schemas"]["PermissionOptionDto"][];
+            /** @description Chỉ các preset người gọi cấp được trọn bộ. */
+            presets: components["schemas"]["RolePresetOptionDto"][];
+        };
+        UpdateAccountPermissionsRequestDto: {
+            /**
+             * @description Bộ quyền MỚI, thay thế toàn bộ bộ cũ.
+             * @example [
+             *       "catalog.view",
+             *       "customers.manage"
              *     ]
              */
             permissions: string[];
@@ -3097,6 +3232,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponseDto"];
+                };
+            };
+        };
+    };
+    AccountsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Mọi account kèm bộ quyền, preset khớp và cờ sửa được. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPermissionSummaryDto"][];
+                };
+            };
+            /** @description Thiếu permissions.manage (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    AccountsController_permissionOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Registry quyền (nhãn, nhóm, phụ thuộc, cấp được không) và các preset người gọi cấp được. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionOptionsResponseDto"];
+                };
+            };
+            /** @description Thiếu permissions.manage (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    AccountsController_updatePermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountPermissionsRequestDto"];
+            };
+        };
+        responses: {
+            /** @description Account sau khi lưu bộ quyền mới. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountPermissionSummaryDto"];
+                };
+            };
+            /** @description id không phải UUID, key ngoài registry, hoặc có quyền thiếu quyền nó cần (VALIDATION_ERROR, fieldErrors.permissions). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu permissions.manage, tự sửa quyền của mình, sửa account mang quyền người gọi không có, hoặc cấp quyền người gọi không có (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Không có account này (NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
                 };
             };
         };

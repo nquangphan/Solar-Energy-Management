@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 
 import 'health/health_client.dart';
 import 'auth/auth_client.dart';
+import 'accounts/accounts_client.dart';
 import 'feature_flags/feature_flags_client.dart';
 import 'catalog/catalog_client.dart';
 import 'customers/customers_client.dart';
@@ -34,6 +35,7 @@ class PnsApiClient {
 
   HealthClient? _health;
   AuthClient? _auth;
+  AccountsClient? _accounts;
   FeatureFlagsClient? _featureFlags;
   CatalogClient? _catalog;
   CustomersClient? _customers;
@@ -48,6 +50,8 @@ class PnsApiClient {
   HealthClient get health => _health ??= HealthClient(_dio, baseUrl: _baseUrl);
 
   AuthClient get auth => _auth ??= AuthClient(_dio, baseUrl: _baseUrl);
+
+  AccountsClient get accounts => _accounts ??= AccountsClient(_dio, baseUrl: _baseUrl);
 
   FeatureFlagsClient get featureFlags => _featureFlags ??= FeatureFlagsClient(_dio, baseUrl: _baseUrl);
 

@@ -1,4 +1,5 @@
 import {
+  grantableBy,
   keysActorCannotGrant,
   keysBlockingActorFromTarget,
 } from '../src/accounts/domain/permission-escalation';
@@ -88,5 +89,47 @@ describe('luật không-leo-thang quyền (domain thuần)', () => {
       expect(keysBlockingActorFromTarget(actor, target)).toEqual([]);
       expect(keysActorCannotGrant(actor, [...ROLE_PRESETS.ADMIN])).toEqual([]);
     });
+  });
+});
+
+describe('orders.view_all covers orders.view_own for escalation', () => {
+  const set = (keys: readonly PermissionKey[]) => new Set<PermissionKey>(keys);
+
+  it('ADMIN can grant every field-worker preset in full', () => {
+    for (const preset of ['THO_KS', 'THI_CONG', 'KHO_GIAO'] as const) {
+      expect(
+        keysActorCannotGrant(set(ROLE_PRESETS.ADMIN), ROLE_PRESETS[preset]),
+      ).toEqual([]);
+    }
+  });
+
+  it('ADMIN can edit an account holding orders.view_own', () => {
+    expect(
+      keysBlockingActorFromTarget(
+        set(ROLE_PRESETS.ADMIN),
+        set(ROLE_PRESETS.THO_KS),
+      ),
+    ).toEqual([]);
+  });
+
+  it('without orders.view_all, orders.view_own is still not grantable', () => {
+    expect(
+      keysActorCannotGrant(set([PERM.permissionsManage]), [PERM.ordersViewOwn]),
+    ).toEqual([PERM.ordersViewOwn]);
+  });
+
+  it('the implication is one-way: view_own does not cover view_all', () => {
+    expect(grantableBy(set([PERM.ordersViewOwn])).has(PERM.ordersViewAll)).toBe(
+      false,
+    );
+  });
+
+  it('ADMIN still cannot grant or edit Super Admin keys', () => {
+    expect(
+      keysBlockingActorFromTarget(
+        set(ROLE_PRESETS.ADMIN),
+        set(ROLE_PRESETS.SUPER_ADMIN),
+      ),
+    ).toEqual([PERM.auditRead, PERM.systemFeatureFlags].sort());
   });
 });

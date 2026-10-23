@@ -29,6 +29,13 @@ const List<AppNavSection> kMobileMenu = [
         icon: 'ic-phone',
         requiresAny: [AppPermissionKeys.ordersViewAll, AppPermissionKeys.ordersViewOwn],
       ),
+      AppNavLink(
+        key: 'permissions',
+        label: 'Phân quyền',
+        subtitle: 'Tài khoản & quyền',
+        icon: 'ic-permissions',
+        requires: AppPermissionKeys.permissionsManage,
+      ),
       AppNavLink(key: 'profile', label: 'Hồ sơ', subtitle: 'Thông tin & đổi mật khẩu', icon: 'ic-user'),
     ],
   ),

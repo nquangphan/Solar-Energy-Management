@@ -131,6 +131,15 @@ export type {
   DashboardStatusCount,
   DashboardPeriod,
 } from './dashboard-port';
+// Accounts seam (Story 8.2): who may grant/edit what arrives computed by the
+// backend (`grantable`, `editable`, filtered presets); the screen only displays it.
+export type {
+  AccountsPort,
+  AccountPermissionSummary,
+  PermissionOptions,
+  PermissionOption,
+  RolePresetOption,
+} from './accounts-port';
 export type {
   CatalogPort,
   CatalogProduct,
@@ -185,6 +194,11 @@ export {
   DEMO_INVOICE_DETAIL,
 } from './fake-invoices-port';
 export { FakeDashboardPort, DEMO_DASHBOARD_SUMMARY } from './fake-dashboard-port';
+export {
+  FakeAccountsPort,
+  DEMO_ACCOUNTS,
+  DEMO_PERMISSION_OPTIONS,
+} from './fake-accounts-port';
 export {
   FakeCatalogPort,
   DEMO_CATALOG_PRODUCTS,

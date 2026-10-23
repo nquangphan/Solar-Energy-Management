@@ -268,6 +268,156 @@
         ]
       }
     },
+    "/accounts": {
+      "get": {
+        "operationId": "AccountsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Mọi account kèm bộ quyền, preset khớp và cờ sửa được.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccountPermissionSummaryDto"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu permissions.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/accounts/permission-options": {
+      "get": {
+        "operationId": "AccountsController_permissionOptions",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Registry quyền (nhãn, nhóm, phụ thuộc, cấp được không) và các preset người gọi cấp được.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionOptionsResponseDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu permissions.manage (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
+    "/accounts/{id}/permissions": {
+      "put": {
+        "operationId": "AccountsController_updatePermissions",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountPermissionsRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Account sau khi lưu bộ quyền mới.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPermissionSummaryDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "id không phải UUID, key ngoài registry, hoặc có quyền thiếu quyền nó cần (VALIDATION_ERROR, fieldErrors.permissions).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu permissions.manage, tự sửa quyền của mình, sửa account mang quyền người gọi không có, hoặc cấp quyền người gọi không có (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có account này (NOT_FOUND).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "accounts"
+        ]
+      }
+    },
     "/feature-flags": {
       "get": {
         "operationId": "FeatureFlagsController_findAll",
@@ -5545,6 +5695,205 @@
           "email",
           "phone",
           "displayName",
+          "permissions"
+        ]
+      },
+      "RolePreset": {
+        "type": "string",
+        "enum": [
+          "THO_KS",
+          "THI_CONG",
+          "KE_TOAN",
+          "KHO_GIAO",
+          "QUAN_LY",
+          "ADMIN",
+          "SUPER_ADMIN"
+        ],
+        "description": "Preset có bộ quyền trùng khít bộ quyền của account; null = tuỳ chỉnh. Account không lưu role."
+      },
+      "AccountPermissionSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "6f1c2a4e-0b7d-4c1a-9d3e-2f5a8b7c9d10"
+          },
+          "displayName": {
+            "type": "string",
+            "example": "Trần Văn A"
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true,
+            "description": "SĐT đăng nhập (E.164). null với account cũ chưa có số.",
+            "example": "+84901234567"
+          },
+          "email": {
+            "type": "string",
+            "example": "a.tran@phuongnamsolar.vn"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "false = account đã vô hiệu."
+          },
+          "permissions": {
+            "description": "Bộ quyền đang lưu trên account (sorted).",
+            "example": [
+              "catalog.view",
+              "customers.manage"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "matchingPreset": {
+            "nullable": true,
+            "description": "Preset có bộ quyền trùng khít bộ quyền của account; null = tuỳ chỉnh. Account không lưu role.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RolePreset"
+              }
+            ]
+          },
+          "matchingPresetLabel": {
+            "type": "string",
+            "nullable": true,
+            "description": "Nhãn tiếng Việt của matchingPreset (kể cả preset người gọi không cấp được); null = tuỳ chỉnh.",
+            "example": "Thợ khảo sát"
+          },
+          "editable": {
+            "type": "boolean",
+            "description": "Người gọi có sửa được quyền của account này không (không phải chính mình, và account không mang quyền người gọi không có)."
+          },
+          "readOnlyReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lý do chỉ đọc khi editable = false; null khi sửa được.",
+            "example": "Đây là tài khoản của bạn."
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "phone",
+          "email",
+          "isActive",
+          "permissions",
+          "matchingPreset",
+          "matchingPresetLabel",
+          "editable",
+          "readOnlyReason"
+        ]
+      },
+      "PermissionOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "quotes.create_edit"
+          },
+          "label": {
+            "type": "string",
+            "example": "Tạo/sửa báo giá"
+          },
+          "group": {
+            "type": "string",
+            "example": "quotes"
+          },
+          "requires": {
+            "description": "Quyền phải có kèm thì quyền này mới dùng được (thiếu ⇒ lưu bị từ chối).",
+            "example": [
+              "customers.manage",
+              "catalog.view"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grantable": {
+            "type": "boolean",
+            "description": "Người gọi cấp được quyền này không (luật không-leo-thang)."
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "group",
+          "requires",
+          "grantable"
+        ]
+      },
+      "RolePresetOptionDto": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RolePreset"
+              }
+            ]
+          },
+          "label": {
+            "type": "string",
+            "example": "Thợ khảo sát"
+          },
+          "permissions": {
+            "example": [
+              "catalog.view"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "permissions"
+        ]
+      },
+      "PermissionOptionsResponseDto": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "description": "Mọi quyền trong registry, xếp theo nhóm.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionOptionDto"
+            }
+          },
+          "presets": {
+            "description": "Chỉ các preset người gọi cấp được trọn bộ.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RolePresetOptionDto"
+            }
+          }
+        },
+        "required": [
+          "permissions",
+          "presets"
+        ]
+      },
+      "UpdateAccountPermissionsRequestDto": {
+        "type": "object",
+        "properties": {
+          "permissions": {
+            "description": "Bộ quyền MỚI, thay thế toàn bộ bộ cũ.",
+            "example": [
+              "catalog.view",
+              "customers.manage"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
           "permissions"
         ]
       },
