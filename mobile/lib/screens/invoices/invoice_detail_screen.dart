@@ -15,8 +15,12 @@
 // header on mobile.
 //
 // LABELS are byte-identical with the web twin.
+//
+// InvoiceDetailCubit reads and exports through the injected [InvoicesPort]
+// (Story 11.4); the screen hands it the share seam and renders its state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/invoices_port.dart';
@@ -26,6 +30,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../orders/discount_approval_screen.dart' show kOrdersTabIndex;
+import 'invoice_detail_cubit.dart';
+import 'invoice_detail_state.dart';
 
 const TextStyle _micro = TextStyle(
   color: AppTokens.muted,
@@ -40,7 +46,6 @@ const TextStyle _strong = TextStyle(
   fontWeight: FontWeight.w800,
 );
 
-const String _kExportError = 'Không xuất được PDF hoá đơn. Vui lòng thử lại.';
 const String _kNotConfigured = 'Chưa cấu hình';
 
 /// UTC instant ⇒ `dd/MM/yyyy` in Vietnam (UTC+7).
@@ -53,8 +58,6 @@ String _vnDate(DateTime instant) {
 /// A seller field left empty when the invoice was issued.
 String _orNotConfigured(String value) =>
     value.trim().isEmpty ? _kNotConfigured : value;
-
-enum _LoadState { loading, ready, error }
 
 class InvoiceDetailScreen extends StatefulWidget {
   const InvoiceDetailScreen({
@@ -79,16 +82,21 @@ class InvoiceDetailScreen extends StatefulWidget {
 }
 
 class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
-  _LoadState _state = _LoadState.loading;
-  InvoiceDetail? _invoice;
-  int _ticket = 0;
-  bool _busy = false;
-  String? _error;
+  // Created once and retargeted rather than rebuilt when the invoice changes: a
+  // running export keeps its busy flag and re-reads the NEW invoice.
+  late final InvoiceDetailCubit _cubit =
+      InvoiceDetailCubit(widget.port, widget.orderId, widget.invoiceId);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  InvoiceDetailStatus get _state => _cubit.state.status;
+  InvoiceDetail? get _invoice => _cubit.state.invoice;
+  bool get _busy => _cubit.state.busy;
+  String? get _error => _cubit.state.error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
   @override
@@ -99,65 +107,17 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     if (oldWidget.port != widget.port ||
         oldWidget.orderId != widget.orderId ||
         oldWidget.invoiceId != widget.invoiceId) {
-      _invoice = null;
-      _load();
+      _cubit.retarget(widget.port, widget.orderId, widget.invoiceId);
     }
   }
 
-  Future<void> _load({bool showSkeleton = true}) async {
-    final int ticket = ++_ticket;
-    if (showSkeleton) setState(() => _state = _LoadState.loading);
-    try {
-      final InvoiceDetail i =
-          await widget.port.getInvoice(widget.orderId, widget.invoiceId);
-      if (!mounted || ticket != _ticket) return;
-      setState(() {
-        _invoice = i;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _ticket) return;
-      // A failed silent refresh keeps the last good view.
-      if (showSkeleton || _invoice == null) {
-        setState(() => _state = _LoadState.error);
-      }
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
-  /// Export → download → share, one call at a time; then the detail is reloaded
-  /// so the PDF status is the server's.
-  Future<void> _exportPdf() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await widget.port.exportInvoicePdf(widget.orderId, widget.invoiceId);
-      final InvoicePdfFile file = await widget.port
-          .downloadInvoicePdf(widget.orderId, widget.invoiceId);
-      final AppShareFn share = widget.shareImpl ?? platformShareXFiles;
-      await share(
-        <XFile>[
-          XFile.fromData(
-            file.bytes,
-            mimeType: 'application/pdf',
-            name: file.fileName,
-          ),
-        ],
-        title: file.fileName,
-      fileNames: <String>[file.fileName],
-      );
-    } catch (e) {
-      if (mounted) {
-        setState(
-            () => _error = e is InvoicesPortError ? e.message : _kExportError);
-      }
-    } finally {
-      await _load(showSkeleton: false);
-      if (mounted) setState(() => _busy = false);
-    }
-  }
+  void _exportPdf() => _cubit.exportPdf(widget.shareImpl ?? platformShareXFiles);
 
   // ---- view ----------------------------------------------------------------
 
@@ -230,17 +190,17 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case InvoiceDetailStatus.loading:
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case InvoiceDetailStatus.error:
         return AppErrorState(
           message: 'Không tải được hoá đơn.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case InvoiceDetailStatus.ready:
         final InvoiceDetail i = _invoice!;
         const SizedBox gap = SizedBox(height: AppTokens.space12);
         final InvoicePdfInfo? pdf = i.pdf;
@@ -280,6 +240,15 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<InvoiceDetailCubit, InvoiceDetailState>(
+        builder: (BuildContext context, InvoiceDetailState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(

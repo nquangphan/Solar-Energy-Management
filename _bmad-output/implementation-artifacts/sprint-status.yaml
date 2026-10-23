@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-23 (code-review 11.3 done)
+# last_updated: 2026-10-23 (code-review 11.4 done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-23 (code-review 11.3 done)
+last_updated: 2026-10-23 (code-review 11.4 done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -113,7 +113,7 @@ development_status:
   11-1-nen-bloc-dependency-guard-man-khong-goi-port-phien-va-man-dang-nhap: done
   11-2-chuyen-bloc-man-khach-hang-bao-hanh-ho-so: done
   11-3-chuyen-bloc-man-don-hang-va-bao-gia: done
-  11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: backlog
+  11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: done
   epic-11-retrospective: optional
   epic-8: backlog
   8-1-dashboard-van-hanh: backlog
@@ -429,3 +429,13 @@ action_items:
     owner: "Amelia (Dev)"
     status: open
     resolution: "Có từ trước Epic 11, 11.3 giữ nguyên số request (§6.11). Không emit, người dùng không thấy; chỉ tốn request. Tái hiện: tab Ảnh → xoá ảnh, removeAttachment chậm → rời màn → removeAttachment trả lời ⇒ thêm 1 listAttachments; hoặc attachmentBytes ảnh 1 lỗi sau khi rời màn ⇒ vẫn gọi bytes ảnh 2. Hướng sửa: return khi isClosed trước request kế tiếp + ca test đếm request sau close."
+  - epic: 11
+    action: "TD-75: Tồn kho mobile không chặn trả lời sai thứ tự — hai lần đọc chồng nhau (bấm tab Kho khi đang tải, hoặc quay về từ Phiếu kho) thì câu trả lời về SAU thắng, kể cả khi nó là của lần hỏi trước"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Có từ trước Epic 11, 11.4 giữ nguyên (InventoryCubit.load không vé; ca bloc_test 'two overlapping loads… the later answer wins (no ticket, TD-75)' ghim hành vi hiện tại). Tái hiện: Tồn kho với listStock chậm → bấm tab Kho (reloadSignal) → lần 2 trả lời trước, lần 1 trả lời sau ⇒ màn hiện số của lần 1. Hướng sửa: vé trong InventoryCubit.load như ContractsCubit + đổi ca bloc_test kia thành 'chỉ lần mới hiện'."
+  - epic: 11
+    action: "TD-76: Guard tiền của design-system/screens/payment-schedule.test.mjs mù khi phép tính chen `.toInt()`, `?.` hoặc `(` giữa field tiền và toán tử — `orderTotal.toInt() - x` và `y - (s?.paidTotal ?? 0)` đều lọt"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Có từ 10.8 (regex BANNED dòng 118-119: `\\b\\w*MONEY\\w*\\s*[-+*/]` đòi toán tử đứng ngay sau tên field; `[-+*/]\\s*[\\w.]*\\bMONEY\\b` không cho `(`/`?`). Review 11.4 phát hiện khi đột biến, không sửa trong story refactor. Tái hiện: chèn `final int left = (state.schedule?.orderTotal.toInt() ?? 0) - (state.schedule?.paidTotal.toInt() ?? 0);` vào payment_schedule_cubit.dart ⇒ `node --test screens/payment-schedule.test.mjs` vẫn xanh. Hướng sửa: cho phép chuỗi gọi/truy cập (`(?:\\??\\.\\w+(?:\\(\\))?)*`) và `?? 0)` giữa field và toán tử, thêm 2 mẫu trên vào ca sanity; soát cùng mẫu ở contracts/invoices/stock-vouchers."

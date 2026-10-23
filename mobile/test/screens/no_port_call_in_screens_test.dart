@@ -2,25 +2,18 @@
 // `*_cubit.dart` / `*_bloc.dart` file calls a method on a port. A screen hands
 // its port to its cubit (constructor → BlocProvider) and renders the state.
 //
-// Screens not migrated yet sit in [notMigrated]; each entry must still call a
-// port (a clean screen left in the list fails) and the list shrinks to empty in
-// Story 11.4. lib/app/pns_app.dart and the session provider are held to the same
-// rule with no allowlist: the session moved to SessionCubit / PermissionsCubit.
+// [notMigrated] is empty since Story 11.4 (every screen moved in Epic 11) and
+// adding an entry fails: a new screen starts with its cubit. lib/app/pns_app.dart
+// and the session provider are held to the same rule with no allowlist: the
+// session moved to SessionCubit / PermissionsCubit.
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/dart_source.dart';
 
-/// Screens still calling a port ⇒ the story that migrates them.
-const Map<String, String> notMigrated = {
-  'lib/screens/contracts/contracts_screen.dart': '11.4',
-  'lib/screens/inventory/inventory_screen.dart': '11.4',
-  'lib/screens/inventory/stock_vouchers_screen.dart': '11.4',
-  'lib/screens/invoices/invoice_detail_screen.dart': '11.4',
-  'lib/screens/invoices/invoices_screen.dart': '11.4',
-  'lib/screens/payments/payment_schedule_screen.dart': '11.4',
-};
+/// Screens still calling a port ⇒ the story that migrates them. Empty for good.
+const Map<String, String> notMigrated = {};
 
 /// Held to the rule with no allowlist.
 const List<String> alsoClean = [
@@ -132,6 +125,11 @@ void main() {
     }
     expect(offenders, isEmpty,
         reason: 'move these port calls into the screen\'s cubit:\n${offenders.join('\n')}');
+  });
+
+  test('the allowlist is empty: Epic 11 is done, a new screen starts with its cubit', () {
+    expect(notMigrated, isEmpty,
+        reason: 'no screen may call a port any more — give it a cubit instead of an allowlist entry');
   });
 
   test('every allowlist entry exists and still calls a port (clean ⇒ remove the entry)', () {

@@ -15,8 +15,12 @@
 // `inventory.manage`; the backend enforces it anyway.
 //
 // LABELS are byte-identical with the web twin (UX-DR-27).
+//
+// InventoryCubit reads the stock through the injected [InventoryPort] (Story
+// 11.4); the screen wires the reload signal to it and renders its state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permission_keys.g.dart';
@@ -27,11 +31,11 @@ import '../../design_system/shell/app_mobile_shell.dart';
 import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
+import 'inventory_cubit.dart';
+import 'inventory_state.dart';
 
 /// Index of the `Kho` tab in the LOCKED 5-tab bottom nav (UX-DR-15).
 const int kInventoryTabIndex = 3;
-
-enum _LoadState { loading, ready, error }
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({
@@ -61,49 +65,36 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
-  _LoadState _state = _LoadState.loading;
-  StockList? _data;
+  // Created here rather than by BlocProvider(create:): the reload signal needs the
+  // same instance from initState to dispose, and Phiếu kho reloads it after an await.
+  late final InventoryCubit _cubit = InventoryCubit(widget.port);
 
   @override
   void initState() {
     super.initState();
-    widget.reloadSignal?.addListener(_tai);
-    _tai();
+    widget.reloadSignal?.addListener(_cubit.load);
+    _cubit.load();
   }
 
   @override
   void didUpdateWidget(InventoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.reloadSignal != widget.reloadSignal) {
-      oldWidget.reloadSignal?.removeListener(_tai);
-      widget.reloadSignal?.addListener(_tai);
+      oldWidget.reloadSignal?.removeListener(_cubit.load);
+      widget.reloadSignal?.addListener(_cubit.load);
     }
   }
 
   @override
   void dispose() {
-    widget.reloadSignal?.removeListener(_tai);
+    widget.reloadSignal?.removeListener(_cubit.load);
+    _cubit.close();
     super.dispose();
   }
 
   Future<void> _openVouchers() async {
     await widget.onOpenVouchers!();
-    if (mounted) _tai();
-  }
-
-  Future<void> _tai() async {
-    setState(() => _state = _LoadState.loading);
-    try {
-      final StockList kq = await widget.port.listStock();
-      if (!mounted) return;
-      setState(() {
-        _data = kq;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _state = _LoadState.error);
-    }
+    if (mounted) _cubit.load();
   }
 
   /// TWIN of `nhanTinhTrang()` in the web screen.
@@ -239,20 +230,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _than() {
-    final StockList? data = _data;
-    switch (_state) {
-      case _LoadState.loading:
+  Widget _than(InventoryState state) {
+    switch (state) {
+      case InventoryLoading():
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case InventoryError():
         return AppErrorState(
           message: 'Không tải được tồn kho.',
-          onRetry: _tai,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
-        if (data == null || data.items.isEmpty) {
+      case InventoryReady(:final StockList data):
+        if (data.items.isEmpty) {
           return const AppEmptyState(
             icon: 'ic-warehouse',
             title: 'Chưa có sản phẩm nào theo dõi tồn kho.',
@@ -271,6 +261,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<InventoryCubit, InventoryState>(
+        builder: (BuildContext context, InventoryState state) => _view(state),
+      ),
+    );
+  }
+
+  Widget _view(InventoryState state) {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: widget.onOpenVouchers != null &&
@@ -291,7 +290,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               )
             : const AppTopbar(eyebrow: 'KHO · 1 KHO', title: 'Tồn kho'),
         bottomNav: const AppBottomNav(activeIndex: kInventoryTabIndex),
-        body: SingleChildScrollView(child: _than()),
+        body: SingleChildScrollView(child: _than(state)),
       ),
     );
   }

@@ -12,8 +12,12 @@
 // There is no confirm dialog: generating a document is not a money action.
 //
 // LABELS are byte-identical with the web twin.
+//
+// ContractsCubit reads and writes through the injected [ContractsPort] (Story
+// 11.4); the screen hands it the share seam and renders its state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/contracts_port.dart';
@@ -23,6 +27,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../orders/discount_approval_screen.dart' show kOrdersTabIndex;
+import 'contracts_cubit.dart';
+import 'contracts_state.dart';
 
 const TextStyle _micro = TextStyle(
   color: AppTokens.muted,
@@ -36,15 +42,6 @@ const TextStyle _strong = TextStyle(
   fontSize: 12.5,
   fontWeight: FontWeight.w800,
 );
-
-const String _kUnknownError = 'Không xuất được hợp đồng. Vui lòng thử lại.';
-const String _kDownloadError =
-    'Không tải được file hợp đồng. Vui lòng thử lại.';
-
-/// The contract exists now, so a retry of "Xuất PDF hợp đồng" would make a SECOND
-/// one: point at "Tải PDF" in the refreshed list instead.
-String _generatedButNotDownloaded(String contractNo) =>
-    'Đã sinh hợp đồng $contractNo nhưng chưa tải được — bấm “Tải PDF” trong danh sách.';
 
 /// Presentation-only label of a backend `contractType`; a type this build does
 /// not know shows the neutral `—`, never another document's name.
@@ -60,8 +57,6 @@ String _vnDate(String iso) {
   String pad(int n) => n.toString().padLeft(2, '0');
   return '${pad(d.day)}/${pad(d.month)}/${d.year}';
 }
-
-enum _LoadState { loading, ready, error }
 
 class ContractsScreen extends StatefulWidget {
   const ContractsScreen({
@@ -84,90 +79,31 @@ class ContractsScreen extends StatefulWidget {
 }
 
 class _ContractsScreenState extends State<ContractsScreen> {
-  _LoadState _state = _LoadState.loading;
-  ContractsOverview? _overview;
-  int _ticket = 0;
-  bool _busy = false;
-  String? _error;
+  // Created here rather than by BlocProvider(create:): the buttons call it after
+  // the share sheet's await, as the other money screens do.
+  late final ContractsCubit _cubit = ContractsCubit(widget.port, widget.orderId);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  ContractsStatus get _state => _cubit.state.status;
+  ContractsOverview? get _overview => _cubit.state.overview;
+  bool get _busy => _cubit.state.busy;
+  String? get _error => _cubit.state.error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
-  Future<void> _load({bool showSkeleton = true}) async {
-    final int ticket = ++_ticket;
-    if (showSkeleton) setState(() => _state = _LoadState.loading);
-    try {
-      final ContractsOverview o = await widget.port.getOverview(widget.orderId);
-      if (!mounted || ticket != _ticket) return;
-      setState(() {
-        _overview = o;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _ticket) return;
-      // A failed silent refresh keeps the last good view.
-      if (showSkeleton || _overview == null) {
-        setState(() => _state = _LoadState.error);
-      }
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
-  Future<void> _share(String contractId) async {
-    final ContractPdfFile file =
-        await widget.port.downloadContractPdf(widget.orderId, contractId);
-    final AppShareFn share = widget.shareImpl ?? platformShareXFiles;
-    await share(
-      <XFile>[
-        XFile.fromData(
-          file.bytes,
-          mimeType: 'application/pdf',
-          name: file.fileName,
-        ),
-      ],
-      title: file.fileName,
-      fileNames: <String>[file.fileName],
-    );
-  }
+  AppShareFn get _shareFn => widget.shareImpl ?? platformShareXFiles;
 
-  /// Runs [action] once at a time; a failure becomes a banner with the server
-  /// message verbatim, then the overview is reloaded.
-  Future<void> _run(Future<void> Function() action,
-      {String fallback = _kUnknownError}) async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await action();
-    } catch (e) {
-      if (mounted) {
-        setState(() => _error = e is ContractsPortError ? e.message : fallback);
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-    await _load(showSkeleton: false);
-  }
-
-  Future<void> _generate() => _run(() async {
-        final ContractSummary created =
-            await widget.port.generateContract(widget.orderId);
-        try {
-          await _share(created.id);
-        } catch (_) {
-          if (mounted) {
-            setState(
-                () => _error = _generatedButNotDownloaded(created.contractNo));
-          }
-        }
-      });
-
-  Future<void> _download(String contractId) =>
-      _run(() => _share(contractId), fallback: _kDownloadError);
+  void _generate() => _cubit.generate(_shareFn);
 
   // ---- view ----------------------------------------------------------------
 
@@ -217,7 +153,7 @@ class _ContractsScreenState extends State<ContractsScreen> {
             AppButton(
               label: 'Tải PDF',
               size: AppButtonSize.sm,
-              onPressed: _busy ? null : () => _download(c.id),
+              onPressed: _busy ? null : () => _cubit.download(c.id, _shareFn),
             ),
           ],
         ),
@@ -238,17 +174,17 @@ class _ContractsScreenState extends State<ContractsScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case ContractsStatus.loading:
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case ContractsStatus.error:
         return AppErrorState(
           message: 'Không tải được thông tin hợp đồng.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case ContractsStatus.ready:
         final ContractsOverview o = _overview!;
         const SizedBox gap = SizedBox(height: AppTokens.space12);
         return Column(
@@ -300,6 +236,15 @@ class _ContractsScreenState extends State<ContractsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<ContractsCubit, ContractsState>(
+        builder: (BuildContext context, ContractsState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(

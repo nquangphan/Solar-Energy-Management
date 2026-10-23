@@ -20,8 +20,14 @@
 // on every retry; a new key only after a success or a close.
 //
 // LABELS are byte-identical with the web twin.
+//
+// PaymentScheduleCubit reads and writes through the injected [PaymentsPort] and
+// holds the idempotency key (Story 11.4); the screen keeps the typed inputs (row
+// controllers, template, method), builds the inputs from them and renders the
+// cubit state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/gating/app_permission_keys.g.dart';
@@ -34,6 +40,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../orders/discount_approval_screen.dart' show kOrdersTabIndex;
+import 'payment_schedule_cubit.dart';
+import 'payment_schedule_state.dart';
 
 const int _kMaxRows = 12;
 const String _kKindPercent = 'percent';
@@ -62,8 +70,6 @@ const TextStyle _errorStyle = TextStyle(
 );
 
 final RegExp _nonDigit = RegExp(r'\D');
-final RegExp _rowFieldPath =
-    RegExp(r'^installments\.(\d+)\.(percent|amount|conditionNote)$');
 
 /// Text for an input prefill (digits only, no formatting).
 String _digits(int value) => value.toString();
@@ -98,13 +104,6 @@ String _todayIso() {
 String _orderStatusLabel(String status) {
   final StatusKey? key = statusKeyOf(status);
   return key == null ? status : kStatusLabels[key]!;
-}
-
-enum _LoadState { loading, ready, error }
-
-class _RowErrors {
-  String? number;
-  String? note;
 }
 
 class _Row {
@@ -151,38 +150,39 @@ class PaymentScheduleScreen extends StatefulWidget {
 }
 
 class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
-  _LoadState _state = _LoadState.loading;
-  PaymentSchedule? _schedule;
-  int _ticket = 0;
+  // Created here rather than by BlocProvider(create:): the confirm dialog calls it
+  // after the dialog's await, and the typed inputs below live beside it.
+  late final PaymentScheduleCubit _cubit =
+      PaymentScheduleCubit(port: widget.port, orderId: widget.orderId, newKey: widget.newKey);
 
-  bool _editing = false;
-  bool _saving = false;
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  PaymentScheduleStatus get _state => _cubit.state.status;
+  PaymentSchedule? get _schedule => _cubit.state.schedule;
+  bool get _editing => _cubit.state.editing;
+  bool get _saving => _cubit.state.saving;
+  Map<int, PaymentRowErrors> get _rowErrors => _cubit.state.rowErrors;
+  String? get _formError => _cubit.state.formError;
+  String? get _conflict => _cubit.state.conflict;
+  Installment? get _recordFor => _cubit.state.recordFor;
+  bool get _recording => _cubit.state.recording;
+  Map<String, String> get _recordFieldErrors => _cubit.state.recordFieldErrors;
+  String? get _recordError => _cubit.state.recordError;
+  String? get _recordConflict => _cubit.state.recordConflict;
+  AutoTransitionResult? get _outcome => _cubit.state.outcome;
+  String get _outcomeStatus => _cubit.state.outcomeStatus;
+
+  // ---- typed inputs (UI only) ------------------------------------------------
   String _template = _kTemplateCustom;
   final List<_Row> _rows = <_Row>[];
-  final Map<int, _RowErrors> _rowErrors = <int, _RowErrors>{};
-  String? _formError;
-  String? _conflict;
-
-  // ---- record-a-payment form (raw inputs only, plus its idempotency key) ----
-  Installment? _recordFor;
-  String _recordKey = '';
-  // An attempt of this form already failed — its payment may have been recorded anyway.
-  bool _recordFailedAttempt = false;
   String _recordMethod = _kMethodBank;
   final TextEditingController _recordAmount = TextEditingController();
   final TextEditingController _recordDate = TextEditingController();
   final TextEditingController _recordNote = TextEditingController();
-  bool _recording = false;
-  final Map<String, String> _recordFieldErrors = <String, String>{};
-  String? _recordError;
-  String? _recordConflict;
-  AutoTransitionResult? _outcome;
-  String _outcomeStatus = '';
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
   @override
@@ -191,6 +191,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     _recordAmount.dispose();
     _recordDate.dispose();
     _recordNote.dispose();
+    _cubit.close();
     super.dispose();
   }
 
@@ -201,30 +202,6 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     _rows.clear();
   }
 
-  Future<void> _load() async {
-    final int ticket = ++_ticket;
-    setState(() {
-      _state = _LoadState.loading;
-      _editing = false;
-      _conflict = null;
-      _formError = null;
-      _rowErrors.clear();
-      _recordFor = null;
-      _clearRecordErrors();
-    });
-    try {
-      final PaymentSchedule s = await widget.port.getSchedule(widget.orderId);
-      if (!mounted || ticket != _ticket) return;
-      setState(() {
-        _schedule = s;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _ticket) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
   bool get _canEdit =>
       (_schedule?.editable ?? false) &&
       can(widget.perms, AppPermissionKeys.paymentsRecord);
@@ -233,35 +210,14 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
       (_schedule?.recordable ?? false) &&
       can(widget.perms, AppPermissionKeys.paymentsRecord);
 
-  void _clearRecordErrors() {
-    _recordFieldErrors.clear();
-    _recordError = null;
-    _recordConflict = null;
-  }
-
-  /// A NEW key per opened form; retries of this form keep it. Pressing "Ghi nhận" again on the
-  /// installment whose form is already open keeps that form and its key: after a lost
-  /// response a fresh key would let the same payment be recorded twice.
+  /// A newly opened form starts from the installment's remaining amount, today
+  /// and a bank transfer; the same installment's open form keeps what was typed.
   void _openRecord(Installment i) {
-    if (_recordFor?.id == i.id) return;
+    if (!_cubit.openRecord(i)) return;
     _recordAmount.text = _digits(i.remainingAmount.toInt());
     _recordDate.text = _todayIso();
     _recordNote.clear();
-    setState(() {
-      _recordFor = i;
-      _recordKey = widget.newKey();
-      _recordFailedAttempt = false;
-      _recordMethod = _kMethodBank;
-      _outcome = null;
-      _clearRecordErrors();
-    });
-  }
-
-  void _closeRecord() {
-    setState(() {
-      _recordFor = null;
-      _clearRecordErrors();
-    });
+    setState(() => _recordMethod = _kMethodBank);
   }
 
   void _recordDigitsOnly(String value) {
@@ -286,19 +242,6 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     }
   }
 
-  /// Form ⇒ request. A blank amount stays ABSENT (never 0); a blank note is not sent.
-  RecordPaymentInput _buildRecordInput() {
-    final String note = _recordNote.text.trim();
-    return RecordPaymentInput(
-      idempotencyKey: _recordKey,
-      installmentId: _recordFor!.id,
-      amount: int.tryParse(_recordAmount.text),
-      paidOn: _recordDate.text.trim(),
-      method: _recordMethod,
-      note: note.isEmpty ? null : note,
-    );
-  }
-
   Future<void> _confirmRecord() async {
     final Installment i = _recordFor!;
     final int? amount = int.tryParse(_recordAmount.text);
@@ -318,60 +261,15 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     );
   }
 
+  /// A blank amount stays ABSENT (never 0); a blank note is not sent.
   Future<void> _submitRecord() async {
-    if (_recording || _recordFor == null) return;
-    final RecordPaymentInput input = _buildRecordInput();
-    setState(() {
-      _recording = true;
-      _clearRecordErrors();
-    });
-    try {
-      final RecordPaymentResult r =
-          await widget.port.recordPayment(widget.orderId, input);
-      if (!mounted) return;
-      setState(() {
-        _recording = false;
-        _schedule = r.schedule;
-        _recordFor = null;
-        _outcome = r.autoTransition;
-        _outcomeStatus = r.orderStatus;
-      });
-      // A retry after a failed attempt may be the replay of a payment whose response was
-      // lost: the replay carries no autoTransition, so the current status is reported as well.
-      if (r.autoTransition?.outcome.json == 'applied' || _recordFailedAttempt) {
-        widget.onOrderStatusChanged?.call(r.orderStatus);
-      }
-    } on PaymentsPortError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _recording = false;
-        _recordFailedAttempt = true;
-        _mapRecordError(e);
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _recording = false;
-        _recordFailedAttempt = true;
-        _recordError = 'Không ghi nhận được thanh toán. Vui lòng thử lại.';
-      });
-    }
-  }
-
-  void _mapRecordError(PaymentsPortError e) {
-    if (e.code == 'CONFLICT') {
-      _recordConflict = e.message;
-      return;
-    }
-    final List<String> general = <String>[e.message];
-    for (final FieldError f in e.fieldErrors ?? const <FieldError>[]) {
-      if (f.field == 'amount' || f.field == 'paidOn') {
-        _recordFieldErrors.putIfAbsent(f.field, () => f.message);
-      } else {
-        general.add(f.message);
-      }
-    }
-    _recordError = general.join('\n');
+    final String? status = await _cubit.submitRecord(
+      amountText: _recordAmount.text,
+      paidOn: _recordDate.text,
+      method: _recordMethod,
+      note: _recordNote.text,
+    );
+    if (status != null && mounted) widget.onOrderStatusChanged?.call(status);
   }
 
   void _startEdit() {
@@ -396,22 +294,8 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     } else {
       _rows.add(_Row());
     }
-    setState(() {
-      _editing = true;
-      _template = _kTemplateCustom;
-      _formError = null;
-      _conflict = null;
-      _rowErrors.clear();
-    });
-  }
-
-  void _cancelEdit() {
-    setState(() {
-      _editing = false;
-      _formError = null;
-      _conflict = null;
-      _rowErrors.clear();
-    });
+    _template = _kTemplateCustom;
+    _cubit.startEdit();
   }
 
   void _applyTemplate(String template) {
@@ -430,11 +314,8 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     for (final (String, String) s in spec) {
       _rows.add(_Row(number: s.$1, note: s.$2));
     }
-    setState(() {
-      _template = template;
-      _rowErrors.clear();
-      _formError = null;
-    });
+    setState(() => _template = template);
+    _cubit.clearRowErrors(formError: true);
   }
 
   void _addRow() {
@@ -449,9 +330,9 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     if (_rows.length <= 1) return;
     setState(() {
       _rows.removeAt(index).dispose();
-      _rowErrors.clear();
       _template = _kTemplateCustom;
     });
+    _cubit.clearRowErrors();
   }
 
   void _setKind(_Row row, String kind) {
@@ -488,82 +369,21 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
     );
   }
 
-  Future<void> _save() async {
-    if (_saving) return;
-    final ReplacePaymentScheduleInput input = _buildInput();
-    setState(() {
-      _saving = true;
-      _formError = null;
-      _conflict = null;
-      _rowErrors.clear();
-    });
-    try {
-      final PaymentSchedule s =
-          await widget.port.replaceSchedule(widget.orderId, input);
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _schedule = s;
-        _editing = false;
-      });
-    } on PaymentsPortError catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _mapError(e);
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _saving = false;
-        _formError = 'Không lưu được lịch thanh toán. Vui lòng thử lại.';
-      });
-    }
-  }
-
-  void _mapError(PaymentsPortError e) {
-    if (e.code == 'CONFLICT') {
-      _conflict = e.message;
-      return;
-    }
-    final List<FieldError> fields = e.fieldErrors ?? const <FieldError>[];
-    final List<String> general = <String>[];
-    for (final FieldError f in fields) {
-      final RegExpMatch? m = _rowFieldPath.firstMatch(f.field);
-      final int? index = m == null ? null : int.parse(m.group(1)!);
-      if (m == null || index! >= _rows.length) {
-        general.add(f.message);
-        continue;
-      }
-      final _RowErrors errors = _rowErrors.putIfAbsent(index, _RowErrors.new);
-      if (m.group(2) == 'conditionNote') {
-        errors.note ??= f.message;
-      } else {
-        errors.number ??= f.message;
-      }
-    }
-    if (general.isNotEmpty) {
-      _formError = general.join('\n');
-    } else if (_rowErrors.isEmpty) {
-      _formError = e.message;
-    }
-  }
-
   // ---- view ----------------------------------------------------------------
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case PaymentScheduleStatus.loading:
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case PaymentScheduleStatus.error:
         return AppErrorState(
           message: 'Không tải được lịch thanh toán.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case PaymentScheduleStatus.ready:
         return _editing ? _editMode() : _viewMode();
     }
   }
@@ -808,7 +628,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
               child: AppButton(
                 label: 'Tải lại',
                 size: AppButtonSize.sm,
-                onPressed: _load,
+                onPressed: _cubit.load,
               ),
             ),
           ],
@@ -824,7 +644,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
               ),
               AppButton(
                 label: 'Huỷ',
-                onPressed: _recording ? null : _closeRecord,
+                onPressed: _recording ? null : _cubit.closeRecord,
               ),
             ],
           ),
@@ -899,7 +719,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
             child: AppButton(
               label: 'Tải lại',
               size: AppButtonSize.sm,
-              onPressed: _load,
+              onPressed: _cubit.load,
             ),
           ),
         ],
@@ -911,11 +731,11 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
             AppButton(
               label: _saving ? 'Đang lưu…' : 'Lưu lịch',
               variant: AppButtonVariant.primary,
-              onPressed: _saving ? null : _save,
+              onPressed: _saving ? null : () => _cubit.save(_buildInput(), rowCount: () => _rows.length),
             ),
             AppButton(
               label: 'Huỷ',
-              onPressed: _saving ? null : _cancelEdit,
+              onPressed: _saving ? null : _cubit.cancelEdit,
             ),
           ],
         ),
@@ -924,7 +744,7 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
   }
 
   Widget _rowEditor(int index, _Row row) {
-    final _RowErrors? errors = _rowErrors[index];
+    final PaymentRowErrors? errors = _rowErrors[index];
     final bool isPercent = row.kind == _kKindPercent;
     return AppCard(
       key: ObjectKey(row),
@@ -993,6 +813,15 @@ class _PaymentScheduleScreenState extends State<PaymentScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<PaymentScheduleCubit, PaymentScheduleState>(
+        builder: (BuildContext context, PaymentScheduleState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(

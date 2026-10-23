@@ -23,6 +23,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { moneyFields } from '../money/money-fields.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -51,11 +52,11 @@ const stripDart = (s) =>
 // Labels are matched on the RAW files: a stripper that eats string literals would
 // make every label check vacuous.
 const webRaw = read(FILES.webScreen);
-const mobileRaw = read(FILES.mobileScreen);
+const mobileRaw = readMobileScreen(repoRoot, FILES.mobileScreen);
 const webCode = stripTsx(webRaw);
 const mobileCode = stripDart(mobileRaw);
 const webDetailRaw = read(FILES.webDetail);
-const mobileDetailRaw = read(FILES.mobileDetail);
+const mobileDetailRaw = readMobileScreen(repoRoot, FILES.mobileDetail);
 const webDetailCode = stripTsx(webDetailRaw);
 const mobileDetailCode = stripDart(mobileDetailRaw);
 const details = [
@@ -191,8 +192,8 @@ test('the spelling is "Hoá" (project spelling), never "Hóa"', () => {
 test('the screens talk only to their port (no fetch/http, no DB, no other session)', () => {
   assert.match(webCode, /port\.getOverview\(/);
   assert.match(webCode, /port\.createInvoice\(/);
-  assert.match(mobileCode, /widget\.port\.getOverview\(/);
-  assert.match(mobileCode, /widget\.port\.createInvoice\(/);
+  assert.match(mobileCode, /\b_port\.getOverview\(_orderId\)/);
+  assert.match(mobileCode, /\b_port\.createInvoice\(_orderId\)/);
   for (const [name, code] of screens) {
     assert.ok(!/\bfetch\(|axios|package:http\/|HttpClient/.test(code), `${name} must not call HTTP directly`);
     assert.ok(!/createInvoice\([^)]*,/.test(code), `${name} must send only the order id`);
@@ -245,7 +246,7 @@ test('creating goes through a confirm dialog on both platforms', () => {
     /label:\s*'Tạo hoá đơn',\s*variant:\s*AppButtonVariant\.primary,\s*onPressed:\s*_busy \? null : \(\) => _confirmCreate\(o\)/,
     'mobile: the "Tạo hoá đơn" button must only open the dialog',
   );
-  assert.match(mobileCode, /onConfirm:\s*_create\b/, 'mobile: the dialog confirm must create');
+  assert.match(mobileCode, /onConfirm:\s*_cubit\.create\b/, 'mobile: the dialog confirm must create');
   for (const [name, code] of screens) {
     assert.equal(
       (code.match(/\.createInvoice\(/g) ?? []).length,
@@ -317,7 +318,8 @@ test('"Xuất PDF" goes export → download → share through the port, once, wi
     [
       'mobile:detail',
       mobileDetailCode,
-      /widget\.port\.exportInvoicePdf\(widget\.orderId, widget\.invoiceId\);\s*final InvoicePdfFile file =\s*await widget\.port\s*\.downloadInvoicePdf\(widget\.orderId, widget\.invoiceId\);\s*final AppShareFn share = widget\.shareImpl \?\? platformShareXFiles;/,
+      // A screen closed while the PDF downloads shares nothing.
+      /_port\.exportInvoicePdf\(_orderId, _invoiceId\);\s*final InvoicePdfFile file =\s*await _port\s*\.downloadInvoicePdf\(_orderId, _invoiceId\);\s*if \(isClosed\) return;\s*await share\(/,
     ],
   ];
   for (const [name, code, flow] of flows) {
@@ -330,8 +332,10 @@ test('"Xuất PDF" goes export → download → share through the port, once, wi
   // In flight ⇒ the button cannot be pressed again.
   assert.match(webDetailCode, /if \(inFlight\.current\) return;/);
   assert.match(webDetailCode, /disabled=\{busy\}\s*onClick=\{\(\) => void exportPdf\(\)\}/);
-  assert.match(mobileDetailCode, /if \(_busy\) return;/);
+  assert.match(mobileDetailCode, /Future<void> exportPdf\(AppShareFn share\) async \{\s*if \(state\.busy\) return;/);
   assert.match(mobileDetailCode, /onPressed: _busy \? null : _exportPdf/);
+  // The share seam stays the screen's: tests inject one, production shares through the OS.
+  assert.match(mobileDetailCode, /_cubit\.exportPdf\(widget\.shareImpl \?\? platformShareXFiles\)/);
 });
 
 test('detail amounts render only through the money component', () => {

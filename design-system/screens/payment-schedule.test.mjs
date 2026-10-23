@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, '..', '..'); // design-system/screens -> repo root
@@ -35,7 +36,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const webCode = stripTsx(read('web/src/screens/payments/PaymentScheduleScreen.tsx'));
-const mobileCode = stripDart(read('mobile/lib/screens/payments/payment_schedule_screen.dart'));
+const mobileCode = stripDart(readMobileScreen(repoRoot, 'mobile/lib/screens/payments/payment_schedule_screen.dart'));
 
 const screens = [
   ['web:screen', webCode],

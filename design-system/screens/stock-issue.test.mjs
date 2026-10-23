@@ -205,7 +205,7 @@ test('the row error is placed from the backend\'s `lines.{i}.qty`, on both platf
 
 test('the Phiếu kho screens tell an order-bound stock-out from a free one, with the same words', () => {
   const web = stripTsx(read('web/src/screens/inventory/StockVouchersScreen.tsx'));
-  const mobile = stripDart(read('mobile/lib/screens/inventory/stock_vouchers_screen.dart'));
+  const mobile = stripDart(readMobileScreen(repoRoot, 'mobile/lib/screens/inventory/stock_vouchers_screen.dart'));
   for (const label of ['Xuất kho · gắn đơn', 'Gắn đơn', 'Người xác nhận', 'Một Đơn — một phiếu xuất.']) {
     assert.ok(web.includes(label), `web Phiếu kho must render "${label}"`);
     assert.ok(mobile.includes(label), `mobile Phiếu kho must render "${label}"`);

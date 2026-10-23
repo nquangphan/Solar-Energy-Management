@@ -14,8 +14,13 @@
 // is created from the order, and its author is the person who CONFIRMED it.
 //
 // LABELS are byte-identical with the web twin (UX-DR-27).
+//
+// StockVouchersCubit reads the list and the detail through the injected ports
+// (Story 11.4) and forwards the two sheets' calls; the sheets keep their own
+// form state and in-flight flags.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/inventory_port.dart';
@@ -27,6 +32,8 @@ import '../../design_system/shell/app_tabs.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import 'inventory_screen.dart' show kInventoryTabIndex;
+import 'stock_vouchers_cubit.dart';
+import 'stock_vouchers_state.dart';
 
 const String _kNoteNhap =
     'Giá vốn ở đây không được bỏ trống. Hệ thống lấy nó tính bình quân gia quyền rồi cập nhật giá vốn hiện hành của sản phẩm — một chỗ gõ, không ai phải nhớ sửa hai nơi.';
@@ -42,15 +49,11 @@ const String _kReturnFoot =
 const String _kReturnBlankError = 'Nhập số nhận lại (0 nếu không nhận lại).';
 const int _kNoteMax = 500;
 
-const String _kTabAll = 'all';
-const String _kTabNhap = 'nhap';
-const String _kTabXuat = 'xuat';
-const String _kTabNhapTra = 'nhaptra';
 const List<AppTabItem> _kTabs = <AppTabItem>[
-  AppTabItem(key: _kTabAll, label: 'Tất cả'),
-  AppTabItem(key: _kTabNhap, label: 'Nhập'),
-  AppTabItem(key: _kTabXuat, label: 'Xuất'),
-  AppTabItem(key: _kTabNhapTra, label: 'Nhập trả'),
+  AppTabItem(key: kVoucherTabAll, label: 'Tất cả'),
+  AppTabItem(key: kVoucherTabStockIn, label: 'Nhập'),
+  AppTabItem(key: kVoucherTabStockOut, label: 'Xuất'),
+  AppTabItem(key: kVoucherTabReturn, label: 'Nhập trả'),
 ];
 
 /// TWIN of `ngayNgan()` in web format-gio.ts: ISO UTC ⇒ `dd/MM` at a fixed UTC+7.
@@ -96,8 +99,6 @@ String _moTaLoai(
 /// No digit ⇒ null (blank is NOT 0: a blank cost must reach the backend as absent).
 int? _chiChuSo(String text) => int.tryParse(text.replaceAll(RegExp(r'\D'), ''));
 
-enum _LoadState { loading, ready, error }
-
 class _DongForm {
   _DongForm(this.sp);
 
@@ -130,66 +131,29 @@ class StockVouchersScreen extends StatefulWidget {
 }
 
 class _StockVouchersScreenState extends State<StockVouchersScreen> {
-  _LoadState _state = _LoadState.loading;
-  List<StockVoucherSummary> _items = <StockVoucherSummary>[];
-  String _tab = _kTabAll;
-  int _listTicket = 0;
+  // Created here rather than by BlocProvider(create:): the two sheets are routes
+  // of their own, outside this screen's context, so they take it by constructor.
+  late final StockVouchersCubit _cubit =
+      StockVouchersCubit(port: widget.port, inventoryPort: widget.inventoryPort);
 
-  String? _selectedId;
-  _LoadState _detailState = _LoadState.loading;
-  StockVoucherDetail? _detail;
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  StockVouchersStatus get _state => _cubit.state.status;
+  List<StockVoucherSummary> get _items => _cubit.state.items;
+  String get _tab => _cubit.state.tab;
+  String? get _selectedId => _cubit.state.selectedId;
+  StockVouchersStatus get _detailState => _cubit.state.detailStatus;
+  StockVoucherDetail? get _detail => _cubit.state.detail;
 
   @override
   void initState() {
     super.initState();
-    _tai();
+    _cubit.load();
   }
 
-  Future<void> _tai() async {
-    final int ticket = ++_listTicket;
-    setState(() => _state = _LoadState.loading);
-    try {
-      // The tab maps to the backend's filters; the client filters nothing itself.
-      final StockVoucherList kq = switch (_tab) {
-        _kTabNhap =>
-          await widget.port.listVouchers(type: 'nhap', isReturn: false),
-        _kTabXuat => await widget.port.listVouchers(type: 'xuat'),
-        _kTabNhapTra => await widget.port.listVouchers(isReturn: true),
-        _ => await widget.port.listVouchers(),
-      };
-      if (!mounted || ticket != _listTicket) return;
-      setState(() {
-        _items = kq.items;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _listTicket) return;
-      setState(() => _state = _LoadState.error);
-    }
-  }
-
-  void _changeTab(String key) {
-    if (key == _tab) return;
-    setState(() => _tab = key);
-    _tai();
-  }
-
-  Future<void> _chon(String id) async {
-    setState(() {
-      _selectedId = id;
-      _detailState = _LoadState.loading;
-    });
-    try {
-      final StockVoucherDetail d = await widget.port.getVoucher(id);
-      if (!mounted || _selectedId != id) return;
-      setState(() {
-        _detail = d;
-        _detailState = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || _selectedId != id) return;
-      setState(() => _detailState = _LoadState.error);
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
   /// TWIN of `nhanLoai()` in the web screen: a return voucher shows ONLY the info-toned
@@ -242,7 +206,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
   Widget _hangPhieu(StockVoucherSummary p) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _chon(p.id),
+      onTap: () => _cubit.select(p.id),
       child: Padding(
         padding: const EdgeInsets.symmetric(
           horizontal: AppTokens.space12,
@@ -308,23 +272,20 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
   Future<void> _openReturnSheet(StockVoucherDetail origin) async {
     final String? createdId = await showAppSheet<String>(
       context: context,
-      child: _ReturnSheet(port: widget.port, origin: origin),
+      child: _ReturnSheet(cubit: _cubit, origin: origin),
     );
     if (createdId == null || !mounted) return;
     // Same as web: land on "Tất cả" so the new voucher is in the list, then open it.
-    if (_tab != _kTabAll) setState(() => _tab = _kTabAll);
-    await _tai();
-    if (!mounted) return;
-    await _chon(createdId);
+    await _cubit.showCreated(createdId, fromReturn: true);
   }
 
   Widget _chiTiet() {
     final StockVoucherDetail? d = _detail;
-    if (_detailState == _LoadState.loading) return const AppSkeleton();
-    if (_detailState == _LoadState.error || d == null) {
+    if (_detailState == StockVouchersStatus.loading) return const AppSkeleton();
+    if (_detailState == StockVouchersStatus.error || d == null) {
       return AppErrorState(
         message: 'Không tải được chi tiết phiếu.',
-        onRetry: () => _chon(_selectedId!),
+        onRetry: () => _cubit.select(_selectedId!),
       );
     }
     final bool coGiaVon =
@@ -369,7 +330,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
             _kv(
               'Phiếu nhập trả',
               d.returnVoucher!.code,
-              onTap: () => _chon(d.returnVoucher!.id),
+              onTap: () => _cubit.select(d.returnVoucher!.id),
             ),
           _kv('Ngày', ngayGio(d.createdAt.toUtc().toIso8601String())),
           _kv(
@@ -444,16 +405,16 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
 
   Widget _than() {
     switch (_state) {
-      case _LoadState.loading:
+      case StockVouchersStatus.loading:
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case StockVouchersStatus.error:
         return AppErrorState(
           message: 'Không tải được phiếu kho.',
-          onRetry: _tai,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case StockVouchersStatus.ready:
         if (_items.isEmpty) {
           return const AppEmptyState(
             icon: 'ic-warehouse',
@@ -484,19 +445,23 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
   Future<void> _moForm() async {
     final String? moiId = await showAppSheet<String>(
       context: context,
-      child: _FormPhieu(
-        port: widget.port,
-        inventoryPort: widget.inventoryPort,
-      ),
+      child: _FormPhieu(cubit: _cubit),
     );
     if (moiId == null || !mounted) return;
-    await _tai();
-    if (!mounted) return;
-    await _chon(moiId);
+    await _cubit.showCreated(moiId, fromReturn: false);
   }
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<StockVouchersCubit, StockVouchersState>(
+        builder: (BuildContext context, StockVouchersState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(
@@ -519,7 +484,7 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              AppTabs(tabs: _kTabs, activeKey: _tab, onSelect: _changeTab),
+              AppTabs(tabs: _kTabs, activeKey: _tab, onSelect: _cubit.changeTab),
               const SizedBox(height: AppTokens.space12),
               _than(),
             ],
@@ -532,10 +497,10 @@ class _StockVouchersScreenState extends State<StockVouchersScreen> {
 
 /// The create-voucher sheet. Pops with the new voucher's id on success.
 class _FormPhieu extends StatefulWidget {
-  const _FormPhieu({required this.port, required this.inventoryPort});
+  const _FormPhieu({required this.cubit});
 
-  final StockVouchersPort port;
-  final InventoryPort inventoryPort;
+  /// Forwards the product search and the send to the ports.
+  final StockVouchersCubit cubit;
 
   @override
   State<_FormPhieu> createState() => _FormPhieuState();
@@ -568,7 +533,7 @@ class _FormPhieuState extends State<_FormPhieu> {
   Future<void> _tim(String q) async {
     final int ticket = ++_goiYTicket;
     try {
-      final StockList kq = await widget.inventoryPort.listStock(q: q);
+      final StockList kq = await widget.cubit.searchStock(q);
       if (!mounted || ticket != _goiYTicket) return;
       setState(() => _goiY = kq.items);
     } catch (_) {
@@ -589,7 +554,7 @@ class _FormPhieuState extends State<_FormPhieu> {
     });
     try {
       final String note = _note.text.trim();
-      final StockVoucherDetail moi = await widget.port.createVoucher(
+      final StockVoucherDetail moi = await widget.cubit.createVoucher(
         CreateStockVoucherInput(
           type: CreateStockVoucherRequestDtoType.fromJson(_loai),
           note: note.isEmpty ? null : note,
@@ -810,9 +775,10 @@ class _FormPhieuState extends State<_FormPhieu> {
 /// line is simply not sent, so the backend's `lines.{i}` index is the position in
 /// the SUBMITTED array and is mapped back to the displayed row here.
 class _ReturnSheet extends StatefulWidget {
-  const _ReturnSheet({required this.port, required this.origin});
+  const _ReturnSheet({required this.cubit, required this.origin});
 
-  final StockVouchersPort port;
+  /// Forwards the send to the port.
+  final StockVouchersCubit cubit;
   final StockVoucherDetail origin;
 
   @override
@@ -886,7 +852,7 @@ class _ReturnSheetState extends State<_ReturnSheet> {
 
     setState(() => _sending = true);
     try {
-      final StockVoucherDetail created = await widget.port.createReturnVoucher(
+      final StockVoucherDetail created = await widget.cubit.createReturnVoucher(
         widget.origin.id,
         note: note.isEmpty ? null : note,
         lines: lines,

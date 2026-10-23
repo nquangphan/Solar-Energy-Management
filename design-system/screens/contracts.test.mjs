@@ -19,6 +19,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { moneyFields } from '../money/money-fields.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -45,7 +46,7 @@ const stripDart = (s) =>
     .replace(/\/\/.*$/gm, '');
 
 const webCode = stripTsx(read(FILES.webScreen));
-const mobileCode = stripDart(read(FILES.mobileScreen));
+const mobileCode = stripDart(readMobileScreen(repoRoot, FILES.mobileScreen));
 
 const screens = [
   ['web:screen', webCode],
@@ -119,9 +120,9 @@ test('the screens talk only to their port (no fetch/http, no DB, no other sessio
   assert.match(webCode, /port\.getOverview\(/);
   assert.match(webCode, /port\.generateContract\(/);
   assert.match(webCode, /port\.downloadContractPdf\(/);
-  assert.match(mobileCode, /widget\.port\.getOverview\(/);
-  assert.match(mobileCode, /widget\.port\.generateContract\(/);
-  assert.match(mobileCode, /widget\.port\.downloadContractPdf\(/);
+  assert.match(mobileCode, /\b_port\.getOverview\(_orderId\)/);
+  assert.match(mobileCode, /\b_port\.generateContract\(_orderId\)/);
+  assert.match(mobileCode, /\b_port\.downloadContractPdf\(_orderId, contractId\)/);
   for (const [name, code] of screens) {
     assert.ok(!/\bfetch\(|axios|package:http\/|HttpClient/.test(code), `${name} must not call HTTP directly`);
   }

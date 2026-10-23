@@ -12,8 +12,12 @@
 // document (Xem hoá đơn) when the caller wires a route.
 //
 // LABELS are byte-identical with the web twin.
+//
+// InvoicesCubit reads and creates through the injected [InvoicesPort] (Story
+// 11.4); the screen opens the confirm dialog and renders its state.
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../design_system/components/components.dart';
 import '../../design_system/session/invoices_port.dart';
@@ -23,6 +27,8 @@ import '../../design_system/shell/app_phone_frame.dart';
 import '../../design_system/shell/app_topbar.dart';
 import '../../design_system/tokens/app_tokens.dart';
 import '../orders/discount_approval_screen.dart' show kOrdersTabIndex;
+import 'invoices_cubit.dart';
+import 'invoices_state.dart';
 
 const TextStyle _micro = TextStyle(
   color: AppTokens.muted,
@@ -37,16 +43,12 @@ const TextStyle _strong = TextStyle(
   fontWeight: FontWeight.w800,
 );
 
-const String _kUnknownError = 'Không tạo được hoá đơn. Vui lòng thử lại.';
-
 /// UTC instant ⇒ `dd/MM/yyyy` in Vietnam (UTC+7).
 String _vnDate(DateTime instant) {
   final DateTime d = instant.toUtc().add(const Duration(hours: 7));
   String pad(int n) => n.toString().padLeft(2, '0');
   return '${pad(d.day)}/${pad(d.month)}/${d.year}';
 }
-
-enum _LoadState { loading, ready, error }
 
 class InvoicesScreen extends StatefulWidget {
   const InvoicesScreen({
@@ -69,35 +71,26 @@ class InvoicesScreen extends StatefulWidget {
 }
 
 class _InvoicesScreenState extends State<InvoicesScreen> {
-  _LoadState _state = _LoadState.loading;
-  InvoicesOverview? _overview;
-  int _ticket = 0;
-  bool _busy = false;
-  String? _error;
+  // Created here rather than by BlocProvider(create:): the confirm dialog calls it
+  // after the dialog's await, from a route outside this screen's context.
+  late final InvoicesCubit _cubit = InvoicesCubit(widget.port, widget.orderId);
+
+  // Render reads the cubit state; the names are kept because design-system guards pin them.
+  InvoicesStatus get _state => _cubit.state.status;
+  InvoicesOverview? get _overview => _cubit.state.overview;
+  bool get _busy => _cubit.state.busy;
+  String? get _error => _cubit.state.error;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    _cubit.load();
   }
 
-  Future<void> _load({bool showSkeleton = true}) async {
-    final int ticket = ++_ticket;
-    if (showSkeleton) setState(() => _state = _LoadState.loading);
-    try {
-      final InvoicesOverview o = await widget.port.getOverview(widget.orderId);
-      if (!mounted || ticket != _ticket) return;
-      setState(() {
-        _overview = o;
-        _state = _LoadState.ready;
-      });
-    } catch (_) {
-      if (!mounted || ticket != _ticket) return;
-      // A failed silent refresh keeps the last good view.
-      if (showSkeleton || _overview == null) {
-        setState(() => _state = _LoadState.error);
-      }
-    }
+  @override
+  void dispose() {
+    _cubit.close();
+    super.dispose();
   }
 
   Future<void> _confirmCreate(InvoicesOverview o) async {
@@ -110,42 +103,9 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
         confirmLabel: 'Tạo hoá đơn',
         cancelLabel: 'Huỷ',
         confirmTone: AppButtonVariant.primary,
-        onConfirm: _create,
+        onConfirm: _cubit.create,
       ),
     );
-  }
-
-  /// One call at a time; a failure becomes a banner with the server message
-  /// verbatim, then the overview is reloaded.
-  Future<void> _create() async {
-    if (_busy) return;
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      await widget.port.createInvoice(widget.orderId);
-    } catch (e) {
-      if (mounted) {
-        setState(
-            () => _error = e is InvoicesPortError ? e.message : _kUnknownError);
-      }
-    } finally {
-      // Still busy while reloading: the button must not come back before the
-      // overview says whether the version now has its invoice.
-      await _load(showSkeleton: false);
-      if (mounted) {
-        setState(() {
-          _busy = false;
-          // A lost response (fallback, not a server refusal) whose invoice was
-          // in fact created: the reload shows it, so the "could not create"
-          // banner would contradict the screen.
-          if (_error == _kUnknownError && _overview?.currentInvoiceId != null) {
-            _error = null;
-          }
-        });
-      }
-    }
   }
 
   // ---- view ----------------------------------------------------------------
@@ -228,17 +188,17 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
   Widget _body() {
     switch (_state) {
-      case _LoadState.loading:
+      case InvoicesStatus.loading:
         return const Column(
           children: <Widget>[AppSkeleton(), AppSkeleton(), AppSkeleton()],
         );
-      case _LoadState.error:
+      case InvoicesStatus.error:
         return AppErrorState(
           message: 'Không tải được thông tin hoá đơn.',
           retryLabel: 'Thử lại',
-          onRetry: _load,
+          onRetry: _cubit.load,
         );
-      case _LoadState.ready:
+      case InvoicesStatus.ready:
         final InvoicesOverview o = _overview!;
         const SizedBox gap = SizedBox(height: AppTokens.space12);
         final bool hasCurrent = o.currentInvoiceId != null;
@@ -288,6 +248,15 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<InvoicesCubit, InvoicesState>(
+        builder: (BuildContext context, InvoicesState _) => _view(),
+      ),
+    );
+  }
+
+  Widget _view() {
     return AppPhoneFrame(
       child: AppMobileShell(
         topbar: AppTopbar(
