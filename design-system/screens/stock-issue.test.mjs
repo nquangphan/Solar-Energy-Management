@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { AFTER_FIGURE, BEFORE_FIGURE } from '../lib/money-arithmetic.mjs';
 import { STOCK_PAIR } from '../lib/stock-figures.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync } from 'node:fs';
@@ -73,13 +74,13 @@ const CMP = '(?:<=|>=|<|>)';
 
 /** The decisions only the backend may make — each pattern with why. */
 const BANNED = [
-  [new RegExp(`\\b\\w*${MONEY}\\w*\\s*[*/]`), 'multiply/divide a quantity, cost or stock'],
-  [new RegExp(`[*/]\\s*[\\w.\\[\\]]*${MONEY}`), 'multiply/divide by a quantity, cost or stock'],
+  [new RegExp(`\\b\\w*${MONEY}\\w*${AFTER_FIGURE}\\s*[*/]`), 'multiply/divide a quantity, cost or stock'],
+  [new RegExp(`[*/]${BEFORE_FIGURE}${MONEY}`), 'multiply/divide by a quantity, cost or stock'],
   [new RegExp(`\\bqty\\w*\\s*${CMP}`), 'compare a quantity (not-enough-stock is the backend\'s 409)'],
   [new RegExp(`${CMP}=?\\s*[\\w.\\[\\]]*\\bonHand\\b`), 'compare against onHand'],
   [new RegExp(`\\bonHand\\s*${CMP}`), 'compare onHand'],
-  [new RegExp(`\\b\\w*(?:qty|onHand)\\w*\\s*-(?![->])`), 'subtract from a quantity or stock (a shortage is the backend\'s 409)'],
-  [new RegExp(`-\\s*[\\w.\\[\\]]*\\b(?:qty|onHand)\\b`), 'subtract a quantity or stock'],
+  [new RegExp(`\\b\\w*(?:qty|onHand)\\w*${AFTER_FIGURE}\\s*-(?![->])`), 'subtract from a quantity or stock (a shortage is the backend\'s 409)'],
+  [new RegExp(`-${BEFORE_FIGURE}\\b(?:qty|onHand)\\b`), 'subtract a quantity or stock'],
   // The preview warning is read, never re-derived: `shortfall`/`blocked` come from
   // the backend; comparing or combining two stock figures is the rule itself.
   [STOCK_PAIR, 'compare or combine two stock figures (shortfall/blocked are the backend\'s)'],
@@ -116,6 +117,11 @@ test('the ban patterns catch a real violation (guard is not toothless)', () => {
     'final int con = tong - l.onHand;',
     'const blocked = line.shortfall > line.available;',
     'final bool thieu = l.reserved + l.qty > l.onHand;',
+    // A cast or a null-aware access between the figure and the operator.
+    'final int t = l.qty.toInt() * gia;',
+    'final num t = gia * (l?.unitCost ?? 0);',
+    'final int con = l.onHand.toInt() - x;',
+    'final num con = y - (l?.qty ?? 0);',
   ];
   for (const sample of samples) {
     assert.ok(BANNED.some(([pattern]) => pattern.test(sample)), `no ban pattern caught: ${sample}`);

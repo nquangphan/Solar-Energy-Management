@@ -17,6 +17,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { moneyArithmeticBans } from '../lib/money-arithmetic.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -168,11 +169,18 @@ test('no discount-approval screen hardcodes a permission literal (AD-17)', () =>
 // carries in. A `* 100` or a `/ unitPrice` in this screen would be the client
 // re-deriving the margin — which also re-derives the costPrice the costs.view
 // fence exists to hide.
+const moneyMath =
+  /(?:unitPrice|amount|price|qty|subtotal|margin)\s*[*+\-/]\s*[\w.$_]*(?:qty|unitPrice|amount|price|subtotal|margin|100)/i;
+/** Any arithmetic on a money or margin figure, also behind a cast or a null-aware access. */
+const MONEY_BANS = moneyArithmeticBans('(?:price|amount|subtotal|afterDiscount|margin)');
+
 test('no screen computes money or margin — every number is the port response rendered as-is', () => {
-  const moneyMath =
-    /(?:unitPrice|amount|price|qty|subtotal|margin)\s*[*+\-/]\s*[\w.$_]*(?:qty|unitPrice|amount|price|subtotal|margin|100)/i;
   for (const [name, code] of allCode) {
     assert.ok(!moneyMath.test(code), `${name} must not compute money/margin — render the port's numbers as-is (AD-16)`);
+    for (const [pattern, what] of MONEY_BANS) {
+      const m = pattern.exec(code);
+      assert.equal(m, null, `${name}: ${what} — found "${m?.[0]}"`);
+    }
     assert.ok(!/\breduce\(/.test(code), `${name} must not sum lines — subtotal/afterDiscount come from the port`);
     assert.ok(!/\*\s*100\b/.test(code), `${name} must not contain the percent multiplier — the margin is backend-rounded (FR-37)`);
     assert.ok(!/\/\s*unitPrice/.test(code), `${name} must not divide by unitPrice — the margin is a port number`);
@@ -183,6 +191,17 @@ test('no screen computes money or margin — every number is the port response r
   // The "—" fallback for a null margin must stay present on both platforms.
   assert.ok(web.includes('—'), 'web must keep the "—" fallback for a null margin');
   assert.ok(mobile.includes('—'), 'mobile must keep the "—" fallback for a null margin');
+});
+
+test('the money/margin bans catch what they claim (sanity)', () => {
+  for (const sample of [
+    'final m = item.subtotal * 100;',
+    'final d = item.subtotal.toInt() - x;',
+    'final d = y - (item?.afterDiscount ?? 0);',
+    'const pct = item.estimatedMarginPct!.toInt() / 2;',
+  ]) {
+    assert.ok(moneyMath.test(sample) || MONEY_BANS.some(([p]) => p.test(sample)), `a ban must match: ${sample}`);
+  }
 });
 
 // (k) A FAILURE NEVER WIPES STATE (bất biến k). The resolve error path sets a

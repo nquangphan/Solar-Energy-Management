@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertScanned, assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { moneyArithmeticBans } from '../lib/money-arithmetic.mjs';
 import { readMobileScreen } from '../lib/read-mobile-screen.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -279,20 +280,38 @@ test('no quote screen hardcodes a permission literal (AD-17)', () => {
 // exact bug the architecture forbids: two sources of truth for one sum. (The
 // fake ports simulate the backend and are excluded on purpose — they ARE the
 // demo server.)
+// `[\w.$_]*` on BOTH sides of the operator: the operands are usually property
+// accesses (`line.unitPrice * line.qty`) — a bare-identifier pattern let that
+// exact mutant pass green (caught by the mutation spot-check).
+const moneyMath =
+  /(?:unitPrice|amount|price|qty)\s*[*+\-]\s*[\w.$_]*(?:qty|unitPrice|amount|price)/i;
+/** Any arithmetic on a money figure, also behind a cast or a null-aware access. */
+const MONEY_BANS = moneyArithmeticBans('(?:price|amount|subtotal|total)');
+
 test('no screen multiplies or adds money — amount/totals come from the backend', () => {
-  // `[\w.$_]*` on BOTH sides of the operator: the operands are usually property
-  // accesses (`line.unitPrice * line.qty`) — a bare-identifier pattern let that
-  // exact mutant pass green (caught by the mutation spot-check).
-  const moneyMath =
-    /(?:unitPrice|amount|price|qty)\s*[*+\-]\s*[\w.$_]*(?:qty|unitPrice|amount|price)/i;
   for (const [name, code] of allCode) {
     assert.ok(!moneyMath.test(code), `${name} must not compute money — render the backend's amount as-is (AD-16)`);
+    for (const [pattern, what] of MONEY_BANS) {
+      const m = pattern.exec(code);
+      assert.equal(m, null, `${name}: ${what} — found "${m?.[0]}"`);
+    }
     assert.ok(!/\breduce\(/.test(code), `${name} must not sum lines — totals come ONLY from preview-total`);
   }
   // "—" is the initial/failed-preview state of the totals area — it must stay
   // present in the source of both platforms (fallback khi chưa có/lỗi preview).
   assert.ok(web.includes('—'), 'web totals must keep the "—" fallback (no preview yet / preview failed)');
   assert.ok(mobile.includes('—'), 'mobile totals must keep the "—" fallback (no preview yet / preview failed)');
+});
+
+test('the money bans catch what they claim (sanity)', () => {
+  for (const sample of [
+    'const amount = line.unitPrice * line.qty;',
+    'final t = line.unitPrice.toInt() * q;',
+    'final t = y - (line?.amount ?? 0);',
+    'const t = totals!.subtotal! + vat;',
+  ]) {
+    assert.ok(moneyMath.test(sample) || MONEY_BANS.some(([p]) => p.test(sample)), `a ban must match: ${sample}`);
+  }
 });
 
 // (h.2) 🔴 TOTALS COME ONLY FROM preview-total (Story 4.2, AD-16). Both screens

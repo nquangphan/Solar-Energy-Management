@@ -15,6 +15,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { assertCodeNotBlind } from '../lib/assert-scanned.mjs';
+import { moneyArithmeticBans } from '../lib/money-arithmetic.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -460,21 +461,33 @@ test('no screen hardcodes a permission literal (AD-17)', () => {
 // (g.2) 🔴 NEGATIVE ASSERT — NO MONEY ARITHMETIC (AD-10/AD-16). This screen SHOWS
 // money (line amounts), so the rule is sharper than on the list: every number is
 // one the backend computed, and the screen may not add any of them up.
+const DETAIL_MONEY_MATH = [
+  /\.reduce\(/,
+  ...moneyArithmeticBans('(?:price|amount|subtotal|total)').map(([pattern]) => pattern),
+  /\bsum\b\s*[+=]/i,
+];
+
 test('the detail screen does no money arithmetic (AD-10/AD-16)', () => {
   for (const [name, code] of allCode) {
-    for (const pattern of [
-      /\.reduce\(/,
-      /amount\s*[+*]/,
-      /[+*]\s*(?:line|dong)\.amount/i,
-      /unitPrice\s*\*/,
-      /\bsum\b\s*[+=]/i,
-    ]) {
+    for (const pattern of DETAIL_MONEY_MATH) {
       assert.ok(!pattern.test(code), `${name} must not compute money (${pattern.source}) — the backend owns totals`);
     }
     // A "Tổng đơn" on this screen would have to be computed here: the order
     // response deliberately carries no total (it comes from preview-total).
     assert.ok(!code.includes('Tổng đơn'), `${name} must not render an order total — that is preview-total (AD-16)`);
     assert.ok(!code.includes('costPrice'), `${name} must not touch cost data (costs.view fence)`);
+  }
+});
+
+test('the detail money-arithmetic bans catch what they claim (sanity)', () => {
+  for (const sample of [
+    'const t = line.unitPrice * line.qty;',
+    'final t = sum + line.amount;',
+    'final t = line.amount.toInt() - x;',
+    'final t = y - (line?.amount ?? 0);',
+    'final t = l.unitPrice!.toInt() * q;',
+  ]) {
+    assert.ok(DETAIL_MONEY_MATH.some((p) => p.test(sample)), `a ban must match: ${sample}`);
   }
 });
 
