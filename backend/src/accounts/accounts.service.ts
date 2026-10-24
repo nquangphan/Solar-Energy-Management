@@ -9,6 +9,7 @@ import { isUniqueViolation } from '../common/errors/prisma-unique-violation';
 import { EventBus } from '../events/event-bus';
 import {
   AccountPermissionsService,
+  assertStillManages,
   blockingMessage,
   cannotGrantMessage,
   type AccountPermissionSummary,
@@ -22,7 +23,6 @@ import {
   keysActorCannotGrant,
   keysBlockingActorFromTarget,
 } from './domain/permission-escalation';
-import { PERM, type PermissionKey } from './domain/permission-registry';
 import { ROLE_PRESETS, type RolePreset } from './domain/role-presets';
 
 /**
@@ -358,23 +358,6 @@ async function lockAccounts(
   const rows = await tx.$queryRaw<{ id: string }[]>`
     SELECT id FROM accounts WHERE id = ANY(${ids}::text[]) ORDER BY id FOR UPDATE`;
   return rows.map((row) => row.id);
-}
-
-/**
- * `PermissionsGuard` checked `permissions.manage` before the lock was taken; a revoke that
- * committed meanwhile must win, even when the actor can still grant the preset or edit the
- * target with the permissions it kept.
- */
-function assertStillManages(
-  actorPermissions: ReadonlySet<PermissionKey>,
-): void {
-  if (!actorPermissions.has(PERM.permissionsManage)) {
-    throw new AppException(
-      ErrorCode.FORBIDDEN,
-      403,
-      'Không đủ quyền thực hiện',
-    );
-  }
 }
 
 function conflict(field: 'phone' | 'email', message: string): AppException {

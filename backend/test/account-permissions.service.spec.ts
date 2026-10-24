@@ -257,9 +257,25 @@ describe('AccountPermissionsService (unit, hermetic)', () => {
       expect(calls.indexOf(`tx.findMany:${TARGET_ID}`)).toBeGreaterThan(lockAt);
     });
 
+    it('actor whose permissions.manage was revoked before the lock → 403, nothing written, though rules #1/#2 pass', async () => {
+      givenPermissions({
+        [ACTOR_ID]: [PERM.ordersViewAll, PERM.catalogView],
+        [TARGET_ID]: [PERM.ordersViewAll],
+      });
+
+      const err = await catchAppException(
+        service.setForAccount(ACTOR_ID, TARGET_ID, [PERM.catalogView]),
+      );
+
+      expect(err.errorCode).toBe(ErrorCode.FORBIDDEN);
+      expect(err.getStatus()).toBe(403);
+      expect(err.message).toBe('Không đủ quyền thực hiện');
+      expectNothingWritten();
+    });
+
     it('luật #1 — actor cấp quyền chính mình KHÔNG có → FORBIDDEN 403, KHÔNG ghi', async () => {
       givenPermissions({
-        [ACTOR_ID]: [PERM.ordersViewAll],
+        [ACTOR_ID]: [PERM.ordersViewAll, PERM.permissionsManage],
         [TARGET_ID]: [],
       });
 
@@ -280,7 +296,7 @@ describe('AccountPermissionsService (unit, hermetic)', () => {
       // Ca "ADMIN xoá Super Admin": bộ mới RỖNG ⇒ luật #1 không có gì để bắt. Chỉ luật #2
       // (kiểm bộ quyền HIỆN TẠI của target) mới chặn được.
       givenPermissions({
-        [ACTOR_ID]: [PERM.ordersViewAll],
+        [ACTOR_ID]: [PERM.ordersViewAll, PERM.permissionsManage],
         [TARGET_ID]: [PERM.ordersViewAll, PERM.auditRead],
       });
 

@@ -16,6 +16,7 @@ import {
   keysBlockingActorFromTarget,
 } from './domain/permission-escalation';
 import {
+  PERM,
   PERMISSIONS,
   isPermissionKey,
   type PermissionKey,
@@ -68,6 +69,7 @@ export class AccountPermissionsService {
    *  2. Actor = target ⇒ 403 (nobody edits their own permissions: the only Super Admin could
    *     otherwise lock themselves out of this screen for good).
    *  3. Target không tồn tại ⇒ 404 (checked under the lock, not left to an FK error ⇒ 500).
+   *     Actor no longer holds `permissions.manage` (revoked while waiting for the lock) ⇒ 403.
    *  4. Luật #2 — actor KHÔNG sửa được account đang mang quyền actor không có ⇒ 403.
    *  5. Luật #1 — actor KHÔNG cấp được quyền chính mình không có ⇒ 403.
    *  6. Bộ mới có quyền thiếu quyền nó cần (`PERMISSION_REQUIRES`) ⇒ 400 + `fieldErrors`.
@@ -116,6 +118,7 @@ export class AccountPermissionsService {
       }
 
       const actorPermissions = await this.listForAccount(actorAccountId, tx);
+      assertStillManages(actorPermissions);
       const targetPermissions = await this.listForAccount(targetAccountId, tx);
 
       // Luật #2 TRƯỚC: kiểm bộ quyền HIỆN TẠI của target, không phải bộ mới. Kiểm nhầm
@@ -260,6 +263,23 @@ export const blockingMessage = (keys: readonly PermissionKey[]): string =>
 /** Rule #1 refusal — shared with account creation from a preset (`AccountsService.create`). */
 export const cannotGrantMessage = (keys: readonly PermissionKey[]): string =>
   `Không thể cấp quyền bạn không có: ${keys.join(', ')}`;
+
+/**
+ * `PermissionsGuard` checked `permissions.manage` before the lock was taken; a revoke that
+ * committed meanwhile must win, even when the actor can still grant the keys or edit the
+ * target with the permissions it kept. Shared with `AccountsService.create`/`update`.
+ */
+export function assertStillManages(
+  actorPermissions: ReadonlySet<PermissionKey>,
+): void {
+  if (!actorPermissions.has(PERM.permissionsManage)) {
+    throw new AppException(
+      ErrorCode.FORBIDDEN,
+      403,
+      'Không đủ quyền thực hiện',
+    );
+  }
+}
 
 const UNKNOWN_PERMISSION = 'UNKNOWN_PERMISSION';
 const PERMISSION_DEPENDENCY = 'PERMISSION_DEPENDENCY';

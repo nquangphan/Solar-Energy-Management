@@ -185,6 +185,28 @@ describeDb('account permissions save (real Postgres)', () => {
     expect(await keysOf(workerA)).toEqual([...ROLE_PRESETS.THO_KS].sort());
   });
 
+  it('a racing revoke of permissions.manage alone wins, though the actor can still grant the keys', async () => {
+    // Every ADMIN key but permissions.manage: rules #1/#2 alone would let this save through.
+    const holder = await holdUncommittedSave(
+      adminId,
+      ROLE_PRESETS.ADMIN.filter((key) => key !== PERM.permissionsManage),
+    );
+
+    const racing = service
+      .setForAccount(adminId, workerA, [...ROLE_PRESETS.KE_TOAN])
+      .then(
+        () => null,
+        (err: unknown) => err,
+      );
+    await wait(300);
+    await holder.release();
+    const err = await racing;
+
+    expect(err).toBeInstanceOf(AppException);
+    expect((err as AppException).getStatus()).toBe(403);
+    expect(await keysOf(workerA)).toEqual([...ROLE_PRESETS.THO_KS].sort());
+  });
+
   it('a target that does not exist ⇒ 404 and nothing is written', async () => {
     const missing = '00000000-0000-4000-8000-000000000000';
     const err = await service
