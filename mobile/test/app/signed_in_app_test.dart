@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
 import 'package:pns_mobile/screens/account/profile_screen.dart';
 import 'package:pns_mobile/screens/audit/audit_log_screen.dart';
+import 'package:pns_mobile/screens/reports/profit_report_screen.dart';
 import 'package:pns_mobile/screens/auth/login_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_detail_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_list_screen.dart';
@@ -108,6 +109,28 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
         'total': 1,
         'page': 1,
         'pageSize': 20,
+      });
+    case '/reports/profit':
+      return jsonBody(200, {
+        'groupBy': 'order',
+        'from': '2026-10-01',
+        'to': '2026-10-30',
+        'totals': {'revenue': 10, 'cost': 8, 'grossProfit': 2, 'marginPct': 20, 'orderCount': 1},
+        'rows': [
+          {
+            'key': 'ord-1',
+            'label': 'BG-ORD1',
+            'revenue': 10,
+            'cost': 8,
+            'grossProfit': 2,
+            'marginPct': 20,
+            'orderCount': 1,
+            'customerName': 'Khách A',
+            'assigneeDisplayName': null,
+            'sourceName': 'Facebook',
+            'issuedAt': '2026-10-10T03:00:00.000Z',
+          },
+        ],
       });
     case '/accounts':
       // POST creates `acc-new`; the list always carries it so its matrix can open.
@@ -446,6 +469,32 @@ void main() {
     expect(_location(tester), '/audit');
     expect(app.adapter.to('/audit-logs'), hasLength(1));
     expect(find.text('Hệ thống'), findsOneWidget);
+  });
+
+  testWidgets('Báo cáo lợi nhuận shows only with costs.view and opens /reports/profit over the real adapter; without it the path lands on Trang chủ', (
+    tester,
+  ) async {
+    // Every order and finance key but costs.view: still no report.
+    final app0 = await _signedIn(
+      tester,
+      _backend(permsA: ['orders.view_all', 'dashboard.finance_view', 'payments.record', 'customers.manage']),
+    );
+    expect(find.text('Khách hàng'), findsOneWidget);
+    expect(find.text('Báo cáo lợi nhuận'), findsNothing);
+    _router(tester).go('/reports/profit');
+    await _navigated(tester);
+    expect(find.byType(ProfitReportScreen), findsNothing);
+    expect(_location(tester), '/dashboard');
+    expect(app0.adapter.to('/reports/profit'), isEmpty);
+
+    await tester.pumpWidget(const SizedBox());
+    final app = await _signedIn(tester, _backend(permsA: ['costs.view']));
+    await tester.tap(find.text('Báo cáo lợi nhuận'));
+    await _navigated(tester);
+    expect(find.byType(ProfitReportScreen), findsOneWidget);
+    expect(_location(tester), '/reports/profit');
+    expect(app.adapter.to('/reports/profit'), hasLength(1));
+    expect(find.text('BG-ORD1'), findsOneWidget);
   });
 
   testWidgets('a path the account may not open, or an unknown one, lands on the landing page', (tester) async {

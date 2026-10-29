@@ -22,6 +22,7 @@ import 'api/http_me_port.dart';
 import 'api/http_orders_port.dart';
 import 'api/http_password_port.dart';
 import 'api/http_payments_port.dart';
+import 'api/http_profit_report_port.dart';
 import 'api/http_stock_vouchers_port.dart';
 import 'api/http_warranty_port.dart';
 import 'api/session_store.dart';
@@ -67,6 +68,7 @@ Widget buildApp(String baseUrl, {SecureKeyValueStore? secureStore}) {
       dashboard: HttpDashboardPort(client, transport),
       accounts: HttpAccountsPort(client, transport),
       auditLogs: HttpAuditLogsPort(client, transport),
+      profitReport: HttpProfitReportPort(client, transport),
     ),
     sessionExpired: sessionExpired,
   );

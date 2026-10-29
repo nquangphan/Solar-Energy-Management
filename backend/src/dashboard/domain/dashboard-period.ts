@@ -32,6 +32,19 @@ export function periodRange(period: DashboardPeriod, now: Date): DateRange {
 }
 
 /**
+ * Preset period of the profit report (FR-37), ending today in Vietnam (UTC+7): month = the 1st →
+ * today; year = 1 January → today. The custom period carries its own days.
+ */
+export function profitPeriodRange(
+  period: 'month' | 'year',
+  now: Date,
+): DateRange {
+  const to = todayInVietnam(now);
+  if (period === 'year') return { from: `${to.slice(0, 4)}-01-01`, to };
+  return { from: `${to.slice(0, 8)}01`, to };
+}
+
+/**
  * Vietnam days → half-open instant range `[fromInstant, toExclusive)` for instant columns such as
  * `orders.created_at` (`TIMESTAMP(3)` holding UTC, filled by Prisma). DATE columns (`payments.paid_on`) already hold Vietnam days and
  * are filtered on the strings directly — shifting them again would move them by a day.

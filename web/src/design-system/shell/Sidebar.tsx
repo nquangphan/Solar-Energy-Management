@@ -103,6 +103,12 @@ export const SIDEBAR_NAV: NavSection[] = [
       },
     ],
   },
+  // Reports: the profit report reads cost prices, so it carries the
+  // `costs.view` gate the backend enforces on `GET /reports/profit`.
+  {
+    title: 'Báo cáo',
+    links: [{ key: 'profit', icon: 'ic-status', label: 'Lợi nhuận', requires: PERM.costsView }],
+  },
   {
     title: 'Quản trị',
     links: [

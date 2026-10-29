@@ -140,6 +140,17 @@ export type {
   AuditChange,
   AuditLogQuery,
 } from './audit-logs-port';
+// Profit report seam: READ-ONLY — every figure, margin and row label
+// arrives computed by the backend; the screen only prints it.
+export type {
+  ProfitReportPort,
+  ProfitReport,
+  ProfitReportRow,
+  ProfitFigures,
+  ProfitGroupBy,
+  ProfitPeriod,
+  ProfitReportQuery,
+} from './profit-report-port';
 // Accounts seam (Story 8.2): who may grant/edit what arrives computed by the
 // backend (`grantable`, `editable`, filtered presets); the screen only displays it.
 export type {
@@ -204,6 +215,7 @@ export {
 } from './fake-invoices-port';
 export { FakeDashboardPort, DEMO_DASHBOARD_SUMMARY } from './fake-dashboard-port';
 export { FakeAuditLogsPort, DEMO_AUDIT_LOGS } from './fake-audit-logs-port';
+export { FakeProfitReportPort, DEMO_PROFIT_TOTALS, DEMO_PROFIT_ROWS } from './fake-profit-report-port';
 export {
   FakeAccountsPort,
   DEMO_ACCOUNTS,

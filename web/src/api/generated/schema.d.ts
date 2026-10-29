@@ -1026,6 +1026,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reports/profit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProfitReportController_profit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3171,6 +3187,110 @@ export interface components {
             newOrderCount: number | null;
             /** @description Số đơn hiện tại theo từng trạng thái (không lọc theo kỳ), đủ mọi trạng thái theo thứ tự quy trình, trong phạm vi xem đơn của người gọi. null khi thiếu cả orders.view_all lẫn orders.view_own. */
             ordersByStatus: components["schemas"]["DashboardStatusCountDto"][] | null;
+        };
+        /** @enum {string} */
+        ProfitGroupBy: "order" | "month" | "assignee" | "source";
+        /** @enum {string} */
+        ProfitPeriod: "month" | "year" | "custom";
+        ProfitFiguresDto: {
+            /**
+             * @description Doanh thu = Σ(giá bán chốt × số lượng) − chiết khấu đã duyệt, trước VAT — số nguyên đồng.
+             * @example 345000000
+             */
+            revenue: number;
+            /**
+             * @description Giá vốn = Σ(giá vốn đóng băng lúc xuất kho × số lượng) — số nguyên đồng.
+             * @example 262000000
+             */
+            cost: number;
+            /**
+             * @description Lợi nhuận gộp = doanh thu − giá vốn — số nguyên đồng.
+             * @example 83000000
+             */
+            grossProfit: number;
+            /**
+             * @description Biên lợi nhuận gộp, phần trăm nguyên làm tròn nửa lên (có thể âm); null khi doanh thu ≤ 0.
+             * @example 24
+             */
+            marginPct: number | null;
+            /**
+             * @description Số đơn đã xuất kho được tính.
+             * @example 12
+             */
+            orderCount: number;
+        };
+        ProfitReportRowDto: {
+            /**
+             * @description Doanh thu = Σ(giá bán chốt × số lượng) − chiết khấu đã duyệt, trước VAT — số nguyên đồng.
+             * @example 345000000
+             */
+            revenue: number;
+            /**
+             * @description Giá vốn = Σ(giá vốn đóng băng lúc xuất kho × số lượng) — số nguyên đồng.
+             * @example 262000000
+             */
+            cost: number;
+            /**
+             * @description Lợi nhuận gộp = doanh thu − giá vốn — số nguyên đồng.
+             * @example 83000000
+             */
+            grossProfit: number;
+            /**
+             * @description Biên lợi nhuận gộp, phần trăm nguyên làm tròn nửa lên (có thể âm); null khi doanh thu ≤ 0.
+             * @example 24
+             */
+            marginPct: number | null;
+            /**
+             * @description Số đơn đã xuất kho được tính.
+             * @example 12
+             */
+            orderCount: number;
+            /**
+             * @description Khoá nhóm: mã đơn | YYYY-MM | mã account người phụ trách (null = đơn chưa giao) | mã nguồn khách.
+             * @example 0b7f1f6e-1d7a-4c1e-9a4a-6a5e2f0c1b33
+             */
+            key: string | null;
+            /**
+             * @description Nhãn hàng do server dựng: số báo giá BG-XXXXXXXX | MM/YYYY | tên người phụ trách hoặc "Chưa giao người phụ trách" | tên nguồn khách.
+             * @example BG-0B7F1F6E
+             */
+            label: string;
+            /**
+             * @description Tên khách — chỉ khi nhóm theo đơn, cách nhóm khác null.
+             * @example Nguyễn Văn A
+             */
+            customerName: string | null;
+            /**
+             * @description Tên người phụ trách — chỉ khi nhóm theo đơn; null khi đơn chưa giao hoặc cách nhóm khác.
+             * @example Trần Thị B
+             */
+            assigneeDisplayName: string | null;
+            /**
+             * @description Tên nguồn khách — chỉ khi nhóm theo đơn, cách nhóm khác null.
+             * @example Facebook
+             */
+            sourceName: string | null;
+            /**
+             * Format: date-time
+             * @description Thời điểm xuất kho (ISO-8601 UTC) — chỉ khi nhóm theo đơn, cách nhóm khác null.
+             */
+            issuedAt: string | null;
+        };
+        ProfitReportResponseDto: {
+            /** @example order */
+            groupBy: components["schemas"]["ProfitGroupBy"];
+            /**
+             * @description Ngày đầu kỳ (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.
+             * @example 2026-10-01
+             */
+            from: string;
+            /**
+             * @description Ngày cuối kỳ (giờ Việt Nam), YYYY-MM-DD, tính cả ngày này.
+             * @example 2026-10-30
+             */
+            to: string;
+            totals: components["schemas"]["ProfitFiguresDto"];
+            rows: components["schemas"]["ProfitReportRowDto"][];
         };
     };
     responses: never;
@@ -7261,6 +7381,53 @@ export interface operations {
                 };
             };
             /** @description Thiếu cả orders.view_all, orders.view_own lẫn dashboard.finance_view (FORBIDDEN). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    ProfitReportController_profit: {
+        parameters: {
+            query?: {
+                /** @description Cách nhóm: order = mỗi đơn một hàng, month = theo tháng xuất kho, assignee = theo người phụ trách, source = theo nguồn khách. Bỏ trống ⇒ order. */
+                groupBy?: components["schemas"]["ProfitGroupBy"];
+                /** @description Kỳ theo ngày xuất kho (giờ Việt Nam): month = ngày 1 → hôm nay, year = 01/01 → hôm nay, custom = from → to. Bỏ trống ⇒ month. */
+                period?: components["schemas"]["ProfitPeriod"];
+                /** @description Từ ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này). Bắt buộc khi period=custom, cấm gửi với kỳ khác. */
+                from?: string;
+                /** @description Đến ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này). Bắt buộc khi period=custom, cấm gửi với kỳ khác. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Lợi nhuận gộp trên vật tư của các đơn đã xuất kho trong kỳ (không tính đơn huỷ), toàn công ty, nhóm theo groupBy. Σ rows = totals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfitReportResponseDto"];
+                };
+            };
+            /** @description VALIDATION_ERROR: groupBy/period lạ; from/to sai định dạng YYYY-MM-DD; period=custom thiếu from/to; from sau to (fieldErrors.to); from/to gửi kèm period month/year. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu quyền costs.view (FORBIDDEN). */
             403: {
                 headers: {
                     [name: string]: unknown;

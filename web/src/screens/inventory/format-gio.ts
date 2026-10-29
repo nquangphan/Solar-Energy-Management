@@ -22,6 +22,11 @@ function thanhPhan(iso: string): string[] | null {
   ];
 }
 
+/** Plain Vietnam day `YYYY-MM-DD` ⇒ `DD/MM/YYYY`: reorders the backend's day, no date arithmetic. */
+export function formatPlainDay(day: string): string {
+  return day.split('-').reverse().join('/');
+}
+
 /** `2026-07-06T01:05:00.000Z` ⇒ `06/07`. Unparseable ⇒ `—`. */
 export function ngayNgan(iso: string): string {
   const p = thanhPhan(iso);

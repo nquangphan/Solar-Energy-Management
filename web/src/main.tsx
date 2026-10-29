@@ -32,6 +32,7 @@ import { HttpMePort } from './api/http-me-port';
 import { HttpOrdersPort } from './api/http-orders-port';
 import { HttpPasswordPort } from './api/http-password-port';
 import { HttpPaymentsPort } from './api/http-payments-port';
+import { HttpProfitReportPort } from './api/http-profit-report-port';
 import { HttpSettingsPort } from './api/http-settings-port';
 import { HttpStockVouchersPort } from './api/http-stock-vouchers-port';
 import { HttpWarrantyPort } from './api/http-warranty-port';
@@ -69,6 +70,7 @@ const ports: AppPorts = {
   dashboard: new HttpDashboardPort(client),
   accounts: new HttpAccountsPort(client),
   auditLogs: new HttpAuditLogsPort(client),
+  profitReport: new HttpProfitReportPort(client),
 };
 
 type Status = 'restoring' | 'signedOut' | 'signedIn';

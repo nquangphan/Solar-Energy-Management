@@ -1,0 +1,43 @@
+/* hand-authored — profit report layout wrappers. Composition-level
+   styling only: KPIs, banner, seg, fields, table, empty/error states and
+   skeletons are shipped design-system components. Token vars for every colour
+   and spacing; flat borders, no elevation effects (Viền nét, UX-DR-4). The
+   mockup's notecard is composed here rather than added to the design-system.
+   Load AFTER tokens.css / components.css / shell.css. */
+
+.pr-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.pr-toolbar-label {
+  align-self: center;
+}
+
+.pr-spacer {
+  flex: 1;
+}
+
+.pr-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+}
+
+.pr-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.pr-note {
+  margin: 0;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: 13px;
+}

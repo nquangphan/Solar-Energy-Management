@@ -23,6 +23,7 @@ import type {
   OrdersPort,
   PasswordPort,
   PaymentsPort,
+  ProfitReportPort,
   SettingsPort,
   StockVouchersPort,
   WarrantyPort,
@@ -51,6 +52,7 @@ import { OrderStatusChangeScreen } from '../screens/orders/OrderStatusChangeScre
 import { PaymentScheduleScreen } from '../screens/payments/PaymentScheduleScreen';
 import { AccountFormScreen } from '../screens/permissions/AccountFormScreen';
 import { PermissionsScreen } from '../screens/permissions/PermissionsScreen';
+import { ProfitReportScreen } from '../screens/reports/ProfitReportScreen';
 import { CustomerSourceConfigScreen } from '../screens/settings/CustomerSourceConfigScreen';
 import { WarrantyLookupScreen } from '../screens/warranty/WarrantyLookupScreen';
 import {
@@ -96,6 +98,7 @@ export interface AppPorts {
   dashboard: DashboardPort;
   accounts: AccountsPort;
   auditLogs: AuditLogsPort;
+  profitReport: ProfitReportPort;
 }
 
 export interface SignedOutRoutesProps {
@@ -406,6 +409,7 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
           )}
         />
         <Route path={NAV_ROUTES.audit} element={gate('audit', <AuditLogScreen port={ports.auditLogs} />)} />
+        <Route path={NAV_ROUTES.profit} element={gate('profit', <ProfitReportScreen port={ports.profitReport} />)} />
         <Route
           path={NAV_ROUTES.profile}
           element={gate('profile', <ProfileScreen port={ports.password} onLogout={onLogout} />)}

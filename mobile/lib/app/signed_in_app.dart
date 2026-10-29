@@ -49,6 +49,7 @@ import '../screens/payments/payment_schedule_screen.dart';
 import '../screens/permissions/account_form_screen.dart';
 import '../screens/permissions/account_list_screen.dart';
 import '../screens/permissions/account_permissions_screen.dart';
+import '../screens/reports/profit_report_screen.dart';
 import '../screens/warranty/warranty_lookup_screen.dart';
 import 'app_chrome.dart';
 import 'app_ports.dart';
@@ -208,6 +209,11 @@ class _SignedInAppState extends State<SignedInApp> {
         GoRoute(
           path: kAuditPath,
           builder: (context, state) => AuditLogScreen(port: ports.auditLogs),
+        ),
+        GoRoute(
+          path: kProfitReportPath,
+          builder: (context, state) =>
+              ProfitReportScreen(port: ports.profitReport),
         ),
         GoRoute(
           path: kProfilePath,

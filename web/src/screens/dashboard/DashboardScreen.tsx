@@ -26,6 +26,7 @@ import type {
 } from '../../design-system/session/dashboard-port';
 import { usePermissions } from '../../design-system/session/use-permissions';
 import { Seg, Sidebar, SIDEBAR_NAV, Toolbar, Topbar, WebShell } from '../../design-system/shell';
+import { formatPlainDay } from '../inventory/format-gio';
 
 import './dashboard.css';
 
@@ -47,9 +48,6 @@ const PERIOD_NOUN: Record<DashboardPeriod, string> = {
   week: 'tuần này',
   month: 'tháng này',
 };
-
-/** `YYYY-MM-DD` → `DD/MM/YYYY`: reorders the backend's day, no date arithmetic. */
-const viDate = (day: string) => day.split('-').reverse().join('/');
 
 export function DashboardScreen({ port }: DashboardScreenProps) {
   const { perms } = usePermissions();
@@ -96,7 +94,7 @@ export function DashboardScreen({ port }: DashboardScreenProps) {
           />
           {state === 'ready' && summary && (
             <span className="micro muted db-range">
-              {viDate(summary.from)} – {viDate(summary.to)}
+              {formatPlainDay(summary.from)} – {formatPlainDay(summary.to)}
             </span>
           )}
         </Toolbar>

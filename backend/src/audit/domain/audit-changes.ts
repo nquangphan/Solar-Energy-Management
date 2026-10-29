@@ -25,9 +25,11 @@ export const AUDIT_MONEY_FIELDS: ReadonlySet<string> = new Set([
   // Money fields of the API contract.
   'afterDiscount',
   'amount',
+  'cost',
   'costPrice',
   'difference',
   'discountAmount',
+  'grossProfit',
   'orderTotal',
   'paidAmount',
   'paidTotal',

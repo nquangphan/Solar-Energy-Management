@@ -14,6 +14,7 @@ import '../design_system/session/me_port.dart';
 import '../design_system/session/orders_port.dart';
 import '../design_system/session/password_port.dart';
 import '../design_system/session/payments_port.dart';
+import '../design_system/session/profit_report_port.dart';
 import '../design_system/session/stock_vouchers_port.dart';
 import '../design_system/session/warranty_port.dart';
 
@@ -33,6 +34,7 @@ class AppPorts {
     required this.dashboard,
     required this.accounts,
     required this.auditLogs,
+    required this.profitReport,
   });
 
   final MePort me;
@@ -49,4 +51,5 @@ class AppPorts {
   final DashboardPort dashboard;
   final AccountsPort accounts;
   final AuditLogsPort auditLogs;
+  final ProfitReportPort profitReport;
 }

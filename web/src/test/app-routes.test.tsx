@@ -23,6 +23,7 @@ import {
   FakeOrdersPort,
   FakePasswordPort,
   FakePaymentsPort,
+  FakeProfitReportPort,
   FakeSettingsPort,
   FakeStockVouchersPort,
   FakeWarrantyPort,
@@ -35,6 +36,7 @@ afterEach(cleanup);
 const ALL_PERMISSIONS = [
   'audit.read',
   'catalog.view',
+  'costs.view',
   'customers.manage',
   'inventory.manage',
   'orders.view_all',
@@ -62,6 +64,7 @@ function ports(permissions: string[]): AppPorts {
     dashboard: new FakeDashboardPort(),
     accounts: new FakeAccountsPort(),
     auditLogs: new FakeAuditLogsPort(),
+    profitReport: new FakeProfitReportPort(),
   };
 }
 
@@ -97,7 +100,7 @@ describe('AppRoutes', () => {
     expect(topbarTitle()).toContain('Tổng quan vận hành');
     expect(topbarTitle()).not.toContain('Khách hàng');
     expect(navLabels()).toEqual(['Trang chủ', 'Đơn hàng', 'Tra cứu bảo hành', 'Hồ sơ']);
-    for (const hidden of ['Khách hàng', 'Cấu hình', 'Kho', 'Danh mục', 'Phân quyền', 'Audit']) {
+    for (const hidden of ['Khách hàng', 'Cấu hình', 'Kho', 'Danh mục', 'Phân quyền', 'Audit', 'Lợi nhuận']) {
       expect(navLabels()).not.toContain(hidden);
     }
   });
@@ -166,6 +169,30 @@ describe('AppRoutes', () => {
     expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(navLabels()).not.toContain('Audit');
     expect(listWithout).not.toHaveBeenCalled();
+  });
+
+  it('Lợi nhuận: costs.view shows the link under Báo cáo and opens /reports/profit; without it (even with every other key) the link is hidden and the URL lands on /dashboard', async () => {
+    const appPorts = ports(ALL_PERMISSIONS);
+    const report = vi.spyOn(appPorts.profitReport, 'getProfitReport');
+    renderAt('/profile', appPorts);
+    fireEvent.click(await screen.findByText('Lợi nhuận', { selector: 'a.navlink' }));
+    expect(screen.getByTestId('path').textContent).toBe('/reports/profit');
+    expect(NAV_ROUTES.profit).toBe('/reports/profit');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Lợi nhuận gộp'));
+    expect(report).toHaveBeenCalledTimes(1);
+    const sections = Array.from(document.querySelectorAll('nav.sidebar .navsec')).map((s) => s.textContent);
+    expect(sections).toEqual(['Báo cáo', 'Quản trị']);
+    cleanup();
+
+    const without = ports(
+      ALL_PERMISSIONS.filter((key) => key !== 'costs.view').concat(['dashboard.finance_view', 'payments.record']),
+    );
+    const reportWithout = vi.spyOn(without.profitReport, 'getProfitReport');
+    renderAt('/reports/profit', without);
+    await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    expect(navLabels()).not.toContain('Lợi nhuận');
+    expect(reportWithout).not.toHaveBeenCalled();
   });
 
   it('the account form routes inherit the Phân quyền gate; /permissions/new is never an account id', async () => {

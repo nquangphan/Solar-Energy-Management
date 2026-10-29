@@ -15,6 +15,7 @@ export const NAV_ROUTES = {
   customers: '/customers',
   inventory: '/inventory',
   warranty: '/warranty',
+  profit: '/reports/profit',
   settings: '/settings',
   permissions: '/permissions',
   audit: '/audit',

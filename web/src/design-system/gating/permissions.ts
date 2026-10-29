@@ -120,6 +120,8 @@ export const PERM = {
   inventoryManage: 'inventory.manage',
   /** May create/edit quotes — sale reads Khả dụng on the Tồn kho screen to promise stock (FR-25). */
   quotesCreateEdit: 'quotes.create_edit',
+  /** May see cost prices and profit — gates the Lợi nhuận report (FR-37). */
+  costsView: 'costs.view',
 } as const;
 
 /**

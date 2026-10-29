@@ -17,6 +17,7 @@ const String kOrdersPath = '/orders';
 const String kInventoryPath = '/inventory';
 const String kPermissionsPath = '/permissions';
 const String kAuditPath = '/audit';
+const String kProfitReportPath = '/reports/profit';
 
 /// Child routes of `orders`; the static ones are registered before `/orders/:id`.
 const String kOrderNewPath = '/orders/new';
@@ -52,6 +53,7 @@ const Map<String, String> kNavRoutes = {
   'inventory': kInventoryPath,
   'customers': kCustomersPath,
   'warranty': kWarrantyPath,
+  'profit': kProfitReportPath,
   'permissions': kPermissionsPath,
   'audit': kAuditPath,
   'profile': kProfilePath,

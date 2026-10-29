@@ -18,6 +18,7 @@ import 'payments/payments_client.dart';
 import 'contracts/contracts_client.dart';
 import 'invoices/invoices_client.dart';
 import 'dashboard/dashboard_client.dart';
+import 'reports/reports_client.dart';
 
 /// Phương Nam Solar API `v0.1.0`.
 ///
@@ -48,6 +49,7 @@ class PnsApiClient {
   ContractsClient? _contracts;
   InvoicesClient? _invoices;
   DashboardClient? _dashboard;
+  ReportsClient? _reports;
 
   HealthClient get health => _health ??= HealthClient(_dio, baseUrl: _baseUrl);
 
@@ -76,4 +78,6 @@ class PnsApiClient {
   InvoicesClient get invoices => _invoices ??= InvoicesClient(_dio, baseUrl: _baseUrl);
 
   DashboardClient get dashboard => _dashboard ??= DashboardClient(_dio, baseUrl: _baseUrl);
+
+  ReportsClient get reports => _reports ??= ReportsClient(_dio, baseUrl: _baseUrl);
 }

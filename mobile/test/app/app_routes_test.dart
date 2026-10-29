@@ -30,6 +30,9 @@ void main() {
     test('audit.read ⇒ + audit', () {
       expect(openableKeys({'audit.read'}), {'home', 'audit', 'profile'});
     });
+    test('costs.view ⇒ + profit', () {
+      expect(openableKeys({'costs.view'}), {'home', 'profit', 'profile'});
+    });
   });
 
   group('landingPath', () {
@@ -146,6 +149,27 @@ void main() {
       };
       expect(everyOtherGate, isNotEmpty);
       expect(isOpenable(kAuditPath, everyOtherGate), isFalse);
+    });
+
+    test('the profit report follows costs.view only — not the order or finance keys', () {
+      expect(kProfitReportPath, '/reports/profit');
+      expect(kNavRoutes['profit'], kProfitReportPath);
+      expect(isOpenable(kProfitReportPath, {'costs.view'}), isTrue);
+      expect(isOpenable(kProfitReportPath, {'orders.view_all', 'dashboard.finance_view', 'payments.record'}), isFalse);
+      final Set<String> everyOtherGate = {
+        for (final link in [for (final s in kMobileMenu) ...s.links, ...kMobileTabLinks]) ...[
+          if (link.requires != null && link.requires != 'costs.view') link.requires!,
+          ...?link.requiresAny,
+        ],
+      };
+      expect(everyOtherGate, isNotEmpty);
+      expect(isOpenable(kProfitReportPath, everyOtherGate), isFalse);
+    });
+
+    test('the Menu lists Báo cáo lợi nhuận after Tra cứu bảo hành and before Phân quyền', () {
+      final List<String> keys = [for (final s in kMobileMenu) for (final l in s.links) l.key];
+      expect(keys.indexOf('profit'), keys.indexOf('warranty') + 1);
+      expect(keys.indexOf('permissions'), keys.indexOf('profit') + 1);
     });
   });
 

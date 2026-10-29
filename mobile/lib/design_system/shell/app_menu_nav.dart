@@ -29,6 +29,14 @@ const List<AppNavSection> kMobileMenu = [
         icon: 'ic-phone',
         requiresAny: [AppPermissionKeys.ordersViewAll, AppPermissionKeys.ordersViewOwn],
       ),
+      // The report reads cost prices — the gate the backend enforces on GET /reports/profit.
+      AppNavLink(
+        key: 'profit',
+        label: 'Báo cáo lợi nhuận',
+        subtitle: 'Lợi nhuận gộp trên vật tư',
+        icon: 'ic-status',
+        requires: AppPermissionKeys.costsView,
+      ),
       AppNavLink(
         key: 'permissions',
         label: 'Phân quyền',

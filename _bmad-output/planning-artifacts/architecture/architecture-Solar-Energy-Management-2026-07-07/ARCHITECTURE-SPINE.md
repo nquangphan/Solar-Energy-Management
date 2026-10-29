@@ -171,7 +171,7 @@ flowchart TD
 
 - **Binds:** FR-5, FR-25, FR-36, FR-37
 - **Prevents:** duyệt chiết khấu thấy biên sai thực tế; báo cáo lợi nhuận bao gồm đơn chưa xuất kho; giá vốn sai khi đơn chốt lúc thiếu hàng.
-- **Rule:** `OrderLineItem.unitPriceSnapshot` (giá bán) đóng băng lúc **chốt đơn lần đầu** — vì nó là **lời hứa với khách** (FR-5). `OrderLineItem.costPriceSnapshot` (giá vốn) đóng băng lúc **xuất kho** — vì nó là **sự thật**, chỉ xác định khi hàng rời kho. Hệ quả: (a) duyệt chiết khấu thấy **biên ước tính** (đọc `Product.costPrice` hiện hành), dán nhãn rõ là ước tính; (b) báo cáo lợi nhuận chỉ đọc `costPriceSnapshot`, **đơn chưa xuất kho không có trong báo cáo** — chưa xác định lãi; (c) sửa đơn đã chốt → version mới → `warrantyStartAt` đặt theo dòng, dòng cũ giữ ngày cũ, không gia hạn hết bảo hành. Bảo hành mốc từ ngày chốt đơn là quyết định có ý thức (đơn thi công chốt tháng 1, nghiệm thu tháng 4 → mất 3 tháng bảo hành).
+- **Rule:** `OrderLineItem.unitPriceSnapshot` (giá bán) đóng băng lúc **chốt đơn lần đầu** — vì nó là **lời hứa với khách** (FR-5). `OrderLineItem.costPriceSnapshot` (giá vốn) đóng băng lúc **xuất kho** — vì nó là **sự thật**, chỉ xác định khi hàng rời kho. Hệ quả: (a) duyệt chiết khấu thấy **biên ước tính** (đọc `Product.costPrice` hiện hành), dán nhãn rõ là ước tính; (b) báo cáo lợi nhuận chỉ đọc `costPriceSnapshot`, **đơn chưa xuất kho không có trong báo cáo** — chưa xác định lãi; đơn có mặt khi có phiếu xuất và không huỷ (dòng của version gắn với phiếu xuất); doanh thu trừ chiết khấu đã duyệt, trước VAT; (c) sửa đơn đã chốt → version mới → `warrantyStartAt` đặt theo dòng, dòng cũ giữ ngày cũ, không gia hạn hết bảo hành. Bảo hành mốc từ ngày chốt đơn là quyết định có ý thức (đơn thi công chốt tháng 1, nghiệm thu tháng 4 → mất 3 tháng bảo hành).
 
 ### AD-21 — Không leo thang quyền: không cấp/sửa/vô hiệu hoá tài khoản mà mình không có quyền `[ADOPTED]`
 
@@ -554,7 +554,7 @@ backend/
 | Sinh hợp đồng (FR-13) | `contracts/` | AD-3 (PDF ở R2) |
 | Danh mục vật tư & giá (FR-14, FR-15) | `catalog/` | AD-2, AD-10 |
 | Phân quyền & tài khoản (FR-16..18) | `accounts/`, `auth/` | AD-4, AD-8, AD-17 |
-| Dashboard & báo cáo (FR-19) | `dashboard/` | AD-4 |
+| Dashboard & báo cáo (FR-19, FR-37) | `dashboard/` | AD-4 |
 | Audit log (FR-20) | `audit/` | AD-8 |
 | Xuất & chia sẻ báo giá (FR-21) | `orders/`, `storage/` | AD-3 |
 | Đăng nhập & phiên (FR-22) | `auth/` | AD-4, AD-12 |

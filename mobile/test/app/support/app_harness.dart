@@ -16,6 +16,7 @@ import 'package:pns_mobile/api/http_me_port.dart';
 import 'package:pns_mobile/api/http_orders_port.dart';
 import 'package:pns_mobile/api/http_password_port.dart';
 import 'package:pns_mobile/api/http_payments_port.dart';
+import 'package:pns_mobile/api/http_profit_report_port.dart';
 import 'package:pns_mobile/api/http_stock_vouchers_port.dart';
 import 'package:pns_mobile/api/http_warranty_port.dart';
 import 'package:pns_mobile/api/session_store.dart';
@@ -51,6 +52,7 @@ class TestApp {
         dashboard: HttpDashboardPort(client, transport),
         accounts: HttpAccountsPort(client, transport),
         auditLogs: HttpAuditLogsPort(client, transport),
+        profitReport: HttpProfitReportPort(client, transport),
       ),
       sessionExpired: expired,
     );

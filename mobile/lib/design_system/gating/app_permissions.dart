@@ -138,6 +138,9 @@ class AppPerm {
 
   /// May create/edit quotes — sale reads Khả dụng on the Tồn kho screen to promise stock (FR-25).
   static const PermissionKey quotesCreateEdit = 'quotes.create_edit';
+
+  /// May see cost prices and profit — gates the Báo cáo lợi nhuận report (FR-37).
+  static const PermissionKey costsView = 'costs.view';
 }
 
 /// STUB effective permission set — Epic 1 PLACEHOLDER ONLY (see [AppPerm]).
