@@ -317,6 +317,58 @@ export const SU_KIEN_THU_CONG: readonly TransitionEvent[] = [
   SU_KIEN.hoanThanh,
 ];
 
+/**
+ * Permissions that can open the manual transition door (`POST /orders/:id/transition`):
+ * the `requires` of every table row whose event is in `SU_KIEN_THU_CONG`, deduplicated, in
+ * table order. Derived from the table, never listed by hand — a new manual edge with a new
+ * key widens the door gate automatically, and dropping the last edge of a key narrows it.
+ */
+export const MANUAL_TRANSITION_PERMISSIONS: readonly PermissionKey[] =
+  manualTransitionPermissions(ALLOWED_TRANSITIONS);
+
+/**
+ * Throws on an empty result: `@RequireAnyPermissions()` with no key means "any signed-in
+ * account" to `PermissionsGuard`, so a table that lost every manual edge must stop the app
+ * at load time instead of silently opening the transition door.
+ */
+export function manualTransitionPermissions(
+  rules: readonly TransitionRule[],
+): readonly PermissionKey[] {
+  const keys = [
+    ...new Set(
+      rules
+        .filter((rule) => SU_KIEN_THU_CONG.includes(rule.event))
+        .map((rule) => rule.requires),
+    ),
+  ];
+  if (keys.length === 0) {
+    throw new Error(
+      'No manual transition edge left in ALLOWED_TRANSITIONS: the transition door would open to every account.',
+    );
+  }
+  return keys;
+}
+
+/** One table edge as the permission matrix shows it. */
+export interface GovernedTransition {
+  readonly event: TransitionEvent;
+  readonly from: OrderStatusKey;
+  readonly to: OrderStatusKey;
+}
+
+/**
+ * Every edge of `ALLOWED_TRANSITIONS` gated by `key`, in table order — what ticking that key
+ * in the permission matrix actually unlocks. Reads the table (AD-11); empty for a key that
+ * gates no edge.
+ */
+export function transitionsGovernedBy(
+  key: PermissionKey,
+): readonly GovernedTransition[] {
+  return ALLOWED_TRANSITIONS.filter((rule) => rule.requires === key).map(
+    (rule) => ({ event: rule.event, from: rule.from, to: rule.to }),
+  );
+}
+
 /** Một lựa chọn trên màn Chuyển trạng thái: phát sự kiện gì, đơn sẽ tới đâu, đòi quyền gì. */
 export interface BuocKeTiep {
   readonly event: TransitionEvent;

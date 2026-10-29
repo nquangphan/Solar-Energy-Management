@@ -5,9 +5,11 @@
 // `editable` + `readOnlyReason` per account, and only the presets the caller can
 // grant in full. The screen displays them and holds no escalation rule of its own.
 // Applying a preset only loads its values into the draft; nothing is sent until Lưu.
-// The dependency warning reads each permission's `requires` from the backend; the
-// backend refuses the same gaps with a 400 anyway. "Tạo account" / "Sửa account" open
-// the account form (Story 8.3); coming back selects the account it saved.
+// The dependency warning reads each permission's `requires` and `requiresAnyOf` from the
+// backend; the backend refuses the same gaps with a 400 anyway. Under each permission, the
+// order steps it gates come from the backend's `transitions` (labels from StatusChip).
+// "Tạo account" / "Sửa account" open the account form (Story 8.3); coming back selects
+// the account it saved.
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -20,6 +22,8 @@ import {
   Frame,
   Sheet,
   Skeleton,
+  STATUS_LABELS,
+  type StatusKey,
 } from '../../design-system/components';
 import { filterNav } from '../../design-system/gating/permissions';
 import { Icon } from '../../design-system/icons/Icon';
@@ -49,22 +53,41 @@ type LoadState = 'loading' | 'ready' | 'error';
 
 /**
  * One sentence per permission lacking what it requires — same wording and order as the
- * backend `dependencyMessage` (gaps by key, missing keys by key).
+ * backend `dependencyMessage` (gaps by key; the AND part by key, then "một trong …" in
+ * `requiresAnyOf` order when none of that group is held).
  */
 export function dependencyWarnings(options: readonly PermissionOption[], draft: ReadonlySet<string>): string[] {
   const labels = new Map(options.map((o) => [o.key, o.label]));
+  const quote = (key: string) => `«${labels.get(key) ?? key}»`;
   return options
     .filter((o) => draft.has(o.key))
     .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
     .map((o) => ({
       option: o,
       missing: o.requires.filter((key) => !draft.has(key)).sort(),
+      missingAnyOf: o.requiresAnyOf.some((key) => draft.has(key)) ? [] : o.requiresAnyOf,
     }))
-    .filter(({ missing }) => missing.length > 0)
-    .map(
-      ({ option, missing }) =>
-        `«${option.label}» cần thêm ${missing.map((key) => `«${labels.get(key) ?? key}»`).join(', ')}.`,
-    );
+    .filter(({ missing, missingAnyOf }) => missing.length > 0 || missingAnyOf.length > 0)
+    .map(({ option, missing, missingAnyOf }) => {
+      const parts = missing.map(quote);
+      if (missingAnyOf.length > 0) parts.push(`một trong ${missingAnyOf.map(quote).join(', ')}`);
+      return `«${option.label}» cần thêm ${parts.join(', ')}.`;
+    });
+}
+
+/** A status key as its StatusChip label; a key the chip does not know shows as "—". */
+function statusLabel(key: string): string {
+  return Object.hasOwn(STATUS_LABELS, key) ? STATUS_LABELS[key as StatusKey] : '—';
+}
+
+/**
+ * The order steps a permission gates, e.g. "Chuyển: Báo giá → Đã chốt · Chờ duyệt → Đã chốt";
+ * the same `from → to` pair of status keys shows once. `null` when the permission gates no step.
+ */
+export function transitionsLine(option: PermissionOption): string | null {
+  const pairs = new Map(option.transitions.map((t) => [`${t.from}\u0000${t.to}`, t]));
+  if (pairs.size === 0) return null;
+  return `Chuyển: ${[...pairs.values()].map((t) => `${statusLabel(t.from)} → ${statusLabel(t.to)}`).join(' · ')}`;
 }
 
 export function PermissionsScreen({ port, onCreate, onEdit, selectAccountId }: PermissionsScreenProps) {
@@ -264,15 +287,26 @@ export function PermissionsScreen({ port, onCreate, onEdit, selectAccountId }: P
                     </Banner>
                   )}
                   <div className="perm-checklist">
-                    {options.permissions.map((option) => (
-                      <Checkbox
-                        key={option.key}
-                        label={option.label}
-                        checked={draft.has(option.key)}
-                        disabled={readOnly || !option.grantable}
-                        onChange={(checked) => toggle(option.key, checked)}
-                      />
-                    ))}
+                    {options.permissions.map((option) => {
+                      const steps = transitionsLine(option);
+                      const stepsId = `perm-steps-${option.key}`;
+                      return (
+                        <div key={option.key} className="perm-item">
+                          <Checkbox
+                            label={option.label}
+                            checked={draft.has(option.key)}
+                            disabled={readOnly || !option.grantable}
+                            onChange={(checked) => toggle(option.key, checked)}
+                            describedBy={steps === null ? undefined : stepsId}
+                          />
+                          {steps !== null && (
+                            <span id={stepsId} className="perm-transitions">
+                              {steps}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </Card>

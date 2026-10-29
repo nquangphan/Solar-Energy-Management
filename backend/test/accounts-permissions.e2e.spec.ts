@@ -260,6 +260,84 @@ describe('/accounts permissions (e2e)', () => {
     ]);
   });
 
+  it('permission-options: requiresAnyOf and the table edges each key gates; option keys stay within the contract', async () => {
+    const res = await server()
+      .get('/accounts/permission-options')
+      .set('Authorization', auth(ADMIN_ID));
+    expect(res.status).toBe(200);
+    const OPTION_KEYS = [
+      'key',
+      'label',
+      'group',
+      'requires',
+      'requiresAnyOf',
+      'grantable',
+      'transitions',
+    ];
+    const options = res.body.permissions as {
+      key: string;
+      requiresAnyOf: string[];
+      transitions: { event: string; from: string; to: string }[];
+    }[];
+    for (const option of options) {
+      expect(Object.keys(option).every((k) => OPTION_KEYS.includes(k))).toBe(
+        true,
+      );
+      expect(Array.isArray(option.requiresAnyOf)).toBe(true);
+      expect(Array.isArray(option.transitions)).toBe(true);
+    }
+    const byKey = new Map(options.map((o) => [o.key, o]));
+    expect(byKey.get(PERM.ordersConfirm)?.requiresAnyOf).toEqual([
+      PERM.ordersViewAll,
+      PERM.ordersViewOwn,
+    ]);
+    expect(byKey.get(PERM.settingsManage)?.requiresAnyOf).toEqual([]);
+    expect(byKey.get(PERM.constructionTransition)?.transitions).toEqual([
+      { event: 'bat_dau_thi_cong', from: 'dacoc', to: 'thicong' },
+      { event: 'xong_thi_cong', from: 'thicong', to: 'nghiemthu' },
+      { event: 'hoan_thanh', from: 'nghiemthu', to: 'hoanthanh' },
+    ]);
+    expect(byKey.get(PERM.auditRead)?.transitions).toEqual([]);
+  });
+
+  it.each([
+    [
+      'orders.confirm without any view scope',
+      [PERM.ordersConfirm],
+      '«Chốt đơn» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
+    ],
+    [
+      'discounts.approve with only orders.view_own',
+      [PERM.discountsApprove, PERM.ordersViewOwn],
+      '«Duyệt chiết khấu» cần thêm «Xem tất cả đơn».',
+    ],
+  ])(
+    'PUT %s ⇒ 400 with the dependency sentence, nothing written',
+    async (_n, keys, sentence) => {
+      const res = await put(ADMIN_ID, WORKER_ID, keys);
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors).toEqual([
+        {
+          field: 'permissions',
+          code: 'PERMISSION_DEPENDENCY',
+          message: sentence,
+        },
+      ]);
+      expect(permissionRepo.deleteMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it('PUT orders.confirm with orders.view_own ⇒ 200', async () => {
+    const res = await put(ADMIN_ID, WORKER_ID, [
+      PERM.ordersConfirm,
+      PERM.ordersViewOwn,
+    ]);
+    expect(res.status).toBe(200);
+    expect(held[WORKER_ID]).toEqual(
+      [PERM.ordersConfirm, PERM.ordersViewOwn].sort(),
+    );
+  });
+
   it('permission-options for the SUPER_ADMIN lists every preset', async () => {
     const res = await server()
       .get('/accounts/permission-options')
@@ -293,12 +371,12 @@ describe('/accounts permissions (e2e)', () => {
     ],
     [
       'quotes.create_edit without customers.manage',
-      [PERM.quotesCreateEdit, PERM.catalogView],
+      [PERM.quotesCreateEdit, PERM.catalogView, PERM.ordersViewOwn],
       '«Tạo/sửa báo giá» cần thêm «Quản lý khách hàng».',
     ],
     [
       'quotes.create_edit without catalog.view',
-      [PERM.quotesCreateEdit, PERM.customersManage],
+      [PERM.quotesCreateEdit, PERM.customersManage, PERM.ordersViewOwn],
       '«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư».',
     ],
   ])(

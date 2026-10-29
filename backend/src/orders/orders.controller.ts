@@ -44,7 +44,10 @@ import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { anGiaVonDongPhieu } from '../inventory/domain/stock-voucher-visibility';
 import { toStockVoucherDetailDto } from '../inventory/dto/stock-voucher-response.dto';
 import { SettingsService } from '../settings/settings.service';
-import { type TransitionEvent } from './domain/allowed-transition';
+import {
+  MANUAL_TRANSITION_PERMISSIONS,
+  type TransitionEvent,
+} from './domain/allowed-transition';
 import {
   KICH_THUOC_TOI_DA_BYTE,
   SO_ANH_TOI_DA,
@@ -862,10 +865,11 @@ export class OrdersController {
    * `@HttpCode(OK)` — kỷ luật của file: action nghiệp vụ trên resource CÓ SẴN không trả 201
    * (không có resource nào được tạo ở cấp URL này).
    *
-   * GATE CỬA đúng BA key mà `SU_KIEN_THU_CONG` thực sự cần. KHÔNG liệt `quotes.create_edit`
-   * / `orders.confirm`: đó là key của `chot`/`mo_lai`/`huy` — chính những sự kiện endpoint
-   * này TỪ CHỐI. Mở cửa cho chúng là mời đúng ca hỏng dữ liệu mà whitelist vừa chặn.
-   * Gate thật vẫn là engine dưới row lock (hai tầng).
+   * The door gate is `MANUAL_TRANSITION_PERMISSIONS`, derived from the table: only the keys
+   * that the `SU_KIEN_THU_CONG` rows actually require. `quotes.create_edit` / `orders.confirm`
+   * stay out because they gate `chot`/`mo_lai`/`huy` — the very events this endpoint refuses.
+   * A new manual edge with a new key widens this gate on its own; no hand-kept list to drift.
+   * The real gate is still the engine under the row lock (two layers).
    *
    * GIỚI HẠN CHẶN DoS ở interceptor đặt CAO HƠN giới hạn hợp đồng (10 ảnh × 10 MB, ở
    * `attachment-limits.ts`) một cách CÓ CHỦ ĐÍCH: multer ném `MulterError` TRƯỚC khi handler
@@ -879,11 +883,7 @@ export class OrdersController {
    */
   @Post(':id/transition')
   @HttpCode(HttpStatus.OK)
-  @RequireAnyPermissions(
-    PERM.constructionTransition,
-    PERM.deliveryConfirm,
-    PERM.paymentsRecord,
-  )
+  @RequireAnyPermissions(...MANUAL_TRANSITION_PERMISSIONS)
   @UseInterceptors(
     FilesInterceptor('files', TRAN_CUNG_SO_ANH, {
       limits: { fileSize: TRAN_CUNG_KICH_THUOC_BYTE },

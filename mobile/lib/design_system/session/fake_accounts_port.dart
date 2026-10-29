@@ -6,6 +6,8 @@
 // read answers NEW instances, so a state that equals the previous one is never
 // a coincidence of identical replies.
 
+import 'dart:convert';
+
 import '../gating/app_permission_keys.g.dart';
 import 'accounts_port.dart';
 
@@ -21,35 +23,99 @@ const List<PermissionOption> kDemoPermissionOptions = <PermissionOption>[
       AppPermissionKeys.customersManage,
       AppPermissionKeys.catalogView,
     ],
+    requiresAnyOf: <String>[
+      AppPermissionKeys.ordersViewAll,
+      AppPermissionKeys.ordersViewOwn,
+    ],
     grantable: true,
+    transitions: <PermissionTransition>[
+      PermissionTransition(event: 'mo_lai', from: 'dachot', to: 'baogia'),
+      PermissionTransition(event: 'huy', from: 'baogia', to: 'huy'),
+      PermissionTransition(event: 'huy', from: 'dachot', to: 'huy'),
+      PermissionTransition(event: 'huy', from: 'dacoc', to: 'huy'),
+    ],
   ),
   PermissionOption(
     key: AppPermissionKeys.customersManage,
     label: 'Quản lý khách hàng',
     group: 'customers',
     requires: <String>[],
+    requiresAnyOf: <String>[],
     grantable: true,
+    transitions: <PermissionTransition>[],
   ),
   PermissionOption(
     key: AppPermissionKeys.catalogView,
     label: 'Xem danh mục vật tư',
     group: 'catalog',
     requires: <String>[],
+    requiresAnyOf: <String>[],
     grantable: true,
+    transitions: <PermissionTransition>[],
   ),
   PermissionOption(
     key: AppPermissionKeys.settingsManage,
     label: 'Cấu hình hệ thống',
     group: 'settings',
     requires: <String>[AppPermissionKeys.customersManage],
+    requiresAnyOf: <String>[],
     grantable: true,
+    transitions: <PermissionTransition>[],
   ),
   PermissionOption(
     key: AppPermissionKeys.auditRead,
     label: 'Xem Audit log (Super Admin)',
     group: 'audit',
     requires: <String>[],
+    requiresAnyOf: <String>[],
     grantable: false,
+    transitions: <PermissionTransition>[],
+  ),
+  PermissionOption(
+    key: AppPermissionKeys.ordersViewAll,
+    label: 'Xem tất cả đơn',
+    group: 'orders',
+    requires: <String>[],
+    requiresAnyOf: <String>[],
+    grantable: true,
+    transitions: <PermissionTransition>[],
+  ),
+  PermissionOption(
+    key: AppPermissionKeys.ordersViewOwn,
+    label: 'Chỉ xem đơn của mình',
+    group: 'orders',
+    requires: <String>[],
+    requiresAnyOf: <String>[],
+    grantable: true,
+    transitions: <PermissionTransition>[],
+  ),
+  PermissionOption(
+    key: AppPermissionKeys.constructionTransition,
+    label: 'Chuyển bước thi công',
+    group: 'construction',
+    requires: <String>[],
+    requiresAnyOf: <String>[
+      AppPermissionKeys.ordersViewAll,
+      AppPermissionKeys.ordersViewOwn,
+    ],
+    grantable: true,
+    transitions: <PermissionTransition>[
+      PermissionTransition(
+        event: 'bat_dau_thi_cong',
+        from: 'dacoc',
+        to: 'thicong',
+      ),
+      PermissionTransition(
+        event: 'xong_thi_cong',
+        from: 'thicong',
+        to: 'nghiemthu',
+      ),
+      PermissionTransition(
+        event: 'hoan_thanh',
+        from: 'nghiemthu',
+        to: 'hoanthanh',
+      ),
+    ],
   ),
 ];
 
@@ -61,6 +127,7 @@ const List<RolePresetOption> kDemoPresets = <RolePresetOption>[
       AppPermissionKeys.quotesCreateEdit,
       AppPermissionKeys.customersManage,
       AppPermissionKeys.catalogView,
+      AppPermissionKeys.ordersViewOwn,
     ],
   ),
   RolePresetOption(
@@ -69,6 +136,7 @@ const List<RolePresetOption> kDemoPresets = <RolePresetOption>[
     permissions: <String>[
       AppPermissionKeys.customersManage,
       AppPermissionKeys.catalogView,
+      AppPermissionKeys.ordersViewAll,
     ],
   ),
 ];
@@ -81,6 +149,7 @@ AccountPermissionSummary demoAccount({
   List<String> permissions = const <String>[
     AppPermissionKeys.catalogView,
     AppPermissionKeys.customersManage,
+    AppPermissionKeys.ordersViewOwn,
     AppPermissionKeys.quotesCreateEdit,
   ],
   RolePreset? matchingPreset = RolePreset.thoKs,
@@ -156,8 +225,11 @@ class FakeAccountsPort implements AccountsPort {
     optionsCalls++;
     return PermissionOptions(
       permissions: <PermissionOption>[
+        // Through JSON text: `toJson` keeps nested `transitions` as objects.
         for (final PermissionOption o in options.permissions)
-          PermissionOption.fromJson(o.toJson()),
+          PermissionOption.fromJson(
+            jsonDecode(jsonEncode(o)) as Map<String, dynamic>,
+          ),
       ],
       presets: <RolePresetOption>[
         for (final RolePresetOption p in options.presets)

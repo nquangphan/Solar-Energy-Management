@@ -2,6 +2,7 @@
 // waits on its own completer until the test answers it, so a test controls the
 // order of replies (stale reply, tear-down while pending).
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:pns_mobile/design_system/session/accounts_port.dart';
 import 'package:pns_mobile/design_system/session/fake_accounts_port.dart';
@@ -73,7 +74,9 @@ PermissionOptions demoOptions({
 }) => PermissionOptions(
   permissions: <PermissionOption>[
     for (final PermissionOption o in kDemoPermissionOptions)
-      PermissionOption.fromJson(o.toJson()),
+      PermissionOption.fromJson(
+        jsonDecode(jsonEncode(o)) as Map<String, dynamic>,
+      ),
   ],
   presets: presets,
 );

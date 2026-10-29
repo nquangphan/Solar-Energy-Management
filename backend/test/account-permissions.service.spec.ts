@@ -318,12 +318,12 @@ describe('AccountPermissionsService (unit, hermetic)', () => {
       ],
       [
         'quotes.create_edit without customers.manage',
-        [PERM.quotesCreateEdit, PERM.catalogView],
+        [PERM.quotesCreateEdit, PERM.catalogView, PERM.ordersViewOwn],
         ['«Tạo/sửa báo giá» cần thêm «Quản lý khách hàng».'],
       ],
       [
         'quotes.create_edit without catalog.view',
-        [PERM.quotesCreateEdit, PERM.customersManage],
+        [PERM.quotesCreateEdit, PERM.customersManage, PERM.ordersViewOwn],
         ['«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư».'],
       ],
     ])(

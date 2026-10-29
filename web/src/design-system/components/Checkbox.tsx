@@ -9,6 +9,8 @@ export interface CheckboxProps {
   onChange?: (checked: boolean) => void;
   disabled?: boolean;
   className?: string;
+  // Id of an element outside the label that describes the control (announced with it).
+  describedBy?: string;
 }
 
 /**
@@ -26,6 +28,7 @@ export function Checkbox({
   onChange,
   disabled,
   className,
+  describedBy,
 }: CheckboxProps) {
   const cls = ['checkbox', disabled && 'checkbox--disabled', className]
     .filter(Boolean)
@@ -36,6 +39,7 @@ export function Checkbox({
         type="checkbox"
         checked={checked}
         disabled={disabled}
+        aria-describedby={describedBy}
         onChange={(e) => onChange?.(e.target.checked)}
       />
       <span className="checkbox-box" aria-hidden="true">

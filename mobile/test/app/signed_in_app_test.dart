@@ -98,7 +98,15 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
     case '/accounts/permission-options':
       return jsonBody(200, {
         'permissions': [
-          {'key': 'catalog.view', 'label': 'Xem danh mục vật tư', 'group': 'catalog', 'requires': [], 'grantable': true},
+          {
+            'key': 'catalog.view',
+            'label': 'Xem danh mục vật tư',
+            'group': 'catalog',
+            'requires': [],
+            'requiresAnyOf': [],
+            'grantable': true,
+            'transitions': [],
+          },
         ],
         'presets': [
           {'key': 'THO_KS', 'label': 'Thợ khảo sát', 'permissions': ['catalog.view']},

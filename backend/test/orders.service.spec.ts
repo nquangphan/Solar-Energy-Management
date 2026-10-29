@@ -2298,6 +2298,38 @@ describe('OrdersService', () => {
       lineRepo.findMany.mockResolvedValue([DONG_CATALOG]);
     });
 
+    it('no self-approval threshold: a 1-đồng discount by an actor holding every permission still waits as cho_duyet', async () => {
+      transaction.mockImplementation(
+        async (callback: (tx: unknown) => Promise<unknown>) => callback(txMock),
+      );
+      discountApprovalRepo.findFirst.mockResolvedValue({
+        ...APPROVAL_ROW,
+        amount: 1,
+      });
+
+      const view = await service.applyDiscount(
+        ACTOR,
+        DON_BAOGIA.id,
+        1,
+        'Khách quen',
+        true,
+        TOAN_QUYEN,
+      );
+
+      expect(TOAN_QUYEN.has(PERM.discountsApprove)).toBe(true);
+      expect(TOAN_QUYEN.has(PERM.ordersConfirm)).toBe(true);
+      expect(txOrderRepo.updateMany).toHaveBeenCalledTimes(1);
+      expect(txOrderRepo.updateMany).toHaveBeenCalledWith({
+        where: { id: DON_BAOGIA.id, status: 'baogia' },
+        data: { status: 'choduyet' },
+      });
+      expect(txDiscountRepo.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ amount: 1, status: 'cho_duyet' }),
+      });
+      expect(txDiscountRepo.updateMany).not.toHaveBeenCalled();
+      expect(view.status).toBe('choduyet');
+    });
+
     it("happy: payload từng op — cổng baogia→choduyet, create đúng row approval; thứ tự ['write','publish']; event mang amount/note; view compose discount", async () => {
       const thuTu: string[] = [];
       transaction.mockImplementation(

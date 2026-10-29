@@ -194,3 +194,75 @@ test('the account form sends the phone raw on both platforms (AD-9)', () => {
     }
   }
 });
+
+// Story 8.4: the "một trong" part of the dependency sentence and the "Chuyển:" line of
+// the order steps each permission gates. Both phrases must OPEN a string literal on
+// both platforms (the statement that builds the text, not a word inside a longer
+// sentence), and the status labels come from the StatusChip maps — never a second map.
+
+/** The StatusChip label map, parsed from the web component (never typed here). */
+const STATUS_CHIP = read('web/src/design-system/components/StatusChip.tsx');
+const STATUS_LABEL_BLOCK = /STATUS_LABELS[^=]*=\s*\{([\s\S]*?)\n\};/.exec(STATUS_CHIP)?.[1] ?? '';
+const STATUS_ENTRIES = [...STATUS_LABEL_BLOCK.matchAll(/^\s*(\w+):\s*'([^']+)'/gm)].map((m) => [m[1], m[2]]);
+
+/** `phrase` opens a string literal: `'phrase…`, `"phrase…` or `` `phrase… `` — not mid-sentence. */
+function opensLiteral(code, phrase) {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`['"\`]${escaped}`).test(code);
+}
+
+/**
+ * Status keys the screen spells itself — the shapes of a hand-made label map: a key as a
+ * string literal (`'thicong'`), a key naming a map entry (`thicong: '…'`,
+ * `StatusKey.thicong: '…'`) or a switch case (`case StatusKey.thicong:`). A label alone is
+ * not flagged: "Huỷ" is also a plain cancel button.
+ */
+function statusLiterals(code) {
+  return STATUS_ENTRIES.map(([key]) => key).filter((key) =>
+    [
+      new RegExp(`['"\`]${key}['"\`]`),
+      new RegExp(`\\b${key}['"\`]?\\s*:\\s*['"\`]`),
+      new RegExp(`\\bcase\\s+(?:StatusKey\\.)?['"\`]?${key}\\b`),
+    ].some((re) => re.test(code)),
+  );
+}
+
+test('the StatusChip label map is parsed (guard not blind)', () => {
+  assertScanned(STATUS_ENTRIES, 10, 'StatusChip STATUS_LABELS entries');
+  assert.ok(STATUS_ENTRIES.some(([key, label]) => key === 'thicong' && label === 'Đang thi công'));
+});
+
+test('the phrase and status-literal matchers catch what they must and spare the rest', () => {
+  assert.ok(opensLiteral("parts.push(`một trong ${x}`)", 'một trong '));
+  assert.ok(opensLiteral("'một trong ${x.join(', ')}'", 'một trong '));
+  assert.ok(opensLiteral("`Chuyển: ${pairs.join(' · ')}`", 'Chuyển: '));
+  assert.ok(!opensLiteral("'«A» cần thêm một trong «B».'", 'một trong '));
+  assert.ok(!opensLiteral("'Chuyển bước thi công'", 'Chuyển: '));
+  assert.deepEqual(statusLiterals("const m = { thicong: 'Thi công' };"), ['thicong']);
+  assert.deepEqual(statusLiterals("const m = { 'thicong': 'Thi công' };"), ['thicong']);
+  assert.deepEqual(statusLiterals("const m = {StatusKey.thicong: 'Thi công'};"), ['thicong']);
+  assert.deepEqual(statusLiterals('case StatusKey.thicong: return x;'), ['thicong']);
+  assert.deepEqual(statusLiterals("if (s === 'thicong') return x;"), ['thicong']);
+  assert.deepEqual(statusLiterals("'Chuyển bước thi công'"), []);
+  assert.deepEqual(statusLiterals("<Button label='Huỷ' />; AppButton(label: 'Huỷ')"), []);
+  assert.deepEqual(statusLiterals('STATUS_LABELS[key]; kStatusLabels[key]'), []);
+});
+
+test('both platforms build "một trong …" and "Chuyển: …" the same way', () => {
+  for (const phrase of ['một trong ', 'Chuyển: ']) {
+    assert.ok(opensLiteral(web, phrase), `web must build "${phrase}…"`);
+    assert.ok(opensLiteral(mobilePerms, phrase), `mobile must build "${phrase}…"`);
+  }
+  for (const field of ['requiresAnyOf', 'transitions']) {
+    assert.ok(web.includes(field), `web must display the backend field ${field}`);
+    assert.ok(mobilePerms.includes(field), `mobile must display the backend field ${field}`);
+  }
+});
+
+test('status labels come from the StatusChip maps, never a map of the screen', () => {
+  assert.match(web, /\bSTATUS_LABELS\b/, 'web must read labels from STATUS_LABELS');
+  assert.match(mobilePerms, /\bkStatusLabels\b/, 'mobile must read labels from kStatusLabels');
+  for (const [name, code] of [['web', web], ['mobile', mobilePerms]]) {
+    assert.deepEqual(statusLiterals(code), [], `${name} must not spell a status key or label itself`);
+  }
+});

@@ -1,6 +1,10 @@
-import { PERM } from '../src/accounts/domain/permission-registry';
+import {
+  PERM,
+  PERMISSION_KEYS,
+} from '../src/accounts/domain/permission-registry';
 import {
   ALLOWED_TRANSITIONS,
+  MANUAL_TRANSITION_PERMISSIONS,
   SU_KIEN,
   SU_KIEN_THU_CONG,
   buocKeTiep,
@@ -8,7 +12,9 @@ import {
   coTheHuy,
   daTaiDich,
   evaluateTransition,
+  manualTransitionPermissions,
   thoaCoPhamVi,
+  transitionsGovernedBy,
   type OrderScopeFlags,
 } from '../src/orders/domain/allowed-transition';
 import {
@@ -871,6 +877,76 @@ describe('allowed-transition (domain thuần)', () => {
           }
         }
       }
+    });
+  });
+
+  describe('permissions derived from the table (Story 8.4)', () => {
+    it('MANUAL_TRANSITION_PERMISSIONS is exactly the deduplicated `requires` of manual-lane rows, in table order', () => {
+      const expected: string[] = [];
+      for (const rule of ALLOWED_TRANSITIONS) {
+        if (
+          SU_KIEN_THU_CONG.includes(rule.event) &&
+          !expected.includes(rule.requires)
+        ) {
+          expected.push(rule.requires);
+        }
+      }
+      expect(MANUAL_TRANSITION_PERMISSIONS).toEqual(expected);
+      // Pinned from the real function's output: the three manual-lane keys today.
+      expect(MANUAL_TRANSITION_PERMISSIONS).toEqual([
+        PERM.constructionTransition,
+        PERM.deliveryConfirm,
+        PERM.paymentsRecord,
+      ]);
+    });
+
+    it('a table with no manual edge throws instead of yielding an open door', () => {
+      expect(() => manualTransitionPermissions([])).toThrow(
+        /no manual transition edge/i,
+      );
+      const withoutManual = ALLOWED_TRANSITIONS.filter(
+        (rule) => !SU_KIEN_THU_CONG.includes(rule.event),
+      );
+      expect(withoutManual.length).toBeGreaterThan(0);
+      expect(() => manualTransitionPermissions(withoutManual)).toThrow(
+        /no manual transition edge/i,
+      );
+    });
+
+    it('every rule.requires is a registry key', () => {
+      for (const rule of ALLOWED_TRANSITIONS) {
+        expect(PERMISSION_KEYS).toContain(rule.requires);
+      }
+    });
+
+    it('transitionsGovernedBy over every key covers the whole table exactly once', () => {
+      const covered = PERMISSION_KEYS.flatMap((key) =>
+        transitionsGovernedBy(key).map((t) => `${t.event}:${t.from}:${t.to}`),
+      );
+      const table = ALLOWED_TRANSITIONS.map(
+        (rule) => `${rule.event}:${rule.from}:${rule.to}`,
+      );
+      expect([...covered].sort()).toEqual([...table].sort());
+      expect(new Set(covered).size).toBe(covered.length);
+    });
+
+    it('transitionsGovernedBy keeps only the rows of that key, in table order, as { event, from, to }', () => {
+      for (const key of PERMISSION_KEYS) {
+        const expected = ALLOWED_TRANSITIONS.filter(
+          (rule) => rule.requires === key,
+        ).map((rule) => ({ event: rule.event, from: rule.from, to: rule.to }));
+        expect(transitionsGovernedBy(key)).toEqual(expected);
+      }
+      expect(transitionsGovernedBy(PERM.constructionTransition)).toEqual([
+        { event: 'bat_dau_thi_cong', from: 'dacoc', to: 'thicong' },
+        { event: 'xong_thi_cong', from: 'thicong', to: 'nghiemthu' },
+        { event: 'hoan_thanh', from: 'nghiemthu', to: 'hoanthanh' },
+      ]);
+    });
+
+    it('a key that gates no edge yields an empty list', () => {
+      expect(transitionsGovernedBy(PERM.auditRead)).toEqual([]);
+      expect(transitionsGovernedBy(PERM.catalogView)).toEqual([]);
     });
   });
 });

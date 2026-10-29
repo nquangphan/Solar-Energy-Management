@@ -237,15 +237,46 @@ class _AccountPermissionsScreenState extends State<AccountPermissionsScreen> {
           AppCard(
             key: ValueKey<String>('perm-${p.key}'),
             padding: const EdgeInsets.symmetric(horizontal: AppTokens.space12),
-            child: AppCheckbox(
-              label: p.label,
-              checked: state.draft.contains(p.key),
-              disabled: !editable || !p.grantable || state.saving,
-              onChanged: (checked) => _cubit.toggle(p.key, checked),
-            ),
+            child: _permissionEntry(p, state, editable),
           ),
           gap,
         ],
+      ],
+    );
+  }
+
+  /// The checkbox, then the order steps this permission gates (backend data).
+  Widget _permissionEntry(
+    PermissionOption p,
+    AccountPermissionsState state,
+    bool editable,
+  ) {
+    final AppCheckbox box = AppCheckbox(
+      label: p.label,
+      checked: state.draft.contains(p.key),
+      disabled: !editable || !p.grantable || state.saving,
+      onChanged: (checked) => _cubit.toggle(p.key, checked),
+    );
+    final String? steps = permissionTransitionsLine(p);
+    if (steps == null) return box;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        box,
+        Padding(
+          // Under the checkbox label: box 18 + gap 9 (AppCheckbox).
+          padding: const EdgeInsets.only(left: 27, bottom: AppTokens.space8),
+          child: Text(
+            steps,
+            key: ValueKey<String>('perm-transitions-${p.key}'),
+            style: const TextStyle(
+              color: AppTokens.muted,
+              fontFamily: AppTokens.fontFamily,
+              fontSize: AppTokens.metaFontSize,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ],
     );
   }

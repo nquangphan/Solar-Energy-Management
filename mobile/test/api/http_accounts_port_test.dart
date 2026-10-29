@@ -65,7 +65,24 @@ void main() {
             'label': 'Cấu hình hệ thống',
             'group': 'settings',
             'requires': [AppPermissionKeys.customersManage],
+            'requiresAnyOf': [],
             'grantable': false,
+            'transitions': [],
+          },
+          {
+            'key': AppPermissionKeys.paymentsRecord,
+            'label': 'Ghi nhận thanh toán',
+            'group': 'payments',
+            'requires': [],
+            'requiresAnyOf': [
+              AppPermissionKeys.ordersViewAll,
+              AppPermissionKeys.ordersViewOwn,
+            ],
+            'grantable': true,
+            'transitions': [
+              {'event': 'du_coc', 'from': 'dachot', 'to': 'dacoc'},
+              {'event': 'hoan_thanh', 'from': 'dachot', 'to': 'hoanthanh'},
+            ],
           },
         ],
         'presets': [
@@ -78,10 +95,25 @@ void main() {
       }),
     );
     final result = await port.getPermissionOptions();
-    expect(result.permissions.single.requires, [
-      AppPermissionKeys.customersManage,
+    final settings = result.permissions.first;
+    expect(settings.requires, [AppPermissionKeys.customersManage]);
+    expect(settings.requiresAnyOf, isEmpty);
+    expect(settings.grantable, isFalse);
+    expect(settings.transitions, isEmpty);
+    final payments = result.permissions.last;
+    expect(payments.requiresAnyOf, [
+      AppPermissionKeys.ordersViewAll,
+      AppPermissionKeys.ordersViewOwn,
     ]);
-    expect(result.permissions.single.grantable, isFalse);
+    expect(
+      [
+        for (final t in payments.transitions) [t.event, t.from, t.to],
+      ],
+      [
+        ['du_coc', 'dachot', 'dacoc'],
+        ['hoan_thanh', 'dachot', 'hoanthanh'],
+      ],
+    );
     expect(result.presets.single.key, RolePreset.keToan);
     expect(s.adapter.requests.single.path, '/accounts/permission-options');
   });

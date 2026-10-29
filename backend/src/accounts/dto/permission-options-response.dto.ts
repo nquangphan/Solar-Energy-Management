@@ -2,6 +2,18 @@ import { ApiProperty } from '@nestjs/swagger';
 import { PERM } from '../domain/permission-registry';
 import { ROLE_PRESET_KEYS } from '../domain/role-presets';
 
+/** One edge of the order transition table, as gated by a permission. */
+export class PermissionTransitionDto {
+  @ApiProperty({ type: String, example: 'bat_dau_thi_cong' })
+  event!: string;
+
+  @ApiProperty({ type: String, example: 'dacoc' })
+  from!: string;
+
+  @ApiProperty({ type: String, example: 'thicong' })
+  to!: string;
+}
+
 /** One registry permission, with what it needs and whether the caller may grant it. */
 export class PermissionOptionDto {
   @ApiProperty({ example: PERM.quotesCreateEdit })
@@ -22,9 +34,24 @@ export class PermissionOptionDto {
   requires!: string[];
 
   @ApiProperty({
+    type: [String],
+    description:
+      'Phải có ít nhất một trong các quyền này (rỗng = không ràng buộc).',
+    example: [PERM.ordersViewAll, PERM.ordersViewOwn],
+  })
+  requiresAnyOf!: string[];
+
+  @ApiProperty({
     description: 'Người gọi cấp được quyền này không (luật không-leo-thang).',
   })
   grantable!: boolean;
+
+  @ApiProperty({
+    type: [PermissionTransitionDto],
+    description:
+      'Các bước chuyển trạng thái đơn mà quyền này điều khiển, theo thứ tự bảng (rỗng = không bước nào).',
+  })
+  transitions!: PermissionTransitionDto[];
 }
 
 /** A role preset: default values loaded into the matrix, never stored on the account. */

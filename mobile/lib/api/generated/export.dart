@@ -31,6 +31,7 @@ export 'models/change_password_request_dto.dart';
 export 'models/me_response_dto.dart';
 export 'models/role_preset.dart';
 export 'models/account_permission_summary_dto.dart';
+export 'models/permission_transition_dto.dart';
 export 'models/permission_option_dto.dart';
 export 'models/role_preset_option_dto.dart';
 export 'models/permission_options_response_dto.dart';

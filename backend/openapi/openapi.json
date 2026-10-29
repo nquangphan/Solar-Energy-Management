@@ -5935,6 +5935,28 @@
           "readOnlyReason"
         ]
       },
+      "PermissionTransitionDto": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "example": "bat_dau_thi_cong"
+          },
+          "from": {
+            "type": "string",
+            "example": "dacoc"
+          },
+          "to": {
+            "type": "string",
+            "example": "thicong"
+          }
+        },
+        "required": [
+          "event",
+          "from",
+          "to"
+        ]
+      },
       "PermissionOptionDto": {
         "type": "object",
         "properties": {
@@ -5961,9 +5983,27 @@
               "type": "string"
             }
           },
+          "requiresAnyOf": {
+            "description": "Phải có ít nhất một trong các quyền này (rỗng = không ràng buộc).",
+            "example": [
+              "orders.view_all",
+              "orders.view_own"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "grantable": {
             "type": "boolean",
             "description": "Người gọi cấp được quyền này không (luật không-leo-thang)."
+          },
+          "transitions": {
+            "description": "Các bước chuyển trạng thái đơn mà quyền này điều khiển, theo thứ tự bảng (rỗng = không bước nào).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PermissionTransitionDto"
+            }
           }
         },
         "required": [
@@ -5971,7 +6011,9 @@
           "label",
           "group",
           "requires",
-          "grantable"
+          "requiresAnyOf",
+          "grantable",
+          "transitions"
         ]
       },
       "RolePresetOptionDto": {

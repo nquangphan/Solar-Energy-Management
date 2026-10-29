@@ -9,7 +9,15 @@ import { PERM } from '../src/accounts/domain/permission-registry';
 import { ROLE_PRESETS } from '../src/accounts/domain/role-presets';
 import { AppException } from '../src/common/errors/app.exception';
 import { ErrorCode } from '../src/common/errors/error-code';
-import { SU_KIEN } from '../src/orders/domain/allowed-transition';
+import { REQUIRE_ANY_PERMISSION_KEY } from '../src/auth/require-any-permission.decorator';
+import { REQUIRE_PERMISSIONS_KEY } from '../src/auth/require-permissions.decorator';
+import {
+  ALLOWED_TRANSITIONS,
+  MANUAL_TRANSITION_PERMISSIONS,
+  SU_KIEN,
+  type TransitionEvent,
+} from '../src/orders/domain/allowed-transition';
+import { OrdersController } from '../src/orders/orders.controller';
 import {
   KICH_THUOC_TOI_DA_BYTE,
   SO_ANH_TOI_DA,
@@ -3707,6 +3715,97 @@ describe('/orders (e2e)', () => {
 
         expect(res.status).toBe(404);
         expect(res.body.code).toBe(ErrorCode.NOT_FOUND);
+        expect(storageMap.size).toBe(0);
+      });
+    });
+
+    /**
+     * The door gate is derived from the transition table, not a hand-kept list: each key a
+     * manual-lane row requires opens the door on its own, and keys of the dedicated doors
+     * (confirm / reopen / cancel) never do.
+     */
+    describe('door gate derived from the table (Story 8.4)', () => {
+      it('only `orders.view_own` + `construction.transition` on an own order ⇒ through the door, 200', async () => {
+        givenPermissions(PERM.ordersViewOwn, PERM.constructionTransition);
+
+        const res = await post(SU_KIEN.batDauThiCong);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('thicong');
+      });
+
+      it('only `payments.record` closes an equipment-only order ⇒ 200 `hoanthanh`', async () => {
+        givenPermissions(PERM.ordersViewAll, PERM.paymentsRecord);
+        orderRepo.findUnique.mockResolvedValue({
+          ...DON_BAOGIA,
+          status: 'dachot',
+        });
+        stockVoucherRepo.findUnique.mockResolvedValue({
+          id: 'stock-out-1',
+          seq: 97,
+          type: 'xuat',
+          note: null,
+          orderId: ORDER_ID,
+          createdAt: new Date('2026-10-21T04:00:00Z'),
+          createdBy: { id: ACCOUNT_ID, displayName: 'Kho' },
+          lines: [],
+        });
+
+        const res = await post(SU_KIEN.hoanThanh);
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('hoanthanh');
+      });
+
+      it('every dedicated door gates exactly the `requires` of its table rows — no hand-kept second key', () => {
+        const requiresOf = (event: TransitionEvent): string[] => [
+          ...new Set(
+            ALLOWED_TRANSITIONS.filter((rule) => rule.event === event).map(
+              (rule) => rule.requires,
+            ),
+          ),
+        ];
+        const metaOf = (
+          key: string,
+          handler: keyof OrdersController,
+        ): unknown =>
+          Reflect.getMetadata(key, OrdersController.prototype[handler]);
+        const doors: [keyof OrdersController, TransitionEvent][] = [
+          ['confirm', SU_KIEN.chot],
+          ['revise', SU_KIEN.moLai],
+          ['cancel', SU_KIEN.huy],
+          ['applyDiscount', SU_KIEN.apChietKhau],
+          ['resolveDiscount', SU_KIEN.tuChoiChietKhau],
+        ];
+        for (const [handler, event] of doors) {
+          const required = requiresOf(event);
+          expect({ handler, required: required.length }).toEqual({
+            handler,
+            required: 1,
+          });
+          expect({
+            handler,
+            gate: metaOf(REQUIRE_PERMISSIONS_KEY, handler),
+          }).toEqual({ handler, gate: required });
+        }
+        expect(metaOf(REQUIRE_ANY_PERMISSION_KEY, 'transition')).toEqual([
+          ...MANUAL_TRANSITION_PERMISSIONS,
+        ]);
+      });
+
+      it('`quotes.create_edit` + `orders.confirm` + view ⇒ 403 at the door, nothing written', async () => {
+        givenPermissions(
+          PERM.ordersViewAll,
+          PERM.quotesCreateEdit,
+          PERM.ordersConfirm,
+        );
+
+        const res = await post(SU_KIEN.batDauThiCong, [anh()]);
+
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe(ErrorCode.FORBIDDEN);
+        expect(res.body.message).toBe('Không đủ quyền thực hiện');
+        expect(txOrderRepo.updateMany).not.toHaveBeenCalled();
         expect(storageMap.size).toBe(0);
       });
     });

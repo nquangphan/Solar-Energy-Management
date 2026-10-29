@@ -6,7 +6,12 @@ import { EventBus } from '../events/event-bus';
 import type { AccountsTransactionClient } from './accounts.service';
 import { AccountPermissionsChanged } from './domain/account-events';
 import {
+  transitionsGovernedBy,
+  type GovernedTransition,
+} from '../orders/domain/allowed-transition';
+import {
   PERMISSION_REQUIRES,
+  PERMISSION_REQUIRES_ANY,
   dependencyMessage,
   missingDependencies,
 } from './domain/permission-dependencies';
@@ -226,9 +231,9 @@ export class AccountPermissionsService {
   }
 
   /**
-   * The registry (grouped, with labels and dependencies) plus the presets, as seen by the
-   * actor: `grantable` = rule #1 lets the actor grant the key, and only presets the actor can grant
-   * in full are listed — an Admin never sees Super Admin.
+   * The registry (grouped, with labels, dependencies and the table edges each key gates) plus
+   * the presets, as seen by the actor: `grantable` = rule #1 lets the actor grant the key, and
+   * only presets the actor can grant in full are listed — an Admin never sees Super Admin.
    */
   async permissionOptions(actorAccountId: string): Promise<PermissionOptions> {
     const actorPermissions = await this.listForAccount(actorAccountId);
@@ -241,7 +246,9 @@ export class AccountPermissionsService {
         label: entry.label,
         group: entry.group,
         requires: [...(PERMISSION_REQUIRES[entry.key] ?? [])],
+        requiresAnyOf: [...(PERMISSION_REQUIRES_ANY[entry.key] ?? [])],
         grantable: grantable.has(entry.key),
+        transitions: [...transitionsGovernedBy(entry.key)],
       }));
     const presets = ROLE_PRESET_KEYS.filter(
       (preset) =>
@@ -325,7 +332,9 @@ export interface PermissionOptions {
     label: string;
     group: string;
     requires: PermissionKey[];
+    requiresAnyOf: PermissionKey[];
     grantable: boolean;
+    transitions: GovernedTransition[];
   }[];
   presets: { key: RolePreset; label: string; permissions: PermissionKey[] }[];
 }

@@ -43,6 +43,8 @@ Future<FakeAccountsPort> _open(
 }
 
 Future<void> _tapLabel(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.widgetWithText(AppCheckbox, label));
+  await tester.pumpAndSettle();
   await tester.tap(find.widgetWithText(AppCheckbox, label));
   await tester.pumpAndSettle();
 }
@@ -151,8 +153,81 @@ void main() {
       expect(port.updateCalls.single.$2, [
         AppPermissionKeys.customersManage,
         AppPermissionKeys.catalogView,
+        AppPermissionKeys.ordersViewAll,
       ]);
       expect(find.text('Đã lưu quyền.'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a permission that gates order steps shows them under its box; the others show none',
+    (tester) async {
+      await _open(tester);
+      final Finder line = find.byKey(
+        const ValueKey<String>(
+          'perm-transitions-${AppPermissionKeys.constructionTransition}',
+        ),
+      );
+      expect(
+        tester.widget<Text>(line).data,
+        'Chuyển: Đã cọc → Đang thi công · Đang thi công → Nghiệm thu · Nghiệm thu → Hoàn thành',
+      );
+      // It sits in the card of its own permission.
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>(
+              'perm-${AppPermissionKeys.constructionTransition}',
+            ),
+          ),
+          matching: line,
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'Chuyển: Đã chốt → Báo giá · Báo giá → Huỷ · Đã chốt → Huỷ · Đã cọc → Huỷ',
+        ),
+        findsOneWidget,
+      );
+      final int withSteps = kDemoPermissionOptions
+          .where((o) => o.transitions.isNotEmpty)
+          .length;
+      expect(withSteps, greaterThan(0));
+      expect(find.textContaining('Chuyển: '), findsNWidgets(withSteps));
+      expect(
+        find.descendant(
+          of: find.byKey(
+            const ValueKey<String>('perm-${AppPermissionKeys.auditRead}'),
+          ),
+          matching: find.textContaining('Chuyển: '),
+        ),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets(
+    'no view scope ⇒ the "một trong" banner and Lưu sends nothing; ticking a scope clears it',
+    (tester) async {
+      final port = await _open(tester);
+      await _tapLabel(tester, 'Chuyển bước thi công');
+      await _tapLabel(tester, 'Chỉ xem đơn của mình');
+      final banner = tester.widget<AppBanner>(
+        find.byKey(const ValueKey<String>(_gapBanner)),
+      );
+      expect(
+        banner.message,
+        '«Chuyển bước thi công» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình». '
+        '«Tạo/sửa báo giá» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
+      );
+      await _save(tester);
+      expect(port.updateCalls, isEmpty);
+
+      await _tapLabel(tester, 'Xem tất cả đơn');
+      expect(find.byKey(const ValueKey<String>(_gapBanner)), findsNothing);
+      await _save(tester);
+      expect(port.updateCalls, hasLength(1));
     },
   );
 
@@ -196,6 +271,69 @@ void main() {
       );
       await _save(tester);
       expect(port.updateCalls, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'the steps line is information, not an edit control: it shows on a box the caller cannot grant and on a read-only account',
+    (tester) async {
+      const String key = AppPermissionKeys.constructionTransition;
+      const ValueKey<String> lineKey = ValueKey<String>(
+        'perm-transitions-$key',
+      );
+      final PermissionOption source = kDemoPermissionOptions.firstWhere(
+        (o) => o.key == key,
+      );
+      _tall(tester);
+      await tester.pumpWidget(
+        _host(
+          AccountPermissionsScreen(
+            port: FakeAccountsPort(
+              accounts: [demoAccount()],
+              options: PermissionOptions(
+                permissions: [
+                  for (final PermissionOption o in kDemoPermissionOptions)
+                    o.key == key
+                        ? PermissionOption(
+                            key: o.key,
+                            label: o.label,
+                            group: o.group,
+                            requires: o.requires,
+                            requiresAnyOf: o.requiresAnyOf,
+                            grantable: false,
+                            transitions: o.transitions,
+                          )
+                        : o,
+                ],
+                presets: kDemoPresets,
+              ),
+            ),
+            accountId: kDemoWorkerId,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_box(tester, source.label).disabled, isTrue);
+      expect(
+        tester.widget<Text>(find.byKey(lineKey)).data,
+        'Chuyển: Đã cọc → Đang thi công · Đang thi công → Nghiệm thu · Nghiệm thu → Hoàn thành',
+      );
+
+      // Unmount first so the second screen builds its own cubit on its own port.
+      await tester.pumpWidget(const SizedBox());
+      await _open(
+        tester,
+        account: demoAccount(
+          editable: false,
+          readOnlyReason: 'Đây là tài khoản của bạn.',
+        ),
+      );
+      expect(find.text('Đây là tài khoản của bạn.'), findsOneWidget);
+      final int withSteps = kDemoPermissionOptions
+          .where((o) => o.transitions.isNotEmpty)
+          .length;
+      expect(withSteps, greaterThan(0));
+      expect(find.textContaining('Chuyển: '), findsNWidgets(withSteps));
     },
   );
 

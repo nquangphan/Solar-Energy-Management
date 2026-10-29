@@ -14,6 +14,7 @@ import '../../api/generated/models/account_permission_summary_dto.dart';
 import '../../api/generated/models/create_account_request_dto.dart';
 import '../../api/generated/models/permission_option_dto.dart';
 import '../../api/generated/models/permission_options_response_dto.dart';
+import '../../api/generated/models/permission_transition_dto.dart';
 import '../../api/generated/models/role_preset_option_dto.dart';
 import '../../api/generated/models/update_account_request_dto.dart';
 
@@ -27,6 +28,9 @@ typedef PermissionOptions = PermissionOptionsResponseDto;
 
 /// One registry permission as the caller sees it.
 typedef PermissionOption = PermissionOptionDto;
+
+/// One order transition-table edge a permission gates (`event`, `from`, `to`).
+typedef PermissionTransition = PermissionTransitionDto;
 
 /// One role preset: default values loaded into the draft, never stored.
 typedef RolePresetOption = RolePresetOptionDto;

@@ -1204,6 +1204,14 @@ export interface components {
              */
             readOnlyReason: string | null;
         };
+        PermissionTransitionDto: {
+            /** @example bat_dau_thi_cong */
+            event: string;
+            /** @example dacoc */
+            from: string;
+            /** @example thicong */
+            to: string;
+        };
         PermissionOptionDto: {
             /** @example quotes.create_edit */
             key: string;
@@ -1219,8 +1227,18 @@ export interface components {
              *     ]
              */
             requires: string[];
+            /**
+             * @description Phải có ít nhất một trong các quyền này (rỗng = không ràng buộc).
+             * @example [
+             *       "orders.view_all",
+             *       "orders.view_own"
+             *     ]
+             */
+            requiresAnyOf: string[];
             /** @description Người gọi cấp được quyền này không (luật không-leo-thang). */
             grantable: boolean;
+            /** @description Các bước chuyển trạng thái đơn mà quyền này điều khiển, theo thứ tự bảng (rỗng = không bước nào). */
+            transitions: components["schemas"]["PermissionTransitionDto"][];
         };
         RolePresetOptionDto: {
             key: components["schemas"]["RolePreset"];

@@ -14,7 +14,15 @@ PermissionOptionDto _$PermissionOptionDtoFromJson(Map<String, dynamic> json) =>
       requires: (json['requires'] as List<dynamic>)
           .map((e) => e as String)
           .toList(),
+      requiresAnyOf: (json['requiresAnyOf'] as List<dynamic>)
+          .map((e) => e as String)
+          .toList(),
       grantable: json['grantable'] as bool,
+      transitions: (json['transitions'] as List<dynamic>)
+          .map(
+            (e) => PermissionTransitionDto.fromJson(e as Map<String, dynamic>),
+          )
+          .toList(),
     );
 
 Map<String, dynamic> _$PermissionOptionDtoToJson(
@@ -24,5 +32,7 @@ Map<String, dynamic> _$PermissionOptionDtoToJson(
   'label': instance.label,
   'group': instance.group,
   'requires': instance.requires,
+  'requiresAnyOf': instance.requiresAnyOf,
   'grantable': instance.grantable,
+  'transitions': instance.transitions,
 };

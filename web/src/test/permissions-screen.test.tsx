@@ -17,7 +17,7 @@ import {
   PermissionsProvider,
 } from '../design-system/session';
 import type { AccountPermissionSummary, AccountsPort } from '../design-system/session';
-import { PermissionsScreen, dependencyWarnings } from '../screens/permissions/PermissionsScreen';
+import { PermissionsScreen, dependencyWarnings, transitionsLine } from '../screens/permissions/PermissionsScreen';
 
 afterEach(cleanup);
 
@@ -184,7 +184,7 @@ describe('PermissionsScreen', () => {
     ],
     [
       'quotes.create_edit without customers.manage',
-      [K.quotesCreateEdit, K.catalogView],
+      [K.quotesCreateEdit, K.catalogView, K.ordersViewOwn],
       '«Tạo/sửa báo giá» cần thêm «Quản lý khách hàng».',
     ],
   ])('%s ⇒ warning banner naming both and Lưu disabled', async (_name, keys, sentence) => {
@@ -206,9 +206,104 @@ describe('PermissionsScreen', () => {
     expect(
       dependencyWarnings(DEMO_PERMISSION_OPTIONS.permissions, new Set([K.settingsManage, K.quotesCreateEdit])),
     ).toEqual([
-      '«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư», «Quản lý khách hàng».',
+      '«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư», «Quản lý khách hàng», một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
       '«Cấu hình hệ thống» cần thêm «Quản lý khách hàng».',
     ]);
+  });
+
+  it('"at least one of": no view scope ⇒ the backend sentence; either scope alone ⇒ none', () => {
+    const options = DEMO_PERMISSION_OPTIONS.permissions;
+    expect(dependencyWarnings(options, new Set([K.ordersConfirm]))).toEqual([
+      '«Chốt đơn» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
+    ]);
+    expect(dependencyWarnings(options, new Set([K.ordersConfirm, K.ordersViewOwn]))).toEqual([]);
+    expect(dependencyWarnings(options, new Set([K.ordersConfirm, K.ordersViewAll]))).toEqual([]);
+  });
+
+  it('AND and "một trong" join in one sentence, AND part first', () => {
+    expect(
+      dependencyWarnings(DEMO_PERMISSION_OPTIONS.permissions, new Set([K.quotesCreateEdit, K.catalogView])),
+    ).toEqual(['«Tạo/sửa báo giá» cần thêm «Quản lý khách hàng», một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».']);
+  });
+
+  it('an "at least one of" gap shows the banner and disables Lưu until a view scope is ticked', async () => {
+    const sentence = '«Chốt đơn» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».';
+    const port = new FakeAccountsPort([{ ...WORKER, permissions: [K.ordersConfirm] }]);
+    await openAccount(port, /Trần Văn A/);
+    expect(screen.getByText(sentence)).toBeTruthy();
+    expect(saveButton().disabled).toBe(true);
+    fireEvent.click(box('Chỉ xem đơn của mình'));
+    expect(screen.queryByText(sentence)).toBeNull();
+    expect(saveButton().disabled).toBe(false);
+  });
+
+  it('each permission that gates order steps shows them under its box, labels from StatusChip', async () => {
+    await openAccount(new FakeAccountsPort(), /Trần Văn A/);
+    expect(screen.getByText('Chuyển: Báo giá → Đã chốt · Chờ duyệt → Đã chốt')).toBeTruthy();
+    expect(screen.getByText('Chuyển: Đã chốt → Đã cọc · Đã chốt → Hoàn thành')).toBeTruthy();
+    expect(screen.getByText('Chuyển: Đã chốt → Báo giá · Báo giá → Huỷ · Đã chốt → Huỷ · Đã cọc → Huỷ')).toBeTruthy();
+    // One line per permission with steps, none for the rest.
+    const lines = document.querySelectorAll('.perm-transitions');
+    const withSteps = DEMO_PERMISSION_OPTIONS.permissions.filter((o) => o.transitions.length > 0);
+    expect(withSteps.length).toBeGreaterThan(0);
+    expect(lines.length).toBe(withSteps.length);
+    // The line sits with its own box.
+    const confirmItem = box('Chốt đơn').closest('.perm-item');
+    expect(confirmItem?.textContent).toContain('Chuyển: Báo giá → Đã chốt');
+    expect(box('Xem tất cả đơn').closest('.perm-item')?.querySelector('.perm-transitions')).toBeNull();
+    // Assistive tech hears the steps with the box they belong to; a box without steps has no description.
+    const describedBy = box('Chốt đơn').getAttribute('aria-describedby');
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy ?? '')?.textContent).toBe(
+      'Chuyển: Báo giá → Đã chốt · Chờ duyệt → Đã chốt',
+    );
+    expect(box('Xem tất cả đơn').hasAttribute('aria-describedby')).toBe(false);
+  });
+
+  it('transitionsLine: a repeated from → to pair shows once; an unknown status key shows —', () => {
+    const base = DEMO_PERMISSION_OPTIONS.permissions[0];
+    expect(transitionsLine({ ...base, transitions: [] })).toBeNull();
+    expect(
+      transitionsLine({
+        ...base,
+        transitions: [
+          { event: 'xong_giao', from: 'dacoc', to: 'dagiao' },
+          { event: 'other', from: 'dacoc', to: 'dagiao' },
+          { event: 'x', from: 'bay_len', to: 'thicong' },
+        ],
+      }),
+    ).toBe('Chuyển: Đã cọc → Đã giao · — → Đang thi công');
+    // Dedupe is by status keys, not by label: two different unknown keys stay two steps.
+    expect(
+      transitionsLine({
+        ...base,
+        transitions: [
+          { event: 'x', from: 'bay_len', to: 'thicong' },
+          { event: 'y', from: 'roi_xuong', to: 'thicong' },
+        ],
+      }),
+    ).toBe('Chuyển: — → Đang thi công · — → Đang thi công');
+  });
+
+  it('the steps line is information, not an edit control: it shows on a box the caller cannot grant and on a read-only account', async () => {
+    const options = {
+      ...DEMO_PERMISSION_OPTIONS,
+      permissions: DEMO_PERMISSION_OPTIONS.permissions.map((o) =>
+        o.key === K.ordersConfirm ? { ...o, grantable: false } : o,
+      ),
+    };
+    await openAccount(new FakeAccountsPort(DEMO_ACCOUNTS, options), /Trần Văn A/);
+    expect(box('Chốt đơn').disabled).toBe(true);
+    expect(box('Chốt đơn').closest('.perm-item')?.textContent).toContain(
+      'Chuyển: Báo giá → Đã chốt · Chờ duyệt → Đã chốt',
+    );
+    cleanup();
+
+    await openAccount(new FakeAccountsPort(), /Chủ vận hành/);
+    expect(screen.getByText(OWNER.readOnlyReason ?? '')).toBeTruthy();
+    const withSteps = DEMO_PERMISSION_OPTIONS.permissions.filter((o) => o.transitions.length > 0);
+    expect(withSteps.length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('.perm-transitions').length).toBe(withSteps.length);
   });
 
   it('a permission the backend marks grantable:false is a disabled box', async () => {

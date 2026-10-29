@@ -286,6 +286,74 @@ void main() {
     );
   });
 
+  group('permissionTransitionsLine', () {
+    PermissionOption option(List<PermissionTransition> transitions) =>
+        PermissionOption(
+          key: AppPermissionKeys.deliveryConfirm,
+          label: 'Xác nhận giao hàng',
+          group: 'delivery',
+          requires: const <String>[],
+          requiresAnyOf: const <String>[],
+          grantable: true,
+          transitions: transitions,
+        );
+
+    test('no step ⇒ null', () {
+      expect(permissionTransitionsLine(option(const [])), isNull);
+    });
+
+    test('labels from StatusChip, joined by " · ", in backend order', () {
+      expect(
+        permissionTransitionsLine(
+          option(const [
+            PermissionTransition(event: 'chot', from: 'baogia', to: 'dachot'),
+            PermissionTransition(event: 'chot', from: 'choduyet', to: 'dachot'),
+          ]),
+        ),
+        'Chuyển: Báo giá → Đã chốt · Chờ duyệt → Đã chốt',
+      );
+    });
+
+    test(
+      'a repeated from → to pair shows once; an unknown status key shows —',
+      () {
+        expect(
+          permissionTransitionsLine(
+            option(const [
+              PermissionTransition(
+                event: 'xong_giao',
+                from: 'dacoc',
+                to: 'dagiao',
+              ),
+              PermissionTransition(event: 'other', from: 'dacoc', to: 'dagiao'),
+              PermissionTransition(event: 'x', from: 'bay_len', to: 'thicong'),
+            ]),
+          ),
+          'Chuyển: Đã cọc → Đã giao · — → Đang thi công',
+        );
+      },
+    );
+
+    test(
+      'dedupe is by status keys, not by label: two unknown keys stay two steps',
+      () {
+        expect(
+          permissionTransitionsLine(
+            option(const [
+              PermissionTransition(event: 'x', from: 'bay_len', to: 'thicong'),
+              PermissionTransition(
+                event: 'y',
+                from: 'roi_xuong',
+                to: 'thicong',
+              ),
+            ]),
+          ),
+          'Chuyển: — → Đang thi công · — → Đang thi công',
+        );
+      },
+    );
+  });
+
   group('dependency gaps (Lưu disabled)', () {
     final FakeAccountsPort fake = FakeAccountsPort();
     test('settings.manage without customers.manage', () {
@@ -306,6 +374,7 @@ void main() {
         draft: const {
           AppPermissionKeys.quotesCreateEdit,
           AppPermissionKeys.catalogView,
+          AppPermissionKeys.ordersViewOwn,
         },
       );
       expect(s.dependencyGaps, [
@@ -324,11 +393,52 @@ void main() {
           },
         );
         expect(s.dependencyGaps, [
-          '«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư», «Quản lý khách hàng».',
+          '«Tạo/sửa báo giá» cần thêm «Xem danh mục vật tư», «Quản lý khách hàng», một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
           '«Cấu hình hệ thống» cần thêm «Quản lý khách hàng».',
         ]);
       },
     );
+
+    test(
+      '"at least one of": no view scope ⇒ the backend sentence, Lưu disabled',
+      () {
+        final s = _seed(
+          draft: const {AppPermissionKeys.constructionTransition},
+        );
+        expect(s.dependencyGaps, [
+          '«Chuyển bước thi công» cần thêm một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
+        ]);
+        expect(s.canSave, isFalse);
+      },
+    );
+
+    test(
+      '"at least one of": either view scope alone ⇒ no gap, Lưu enabled',
+      () {
+        for (final String scope in const [
+          AppPermissionKeys.ordersViewOwn,
+          AppPermissionKeys.ordersViewAll,
+        ]) {
+          final s = _seed(
+            draft: {AppPermissionKeys.constructionTransition, scope},
+          );
+          expect(s.dependencyGaps, isEmpty, reason: scope);
+          expect(s.canSave, isTrue, reason: scope);
+        }
+      },
+    );
+
+    test('AND and "một trong" join in one sentence, AND part first', () {
+      final s = _seed(
+        draft: const {
+          AppPermissionKeys.quotesCreateEdit,
+          AppPermissionKeys.catalogView,
+        },
+      );
+      expect(s.dependencyGaps, [
+        '«Tạo/sửa báo giá» cần thêm «Quản lý khách hàng», một trong «Xem tất cả đơn», «Chỉ xem đơn của mình».',
+      ]);
+    });
 
     test(
       'dependencies met ⇒ no gap, Lưu enabled; read-only account ⇒ Lưu disabled',
@@ -338,6 +448,7 @@ void main() {
             AppPermissionKeys.quotesCreateEdit,
             AppPermissionKeys.customersManage,
             AppPermissionKeys.catalogView,
+            AppPermissionKeys.ordersViewOwn,
           },
         );
         expect(ok.dependencyGaps, isEmpty);

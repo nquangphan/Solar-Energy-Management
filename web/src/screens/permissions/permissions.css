@@ -74,6 +74,21 @@
   gap: 7px 20px;
 }
 
+/* One checklist entry: the checkbox, then the order steps it gates (Story 8.4). */
+.perm-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.perm-transitions {
+  /* Under the checkbox label: box 18px + gap 9px (components.css `.checkbox`). */
+  padding-left: 27px;
+  font-size: var(--text-meta-fontsize);
+  font-weight: var(--text-meta-fontweight);
+  color: var(--muted);
+}
+
 .perm-presets {
   display: flex;
   flex-direction: column;
