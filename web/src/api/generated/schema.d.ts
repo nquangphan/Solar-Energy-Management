@@ -194,6 +194,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AuditController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/feature-flags": {
         parameters: {
             query?: never;
@@ -1311,6 +1327,79 @@ export interface components {
             email: string;
             /** @description false = vô hiệu hoá (thu hồi mọi phiên). */
             isActive: boolean;
+        };
+        /** @enum {string} */
+        AuditTargetType: "Order" | "Account" | "Product" | "ProductGroup" | "Customer" | "CustomerSource" | "StockVoucher" | "FeatureFlag" | "SystemSetting";
+        AuditChangeDto: {
+            /**
+             * @description Đường dẫn tới giá trị bị đổi (status, lines[0].unitCost, [1].price); chuỗi rỗng khi dữ liệu là một giá trị đơn.
+             * @example status
+             */
+            field: string;
+            /**
+             * @description Giá trị trước dạng chuỗi (tối đa 500 ký tự); null khi không có.
+             * @example baogia
+             */
+            before: string | null;
+            /**
+             * @description Giá trị sau dạng chuỗi (tối đa 500 ký tự); null khi không có.
+             * @example dachot
+             */
+            after: string | null;
+            /**
+             * @description Field là số tiền nguyên: client hiển thị qua bộ định dạng tiền khi giá trị là số nguyên.
+             * @example false
+             */
+            isMoney: boolean;
+        };
+        AuditLogEntryDto: {
+            /** @example 0b7f1f6e-1d7a-4c1e-9a4a-6a5e2f0c1b33 */
+            id: string;
+            /**
+             * @description Loại sự kiện (mã).
+             * @example OrderConfirmed
+             */
+            eventType: string;
+            /**
+             * @description Tên hành động tiếng Việt.
+             * @example Chốt đơn
+             */
+            eventLabel: string;
+            /** @description Account thực hiện; null = hệ thống tự chạy. */
+            actorAccountId: string | null;
+            /**
+             * @description Tên hiển thị của account thực hiện; null khi hệ thống tự chạy hoặc account không còn.
+             * @example Nguyễn Văn A
+             */
+            actorDisplayName: string | null;
+            /** @description Loại đối tượng bị tác động; null khi sự kiện không gắn đối tượng. */
+            targetType: components["schemas"]["AuditTargetType"] | null;
+            /** @description Mã đối tượng (UUID, hoặc SĐT E.164 với khách hàng). */
+            targetId: string | null;
+            /**
+             * Format: date-time
+             * @description Thời điểm nghiệp vụ, ISO-8601 UTC.
+             */
+            occurredAt: string;
+            changes: components["schemas"]["AuditChangeDto"][];
+        };
+        AuditLogListResponseDto: {
+            items: components["schemas"]["AuditLogEntryDto"][];
+            /**
+             * @description Tổng số bản ghi khớp bộ lọc (KHÔNG phải số dòng của trang này).
+             * @example 57
+             */
+            total: number;
+            /**
+             * @description Trang hiện tại (bắt đầu từ 1).
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Số bản ghi mỗi trang.
+             * @example 20
+             */
+            pageSize: number;
         };
         FeatureFlagResponseDto: {
             /** @description Tên cờ chính tắc (khoá chính). Chỉ những cờ trong registry mới tồn tại. */
@@ -3530,6 +3619,55 @@ export interface operations {
             };
             /** @description SĐT hoặc email đã thuộc account khác (CONFLICT, fieldErrors.phone / .email). */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+        };
+    };
+    AuditController_list: {
+        parameters: {
+            query?: {
+                /** @description Lọc theo loại đối tượng. Bỏ trống ⇒ mọi loại. */
+                targetType?: components["schemas"]["AuditTargetType"];
+                /** @description Từ ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này). */
+                from?: string;
+                /** @description Đến ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này). */
+                to?: string;
+                /** @description Trang, bắt đầu từ 1. */
+                page?: number;
+                /** @description Số bản ghi mỗi trang — tối đa 100. */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nhật ký bất biến, mới nhất trước (occurredAt giảm dần, rồi id giảm dần), phân trang. Thiếu costs.view ⇒ các dòng giá vốn bị loại khỏi changes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogListResponseDto"];
+                };
+            };
+            /** @description VALIDATION_ERROR: targetType lạ, from/to sai định dạng YYYY-MM-DD, from sau to (fieldErrors.to), page/pageSize ngoài khoảng. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelopeDto"];
+                };
+            };
+            /** @description Thiếu quyền audit.read (FORBIDDEN). */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -341,10 +341,10 @@ void main() {
     tester,
   ) async {
     await _open(tester);
-    expect(_box(tester, 'Xem Audit log (Super Admin)').disabled, isTrue);
+    expect(_box(tester, 'Xem Audit log').disabled, isTrue);
     expect(_box(tester, 'Cấu hình hệ thống').disabled, isFalse);
-    await _tapLabel(tester, 'Xem Audit log (Super Admin)');
-    expect(_box(tester, 'Xem Audit log (Super Admin)').checked, isFalse);
+    await _tapLabel(tester, 'Xem Audit log');
+    expect(_box(tester, 'Xem Audit log').checked, isFalse);
   });
 
   testWidgets(

@@ -20,6 +20,7 @@ import 'package:pns_mobile/design_system/session/fake_customers_port.dart';
 import 'package:pns_mobile/design_system/session/fake_inventory_port.dart';
 import 'package:pns_mobile/design_system/session/fake_invoices_port.dart';
 import 'package:pns_mobile/design_system/session/fake_accounts_port.dart';
+import 'package:pns_mobile/design_system/session/fake_audit_logs_port.dart';
 import 'package:pns_mobile/design_system/session/fake_dashboard_port.dart';
 import 'package:pns_mobile/design_system/session/fake_me_port.dart';
 import 'package:pns_mobile/design_system/session/fake_orders_port.dart';
@@ -235,6 +236,7 @@ void main() {
         invoices: FakeInvoicesPort(),
         dashboard: FakeDashboardPort(),
         accounts: FakeAccountsPort(),
+        auditLogs: FakeAuditLogsPort(),
       ),
     ));
     await _settle(tester);

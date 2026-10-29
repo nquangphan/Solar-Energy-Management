@@ -308,7 +308,7 @@ describe('PermissionsScreen', () => {
 
   it('a permission the backend marks grantable:false is a disabled box', async () => {
     await openAccount(new FakeAccountsPort(), /Trần Văn A/);
-    expect(box('Xem Audit log (Super Admin)').disabled).toBe(true);
+    expect(box('Xem Audit log').disabled).toBe(true);
     expect(box('Chốt đơn').disabled).toBe(false);
   });
 

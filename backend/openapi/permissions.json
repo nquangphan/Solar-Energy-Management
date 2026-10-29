@@ -11,7 +11,7 @@
   },
   {
     "key": "audit.read",
-    "label": "Xem Audit log (Super Admin)",
+    "label": "Xem Audit log",
     "group": "audit"
   },
   {

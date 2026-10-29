@@ -27,6 +27,7 @@ import {
   FakeOrdersPort,
   FakePasswordPort,
   FakePaymentsPort,
+  FakeAuditLogsPort,
   FakeAuthPort,
   FakeContractsPort,
   FakeInvoicesPort,
@@ -38,6 +39,7 @@ import {
   PermissionsProvider,
 } from '../design-system/session';
 import { ProfileScreen } from '../screens/account/ProfileScreen';
+import { AuditLogScreen } from '../screens/audit/AuditLogScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { CustomerDetailScreen } from '../screens/customers/CustomerDetailScreen';
@@ -303,7 +305,17 @@ describe('smoke render — mọi màn web/src/screens', () => {
     expect(screen.queryByLabelText('Mật khẩu ban đầu')).toBeNull();
     expect(screen.queryByText('Role preset')).toBeNull();
   });
+
+  it('AuditLogScreen — records loaded from the port: system actor, money and status through their formatters', async () => {
+    renderScreen(<AuditLogScreen port={new FakeAuditLogsPort()} />);
+    expect(await screen.findByText('Trần Kinh Doanh')).toBeTruthy();
+    expect(screen.getByText('Hệ thống')).toBeTruthy();
+    expect(screen.getByText(/0 đ → 83\.010\.960 đ/)).toBeTruthy();
+    expect(screen.getByText(/Báo giá → Đã chốt/)).toBeTruthy();
+    expect(screen.getByText('Bản ghi bất biến — chỉ đọc, không sửa/xoá.')).toBeTruthy();
+    expect(screen.getByText('Trang 1/3')).toBeTruthy();
+  });
 });
 
 /** Số `it` render màn ở trên — thêm màn mới mà quên thêm test thì guard rỗng đỏ. */
-const SCREEN_COUNT = 22;
+const SCREEN_COUNT = 23;

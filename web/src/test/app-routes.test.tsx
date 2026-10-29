@@ -10,6 +10,7 @@ import { AVAILABLE_NAV_KEYS, NAV_ROUTES } from '../app/routes';
 import {
   DEMO_ACCOUNTS,
   FakeAccountsPort,
+  FakeAuditLogsPort,
   FakeAuthPort,
   FakeCatalogPort,
   FakeContractsPort,
@@ -60,6 +61,7 @@ function ports(permissions: string[]): AppPorts {
     invoices: new FakeInvoicesPort(),
     dashboard: new FakeDashboardPort(),
     accounts: new FakeAccountsPort(),
+    auditLogs: new FakeAuditLogsPort(),
   };
 }
 
@@ -144,6 +146,25 @@ describe('AppRoutes', () => {
     await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
     expect(screen.getByTestId('path').textContent).toBe('/dashboard');
     expect(navLabels()).not.toContain('Phân quyền');
+    expect(listWithout).not.toHaveBeenCalled();
+  });
+
+  it('Audit: audit.read shows the link and opens /audit; without it (even with every other key) the link is hidden and /audit lands on /dashboard', async () => {
+    const appPorts = ports(ALL_PERMISSIONS);
+    const list = vi.spyOn(appPorts.auditLogs, 'listAuditLogs');
+    renderAt('/profile', appPorts);
+    fireEvent.click(await screen.findByText('Audit', { selector: 'a.navlink' }));
+    expect(screen.getByTestId('path').textContent).toBe('/audit');
+    await vi.waitFor(() => expect(topbarTitle()).toContain('Audit log'));
+    expect(list).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    const without = ports(ALL_PERMISSIONS.filter((key) => key !== 'audit.read'));
+    const listWithout = vi.spyOn(without.auditLogs, 'listAuditLogs');
+    renderAt('/audit', without);
+    await screen.findByText('Hồ sơ', { selector: 'a.navlink' });
+    expect(screen.getByTestId('path').textContent).toBe('/dashboard');
+    expect(navLabels()).not.toContain('Audit');
     expect(listWithout).not.toHaveBeenCalled();
   });
 

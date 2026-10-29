@@ -3,6 +3,7 @@
 // permission of their own, and which locations a permission set may open.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pns_mobile/app/app_routes.dart';
+import 'package:pns_mobile/design_system/shell/app_menu_nav.dart';
 
 void main() {
   group('openableKeys', () {
@@ -25,6 +26,9 @@ void main() {
     });
     test('permissions.manage ⇒ + permissions', () {
       expect(openableKeys({'permissions.manage'}), {'home', 'permissions', 'profile'});
+    });
+    test('audit.read ⇒ + audit', () {
+      expect(openableKeys({'audit.read'}), {'home', 'audit', 'profile'});
     });
   });
 
@@ -127,6 +131,21 @@ void main() {
         expect(isOpenable(path, {'permissions.manage'}), isTrue, reason: path);
         expect(isOpenable(path, {'settings.manage', 'orders.view_all'}), isFalse, reason: path);
       }
+    });
+
+    test('the Audit log follows audit.read only — not settings.manage, not every other key', () {
+      expect(kAuditPath, '/audit');
+      expect(isOpenable(kAuditPath, {'audit.read'}), isTrue);
+      expect(isOpenable(kAuditPath, {'settings.manage'}), isFalse);
+      // Every key a Menu entry or tab is gated on, except audit.read.
+      final Set<String> everyOtherGate = {
+        for (final link in [for (final s in kMobileMenu) ...s.links, ...kMobileTabLinks]) ...[
+          if (link.requires != null && link.requires != 'audit.read') link.requires!,
+          ...?link.requiresAny,
+        ],
+      };
+      expect(everyOtherGate, isNotEmpty);
+      expect(isOpenable(kAuditPath, everyOtherGate), isFalse);
     });
   });
 

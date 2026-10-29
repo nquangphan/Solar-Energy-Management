@@ -76,7 +76,7 @@ model AccountPermission {
 }
 
 /// Nhật ký kiểm toán BẤT BIẾN, append-only (AD-8, spine "AuditLog append-only").
-/// Ghi bởi AuditSubscriber khi có domain event; đọc CHỈ Super Admin (endpoint read = Story 8.5).
+/// Ghi bởi AuditSubscriber khi có domain event; đọc theo quyền `audit.read` (`GET /audit-logs`).
 /// `actorAccountId` lưu dạng String (KHÔNG FK cascade) để bản ghi lịch sử SỐNG SÓT khi
 /// account bị vô hiệu/xoá — audit là snapshot bất biến, không đổi theo vòng đời account.
 model AuditLog {
@@ -92,6 +92,7 @@ model AuditLog {
 
   @@index([actorAccountId])
   @@index([targetType, targetId])
+  @@index([occurredAt])
   @@map("audit_logs")
 }
 

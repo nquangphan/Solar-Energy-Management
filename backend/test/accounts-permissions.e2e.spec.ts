@@ -88,6 +88,8 @@ describe('/accounts permissions (e2e)', () => {
     Promise.resolve(ids.filter((id) => id in accounts).map((id) => ({ id }))),
   );
   const auditCreate = jest.fn().mockResolvedValue({});
+  const auditFindMany = jest.fn().mockResolvedValue([]);
+  const auditCount = jest.fn().mockResolvedValue(0);
   const prismaMock = {
     accountPermission: permissionRepo,
     account: {
@@ -100,9 +102,17 @@ describe('/accounts permissions (e2e)', () => {
         ),
       ),
     },
-    auditLog: { create: auditCreate },
-    $transaction: jest.fn((cb: (tx: unknown) => Promise<unknown>) =>
-      cb({ $queryRaw: queryRaw, accountPermission: permissionRepo }),
+    auditLog: {
+      create: auditCreate,
+      findMany: auditFindMany,
+      count: auditCount,
+    },
+    // Interactive form for the permission save; array form for the audit read (`GET /audit-logs`).
+    $transaction: jest.fn(
+      (arg: Promise<unknown>[] | ((tx: unknown) => Promise<unknown>)) =>
+        Array.isArray(arg)
+          ? Promise.all(arg)
+          : arg({ $queryRaw: queryRaw, accountPermission: permissionRepo }),
     ),
   };
   const accountsMock = {
@@ -414,6 +424,25 @@ describe('/accounts permissions (e2e)', () => {
   it('ADMIN granting audit.read ⇒ 403', async () => {
     const res = await put(ADMIN_ID, WORKER_ID, [PERM.auditRead]);
     expect(res.status).toBe(403);
+    expect(held[WORKER_ID]).not.toContain(PERM.auditRead);
+  });
+
+  it('an account holding audit.read grants it ⇒ the grantee opens GET /audit-logs', async () => {
+    const readAudit = () =>
+      server().get('/audit-logs').set('Authorization', auth(WORKER_ID));
+    expect((await readAudit()).status).toBe(403);
+
+    const res = await put(SUPER_ID, WORKER_ID, [
+      ...ROLE_PRESETS.THO_KS,
+      PERM.auditRead,
+    ]);
+    expect(res.status).toBe(200);
+    expect(held[WORKER_ID]).toContain(PERM.auditRead);
+
+    const after = await readAudit();
+    expect(after.status).toBe(200);
+    expect(after.body).toMatchObject({ items: [], total: 0 });
+    expect(auditFindMany).toHaveBeenCalledTimes(1);
   });
 
   it('PUT on a non-UUID id ⇒ 400 with the Vietnamese sentence', async () => {

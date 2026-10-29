@@ -24,6 +24,7 @@ import { HttpContractsPort } from './api/http-contracts-port';
 import { HttpCustomerSourcesPort } from './api/http-customer-sources-port';
 import { HttpCustomersPort } from './api/http-customers-port';
 import { HttpAccountsPort } from './api/http-accounts-port';
+import { HttpAuditLogsPort } from './api/http-audit-logs-port';
 import { HttpDashboardPort } from './api/http-dashboard-port';
 import { HttpInventoryPort } from './api/http-inventory-port';
 import { HttpInvoicesPort } from './api/http-invoices-port';
@@ -67,6 +68,7 @@ const ports: AppPorts = {
   invoices: new HttpInvoicesPort(client),
   dashboard: new HttpDashboardPort(client),
   accounts: new HttpAccountsPort(client),
+  auditLogs: new HttpAuditLogsPort(client),
 };
 
 type Status = 'restoring' | 'signedOut' | 'signedIn';

@@ -29,6 +29,7 @@ import '../design_system/shell/app_menu_nav.dart';
 import '../design_system/shell/app_phone_frame.dart';
 import '../design_system/tokens/app_tokens.dart';
 import '../screens/account/profile_screen.dart';
+import '../screens/audit/audit_log_screen.dart';
 import '../screens/contracts/contracts_screen.dart';
 import '../screens/customers/customer_detail_screen.dart';
 import '../screens/customers/customer_list_screen.dart';
@@ -203,6 +204,10 @@ class _SignedInAppState extends State<SignedInApp> {
             onBack: () => back(context),
             onEdit: () => context.push(accountEditPath(id(state))),
           ),
+        ),
+        GoRoute(
+          path: kAuditPath,
+          builder: (context, state) => AuditLogScreen(port: ports.auditLogs),
         ),
         GoRoute(
           path: kProfilePath,

@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { AccountsModule } from '../accounts/accounts.module';
+import { AuditLogReadService } from './audit-log-read.service';
+import { AuditController } from './audit.controller';
 import { AuditService } from './audit.service';
 import { AuditSubscriber } from './audit.subscriber';
 
@@ -9,8 +12,13 @@ import { AuditSubscriber } from './audit.subscriber';
  *
  * KHÔNG export gì — producer KHÔNG được inject `AuditService`/`AuditSubscriber` trực tiếp
  * (source-guard AD-18 enforce); mọi audit đi qua `EventBus.publish`.
+ *
+ * The read side (`GET /audit-logs`, gated on `audit.read`) lives here too, in its own service;
+ * it imports `AccountsModule` for `AccountPermissionsService` (fresh `costs.view` check).
  */
 @Module({
-  providers: [AuditService, AuditSubscriber],
+  imports: [AccountsModule],
+  controllers: [AuditController],
+  providers: [AuditService, AuditSubscriber, AuditLogReadService],
 })
 export class AuditModule {}

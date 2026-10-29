@@ -64,7 +64,7 @@ const List<PermissionOption> kDemoPermissionOptions = <PermissionOption>[
   ),
   PermissionOption(
     key: AppPermissionKeys.auditRead,
-    label: 'Xem Audit log (Super Admin)',
+    label: 'Xem Audit log',
     group: 'audit',
     requires: <String>[],
     requiresAnyOf: <String>[],

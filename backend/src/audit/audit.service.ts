@@ -10,8 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
  * APPEND-ONLY là bất biến: service này CHỈ expose `record` (create) — KHÔNG `update`/
  * `delete`/`upsert`. Không có đường code nào sửa/xoá audit sau khi ghi.
  *
- * CHỈ chạm DB qua `PrismaService` (AD-1) — KHÔNG `new PrismaClient()`. Đọc audit (chỉ
- * Super Admin, gate `audit.read`) là Story 8.5, KHÔNG thuộc đây.
+ * CHỈ chạm DB qua `PrismaService` (AD-1) — KHÔNG `new PrismaClient()`. Reading the audit log
+ * (gated on `audit.read`) is `AuditLogReadService`, not this service.
  */
 @Injectable()
 export class AuditService {

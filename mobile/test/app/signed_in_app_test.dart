@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:pns_mobile/design_system/components/components.dart';
 import 'package:pns_mobile/screens/account/profile_screen.dart';
+import 'package:pns_mobile/screens/audit/audit_log_screen.dart';
 import 'package:pns_mobile/screens/auth/login_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_detail_screen.dart';
 import 'package:pns_mobile/screens/customers/customer_list_screen.dart';
@@ -89,6 +90,25 @@ FakeHandler _backend({List<String> permsA = _customerPerms, List<String> permsB 
       return jsonBody(200, {'found': false, 'phone': '+84999999999', 'customer': null, 'orders': []});
     case '/dashboard/summary':
       return jsonBody(200, dashboardBody());
+    case '/audit-logs':
+      return jsonBody(200, {
+        'items': [
+          {
+            'id': 'log-1',
+            'eventType': 'OrderConfirmed',
+            'eventLabel': 'Chốt đơn',
+            'actorAccountId': null,
+            'actorDisplayName': null,
+            'targetType': 'Order',
+            'targetId': 'ord-1',
+            'occurredAt': '2026-10-30T03:00:00.000Z',
+            'changes': [],
+          },
+        ],
+        'total': 1,
+        'page': 1,
+        'pageSize': 20,
+      });
     case '/accounts':
       // POST creates `acc-new`; the list always carries it so its matrix can open.
       if (r.method == 'POST') return jsonBody(201, _account('acc-new', 'Người Mới'));
@@ -400,6 +420,32 @@ void main() {
     expect(change.authorization, 'Bearer access-a');
     expect(change.json, {'currentPassword': 'old-pass-1', 'newPassword': 'new-pass-22'});
     expect(find.text('Đã đổi mật khẩu. Bạn cần đăng nhập lại.'), findsOneWidget);
+  });
+
+  testWidgets('Audit log shows only with audit.read and opens /audit over the real adapter; without it /audit lands on Trang chủ', (
+    tester,
+  ) async {
+    // Every other gate but audit.read: still no Audit log.
+    final app0 = await _signedIn(
+      tester,
+      _backend(permsA: ['permissions.manage', 'settings.manage', 'customers.manage', 'orders.view_all']),
+    );
+    expect(find.text('Phân quyền'), findsOneWidget);
+    expect(find.text('Audit log'), findsNothing);
+    _router(tester).go('/audit');
+    await _navigated(tester);
+    expect(find.byType(AuditLogScreen), findsNothing);
+    expect(_location(tester), '/dashboard');
+    expect(app0.adapter.to('/audit-logs'), isEmpty);
+
+    await tester.pumpWidget(const SizedBox());
+    final app = await _signedIn(tester, _backend(permsA: ['audit.read']));
+    await tester.tap(find.text('Audit log'));
+    await _navigated(tester);
+    expect(find.byType(AuditLogScreen), findsOneWidget);
+    expect(_location(tester), '/audit');
+    expect(app.adapter.to('/audit-logs'), hasLength(1));
+    expect(find.text('Hệ thống'), findsOneWidget);
   });
 
   testWidgets('a path the account may not open, or an unknown one, lands on the landing page', (tester) async {

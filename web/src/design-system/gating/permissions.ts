@@ -106,7 +106,7 @@ export const PERM = {
   ordersViewAll: 'orders.view_all',
   /** May view ONLY their own orders — the `'mine'` scope (FR-18). */
   ordersViewOwn: 'orders.view_own',
-  /** May read the audit log — Super Admin only (FR-20). */
+  /** May read the audit log (FR-20) — gated on this permission, never on a role. */
   auditRead: 'audit.read',
   /** May manage account permissions (the Phân quyền screen, Epic 8). */
   permissionsManage: 'permissions.manage',

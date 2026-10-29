@@ -58,7 +58,7 @@ export const DEMO_PERMISSION_OPTIONS: PermissionOptions = {
     },
     {
       key: K.auditRead,
-      label: 'Xem Audit log (Super Admin)',
+      label: 'Xem Audit log',
       group: 'audit',
       requires: [],
       requiresAnyOf: [],
@@ -182,7 +182,7 @@ export const DEMO_ACCOUNTS: AccountPermissionSummary[] = [
     matchingPreset: null,
     matchingPresetLabel: null,
     editable: false,
-    readOnlyReason: 'Tài khoản mang quyền bạn không có: Xem Audit log (Super Admin).',
+    readOnlyReason: 'Tài khoản mang quyền bạn không có: Xem Audit log.',
   },
 ];
 

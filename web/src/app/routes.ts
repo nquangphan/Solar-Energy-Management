@@ -17,6 +17,7 @@ export const NAV_ROUTES = {
   warranty: '/warranty',
   settings: '/settings',
   permissions: '/permissions',
+  audit: '/audit',
   profile: '/profile',
 } as const;
 

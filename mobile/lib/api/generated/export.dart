@@ -6,6 +6,7 @@
 export 'health/health_client.dart';
 export 'auth/auth_client.dart';
 export 'accounts/accounts_client.dart';
+export 'audit/audit_client.dart';
 export 'feature_flags/feature_flags_client.dart';
 export 'catalog/catalog_client.dart';
 export 'customers/customers_client.dart';
@@ -38,6 +39,10 @@ export 'models/permission_options_response_dto.dart';
 export 'models/update_account_permissions_request_dto.dart';
 export 'models/create_account_request_dto.dart';
 export 'models/update_account_request_dto.dart';
+export 'models/audit_target_type.dart';
+export 'models/audit_change_dto.dart';
+export 'models/audit_log_entry_dto.dart';
+export 'models/audit_log_list_response_dto.dart';
 export 'models/feature_flag_response_dto.dart';
 export 'models/toggle_feature_flag_request_dto.dart';
 export 'models/create_product_request_dto.dart';

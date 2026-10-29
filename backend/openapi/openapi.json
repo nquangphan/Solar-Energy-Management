@@ -567,6 +567,106 @@
         ]
       }
     },
+    "/audit-logs": {
+      "get": {
+        "operationId": "AuditController_list",
+        "parameters": [
+          {
+            "name": "targetType",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo loại đối tượng. Bỏ trống ⇒ mọi loại.",
+            "schema": {
+              "$ref": "#/components/schemas/AuditTargetType"
+            }
+          },
+          {
+            "name": "from",
+            "required": false,
+            "in": "query",
+            "description": "Từ ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này).",
+            "schema": {
+              "format": "date",
+              "example": "2026-10-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": false,
+            "in": "query",
+            "description": "Đến ngày YYYY-MM-DD (giờ Việt Nam, tính cả ngày này).",
+            "schema": {
+              "format": "date",
+              "example": "2026-10-30",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Trang, bắt đầu từ 1.",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Số bản ghi mỗi trang — tối đa 100.",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nhật ký bất biến, mới nhất trước (occurredAt giảm dần, rồi id giảm dần), phân trang. Thiếu costs.view ⇒ các dòng giá vốn bị loại khỏi changes.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogListResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR: targetType lạ, from/to sai định dạng YYYY-MM-DD, from sau to (fieldErrors.to), page/pageSize ngoài khoảng.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Thiếu quyền audit.read (FORBIDDEN).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelopeDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "audit"
+        ]
+      }
+    },
     "/feature-flags": {
       "get": {
         "operationId": "FeatureFlagsController_findAll",
@@ -6161,6 +6261,151 @@
           "phone",
           "email",
           "isActive"
+        ]
+      },
+      "AuditTargetType": {
+        "type": "string",
+        "enum": [
+          "Order",
+          "Account",
+          "Product",
+          "ProductGroup",
+          "Customer",
+          "CustomerSource",
+          "StockVoucher",
+          "FeatureFlag",
+          "SystemSetting"
+        ]
+      },
+      "AuditChangeDto": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "Đường dẫn tới giá trị bị đổi (status, lines[0].unitCost, [1].price); chuỗi rỗng khi dữ liệu là một giá trị đơn.",
+            "example": "status"
+          },
+          "before": {
+            "type": "string",
+            "nullable": true,
+            "description": "Giá trị trước dạng chuỗi (tối đa 500 ký tự); null khi không có.",
+            "example": "baogia"
+          },
+          "after": {
+            "type": "string",
+            "nullable": true,
+            "description": "Giá trị sau dạng chuỗi (tối đa 500 ký tự); null khi không có.",
+            "example": "dachot"
+          },
+          "isMoney": {
+            "type": "boolean",
+            "description": "Field là số tiền nguyên: client hiển thị qua bộ định dạng tiền khi giá trị là số nguyên.",
+            "example": false
+          }
+        },
+        "required": [
+          "field",
+          "before",
+          "after",
+          "isMoney"
+        ]
+      },
+      "AuditLogEntryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "0b7f1f6e-1d7a-4c1e-9a4a-6a5e2f0c1b33"
+          },
+          "eventType": {
+            "type": "string",
+            "description": "Loại sự kiện (mã).",
+            "example": "OrderConfirmed"
+          },
+          "eventLabel": {
+            "type": "string",
+            "description": "Tên hành động tiếng Việt.",
+            "example": "Chốt đơn"
+          },
+          "actorAccountId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Account thực hiện; null = hệ thống tự chạy."
+          },
+          "actorDisplayName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Tên hiển thị của account thực hiện; null khi hệ thống tự chạy hoặc account không còn.",
+            "example": "Nguyễn Văn A"
+          },
+          "targetType": {
+            "nullable": true,
+            "description": "Loại đối tượng bị tác động; null khi sự kiện không gắn đối tượng.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuditTargetType"
+              }
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Mã đối tượng (UUID, hoặc SĐT E.164 với khách hàng)."
+          },
+          "occurredAt": {
+            "format": "date-time",
+            "type": "string",
+            "description": "Thời điểm nghiệp vụ, ISO-8601 UTC."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditChangeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "eventType",
+          "eventLabel",
+          "actorAccountId",
+          "actorDisplayName",
+          "targetType",
+          "targetId",
+          "occurredAt",
+          "changes"
+        ]
+      },
+      "AuditLogListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditLogEntryDto"
+            }
+          },
+          "total": {
+            "type": "number",
+            "description": "Tổng số bản ghi khớp bộ lọc (KHÔNG phải số dòng của trang này).",
+            "example": 57
+          },
+          "page": {
+            "type": "number",
+            "description": "Trang hiện tại (bắt đầu từ 1).",
+            "example": 1
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Số bản ghi mỗi trang.",
+            "example": 20
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
         ]
       },
       "FeatureFlagResponseDto": {

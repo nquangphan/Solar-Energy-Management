@@ -28,7 +28,7 @@ export const PERM = {
   ordersViewAll: 'orders.view_all',
   /** ✱ Chỉ xem đơn CỦA MÌNH — entry tường minh #2 (AC-2); FE suy scope từ có/không `orders.view_all`. */
   ordersViewOwn: 'orders.view_own',
-  /** ✱ Xem Audit log — chỉ Super Admin (AC-3, FR-20) — khớp FE `PERM.auditRead`. */
+  /** ✱ Xem Audit log (FR-20) — only the SUPER_ADMIN preset holds it by default; grantable per account. Matches FE `PERM.auditRead`. */
   auditRead: 'audit.read',
   /** ✱ Quản lý account & phân quyền (màn Phân quyền, Epic 8) — khớp FE `PERM.permissionsManage`. */
   permissionsManage: 'permissions.manage',
@@ -85,7 +85,7 @@ export interface PermissionEntry {
 export const PERMISSIONS: readonly PermissionEntry[] = [
   { key: PERM.ordersViewAll, label: 'Xem tất cả đơn', group: 'orders' },
   { key: PERM.ordersViewOwn, label: 'Chỉ xem đơn của mình', group: 'orders' },
-  { key: PERM.auditRead, label: 'Xem Audit log (Super Admin)', group: 'audit' },
+  { key: PERM.auditRead, label: 'Xem Audit log', group: 'audit' },
   {
     key: PERM.permissionsManage,
     label: 'Quản lý account & phân quyền',

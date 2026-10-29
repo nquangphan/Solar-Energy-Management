@@ -192,7 +192,7 @@ flowchart TD
 | Error shape | `{ code: string (enum có tài liệu), message, fieldErrors?: Array<{ field, code, message }>, traceId }` + HTTP status; chỉ exception filter trung tâm tạo envelope (AD-5) |
 | Auth | JWT access+refresh; Bearer header; `/me` trả permission set (AD-12). Định danh đăng nhập là **SĐT** `accounts.phone` (E.164, unique) chuẩn hoá ở backend từ Story 10.9; `email` chỉ là liên hệ |
 | Permission enforce | guard server-side mỗi request; client gating chỉ UX (AD-4) |
-| Logging / Audit | AuditLog bất biến (ai/gì/đối tượng/khi nào/trước→sau) cho mọi mutation nghiệp vụ; append-only; đọc chỉ Super Admin |
+| Logging / Audit | AuditLog bất biến (ai/gì/đối tượng/khi nào/trước→sau) cho mọi mutation nghiệp vụ; append-only; đọc theo quyền `audit.read` (`GET /audit-logs`, gate theo quyền, không theo role); giá vốn trong payload (`costPrice`, `unitCost`, `giaVon…`) chỉ trả cho người có thêm `costs.view` |
 | Idempotency | thao tác tiền (ghi thanh toán, chốt) idempotent, an toàn khi retry (NFR SM-1) |
 | Push / Notification | người nhận resolve qua permission engine (AD-8/AD-15), không theo role; payload mang `type` + deep-link (`{ type, targetId, deeplink }`) mở đúng màn/đơn; lọc theo quyền xem đơn (AD-15) |
 | **Đường đỏ: `settings.manage`** | **Quyền cấu hình hệ thống KHÔNG BAO GIỜ gate:** màn phân quyền (8.2), ma trận quyền (8.4), hay audit log (8.5). Nếu không, account có `settings.manage` sẽ tự cấp cho mình mọi quyền trong một click. Ràng buộc thi hành ở `account-permissions.service.ts` + test (tuân AD-21) |
@@ -532,7 +532,7 @@ backend/
     feature-flags/  # FeatureFlag — bấm cờ, gate bởi `system.feature_flags` (AD-14)
     health/         # health check
     openapi/        # openapi-document.ts — spec là build artifact sinh từ code (AD-12)
-    audit/          # AuditLog append-only, đọc chỉ Super Admin (FR-20)
+    audit/          # AuditLog append-only, đọc theo quyền `audit.read` (FR-20)
     notifications/  # FCM sender qua firebase-admin, DeviceToken registry, Notification inbox, nhắc theo lịch (cần job scheduler, vd NestJS Schedule/cron); người nhận resolve qua permission engine (AD-14, AD-15, FR-30..34)
     dashboard/      # doanh thu / đếm đơn theo trạng thái (FR-19)
     prisma/         # PrismaService — điểm truy cập DB duy nhất (AD-1)

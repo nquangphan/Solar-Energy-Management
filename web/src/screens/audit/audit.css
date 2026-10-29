@@ -1,0 +1,57 @@
+/* hand-authored — Story 8.5 audit log layout wrappers. Composition-level styling
+   only: table, banner, fields, buttons, empty/error states and skeletons are
+   shipped design-system components. Token vars for every colour and spacing;
+   flat borders, no elevation effects (Viền nét, UX-DR-4). Load AFTER tokens.css
+   / components.css / shell.css. */
+
+.aud-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-22);
+  background: var(--bg);
+}
+
+.aud-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+}
+
+/* Ids and instants are read character by character: tabular figures. */
+.aud-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.aud-strong {
+  font-weight: 700;
+}
+
+.aud-muted {
+  color: var(--muted);
+}
+
+.aud-change {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.aud-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.aud-state-msg,
+.aud-pager-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.aud-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}

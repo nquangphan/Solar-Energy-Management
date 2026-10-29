@@ -10,6 +10,7 @@ import { can, PERMISSION_KEYS } from '../design-system/gating';
 import type { PermissionKey } from '../design-system/gating';
 import type {
   AccountsPort,
+  AuditLogsPort,
   AuthPort,
   CatalogPort,
   ContractsPort,
@@ -30,6 +31,7 @@ import { usePermissions } from '../design-system/session';
 import { SidebarNavContext, WebShell } from '../design-system/shell';
 import type { SidebarNavValue } from '../design-system/shell';
 import { ProfileScreen } from '../screens/account/ProfileScreen';
+import { AuditLogScreen } from '../screens/audit/AuditLogScreen';
 import { ForgotPasswordScreen } from '../screens/auth/ForgotPasswordScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 import { ContractsScreen } from '../screens/contracts/ContractsScreen';
@@ -93,6 +95,7 @@ export interface AppPorts {
   invoices: InvoicesPort;
   dashboard: DashboardPort;
   accounts: AccountsPort;
+  auditLogs: AuditLogsPort;
 }
 
 export interface SignedOutRoutesProps {
@@ -402,6 +405,7 @@ export function AppRoutes({ ports, onLogout, onRetry }: AppRoutesProps) {
             />,
           )}
         />
+        <Route path={NAV_ROUTES.audit} element={gate('audit', <AuditLogScreen port={ports.auditLogs} />)} />
         <Route
           path={NAV_ROUTES.profile}
           element={gate('profile', <ProfileScreen port={ports.password} onLogout={onLogout} />)}

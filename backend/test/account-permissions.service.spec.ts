@@ -486,7 +486,7 @@ describe('AccountPermissionsService (unit, hermetic)', () => {
       expect(result[1].isActive).toBe(false);
       expect(result[1].phone).toBeNull();
       expect(result[2].readOnlyReason).toBe(
-        'Tài khoản mang quyền bạn không có: Xem Audit log (Super Admin), Cờ tính năng (vận hành app).',
+        'Tài khoản mang quyền bạn không có: Xem Audit log, Cờ tính năng (vận hành app).',
       );
       expect(result[3].permissions).toEqual([PERM.catalogView]);
     });

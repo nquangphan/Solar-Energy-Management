@@ -3,6 +3,7 @@
 // and handed down unchanged: eleven ports through two widgets one parameter at a
 // time would be eleven chances to wire the wrong one.
 import '../design_system/session/accounts_port.dart';
+import '../design_system/session/audit_logs_port.dart';
 import '../design_system/session/catalog_port.dart';
 import '../design_system/session/contracts_port.dart';
 import '../design_system/session/customers_port.dart';
@@ -31,6 +32,7 @@ class AppPorts {
     required this.invoices,
     required this.dashboard,
     required this.accounts,
+    required this.auditLogs,
   });
 
   final MePort me;
@@ -46,4 +48,5 @@ class AppPorts {
   final InvoicesPort invoices;
   final DashboardPort dashboard;
   final AccountsPort accounts;
+  final AuditLogsPort auditLogs;
 }

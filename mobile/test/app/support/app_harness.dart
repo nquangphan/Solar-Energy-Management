@@ -8,6 +8,7 @@ import 'package:pns_mobile/api/http_catalog_port.dart';
 import 'package:pns_mobile/api/http_contracts_port.dart';
 import 'package:pns_mobile/api/http_customers_port.dart';
 import 'package:pns_mobile/api/http_accounts_port.dart';
+import 'package:pns_mobile/api/http_audit_logs_port.dart';
 import 'package:pns_mobile/api/http_dashboard_port.dart';
 import 'package:pns_mobile/api/http_inventory_port.dart';
 import 'package:pns_mobile/api/http_invoices_port.dart';
@@ -49,6 +50,7 @@ class TestApp {
         invoices: HttpInvoicesPort(client, transport),
         dashboard: HttpDashboardPort(client, transport),
         accounts: HttpAccountsPort(client, transport),
+        auditLogs: HttpAuditLogsPort(client, transport),
       ),
       sessionExpired: expired,
     );

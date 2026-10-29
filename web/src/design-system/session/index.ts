@@ -131,6 +131,15 @@ export type {
   DashboardStatusCount,
   DashboardPeriod,
 } from './dashboard-port';
+// Audit log seam (Story 8.5): READ-ONLY — labels and the flat before → after rows
+// arrive computed by the backend; there is no way to change or remove a record.
+export type {
+  AuditLogsPort,
+  AuditLogPage,
+  AuditLogEntry,
+  AuditChange,
+  AuditLogQuery,
+} from './audit-logs-port';
 // Accounts seam (Story 8.2): who may grant/edit what arrives computed by the
 // backend (`grantable`, `editable`, filtered presets); the screen only displays it.
 export type {
@@ -194,6 +203,7 @@ export {
   DEMO_INVOICE_DETAIL,
 } from './fake-invoices-port';
 export { FakeDashboardPort, DEMO_DASHBOARD_SUMMARY } from './fake-dashboard-port';
+export { FakeAuditLogsPort, DEMO_AUDIT_LOGS } from './fake-audit-logs-port';
 export {
   FakeAccountsPort,
   DEMO_ACCOUNTS,
