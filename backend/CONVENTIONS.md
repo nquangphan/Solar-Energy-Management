@@ -167,6 +167,8 @@ Hai luật domain thuần (`accounts/domain/permission-escalation.ts`), enforce 
 - **Hệ quả — "xoá Super Admin" bất khả:** `SUPER_ADMIN` mang `audit.read` + `system.feature_flags` mà `ADMIN` không có (`role-presets.ts`) ⇒ luật #2 chặn mọi thao tác của `ADMIN` lên account `SUPER_ADMIN`. Đừng thêm hai key đó vào `ADMIN_PRESET` — mất luôn lằn ranh (`permission-escalation.spec.ts` sẽ đỏ).
 - Quyền của actor **và** target resolve **tươi từ DB** mỗi lần gọi (AD-8) — KHÔNG nhận qua tham số/JWT claim; service là ranh giới bảo mật cuối.
 - Ghi thành công ⇒ publish `AccountPermissionsChanged` qua `EventBus` **sau commit** (AD-18); payload chỉ id + danh sách key (sorted), KHÔNG bí mật.
+- **Mọi đường ghi account (Epic 8):** hai luật trên áp cả `AccountsService.create`/`update` (8.3). Trước tx: không tự sửa quyền/tài khoản của chính mình (403). Trong tx: khoá `accounts` (xem mục Khoá dòng) → đọc quyền qua `tx` → **`assertStillManages`** (actor còn `permissions.manage` trên lần đọc dưới khoá — luật #1/#2 không bắt được lần thu RIÊNG quyền gate; ca DB phải thu đúng key đó) → luật #2 → luật #1. Khi kiểm leo thang, `orders.view_all` bao `orders.view_own` (`PERMISSION_IMPLIES`, chỉ dùng ở đây).
+- **Bảng phụ thuộc quyền (`accounts/domain/permission-dependencies.ts`, 8.2/8.4):** bộ quyền lưu phải thoả `PERMISSION_REQUIRES` (AND) và `PERMISSION_REQUIRES_ANY` (ít nhất một trong) — thiếu ⇒ 400 `fieldErrors.permissions`, một câu mỗi quyền thiếu. Quyền mới mà luồng của nó cần quyền đọc khác thì thêm dòng vào bảng; mọi `ROLE_PRESETS` phải thoả (test).
 
 ## Domain Event & EventBus (AD-18, Story 2.7)
 
@@ -183,7 +185,7 @@ Mọi hành động nghiệp vụ **có hệ quả** (E4+) phát tín hiệu qua
 ## Khoá dòng & test đồng thời (Epic 6)
 
 - **Thứ tự khoá toàn hệ thống:** `SELECT id FROM orders WHERE id = … FOR UPDATE` là op đầu tiên trong tx chạm đơn; khoá sản phẩm sau đó bằng **một** câu `SELECT id FROM products WHERE id = ANY(…) ORDER BY id FOR UPDATE` (khoá `products`, không khoá `stock_items` — dòng tồn sinh lười, `FOR UPDATE` trên tập rỗng không khoá gì). Đảo thứ tự = deadlock.
-- **Khoá account (Story 8.2):** lưu bộ quyền khoá `SELECT id FROM accounts WHERE id = ANY(…::text[]) ORDER BY id FOR UPDATE` (người sửa + account bị sửa, `accounts.id` là TEXT) làm op đầu tx, rồi đọc quyền cả hai qua `tx`. Đường này không chạm `orders`/`products` ⇒ không chen vào thứ tự trên.
+- **Khoá account (Story 8.2, 8.3):** lưu bộ quyền và tạo/sửa account khoá `SELECT id FROM accounts WHERE id = ANY(…::text[]) ORDER BY id FOR UPDATE` (người sửa + account bị sửa; tạo chỉ khoá người tạo; `accounts.id` là TEXT) làm op đầu tx, rồi đọc quyền cả hai qua `tx`. Đường này không chạm `orders`/`products` ⇒ không chen vào thứ tự trên.
 - **`FOR UPDATE` chỉ đo được ở lane DB** — lane hermetic mock Prisma luôn xanh khi gỡ khoá. Mỗi khoá mới cần một ca `*.db.integration.spec.ts` ép interleaving.
 - **Tx giữ khoá trong test phải GHI đúng thứ primitive đọc** (vd `onHand + 3` dưới khoá, rồi assert kết quả cuối). Tx chỉ giữ khoá "trần" có thể bị một lệnh khác chặn hộ (FK lấy KEY SHARE, UPDATE cùng dòng) ⇒ ca "CHỜ khoá" vẫn xanh khi gỡ `FOR UPDATE`.
 - **Tập khoá có nhiều nguồn** (vd dòng version mới + sản phẩm chỉ còn giữ ở version cũ): mỗi nguồn cần một ca interleaving riêng; mutate từng nguồn và đòi ĐỎ.

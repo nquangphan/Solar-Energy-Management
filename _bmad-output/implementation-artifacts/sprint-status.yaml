@@ -1,5 +1,5 @@
 # generated: 2026-07-07
-# last_updated: 2026-10-30 (story 8.6 done)
+# last_updated: 2026-10-30 (epic 8 retrospective done)
 # project: Solar-Energy-Management
 # project_key: NOKEY
 # tracking_system: file-system
@@ -17,7 +17,7 @@
 # - Dev moves story to review, then runs code-review; retrospective appends action_items
 
 generated: 2026-07-07
-last_updated: 2026-10-30 (story 8.6 done)
+last_updated: 2026-10-30 (epic 8 retrospective done)
 project: Solar-Energy-Management
 project_key: NOKEY
 tracking_system: file-system
@@ -115,14 +115,14 @@ development_status:
   11-3-chuyen-bloc-man-don-hang-va-bao-gia: done
   11-4-chuyen-bloc-man-thanh-toan-kho-hop-dong-hoa-don-va-khoa-guard: done
   epic-11-retrospective: done
-  epic-8: in-progress
+  epic-8: done
   8-1-dashboard-van-hanh: done
   8-2-man-phan-quyen-ma-tran-per-account-ap-preset-role: done
   8-3-form-tao-sua-vo-hieu-hoa-account: done
   8-4-cau-hinh-ma-tran-quyen-hanh-dong-duyet: done
   8-5-man-xem-audit-log-chi-super-admin: done
   8-6-bao-cao-loi-nhuan-gop: done
-  epic-8-retrospective: optional
+  epic-8-retrospective: done
   epic-9: backlog
   9-1-thiet-lap-firebase-mobile: backlog
   9-2-dang-ky-go-device-token: backlog
@@ -378,7 +378,7 @@ action_items:
     action: "H-1: Push 22 commit (Epic 7 + Epic 10) sau 5 lane xanh"
     owner: "Đại Ca (Project Lead)"
     status: open
-    resolution: "Tiêu chí: git status -sb không còn ahead. Retro 2026-10-23: 4 lane hermetic xanh (2547 + 506 + 447 + 747), lane DB 325 xanh ở 10.9. Retro Epic 11 (2026-10-23): CHƯA push, nay ahead 29 (Epic 7 + 10 + 11); mobile 1327 + design-system 510 xanh trong phiên retro."
+    resolution: "Tiêu chí: git status -sb không còn ahead. Retro 2026-10-23: 4 lane hermetic xanh (2547 + 506 + 447 + 747), lane DB 325 xanh ở 10.9. Retro Epic 11 (2026-10-23): CHƯA push, nay ahead 29 (Epic 7 + 10 + 11); mobile 1327 + design-system 510 xanh trong phiên retro. Retro Epic 8 (2026-10-30): CHƯA push, nay ahead 42 (Epic 7 + 10 + 11 + 8); backend 2827 + design-system 554 + web 558 xanh trong phiên retro, DB 367 + mobile 1535 ở cổng 8.6."
   - epic: 10
     action: "H-2: Rate-limit 3 route công khai /auth/login, /auth/forgot-password, /auth/reset-password (TD-62, gộp item epic 2)"
     owner: "Đại Ca (quyết) + Amelia (Dev)"
@@ -467,10 +467,60 @@ action_items:
   - epic: 11
     action: "I-6: Smoke chỉ chạm tiến trình của chính nó — ghi adb devices + cổng đang nghe trước/sau, chỉ tắt đúng serial/PID mình khởi động"
     owner: "Amelia (Dev)"
-    status: open
-    resolution: "Căn cứ: smoke 11.4 — emulator kidy_cam_fix (dự án khác) không còn chạy sau khi dọn, nguyên nhân chưa rõ. Đại Ca xác nhận có cần khởi động lại."
+    status: done
+    resolution: "Căn cứ: smoke 11.4 — emulator kidy_cam_fix (dự án khác) không còn chạy sau khi dọn, nguyên nhân chưa rõ. Đại Ca xác nhận có cần khởi động lại. || 2026-10-30 (retro Epic 8): áp 6/6 story Epic 8 — serial riêng emulator-5590/5584/5586, kill đúng PID ghi lúc khởi động, verifier adb bật lại. Không có phản hồi về kidy_cam_fix; không còn việc phía dự án."
   - epic: 11
     action: "I-7: Đồng bộ sổ sách + tài liệu lệch code (project-context codegen package + luật test, spine Deferred codegen)"
     owner: "Amelia (Dev)"
     status: done
     resolution: "Làm trong retro Epic 11, xem §12 của epic-11-retro-2026-10-23.md."
+  - epic: 8
+    action: "TD-77: OrdersService.lookupByPhone (tra bảo hành) chép tay mệnh đề phạm vi owner/assignee thay vì gọi dieuKienPhamVi"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: 8.1 review (ghi nhận, ngoài phạm vi); còn ở orders.service.ts quanh dòng 2053. Trả cùng J-2, trước 9.3. Tiêu chí: đột biến dieuKienPhamVi ⇒ ĐỎ cả suite tra bảo hành."
+  - epic: 8
+    action: "TD-78: Mobile không có ô chọn ngày — Audit (8.5) và Lợi nhuận (8.6) gõ tay YYYY-MM-DD, xử lý ngày không tồn tại khác nhau; web 8.6 hiện ngày xuất DD/MM (khoảng vắt năm trùng chữ)"
+    owner: "Sally (UX) + Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: 8.5 review (MEDIUM ngày không tồn tại) + 8.6 review (2 LOW để nguyên). Trả bằng J-5, trước go-live."
+  - epic: 8
+    action: "TD-79: payments.paid_on và orders.created_at chưa có index; dashboard là màn đáp của mọi account"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Căn cứ: 8.1 review. Khối lượng Phase 1 chưa đáng migration; theo dõi khi dữ liệu lớn."
+  - epic: 8
+    action: "J-1: Cấp hạ tầng Firebase (project, google-services.json Android, service account firebase-admin) — để ngoài repo"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Mặc định tuyên bố trước: chưa cấp thì 9.1–9.3 dựng sau port với bộ gửi fake, mọi lane xanh, smoke push thật ghi 'chưa chạy, thiếu credential'; push Phase 1 chỉ Android (iOS chưa build/ký). Hạn: trước smoke push thật của 9.1/9.3."
+  - epic: 8
+    action: "J-2: Một vị từ phạm vi xem đơn dùng chung cho dieuKienPhamVi và resolver người nhận 9.3 (chiều 'account nào xem được đơn') + trả TD-77"
+    owner: "Amelia (Dev)"
+    status: open
+    resolution: "Trước commit đầu 9.3. Tiêu chí: không bản sao thứ ba của luật owner/assignee/view_all; đột biến hàm domain ⇒ ĐỎ ở orders list, tra bảo hành và resolver."
+  - epic: 8
+    action: "J-3: Ghi chú bắt buộc Epic 9 — payload push + hộp thư không mang tiền/giá vốn, hộp thư đọc lại quyền xem đơn tươi lúc đọc"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 8: epics.md Epic 9 (khối ghi chú đầu epic). Căn cứ: 8.5 review 2 HIGH (giá vốn + tiền lồng lọt qua audit)."
+  - epic: 8
+    action: "J-4: Xác nhận 6 câu hỏi sản phẩm Epic 8 (8.4 cho tự duyệt chiết khấu, một key mỗi nhánh; 8.6 trừ chiết khấu đã duyệt trước VAT, đơn chỉ công lắp không có mặt, biên % số nguyên, ngày xuất DD/MM)"
+    owner: "Đại Ca (Project Lead)"
+    status: open
+    resolution: "Mặc định tuyên bố trước = hành vi code hiện tại. Im lặng tới commit đầu 9.1 ⇒ mặc định thành quyết định. Đổi cái nào là story/quick-dev riêng."
+  - epic: 8
+    action: "J-5: Ô chọn ngày mobile chung (AppDateField) thay ô gõ tay ở Audit + Lợi nhuận, một luật kiểm ngày (TD-78)"
+    owner: "Sally (UX) + Amelia (Dev)"
+    status: open
+    resolution: "Trước go-live, không chặn Epic 9. Tiêu chí: hai màn cùng hành vi; widget test ngày không tồn tại + khoảng ngược."
+  - epic: 8
+    action: "J-6: Đưa 3 luật Epic 8 vào tài liệu create-story đọc (kiểm lại quyền gate dưới khoá; bề mặt đọc lại payload phải tự che; dọn smoke theo thứ tự FK rồi chạy lại test:db)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 8: _bmad-output/project-context.md mục Testing."
+  - epic: 8
+    action: "J-7: Đồng bộ sổ sách + tài liệu lệch code (spine AD-8/AD-11/AD-21 + cây module, CONVENTIONS leo thang, backend README số suite, project-context, van-hanh-go-live, epics Epic 9)"
+    owner: "Amelia (Dev)"
+    status: done
+    resolution: "Làm trong retro Epic 8, xem §12 của epic-8-retro-2026-10-30.md."

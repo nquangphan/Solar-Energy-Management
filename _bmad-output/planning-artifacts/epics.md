@@ -925,6 +925,11 @@ _Firebase mobile (FCM/Crashlytics/Analytics/Remote Config); đăng ký device to
 
 _**Mobile: BLoC từ đầu** (correct-course 2026-10-23, Epic 11). Mọi màn/state mobile mới của Epic 9 (đăng ký/gỡ token gắn vào `SessionCubit`, hộp thư in-app + badge, tuỳ chọn thông báo, mở deep-link) dựng bằng Cubit/Bloc. Cubit nhận port qua constructor từ `main.dart` và là nơi duy nhất gọi port; màn chỉ render state + gửi sự kiện; logic có `bloc_test`. Guard "màn không gọi port" (allowlist rỗng từ 11.4) phủ màn mới. [Source: `sprint-change-proposal-2026-10-23.md` §6]_
 
+_**Ghi chú bắt buộc từ retro Epic 8 (2026-10-30), create-story 9.3/9.4/9.6 mang theo:**_
+- _**Một vị từ phạm vi xem đơn (J-2):** resolver người nhận (9.3, 9.6) lọc "account nào xem được đơn này" bằng MỘT hàm domain dùng chung với mệnh đề `dieuKienPhamVi` của `OrdersService` (cùng `PERMISSION_IMPLIES`: `orders.view_all` ⊇ `orders.view_own`; `view_own` = owner HOẶC assignee) — không chép tay bản thứ ba (TD-77 `lookupByPhone` trả trước 9.3). Đột biến hàm đó phải ĐỎ ở cả danh sách đơn lẫn resolver._
+- _**Che dữ liệu ở payload + hộp thư (J-3):** payload FCM chỉ `{ type, targetId, deeplink }` + tiêu đề/nội dung tiếng Việt KHÔNG chứa số tiền hay giá vốn; hộp thư in-app (9.4) đọc lại quyền xem đơn **tươi lúc đọc** (quyền có thể bị thu sau khi noti được lưu) — account không còn xem được đơn thì không thấy nội dung noti đó. Căn cứ: 8.5 review 2 HIGH (giá vốn + tiền lồng lọt qua bề mặt đọc audit)._
+- _**Hạ tầng (J-1):** chưa có Firebase project/credential. Mọi lane test dùng bộ gửi fake sau port (luật không gọi dịch vụ ngoài localhost); push thật chỉ ở smoke khi Đại Ca cấp credential (để ngoài repo). Push Phase 1 mặc định chỉ Android (iOS chưa build/ký)._
+
 ### Story 9.1: Thiết lập Firebase mobile
 As a lập trình viên mobile, I want tích hợp Firebase (FCM/Crashlytics/Analytics/Remote Config), So that mobile nhận push và có telemetry cơ bản.
 **Acceptance Criteria:**

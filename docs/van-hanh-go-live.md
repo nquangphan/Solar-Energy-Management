@@ -4,7 +4,7 @@ Các việc phải làm một lần khi đưa app vào dùng thật.
 
 ## Gán số điện thoại cho mọi account
 
-**Ai làm:** người quản trị có quyền chạy SQL trên DB production (tới khi có form tạo/sửa account của Story 8.3).
+**Ai làm:** account có quyền `permissions.manage` (sau account admin đầu tiên của seed), trên màn **Phân quyền** — web: nút **"+ Tạo account"** / **"Sửa account"**; mobile: Menu → Phân quyền. Ô Số điện thoại bắt buộc, backend chuẩn hoá. Không ai tự sửa được tài khoản của chính mình; account mang quyền người sửa không có (vd Super Admin) thì người đó không sửa được. Chỉ cần chạy SQL cho account đã tồn tại trước khi có form mà không ai có quyền sửa.
 
 **Khi nào:** ngay lúc go-live, **trước** khi phát tài khoản cho nhân viên.
 
