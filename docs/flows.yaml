@@ -41,6 +41,7 @@ source:
     - "**/*.g.dart"
     - "**/*.generated.ts"
     - "backend/openapi/**"
+    - "mobile/lib/api/generated/**"
     - "web/src/design-system/tokens/tokens.ts"
     - "web/src/design-system/tokens/tokens.css"
     - "web/src/design-system/icons/sprite.ts"
