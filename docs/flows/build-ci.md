@@ -106,6 +106,12 @@ trong môi trường thì chỉ `testPathIgnorePatterns` giữ `npm test` hermet
 - accounts-permissions: drift guard `permissions.json` chạy trong lane backend; key quyền sinh ra kiểm ở lane design-system.
 - orders, inventory, catalog, customers, system-settings: các ca `backend/test/*.db.integration.spec.ts` (khoá dòng, CHECK, unique) của các flow này chỉ chạy ở lane DB.
 
+## Mở rộng: khai báo biến môi trường của web
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `web/src/vite-env.d.ts` | Khai báo `import.meta.env` cho biến `VITE_*` (chỉ biến `VITE_*` vào bundle) |
+
 ## Tests
 
 | Loại | Test | Kiểm tra |
@@ -126,4 +132,4 @@ Các test khác do CI chạy thuộc flow riêng của chúng; flow này chỉ s
 - Không có ngưỡng coverage; `collectCoverageFrom` trong `backend/package.json` chỉ khai phạm vi.
 - CI không chạy `openapi:gen`, `permissions:gen` hay generator design-system. File sinh cũ bị bắt bởi drift guard
   (đỏ), không được tự sinh lại.
-- `mobile/` chưa có `main.dart`, `android/`, `ios/`: lane mobile chỉ analyze + widget test, không build app.
+- `mobile/` có `main.dart` (composition root) nhưng chưa có `android/`, `ios/`: lane mobile chỉ analyze + widget test, không build app.

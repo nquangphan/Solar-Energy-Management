@@ -32,7 +32,7 @@ Màn hình: chỉ web — khung "Thuế suất VAT" nằm dưới bảng nguồn
 (`web/src/screens/settings/`, shared với flow `customers`). Mockup vẽ tab "Nguồn khách | Thuế suất VAT" nhưng
 design-system chưa có component Tabs nên dựng thành Frame riêng (lệch có chủ đích, ghi trong code). Không có
 màn bấm cờ, không có port cờ ở web/mobile, và không có bản mobile của `SettingsPort` (header port ghi "WEB-ONLY,
-AND THAT IS DELIBERATE"). Màn chạy trên `FakeSettingsPort`; web chưa có router/port HTTP thật.
+AND THAT IS DELIBERATE"). Web nối `HttpSettingsPort` vào app thật; `FakeSettingsPort` chỉ dùng trong test.
 
 ## Các bước
 
@@ -104,6 +104,18 @@ AND THAT IS DELIBERATE"). Màn chạy trên `FakeSettingsPort`; web chưa có ro
 - auth-session: JWT, `PermissionsGuard`, `@RequirePermissions`, `@AuthenticatedOnly`.
 - domain-events-audit: `EventBus`, `AuditSubscriber`.
 - backend-platform: `PrismaService`, `AppException` / error envelope, `ValidationPipe`.
+
+## Mở rộng: pháp nhân công ty (bên bán trên hợp đồng và hoá đơn)
+
+`GET /settings/company-legal-entity` và `PUT /settings/company-legal-entity` (`SettingsController`, cần `settings.manage`)
+đọc và ghi các trường pháp nhân trong `system_settings`. Các trường mặc định rỗng; trường rỗng in "Chưa cấu hình" trên
+hợp đồng và hoá đơn và KHÔNG chặn sinh chứng từ (`missingLegalEntityFields` chỉ liệt kê những trường còn thiếu).
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/settings/domain/company-legal-entity.ts` | Trường pháp nhân theo thứ tự hiển thị (`LEGAL_ENTITY_FIELDS`), `missingLegalEntityFields` |
+| `backend/src/settings/dto/company-legal-entity.dto.ts` | DTO đọc và ghi pháp nhân |
+| `web/src/api/http-settings-port.ts` | Port thật của màn Cấu hình (web) |
 
 ## Tests
 

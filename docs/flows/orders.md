@@ -51,7 +51,7 @@ Màn hình (cùng cặp web/mobile, nhãn tiếng Việt giống từng byte):
 - Duyệt chiết khấu: `DiscountApprovalScreen.tsx`, `discount_approval_screen.dart` → `DiscountApprovalScreen`.
 - Tra cứu bảo hành: `web/src/screens/warranty/WarrantyLookupScreen.tsx`, `mobile/lib/screens/warranty/warranty_lookup_screen.dart` → `WarrantyLookupScreen`.
 
-Giới hạn đã biết: web chưa có router và chưa có port HTTP (`web/src/main.tsx` chỉ dựng shell demo hai màn auth), nên các màn orders chỉ chạy trên `FakeOrdersPort`/`FakeWarrantyPort` trong test. Mobile chưa có `main.dart`; màn chạy qua widget test với fake port.
+Các màn orders nối vào app thật qua `HttpOrdersPort` và `HttpWarrantyPort` (web và mobile), được dựng ở composition root (flow `app-shell`); test dùng `FakeOrdersPort` và `FakeWarrantyPort`.
 
 ## Các bước
 
@@ -195,6 +195,27 @@ Migration dùng chung (mục `shared`): `20260717000000_add_system_settings_and_
 - backend-platform: `PrismaService`, `StoragePort`/R2, `AppException` + `AllExceptionsFilter`, OpenAPI.
 - design-system: component/widget, `StatusChip`, shell, guard màn `design-system/screens/*.test.mjs`.
 - build-ci: CI chạy các lane test bên dưới.
+
+## Mở rộng: số báo giá, đính kèm, tra cứu bảo hành và port thật
+
+- `backend/src/orders/domain/quote-number.ts` (`quoteNumberOf`): số báo giá in trên PDF là 8 ký tự đầu của id đơn, viết hoa.
+- `backend/src/orders/dto/attachment-upload-request.dto.ts`: body upload ảnh đính kèm đơn.
+- Trạng thái của các màn đơn và bảo hành trên mobile nằm trong cubit/state riêng (`*_cubit.dart`, `*_state.dart`);
+  màn chỉ render, mọi lời gọi qua port.
+- Tra cứu bảo hành gửi SĐT thô; backend là nơi chuẩn hoá duy nhất (AD-9).
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/orders/domain/quote-number.ts` | Số báo giá từ id đơn (`quoteNumberOf`) |
+| `backend/src/orders/dto/attachment-upload-request.dto.ts` | Body upload ảnh đính kèm |
+| `mobile/lib/screens/orders/create_quote_cubit.dart`, `create_quote_state.dart` | Trạng thái màn Tạo báo giá (mobile) |
+| `mobile/lib/screens/orders/discount_approval_cubit.dart`, `discount_approval_state.dart` | Trạng thái màn Duyệt chiết khấu (mobile) |
+| `mobile/lib/screens/orders/order_detail_cubit.dart`, `order_detail_state.dart` | Trạng thái màn Chi tiết đơn (mobile) |
+| `mobile/lib/screens/orders/order_list_cubit.dart`, `order_list_state.dart` | Trạng thái màn Danh sách đơn (mobile) |
+| `mobile/lib/screens/orders/order_status_change_cubit.dart`, `order_status_change_state.dart` | Trạng thái màn Chuyển trạng thái (mobile) |
+| `mobile/lib/screens/warranty/warranty_lookup_cubit.dart`, `warranty_lookup_state.dart` | Trạng thái màn Tra cứu bảo hành (mobile) |
+| `mobile/lib/api/http_orders_port.dart`, `mobile/lib/api/http_warranty_port.dart` | Port thật (mobile) |
+| `web/src/api/http-orders-port.ts`, `web/src/api/http-warranty-port.ts` | Port thật (web) |
 
 ## Tests
 

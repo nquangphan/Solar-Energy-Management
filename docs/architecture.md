@@ -32,11 +32,10 @@ backend/openapi/permissions.json ──sinh──> key quyền web + mobile
     event sau commit) → `domain/` (hàm thuần: pricing/VAT, transition, tồn, giá vốn…, không import Nest/Prisma).
 - **Web (`web/`)**: React 19 + Vite. `web/src/design-system/` là thư viện component/shell/token/icon và gating
   quyền; `web/src/screens/` là các màn theo miền. Màn nhận dữ liệu qua port (`web/src/design-system/session/*-port.ts`)
-  mà hình dạng khớp contract backend; hiện mới có fake port, chưa có HTTP client, router hay composition root.
-  `web/src/main.tsx` chỉ là shell demo nối màn Đăng nhập và Quên mật khẩu với `FakePasswordPort`.
+  mà hình dạng khớp contract backend. Port thật (`web/src/api/http-*-port.ts`) đi qua transport duy nhất (`web/src/api/transport.ts`).
+  `web/src/main.tsx` là composition root: dựng transport, client sinh tự động và mọi `Http*Port`, rồi router (`react-router`) với `AppRoutes` / `SignedOutRoutes` (xem flow `app-shell`).
 - **Mobile (`mobile/`)**: Flutter package `pns_mobile` gồm widget design system, màn và port tiêm
-  (`mobile/lib/design_system/session/`). Chưa có `main.dart`, `android/`, `ios/`: chưa có app chạy được,
-  mọi màn được kiểm bằng widget test với fake port.
+  (`mobile/lib/design_system/session/`). `mobile/lib/main.dart` là composition root (flow `app-shell`). Chưa có `android/`, `ios/`: chưa đóng gói app cài đặt được; mỗi màn vẫn được kiểm bằng widget test với fake port.
 - **Design system (`design-system/`)**: nguồn sự thật cho token (`tokens/design-tokens.json`) và icon
   (`icons/icons.json`); generator `build-tokens.mjs`, `build-icons.mjs`, `build-permission-keys.mjs` sinh output
   cho cả web và mobile. Các file `*.test.mjs` là guard đọc thẳng source web + mobile (drift byte-for-byte,
@@ -89,7 +88,7 @@ hình hoá). Quy ước: model PascalCase, bảng snake_case số nhiều, ID UU
   `PORT`, `JWT_ACCESS_SECRET` (≥32 ký tự), `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL_DAYS`,
   `PASSWORD_RESET_CODE_TTL_MINUTES`, `PASSWORD_RESET_MAX_ATTEMPTS`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`,
   `SEED_ADMIN_IS_SUPER_ADMIN`, `PUPPETEER_NO_SANDBOX`, và bốn biến `R2_*` ở trên.
-- Web: `npm run build` ra `web/dist/` (chưa dùng được cho người dùng thật vì chưa nối backend). Mobile: chưa build.
+- Web: `npm run build` ra `web/dist/`; dev web đi qua proxy của Vite. Mobile: chưa có bản đóng gói cài đặt.
 - CI: `.github/workflows/ci.yml` chạy năm lane (backend hermetic + DB với Postgres 18 service, design-system,
   web, mobile) nhưng chỉ chạy tay (`workflow_dispatch`). `.github/workflows/crew-docs.yml` tự chạy ở mọi push/PR
   để kiểm chuẩn docs (R1–R7).
@@ -104,5 +103,5 @@ hình hoá). Quy ước: model PascalCase, bảng snake_case số nhiều, ID UU
   ghi lên `Order`, AD-11).
 - File R2 đi qua backend (backend proxy bytes sau guard quyền), không dùng presigned URL như sơ đồ triển khai
   của spine.
-- Web chưa có router/HTTP client, mobile chưa có app-runtime (`main.dart`); spine giả định cả hai gọi REST trực tiếp.
-- Backend chưa bật CORS hay global prefix (`main.ts` chỉ `listen`), vì chưa có client thật gọi vào.
+- Web và mobile đều gọi REST qua một transport duy nhất mỗi client (flow `api-client`), đúng với giả định của spine.
+- Backend bật CORS theo allowlist `CORS_ORIGINS` (`common/http/cors.ts`; rỗng ⇒ tắt). Chưa có global prefix.

@@ -13,10 +13,8 @@ server-side" và "Luật không-leo-thang quyền".
 
 Giới hạn hiện tại (theo code):
 
-- `AccountPermissionsService.setForAccount` chưa có route HTTP nào gọi; màn Phân quyền / quản lý account
-  là Epic 8. `ROLE_PRESETS` hiện chỉ được `backend/prisma/seed.ts` dùng (nạp `SUPER_ADMIN`).
-- Chưa có `MePort` HTTP thật trên web lẫn mobile: chỉ có `FakeMePort` (TEST/DEMO-ONLY). Web chưa có router,
-  `SessionGatingExample` / `AppSessionGatingExample` là điểm ghép demo, mobile không có `main.dart`.
+- `AccountPermissionsService.setForAccount` được gọi từ `PUT /accounts/:id/permissions` (`AccountsController.updatePermissions`). `ROLE_PRESETS` (`accounts/domain/role-presets.ts`) được `AccountPermissionsService`, `AccountsService` và `backend/prisma/seed.ts` dùng.
+- `MePort` có bản HTTP thật (`HttpMePort`) trên web và mobile; `FakeMePort` chỉ dùng trong test. `SessionGatingExample` / `AppSessionGatingExample` là điểm ghép demo. Composition root: `web/src/main.tsx`, `mobile/lib/main.dart` (flow `app-shell`).
 - `PermissionsGuard` cho qua handler không khai metadata quyền; việc chặn "quên khai" nằm ở source-guard,
   chỉ quét `*.controller.ts`.
 
@@ -148,6 +146,33 @@ Giới hạn hiện tại (theo code):
   / `Gate` / `AppGate`.
 - design-system: shell (`Sidebar`, `SIDEBAR_NAV`) tiêu thụ `filterNav`.
 - backend-platform: `AppException`/`ErrorCode`, `PrismaService`, seed (`backend/prisma/seed.ts`).
+
+## Mở rộng: quản trị tài khoản và màn Phân quyền
+
+Route quản trị tài khoản và luật phụ thuộc quyền (Epic 8). Màn quản lý nằm ở hai client; port thật
+dùng client sinh tự động. Cổng của mọi route là `permissions.manage`.
+
+- `GET /accounts`, `GET /accounts/permission-options`, `POST /accounts`, `PUT /accounts/:id`, `PUT /accounts/:id/permissions`
+  (`AccountsController`). `PUT /accounts/:id/permissions` gọi `AccountPermissionsService.setForAccount`.
+- `permission-dependencies.ts` khai báo hai loại phụ thuộc: `PERMISSION_REQUIRES` (cần đủ mọi khoá) và
+  `PERMISSION_REQUIRES_ANY` (cần ít nhất một khoá). Bộ quyền thiếu phụ thuộc bị từ chối 400 (`missingDependencies`, `dependencyMessage`).
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/accounts/accounts.controller.ts` | Route quản trị tài khoản (`AccountsController`) |
+| `backend/src/accounts/domain/permission-dependencies.ts` | Luật phụ thuộc quyền (AND/OR) |
+| `backend/src/accounts/dto/account-permission-summary.dto.ts` | Tóm tắt quyền của một tài khoản |
+| `backend/src/accounts/dto/create-account-request.dto.ts`, `update-account-request.dto.ts` | Body tạo và sửa tài khoản |
+| `backend/src/accounts/dto/update-account-permissions-request.dto.ts`, `permission-options-response.dto.ts` | Body ghi quyền và danh mục quyền cho màn |
+| `mobile/lib/screens/permissions/account_list_screen.dart`, `account_list_cubit.dart`, `account_list_state.dart` | Danh sách tài khoản (mobile) |
+| `mobile/lib/screens/permissions/account_form_screen.dart`, `account_form_cubit.dart`, `account_form_state.dart` | Tạo và sửa tài khoản (mobile) |
+| `mobile/lib/screens/permissions/account_permissions_screen.dart`, `account_permissions_cubit.dart`, `account_permissions_state.dart` | Checklist quyền của một tài khoản, "Áp preset role" (mobile) |
+| `mobile/lib/design_system/session/accounts_port.dart`, `fake_accounts_port.dart` | Port và fake quản trị tài khoản (mobile) |
+| `mobile/lib/design_system/session/permissions_cubit.dart` | `PermissionsCubit`: quyền tươi cho gating giao diện |
+| `mobile/lib/api/http_accounts_port.dart`, `mobile/lib/api/http_me_port.dart` | Port thật: quản trị tài khoản và `/me` |
+| `web/src/screens/permissions/PermissionsScreen.tsx`, `web/src/screens/permissions/AccountFormScreen.tsx`, `web/src/screens/permissions/permissions.css` | Màn Phân quyền và Tạo/sửa tài khoản (web) |
+| `web/src/design-system/session/accounts-port.ts`, `fake-accounts-port.ts` | Port và fake quản trị tài khoản (web) |
+| `web/src/api/http-accounts-port.ts`, `web/src/api/http-me-port.ts` | Port thật: quản trị tài khoản và `/me` (web) |
 
 ## Tests
 

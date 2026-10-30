@@ -177,6 +177,20 @@ Mỗi thư mục migration được liệt kê trong `files` của flow sở h�
 - design-system: `money-fields.mjs` lấy danh sách field tiền từ `openapi.json`.
 - build-ci: lane backend chạy lint, format, build, `npm test`, migrate + seed + `test:db`.
 
+## Mở rộng: CORS, số tiền bằng chữ và pipe UUID
+
+- `backend/src/common/http/cors.ts` (`corsOptionsFromEnv`, `applyCors`): allowlist đúng từng origin từ `CORS_ORIGINS`
+  (phân tách bằng dấu phẩy); rỗng hoặc không đặt ⇒ CORS tắt. `main.ts` gọi `applyCors(app)`. Không có wildcard, không có regex.
+- `backend/src/common/money/amount-in-words.ts` (`amountInWords`): số tiền nguyên đồng thành chữ tiếng Việt ("Bằng chữ" của hợp đồng,
+  "Số tiền viết bằng chữ" của hoá đơn). Dùng chung để `contracts/` và `invoices/` không phụ thuộc nhau.
+- `backend/src/common/validation/uuid-param.ts`: pipe UUID cho path param. Lỗi trả về là 400 `VALIDATION_ERROR` theo envelope, không phải thông báo mặc định của Nest.
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/common/http/cors.ts` | Allowlist CORS từ `CORS_ORIGINS` |
+| `backend/src/common/money/amount-in-words.ts` | Số tiền bằng chữ tiếng Việt |
+| `backend/src/common/validation/uuid-param.ts` | `ParseUUIDPipe` có envelope lỗi chuẩn |
+
 ## Tests
 
 | Loại | Test | Kiểm tra |

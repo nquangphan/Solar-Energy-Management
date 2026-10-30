@@ -9,11 +9,10 @@ VAT, chiết khấu cần duyệt, chốt và phiên bản), vòng đời đơn 
 (giữ hàng khi chốt, xuất kho theo đơn, phiếu nhập/xuất/trả), phân quyền theo từng tài khoản và nhật ký audit.
 Giao diện tiếng Việt, chạy online, có web (làm việc ở bàn) và mobile (ngoài hiện trường).
 
-Trạng thái code (21-10-2026): đã xong Epic 1–6 của `_bmad-output/planning-artifacts/epics.md` (design system,
-nền tảng backend và đăng nhập/quyền, danh mục và khách hàng, báo giá/chốt/chiết khấu, vòng đời đơn và bảo
-hành, giao hàng và tồn kho). Chưa làm: thanh toán, hợp đồng, hoá đơn (Epic 7), dashboard/quản trị quyền/xem
-audit (Epic 8), thông báo đẩy (Epic 9). Web và mobile mới có màn + port; chưa có router, HTTP client thật hay
-app mobile chạy được (xem `docs/architecture.md`).
+Trạng thái code (30-10-2026): có code cho Epic 1–8 của `_bmad-output/planning-artifacts/epics.md` (design system,
+nền tảng backend và đăng nhập/quyền, danh mục và khách hàng, báo giá/chốt/chiết khấu, vòng đời đơn và bảo hành, giao hàng và tồn kho,
+thanh toán, hợp đồng, hoá đơn, dashboard và báo cáo lãi gộp, nhật ký audit, quản trị tài khoản). Chưa làm: thông báo đẩy (Epic 9).
+Web và mobile có màn, port HTTP thật và composition root (`web/src/main.tsx`, `mobile/lib/main.dart`); xem `docs/architecture.md`.
 
 Tài liệu nghiệp vụ gốc: PRD, spine kiến trúc, UX (`DESIGN.md`, `EXPERIENCE.md`) và epics trong
 `_bmad-output/planning-artifacts/`; luật cho agent trong `_bmad-output/project-context.md`. Tài liệu vận hành:
@@ -44,16 +43,22 @@ Hồ sơ mẫu của khách (hợp đồng, báo giá, khảo sát) nằm trong 
 | `backend/src/customers/` | Khách hàng (PK = SĐT E.164), nguồn khách |
 | `backend/src/orders/` | Báo giá kiêm đơn: giỏ hàng, preview-total, version, chốt, chiết khấu, trạng thái, huỷ, ảnh, xuất báo giá, bảo hành |
 | `backend/src/inventory/` | Tồn kho onHand/reserved, ledger `StockMovement`, phiếu kho, xuất kho theo đơn |
+| `backend/src/contracts/` | Hợp đồng HĐ Thi công / HĐ Mua bán (PDF) từ đơn đã chốt |
+| `backend/src/invoices/` | Hoá đơn nội bộ (snapshot của version đã chốt) và PDF |
+| `backend/src/payments/` | Lịch thanh toán, trả góp và ghi nhận thanh toán (chuyển trạng thái tự động) |
+| `backend/src/dashboard/` | Dashboard vận hành và báo cáo lãi gộp (chỉ đọc) |
 | `backend/src/settings/`, `backend/src/feature-flags/` | Cấu hình hệ thống (thuế VAT) và cờ nghiệp vụ |
 | `backend/src/events/`, `audit/`, `notifications/` | `EventBus` port, `AuditLog` append-only, `NotificationDispatcher` (bản đầu chỉ log) |
 | `backend/prisma/` | `schema.prisma`, migration SQL, seed tài khoản admin |
 | `backend/test/` | Test Jest: unit, e2e, lane DB `*.db.integration.spec.ts`, source-guard `no-*.spec.ts` |
 | `backend/openapi/` | Artifact sinh tự động: `openapi.json`, `permissions.json` |
 | `web/src/design-system/` | Thư viện component, shell, token, icon, gating quyền, port + fake port (`session/`) của web |
-| `web/src/screens/` | Màn web theo miền: auth, account, customers, orders, inventory, settings, warranty |
+| `web/src/screens/` | Màn web theo miền: auth, account, customers, orders, inventory, settings, warranty, contracts, invoices, payments, dashboard, reports, audit, permissions |
 | `web/src/test/` | Vitest: render mọi màn, độ phủ class CSS, màn kho |
 | `mobile/lib/design_system/` | Widget, shell, token, icon, gating, port + fake port của Flutter |
 | `mobile/lib/screens/` | Màn mobile theo miền (cùng bộ với web, trừ màn Cấu hình) |
+| `web/src/app/`, `mobile/lib/app/` | Vỏ ứng dụng: composition root, route, menu và gating theo quyền (flow `app-shell`) |
+| `web/src/api/`, `mobile/lib/api/` | Transport HTTP duy nhất, lỗi, lưu phiên, tải file và các port HTTP thật (flow `api-client`) |
 | `mobile/test/` | Widget test Flutter |
 | `design-system/` | Nguồn token/icon (JSON), generator, guard parity/drift/tiền/màn quét web + mobile |
 | `.github/workflows/` | CI năm lane (`ci.yml`) và kiểm docs (`crew-docs.yml`) |
@@ -64,16 +69,22 @@ Hồ sơ mẫu của khách (hợp đồng, báo giá, khảo sát) nằm trong 
 <!-- crew-docs:flows:start -->
 | Flow | Id | Điểm vào |
 |------|----|----------|
-| [Tài khoản, phân quyền và gating giao diện](flows/accounts-permissions.md) | `accounts-permissions` | `backend/scripts/generate-permissions.ts`, `backend/src/auth/me.controller.ts`, `design-system/permissions/build-permission-keys.mjs` |
+| [Tài khoản, phân quyền và gating giao diện](flows/accounts-permissions.md) | `accounts-permissions` | `backend/scripts/generate-permissions.ts`, `backend/src/accounts/accounts.controller.ts`, `backend/src/auth/me.controller.ts`, `design-system/permissions/build-permission-keys.mjs`, `mobile/lib/screens/permissions/account_list_screen.dart`, `web/src/screens/permissions/PermissionsScreen.tsx` |
+| [Lớp gọi API HTTP: transport, lỗi, lưu phiên và tải file](flows/api-client.md) | `api-client` | `mobile/lib/api/transport.dart`, `web/src/api/transport.ts` |
+| [Vỏ ứng dụng: khởi động, định tuyến, menu và ports](flows/app-shell.md) | `app-shell` | `mobile/lib/app/pns_app.dart`, `mobile/lib/main.dart`, `web/src/app/AppRoutes.tsx` |
 | [Đăng nhập, phiên và mật khẩu](flows/auth-session.md) | `auth-session` | `backend/src/auth/auth.controller.ts`, `backend/src/auth/change-password.controller.ts`, `mobile/lib/screens/account/profile_screen.dart`, `mobile/lib/screens/auth/forgot_password_screen.dart`, `mobile/lib/screens/auth/login_screen.dart`, `web/src/main.tsx`, `web/src/screens/account/ProfileScreen.tsx`, `web/src/screens/auth/ForgotPasswordScreen.tsx`, `web/src/screens/auth/LoginScreen.tsx` |
 | [Nền tảng backend: bootstrap, lỗi, Prisma, OpenAPI, storage](flows/backend-platform.md) | `backend-platform` | `backend/scripts/generate-openapi.ts`, `backend/src/health/health.controller.ts`, `backend/src/main.ts` |
 | [Build, test và CI](flows/build-ci.md) | `build-ci` | `.github/workflows/ci.yml` |
 | [Danh mục vật tư, nhóm hàng và bảng giá](flows/catalog.md) | `catalog` | `backend/src/catalog/product-groups.controller.ts`, `backend/src/catalog/product-prices.controller.ts`, `backend/src/catalog/products.controller.ts` |
+| [Hợp đồng: HĐ Thi công và HĐ Mua bán (PDF)](flows/contracts.md) | `contracts` | `backend/src/contracts/contracts.controller.ts`, `mobile/lib/screens/contracts/contracts_screen.dart`, `web/src/screens/contracts/ContractsScreen.tsx` |
 | [Khách hàng và nguồn khách](flows/customers.md) | `customers` | `backend/src/customers/customer-sources.controller.ts`, `backend/src/customers/customers.controller.ts`, `mobile/lib/screens/customers/customer_detail_screen.dart`, `mobile/lib/screens/customers/customer_list_screen.dart`, `mobile/lib/screens/customers/customer_pick_screen.dart`, `web/src/screens/customers/CustomerDetailScreen.tsx`, `web/src/screens/customers/CustomerListScreen.tsx`, `web/src/screens/customers/CustomerPickScreen.tsx` |
+| [Dashboard vận hành và báo cáo lãi gộp](flows/dashboard-reports.md) | `dashboard-reports` | `backend/src/dashboard/dashboard.controller.ts`, `backend/src/dashboard/profit-report.controller.ts`, `mobile/lib/screens/dashboard/dashboard_screen.dart`, `mobile/lib/screens/reports/profit_report_screen.dart`, `web/src/screens/dashboard/DashboardScreen.tsx`, `web/src/screens/reports/ProfitReportScreen.tsx` |
 | [Design system: token, icon, component, shell, định dạng tiền](flows/design-system.md) | `design-system` | `design-system/icons/build-icons.mjs`, `design-system/tokens/build-tokens.mjs` |
-| [Domain event, nhật ký audit và thông báo](flows/domain-events-audit.md) | `domain-events-audit` | — |
+| [Domain event, nhật ký audit và thông báo](flows/domain-events-audit.md) | `domain-events-audit` | `backend/src/audit/audit.controller.ts`, `mobile/lib/screens/audit/audit_log_screen.dart`, `web/src/screens/audit/AuditLogScreen.tsx` |
 | [Tồn kho, giữ hàng và phiếu kho](flows/inventory.md) | `inventory` | `backend/src/inventory/stock-items.controller.ts`, `backend/src/inventory/stock-vouchers.controller.ts`, `backend/src/orders/orders.controller.ts`, `mobile/lib/screens/inventory/inventory_screen.dart`, `mobile/lib/screens/inventory/stock_vouchers_screen.dart`, `web/src/screens/inventory/InventoryScreen.tsx`, `web/src/screens/inventory/StockVouchersScreen.tsx` |
+| [Hoá đơn nội bộ và PDF](flows/invoices.md) | `invoices` | `backend/src/invoices/invoices.controller.ts`, `mobile/lib/screens/invoices/invoices_screen.dart`, `web/src/screens/invoices/InvoicesScreen.tsx` |
 | [Báo giá và đơn hàng](flows/orders.md) | `orders` | `backend/src/orders/orders.controller.ts`, `mobile/lib/screens/orders/create_quote_screen.dart`, `mobile/lib/screens/orders/discount_approval_screen.dart`, `mobile/lib/screens/orders/order_detail_screen.dart`, `mobile/lib/screens/orders/order_list_screen.dart`, `mobile/lib/screens/orders/order_status_change_screen.dart`, `mobile/lib/screens/warranty/warranty_lookup_screen.dart`, `web/src/screens/orders/CreateQuoteScreen.tsx`, `web/src/screens/orders/DiscountApprovalScreen.tsx`, `web/src/screens/orders/OrderDetailScreen.tsx`, `web/src/screens/orders/OrderStatusChangeScreen.tsx`, `web/src/screens/orders/OrdersListScreen.tsx`, `web/src/screens/warranty/WarrantyLookupScreen.tsx` |
+| [Lịch thanh toán, trả góp và ghi nhận thanh toán](flows/payments.md) | `payments` | `backend/src/payments/payment-schedules.controller.ts`, `backend/src/payments/payments.controller.ts`, `mobile/lib/screens/payments/payment_schedule_screen.dart`, `web/src/screens/payments/PaymentScheduleScreen.tsx` |
 | [Cấu hình hệ thống: thuế VAT và cờ nghiệp vụ](flows/system-settings.md) | `system-settings` | `backend/src/feature-flags/feature-flags.controller.ts`, `backend/src/settings/settings.controller.ts` |
 <!-- crew-docs:flows:end -->
 

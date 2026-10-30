@@ -39,8 +39,7 @@ HTTP (mọi route cần JWT; quyền do `PermissionsGuard` toàn cục kiểm qu
 
 Event: `OrderCancelledStockSubscriber` nghe `OrderCancelled` trên `EventBus`.
 
-Màn hình (chưa nối vào app thật: web chưa có router/port HTTP, `web/src/main.tsx` chỉ là shell demo
-auth; mobile chưa có `main.dart`; mọi màn chạy trên fake port):
+Màn hình (nối vào app thật qua `HttpInventoryPort` và `HttpStockVouchersPort` trên web và mobile; test dùng fake port):
 
 - Web: `InventoryScreen` (Tồn kho), `StockVouchersScreen` (Phiếu kho); khối `StockIssuePreview` trong
   `OrderStatusChangeScreen` (bước "Đã giao") và `OrderDetailScreen` ("Phiếu xuất"); cảnh báo tồn trong
@@ -189,6 +188,15 @@ auth; mobile chưa có `main.dart`; mọi màn chạy trên fake port):
 - auth-session: JWT, `PermissionsGuard`, `@RequirePermissions` / `@RequireAnyPermissions`.
 - backend-platform: `PrismaService`, error envelope (`AppException`, `ErrorCode`), `ValidationPipe`.
 - design-system: component, shell, gating (`can`, `filterNav`, `PERM`) cho màn kho; text-guard trong `design-system/screens/`.
+
+## Mở rộng: trạng thái màn mobile và port thật
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `mobile/lib/screens/inventory/inventory_cubit.dart`, `inventory_state.dart` | Trạng thái màn Tồn kho (mobile) |
+| `mobile/lib/screens/inventory/stock_vouchers_cubit.dart`, `stock_vouchers_state.dart` | Trạng thái màn Phiếu kho (mobile) |
+| `mobile/lib/api/http_inventory_port.dart`, `mobile/lib/api/http_stock_vouchers_port.dart` | Port thật (mobile) |
+| `web/src/api/http-inventory-port.ts`, `web/src/api/http-stock-vouchers-port.ts` | Port thật (web) |
 
 ## Tests
 

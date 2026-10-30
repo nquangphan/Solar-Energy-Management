@@ -115,6 +115,23 @@ trước khi tìm chuỗi cấm.
 - auth-session, customers, orders, inventory, system-settings: màn hình dùng component/shell; `screens-render.test.tsx` render mọi màn web của các flow này; money-render guard quét `web/src/screens` và `mobile/lib/screens`.
 - build-ci: lane design-system (`npm test`), web (typecheck + vitest + build), mobile (analyze + test).
 
+## Mở rộng: biểu đồ cột và helper của guard
+
+- `BarChart` (web) và `AppBarChart` trong `bar_chart.dart` (mobile): biểu đồ cột vẽ SỐ ĐẾM (đơn theo trạng thái) của Trang chủ.
+- Helper cho text-guard trong `design-system/lib/`:
+  - `money-arithmetic.mjs`: regex cho guard "client không tính tiền" (tên trường tiền cạnh toán tử, kể cả ép kiểu và `??`).
+  - `read-mobile-screen.mjs`: đọc màn mobile cùng `*_cubit.dart` / `*_state.dart` để guard không mù khi logic đã chuyển sang cubit.
+  - `web-contract-types.mjs`, `mobile-contract-types.mjs`: đọc kiểu contract của web (`schema.d.ts`) và mobile (model sinh tự động) để so sánh trường hai bên.
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `mobile/lib/design_system/components/bar_chart.dart` | Biểu đồ cột (`AppBarChart`) |
+| `web/src/design-system/components/BarChart.tsx` | Biểu đồ cột (`BarChart`) |
+| `design-system/lib/money-arithmetic.mjs` | Regex tên trường tiền cạnh toán tử |
+| `design-system/lib/read-mobile-screen.mjs` | Đọc màn mobile kèm cubit và state |
+| `design-system/lib/web-contract-types.mjs` | Đọc kiểu contract phía web |
+| `design-system/lib/mobile-contract-types.mjs` | Đọc kiểu contract phía mobile |
+
 ## Tests
 
 | Loại | Test | Kiểm tra |

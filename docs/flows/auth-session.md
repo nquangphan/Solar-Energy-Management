@@ -16,10 +16,8 @@ Giới hạn đã biết (ghi trong CONVENTIONS, chưa xử):
   khẩu chưa self-service được. Chưa có nút "Gửi lại mã".
 - Thu hồi phiên không tức thì: access JWT cũ vẫn dùng được tới hết `ACCESS_TOKEN_TTL` (mặc định 15 phút).
 - Không rate-limit IP trên các route công khai; cooldown mã reset là read-then-write, chưa atomic.
-- Màn Đăng nhập (web + mobile) **chỉ validate trình bày**, chưa gọi `POST /auth/login`, chưa lưu token. Màn
-  chấp nhận "SĐT hoặc email" nhưng `LoginRequestDto` chỉ nhận email (`@IsEmail`).
-- Web chưa có router/composition root: `web/src/main.tsx` là shell demo nối Login ↔ Quên mật khẩu bằng
-  `FakePasswordPort`. Mobile chưa có `main.dart`; màn nhận `PasswordPort` qua constructor, test dùng fake port.
+- Màn Đăng nhập (web + mobile) gọi `POST /auth/login` qua `HttpAuthPort` bằng **số điện thoại** (`LoginRequestDto.phone`; `account-phone.ts` chuẩn hoá E.164 cho đăng nhập, quên và đặt lại mật khẩu).
+- Web: `web/src/main.tsx` là composition root (flow `app-shell`): dựng transport, client và các `Http*Port`, rồi mount `SignedOutRoutes` / `AppRoutes`. Mobile: `mobile/lib/main.dart` là composition root; màn nhận `PasswordPort` qua constructor, test dùng fake port.
 
 ## Điểm vào
 
@@ -27,8 +25,8 @@ Giới hạn đã biết (ghi trong CONVENTIONS, chưa xử):
 - `POST /auth/forgot-password`, `POST /auth/reset-password` — `AuthController` (công khai).
 - `POST /auth/change-password` — `ChangePasswordController` (cần Bearer, `@AuthenticatedOnly()`).
 - Guard toàn cục `JwtAuthGuard` (`APP_GUARD` trong `AuthModule`) chạy trên MỌI request không `@Public()`.
-- Web: `web/src/main.tsx` (`DemoShell`), `LoginScreen`, `ForgotPasswordScreen`, `ProfileScreen`.
-- Mobile: `LoginScreen`, `ForgotPasswordScreen`, `ProfileScreen` (Flutter widget, chưa có entry app).
+- Web: `web/src/main.tsx` (composition root), `LoginScreen`, `ForgotPasswordScreen`, `ProfileScreen`.
+- Mobile: `mobile/lib/main.dart` (composition root), `LoginScreen`, `ForgotPasswordScreen`, `ProfileScreen`; phase đăng nhập do `SessionCubit` giữ.
 
 ## Các bước
 
@@ -148,6 +146,27 @@ Giới hạn đã biết (ghi trong CONVENTIONS, chưa xử):
 - backend-platform: `AppException`/`ErrorCode`, `AllExceptionsFilter`, `ValidationPipe`, `PrismaService`,
   fail-fast `JWT_ACCESS_SECRET` ở `main.ts`.
 - design-system: component, `WebShell`/`AppPhoneFrame`/`AppMobileShell`, session provider dùng cho các màn.
+
+## Mở rộng: SĐT đăng nhập, phase phiên và port thật
+
+- **Đăng nhập bằng SĐT**: `backend/src/auth/account-phone.ts` (`accountPhoneOrThrow`) là cửa duy nhất chuẩn hoá SĐT
+  thành E.164 cho đăng nhập, quên và đặt lại mật khẩu; SĐT sai bị 400 trước khi tra cứu tài khoản.
+  Cột `accounts.phone` (unique) thêm bởi migration `20261022230000_add_account_phone`.
+- **Phase phiên mobile**: `SessionCubit` (`mobile/lib/app/session_cubit.dart`, `session_state.dart`) khôi phục phiên lúc khởi động,
+  chuyển giữa Đăng nhập, Quên mật khẩu và app đã đăng nhập, và đăng xuất. Chỉ thấy `AuthPort`.
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/auth/account-phone.ts` | Chuẩn hoá SĐT đăng nhập (E.164), một cửa |
+| `backend/prisma/migrations/20261022230000_add_account_phone/migration.sql` | Cột `accounts.phone` và unique index |
+| `mobile/lib/app/session_cubit.dart`, `mobile/lib/app/session_state.dart` | Phase phiên của app mobile (`SessionCubit`) |
+| `mobile/lib/screens/auth/login_cubit.dart`, `login_state.dart` | Trạng thái màn Đăng nhập (mobile) |
+| `mobile/lib/screens/auth/forgot_password_cubit.dart`, `forgot_password_state.dart` | Trạng thái màn Quên mật khẩu (mobile) |
+| `mobile/lib/screens/account/profile_cubit.dart`, `profile_state.dart` | Trạng thái màn Hồ sơ (mobile) |
+| `mobile/lib/design_system/session/auth_port.dart`, `fake_auth_port.dart` | `AuthPort` và fake (mobile) |
+| `mobile/lib/api/http_auth_port.dart`, `mobile/lib/api/http_password_port.dart` | Port thật: đăng nhập, phiên và mật khẩu (mobile) |
+| `web/src/design-system/session/auth-port.ts`, `fake-auth-port.ts` | `AuthPort` và fake (web) |
+| `web/src/api/http-auth-port.ts`, `web/src/api/http-password-port.ts` | Port thật: đăng nhập, phiên và mật khẩu (web) |
 
 ## Tests
 

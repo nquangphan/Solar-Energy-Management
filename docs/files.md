@@ -40,6 +40,13 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/prisma/migrations/20261021100000_add_stock_voucher_order_link/migration.sql` | [inventory](flows/inventory.md) (file) |
 | `backend/prisma/migrations/20261021110000_add_stock_movement_reservation_keys/migration.sql` | [inventory](flows/inventory.md) (file) |
 | `backend/prisma/migrations/20261021120000_add_stock_voucher_return_link/migration.sql` | [inventory](flows/inventory.md) (file) |
+| `backend/prisma/migrations/20261021130000_add_payment_schedules/migration.sql` | [payments](flows/payments.md) (file) |
+| `backend/prisma/migrations/20261022090000_add_payments/migration.sql` | [payments](flows/payments.md) (file) |
+| `backend/prisma/migrations/20261022120000_add_contracts/migration.sql` | [contracts](flows/contracts.md) (file) |
+| `backend/prisma/migrations/20261022150000_add_invoices/migration.sql` | [invoices](flows/invoices.md) (file) |
+| `backend/prisma/migrations/20261022200000_add_invoice_pdfs/migration.sql` | [invoices](flows/invoices.md) (file) |
+| `backend/prisma/migrations/20261022230000_add_account_phone/migration.sql` | [auth-session](flows/auth-session.md) (file) |
+| `backend/prisma/migrations/20261030090000_add_audit_logs_occurred_at_index/migration.sql` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/prisma/migrations/migration_lock.toml` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/prisma/schema.prisma` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/prisma/seed.ts` | [backend-platform](flows/backend-platform.md) (file) |
@@ -47,17 +54,34 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/scripts/generate-permissions.ts` | [accounts-permissions](flows/accounts-permissions.md) (điểm vào) |
 | `backend/scripts/openapi-app-context.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/accounts/account-permissions.service.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/accounts.controller.ts` | [accounts-permissions](flows/accounts-permissions.md) (điểm vào), [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/accounts.module.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/accounts.service.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/domain/account-events.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/domain/permission-dependencies.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/domain/permission-escalation.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/domain/permission-registry.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/domain/role-presets.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/dto/account-permission-summary.dto.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/dto/create-account-request.dto.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/dto/permission-options-response.dto.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/dto/update-account-permissions-request.dto.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `backend/src/accounts/dto/update-account-request.dto.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/accounts/permissions-artifact.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `backend/src/app.module.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/audit/audit-log-read.service.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/audit.controller.ts` | [domain-events-audit](flows/domain-events-audit.md) (điểm vào), [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/audit/audit.module.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/audit/audit.service.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/audit/audit.subscriber.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/domain/audit-changes.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/domain/audit-event-labels.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/domain/audit-target-types.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/dto/audit-change.dto.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/dto/audit-log-entry.dto.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/dto/audit-log-list-response.dto.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/audit/dto/list-audit-logs-query.dto.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `backend/src/auth/account-phone.ts` | [auth-session](flows/auth-session.md) (file) |
 | `backend/src/auth/auth.config.ts` | [auth-session](flows/auth-session.md) (file) |
 | `backend/src/auth/auth.controller.ts` | [auth-session](flows/auth-session.md) (điểm vào) |
 | `backend/src/auth/auth.module.ts` | [auth-session](flows/auth-session.md) (file) |
@@ -115,7 +139,22 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/common/errors/dto/field-error.dto.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/common/errors/error-code.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/common/errors/prisma-unique-violation.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/common/http/cors.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/common/money/amount-in-words.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/common/validation/uuid-param.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/common/validation/validation-pipe.factory.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/contracts/clauses/construction-clauses.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/clauses/sale-clauses.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/contract-template.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/contracts.controller.ts` | [contracts](flows/contracts.md) (điểm vào), [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/contracts.module.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/contracts.service.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/domain/contract-eligibility.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/domain/contract-events.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/domain/contract-number.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/domain/contract-type.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/dto/contract-response.dto.ts` | [contracts](flows/contracts.md) (file) |
+| `backend/src/contracts/dto/contracts-overview-response.dto.ts` | [contracts](flows/contracts.md) (file) |
 | `backend/src/customers/customer-sources.controller.ts` | [customers](flows/customers.md) (điểm vào) |
 | `backend/src/customers/customer-sources.service.ts` | [customers](flows/customers.md) (file) |
 | `backend/src/customers/customers.controller.ts` | [customers](flows/customers.md) (điểm vào) |
@@ -137,6 +176,20 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/customers/dto/lookup-customer-query.dto.ts` | [customers](flows/customers.md) (file) |
 | `backend/src/customers/dto/update-customer-request.dto.ts` | [customers](flows/customers.md) (file) |
 | `backend/src/customers/dto/update-customer-source-request.dto.ts` | [customers](flows/customers.md) (file) |
+| `backend/src/dashboard/dashboard.controller.ts` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dashboard.module.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dashboard.service.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/domain/dashboard-period.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/domain/profit-report.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/dashboard-status-count.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/dashboard-summary-query.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/dashboard-summary-response.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/profit-figures.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/profit-report-query.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/profit-report-response.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/dto/profit-report-row.dto.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/profit-report.controller.ts` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `backend/src/dashboard/profit-report.service.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `backend/src/events/domain-event.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/events/event-bus.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/events/events.module.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
@@ -173,6 +226,22 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/inventory/stock-items.service.ts` | [inventory](flows/inventory.md) (file) |
 | `backend/src/inventory/stock-vouchers.controller.ts` | [inventory](flows/inventory.md) (điểm vào) |
 | `backend/src/inventory/stock-vouchers.service.ts` | [inventory](flows/inventory.md) (file) |
+| `backend/src/invoices/domain/invoice-eligibility.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/domain/invoice-events.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/domain/invoice-file.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/domain/invoice-number.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/domain/invoice-snapshot.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoice-detail-response.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoice-line.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoice-pdf-response.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoice-response.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoice-seller.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/dto/invoices-overview-response.dto.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/invoice-document.service.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/invoice-template.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/invoices.controller.ts` | [invoices](flows/invoices.md) (điểm vào), [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/invoices.module.ts` | [invoices](flows/invoices.md) (file) |
+| `backend/src/invoices/invoices.service.ts` | [invoices](flows/invoices.md) (file) |
 | `backend/src/main.ts` | [backend-platform](flows/backend-platform.md) (điểm vào) |
 | `backend/src/notifications/notification-dispatcher.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `backend/src/notifications/notifications.module.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
@@ -186,6 +255,7 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/orders/domain/order-events.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/domain/order-status.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/domain/order-totals.ts` | [orders](flows/orders.md) (file) |
+| `backend/src/orders/domain/quote-number.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/domain/scope-preset.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/domain/vat-mode.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/domain/version-diff.ts` | [orders](flows/orders.md) (file) |
@@ -193,6 +263,7 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/orders/dto/add-line-item-request.dto.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/dto/apply-discount-request.dto.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/dto/attachment-response.dto.ts` | [orders](flows/orders.md) (file) |
+| `backend/src/orders/dto/attachment-upload-request.dto.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/dto/cancel-order-request.dto.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/dto/cancel-order-response.dto.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/dto/create-order-request.dto.ts` | [orders](flows/orders.md) (file) |
@@ -225,10 +296,29 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/orders/quote/puppeteer-quote-renderer.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/quote/quote-renderer.port.ts` | [orders](flows/orders.md) (file) |
 | `backend/src/orders/quote/quote-template.ts` | [orders](flows/orders.md) (file) |
+| `backend/src/payments/domain/payment-events.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/domain/payment-schedule-events.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/domain/payment-schedule.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/domain/payment.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/auto-transition-result.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/installment-input.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/installment-response.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/payment-response.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/payment-schedule-response.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/record-payment-request.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/record-payment-response.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/dto/replace-payment-schedule-request.dto.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/payment-schedules.controller.ts` | [payments](flows/payments.md) (điểm vào), [payments](flows/payments.md) (file) |
+| `backend/src/payments/payment-schedules.service.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/payments.controller.ts` | [payments](flows/payments.md) (điểm vào), [payments](flows/payments.md) (file) |
+| `backend/src/payments/payments.module.ts` | [payments](flows/payments.md) (file) |
+| `backend/src/payments/payments.service.ts` | [payments](flows/payments.md) (file) |
 | `backend/src/prisma/prisma.module.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/prisma/prisma.service.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/src/settings/domain/company-legal-entity.ts` | [system-settings](flows/system-settings.md) (file) |
 | `backend/src/settings/domain/setting-events.ts` | [system-settings](flows/system-settings.md) (file) |
 | `backend/src/settings/domain/setting-registry.ts` | [system-settings](flows/system-settings.md) (file) |
+| `backend/src/settings/dto/company-legal-entity.dto.ts` | [system-settings](flows/system-settings.md) (file) |
 | `backend/src/settings/dto/update-vat-rate-request.dto.ts` | [system-settings](flows/system-settings.md) (file) |
 | `backend/src/settings/dto/vat-rate-response.dto.ts` | [system-settings](flows/system-settings.md) (file) |
 | `backend/src/settings/settings.controller.ts` | [system-settings](flows/system-settings.md) (điểm vào) |
@@ -237,18 +327,40 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/src/storage/r2-storage.adapter.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/storage/storage.module.ts` | [backend-platform](flows/backend-platform.md) (file) |
 | `backend/src/storage/storage.port.ts` | [backend-platform](flows/backend-platform.md) (file) |
+| `backend/test/account-events.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/account-permissions.db.integration.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/account-permissions.service.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/account-phone.db.integration.spec.ts` | [auth-session](flows/auth-session.md) (test) |
+| `backend/test/account-phone.spec.ts` | [auth-session](flows/auth-session.md) (test) |
+| `backend/test/accounts-crud.db.integration.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/accounts-crud.e2e.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/accounts-permissions.e2e.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/accounts.service.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/allowed-transition.spec.ts` | [orders](flows/orders.md) (test) |
+| `backend/test/amount-in-words.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/attachment-limits.spec.ts` | [orders](flows/orders.md) (test) |
+| `backend/test/audit-changes.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `backend/test/audit-event-labels.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/audit-log-append-only.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `backend/test/audit-log-read.service.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `backend/test/audit-logs.db.integration.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `backend/test/audit-logs.e2e.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/audit.service.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/audit.subscriber.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/auth-decorators.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `backend/test/auth-phone.e2e.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/auth.config.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/auth.e2e.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/auth.service.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/auto-transition-map.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/change-password.spec.ts` | [auth-session](flows/auth-session.md) (test) |
+| `backend/test/company-legal-entity.spec.ts` | [system-settings](flows/system-settings.md) (test) |
+| `backend/test/contract-domain.spec.ts` | [contracts](flows/contracts.md) (test) |
+| `backend/test/contract-template.spec.ts` | [contracts](flows/contracts.md) (test) |
+| `backend/test/contracts.db.integration.spec.ts` | [contracts](flows/contracts.md) (test) |
+| `backend/test/contracts.e2e.spec.ts` | [contracts](flows/contracts.md) (test) |
+| `backend/test/contracts.service.spec.ts` | [contracts](flows/contracts.md) (test) |
+| `backend/test/cors.e2e.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/cost-snapshot.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/customer-sources.db.integration.spec.ts` | [customers](flows/customers.md) (test) |
 | `backend/test/customer-sources.e2e.spec.ts` | [customers](flows/customers.md) (test) |
@@ -256,6 +368,10 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/test/customers.db.integration.spec.ts` | [customers](flows/customers.md) (test) |
 | `backend/test/customers.e2e.spec.ts` | [customers](flows/customers.md) (test) |
 | `backend/test/customers.service.spec.ts` | [customers](flows/customers.md) (test) |
+| `backend/test/dashboard-period.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/dashboard.db.integration.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/dashboard.e2e.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/dashboard.service.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
 | `backend/test/discount-approvals.db.integration.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/error-envelope.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/event-bus.integration.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
@@ -264,9 +380,18 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/test/health.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/in-process-event-bus.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/inventory-read-only.spec.ts` | [inventory](flows/inventory.md) (test) |
+| `backend/test/invoice-document.db.integration.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoice-document.e2e.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoice-document.service.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoice-domain.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoice-template.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoices.db.integration.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoices.e2e.spec.ts` | [invoices](flows/invoices.md) (test) |
+| `backend/test/invoices.service.spec.ts` | [invoices](flows/invoices.md) (test) |
 | `backend/test/jwt-auth.guard.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/me.e2e.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/naming-convention.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
+| `backend/test/no-bare-parse-uuid-pipe.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/no-controller-error-envelope.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/no-direct-side-effect-outside-eventbus.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/no-fabricated-actor-permissions.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
@@ -279,6 +404,7 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/test/no-unscoped-order-write.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/notification-dispatcher.spec.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
 | `backend/test/openapi-drift.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
+| `backend/test/openapi-no-untyped-object.spec.ts` | [backend-platform](flows/backend-platform.md) (test) |
 | `backend/test/order-attachments.db.integration.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/order-attachments.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/order-cancel.db.integration.spec.ts` | [orders](flows/orders.md) (test) |
@@ -307,6 +433,15 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/test/password-events.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/password-reset.e2e.spec.ts` | [auth-session](flows/auth-session.md) (test) |
 | `backend/test/password-reset.service.spec.ts` | [auth-session](flows/auth-session.md) (test) |
+| `backend/test/payment-schedule.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payment-schedules.db.integration.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payment-schedules.e2e.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payment-schedules.service.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payment.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payments.db.integration.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payments.e2e.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/payments.service.spec.ts` | [payments](flows/payments.md) (test) |
+| `backend/test/permission-dependencies.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/permission-escalation.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/permission-registry-fe-stub-parity.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `backend/test/permission-registry.spec.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
@@ -324,6 +459,10 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `backend/test/product-prices.service.spec.ts` | [catalog](flows/catalog.md) (test) |
 | `backend/test/products.e2e.spec.ts` | [catalog](flows/catalog.md) (test) |
 | `backend/test/products.service.spec.ts` | [catalog](flows/catalog.md) (test) |
+| `backend/test/profit-report.db.integration.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/profit-report.e2e.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/profit-report.service.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `backend/test/profit-report.spec.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
 | `backend/test/quote-export.service.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/quote-exports.db.integration.spec.ts` | [orders](flows/orders.md) (test) |
 | `backend/test/quote-template.spec.ts` | [orders](flows/orders.md) (test) |
@@ -366,6 +505,7 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `design-system/components/components.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/components/data-feedback-components.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/components/gating.test.mjs` | [design-system](flows/design-system.md) (test) |
+| `design-system/components/menu-nav-parity.test.mjs` | [app-shell](flows/app-shell.md) (test) |
 | `design-system/components/parity.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/components/shell-behavior.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/components/shell-parity.test.mjs` | [design-system](flows/design-system.md) (test) |
@@ -376,8 +516,16 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `design-system/icons/parity.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/icons/sprite.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/lib/assert-scanned.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/mobile-contract-types.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/mobile-contract-types.test.mjs` | [design-system](flows/design-system.md) (test) |
+| `design-system/lib/money-arithmetic.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/money-arithmetic.test.mjs` | [design-system](flows/design-system.md) (test) |
+| `design-system/lib/read-mobile-screen.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/read-mobile-screen.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/lib/stock-figures.mjs` | [inventory](flows/inventory.md) (file) |
 | `design-system/lib/strip-comments.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/web-contract-types.mjs` | [design-system](flows/design-system.md) (file) |
+| `design-system/lib/web-contract-types.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/money/format-vnd.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `design-system/money/money-fields.mjs` | [design-system](flows/design-system.md) (file) |
 | `design-system/money/money-render-guard.test.mjs` | [design-system](flows/design-system.md) (test) |
@@ -385,10 +533,14 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `design-system/package.json` | [build-ci](flows/build-ci.md) (file) |
 | `design-system/permissions/build-permission-keys.mjs` | [accounts-permissions](flows/accounts-permissions.md) (điểm vào) |
 | `design-system/permissions/permission-keys.test.mjs` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `design-system/screens/audit-log.test.mjs` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `design-system/screens/contracts.test.mjs` | [contracts](flows/contracts.md) (test) |
 | `design-system/screens/customers.test.mjs` | [customers](flows/customers.md) (test) |
+| `design-system/screens/dashboard.test.mjs` | [dashboard-reports](flows/dashboard-reports.md) (test) |
 | `design-system/screens/discount-approval.test.mjs` | [orders](flows/orders.md) (test) |
 | `design-system/screens/forgot-password.test.mjs` | [auth-session](flows/auth-session.md) (test) |
 | `design-system/screens/inventory.test.mjs` | [inventory](flows/inventory.md) (test) |
+| `design-system/screens/invoices.test.mjs` | [invoices](flows/invoices.md) (test) |
 | `design-system/screens/login.test.mjs` | [auth-session](flows/auth-session.md) (test) |
 | `design-system/screens/order-attachments.test.mjs` | [orders](flows/orders.md) (test) |
 | `design-system/screens/order-cancel.test.mjs` | [orders](flows/orders.md) (test) |
@@ -396,7 +548,10 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `design-system/screens/order-transition.test.mjs` | [orders](flows/orders.md) (test) |
 | `design-system/screens/orders-list.test.mjs` | [orders](flows/orders.md) (test) |
 | `design-system/screens/orders.test.mjs` | [orders](flows/orders.md) (test) |
+| `design-system/screens/payment-schedule.test.mjs` | [payments](flows/payments.md) (test) |
+| `design-system/screens/permissions.test.mjs` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `design-system/screens/profile.test.mjs` | [auth-session](flows/auth-session.md) (test) |
+| `design-system/screens/profit-report.test.mjs` | [dashboard-reports](flows/dashboard-reports.md) (test) |
 | `design-system/screens/quote-stock-check.test.mjs` | [inventory](flows/inventory.md) (test) |
 | `design-system/screens/settings-customer-sources.test.mjs` | [customers](flows/customers.md) (test) |
 | `design-system/screens/stock-issue.test.mjs` | [inventory](flows/inventory.md) (test) |
@@ -409,8 +564,37 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `design-system/tokens/design-tokens.json` | [design-system](flows/design-system.md) (file) |
 | `design-system/tokens/parity.test.mjs` | [design-system](flows/design-system.md) (test) |
 | `mobile/analysis_options.yaml` | [build-ci](flows/build-ci.md) (file) |
+| `mobile/lib/api/api_error.dart` | [api-client](flows/api-client.md) (file) |
+| `mobile/lib/api/bytes.dart` | [api-client](flows/api-client.md) (file) |
+| `mobile/lib/api/http_accounts_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/api/http_audit_logs_port.dart` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/api/http_auth_port.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/api/http_catalog_port.dart` | [catalog](flows/catalog.md) (file) |
+| `mobile/lib/api/http_contracts_port.dart` | [contracts](flows/contracts.md) (file) |
+| `mobile/lib/api/http_customers_port.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/api/http_dashboard_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/api/http_inventory_port.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/api/http_invoices_port.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/api/http_me_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/api/http_orders_port.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/api/http_password_port.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/api/http_payments_port.dart` | [payments](flows/payments.md) (file) |
+| `mobile/lib/api/http_profit_report_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/api/http_stock_vouchers_port.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/api/http_warranty_port.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/api/session_store.dart` | [api-client](flows/api-client.md) (file) |
+| `mobile/lib/api/sparse_bodies.dart` | [api-client](flows/api-client.md) (file) |
+| `mobile/lib/api/transport.dart` | [api-client](flows/api-client.md) (điểm vào), [api-client](flows/api-client.md) (file) |
+| `mobile/lib/app/app_chrome.dart` | [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/app/app_ports.dart` | [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/app/app_routes.dart` | [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/app/pns_app.dart` | [app-shell](flows/app-shell.md) (điểm vào), [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/app/session_cubit.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/app/session_state.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/app/signed_in_app.dart` | [app-shell](flows/app-shell.md) (file) |
 | `mobile/lib/design_system/components/attachment_gallery.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/components/banner.dart` | [design-system](flows/design-system.md) (file) |
+| `mobile/lib/design_system/components/bar_chart.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/components/button.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/components/card.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/components/cart_line_row.dart` | [design-system](flows/design-system.md) (file) |
@@ -436,66 +620,199 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `mobile/lib/design_system/gating/app_permissions.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/gating/gating.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/icons/app_icons.dart` | [design-system](flows/design-system.md) (file) |
+| `mobile/lib/design_system/session/accounts_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/session/app_session.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/session/app_session_gating_example.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/design_system/session/audit_logs_port.dart` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/design_system/session/auth_port.dart` | [auth-session](flows/auth-session.md) (file) |
 | `mobile/lib/design_system/session/catalog_port.dart` | [catalog](flows/catalog.md) (file) |
+| `mobile/lib/design_system/session/contracts_port.dart` | [contracts](flows/contracts.md) (file) |
 | `mobile/lib/design_system/session/customers_port.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/design_system/session/dashboard_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/design_system/session/fake_accounts_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/design_system/session/fake_audit_logs_port.dart` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/design_system/session/fake_auth_port.dart` | [auth-session](flows/auth-session.md) (file) |
 | `mobile/lib/design_system/session/fake_catalog_port.dart` | [catalog](flows/catalog.md) (file) |
+| `mobile/lib/design_system/session/fake_contracts_port.dart` | [contracts](flows/contracts.md) (file) |
 | `mobile/lib/design_system/session/fake_customers_port.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/design_system/session/fake_dashboard_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `mobile/lib/design_system/session/fake_inventory_port.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/design_system/session/fake_invoices_port.dart` | [invoices](flows/invoices.md) (file) |
 | `mobile/lib/design_system/session/fake_me_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/session/fake_orders_port.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/design_system/session/fake_password_port.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/design_system/session/fake_payments_port.dart` | [payments](flows/payments.md) (file) |
+| `mobile/lib/design_system/session/fake_profit_report_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `mobile/lib/design_system/session/fake_stock_vouchers_port.dart` | [inventory](flows/inventory.md) (file) |
 | `mobile/lib/design_system/session/fake_warranty_port.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/design_system/session/idempotency_key.dart` | [api-client](flows/api-client.md) (file) |
 | `mobile/lib/design_system/session/inventory_port.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/design_system/session/invoices_port.dart` | [invoices](flows/invoices.md) (file) |
 | `mobile/lib/design_system/session/me_port.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/session/orders_port.dart` | [orders](flows/orders.md) (file), [inventory](flows/inventory.md) (file) |
 | `mobile/lib/design_system/session/password_port.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/design_system/session/payments_port.dart` | [payments](flows/payments.md) (file) |
+| `mobile/lib/design_system/session/permissions_cubit.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/design_system/session/profit_report_port.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `mobile/lib/design_system/session/session.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `mobile/lib/design_system/session/stock_vouchers_port.dart` | [inventory](flows/inventory.md) (file) |
 | `mobile/lib/design_system/session/warranty_port.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/design_system/shell/app_bottom_nav.dart` | [design-system](flows/design-system.md) (file) |
+| `mobile/lib/design_system/shell/app_menu_nav.dart` | [app-shell](flows/app-shell.md) (file) |
 | `mobile/lib/design_system/shell/app_mobile_shell.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/shell/app_phone_frame.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/shell/app_tabs.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/shell/app_topbar.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/shell/shell.dart` | [design-system](flows/design-system.md) (file) |
 | `mobile/lib/design_system/tokens/app_tokens.dart` | [design-system](flows/design-system.md) (file) |
+| `mobile/lib/main.dart` | [app-shell](flows/app-shell.md) (điểm vào), [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/screens/account/profile_cubit.dart` | [auth-session](flows/auth-session.md) (file) |
 | `mobile/lib/screens/account/profile_screen.dart` | [auth-session](flows/auth-session.md) (điểm vào) |
+| `mobile/lib/screens/account/profile_state.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/screens/audit/audit_log_cubit.dart` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/screens/audit/audit_log_screen.dart` | [domain-events-audit](flows/domain-events-audit.md) (điểm vào), [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/screens/audit/audit_log_state.dart` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `mobile/lib/screens/auth/forgot_password_cubit.dart` | [auth-session](flows/auth-session.md) (file) |
 | `mobile/lib/screens/auth/forgot_password_screen.dart` | [auth-session](flows/auth-session.md) (điểm vào) |
+| `mobile/lib/screens/auth/forgot_password_state.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/screens/auth/login_cubit.dart` | [auth-session](flows/auth-session.md) (file) |
 | `mobile/lib/screens/auth/login_screen.dart` | [auth-session](flows/auth-session.md) (điểm vào) |
+| `mobile/lib/screens/auth/login_state.dart` | [auth-session](flows/auth-session.md) (file) |
+| `mobile/lib/screens/contracts/contracts_cubit.dart` | [contracts](flows/contracts.md) (file) |
+| `mobile/lib/screens/contracts/contracts_screen.dart` | [contracts](flows/contracts.md) (điểm vào), [contracts](flows/contracts.md) (file) |
+| `mobile/lib/screens/contracts/contracts_state.dart` | [contracts](flows/contracts.md) (file) |
+| `mobile/lib/screens/customers/customer_detail_cubit.dart` | [customers](flows/customers.md) (file) |
 | `mobile/lib/screens/customers/customer_detail_screen.dart` | [customers](flows/customers.md) (điểm vào) |
+| `mobile/lib/screens/customers/customer_detail_state.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/screens/customers/customer_list_cubit.dart` | [customers](flows/customers.md) (file) |
 | `mobile/lib/screens/customers/customer_list_screen.dart` | [customers](flows/customers.md) (điểm vào) |
+| `mobile/lib/screens/customers/customer_list_state.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/screens/customers/customer_pick_cubit.dart` | [customers](flows/customers.md) (file) |
 | `mobile/lib/screens/customers/customer_pick_screen.dart` | [customers](flows/customers.md) (điểm vào) |
+| `mobile/lib/screens/customers/customer_pick_state.dart` | [customers](flows/customers.md) (file) |
+| `mobile/lib/screens/dashboard/dashboard_cubit.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/dashboard/dashboard_screen.dart` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/dashboard/dashboard_state.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/inventory/inventory_cubit.dart` | [inventory](flows/inventory.md) (file) |
 | `mobile/lib/screens/inventory/inventory_screen.dart` | [inventory](flows/inventory.md) (điểm vào) |
+| `mobile/lib/screens/inventory/inventory_state.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/screens/inventory/stock_vouchers_cubit.dart` | [inventory](flows/inventory.md) (file) |
 | `mobile/lib/screens/inventory/stock_vouchers_screen.dart` | [inventory](flows/inventory.md) (điểm vào) |
+| `mobile/lib/screens/inventory/stock_vouchers_state.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/screens/invoices/invoice_detail_cubit.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/invoices/invoice_detail_screen.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/invoices/invoice_detail_state.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/invoices/invoices_cubit.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/invoices/invoices_screen.dart` | [invoices](flows/invoices.md) (điểm vào), [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/invoices/invoices_state.dart` | [invoices](flows/invoices.md) (file) |
+| `mobile/lib/screens/menu/menu_cubit.dart` | [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/screens/menu/menu_screen.dart` | [app-shell](flows/app-shell.md) (file) |
+| `mobile/lib/screens/orders/create_quote_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/create_quote_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/orders/create_quote_state.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/screens/orders/discount_approval_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/discount_approval_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/orders/discount_approval_state.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/screens/orders/order_detail_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/order_detail_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/orders/order_detail_state.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/screens/orders/order_list_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/order_list_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/orders/order_list_state.dart` | [orders](flows/orders.md) (file) |
+| `mobile/lib/screens/orders/order_status_change_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/order_status_change_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/orders/order_status_change_state.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/orders/stock_issue_preview.dart` | [inventory](flows/inventory.md) (file) |
+| `mobile/lib/screens/payments/payment_schedule_cubit.dart` | [payments](flows/payments.md) (file) |
+| `mobile/lib/screens/payments/payment_schedule_screen.dart` | [payments](flows/payments.md) (điểm vào), [payments](flows/payments.md) (file) |
+| `mobile/lib/screens/payments/payment_schedule_state.dart` | [payments](flows/payments.md) (file) |
+| `mobile/lib/screens/permissions/account_form_cubit.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_form_screen.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_form_state.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_list_cubit.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_list_screen.dart` | [accounts-permissions](flows/accounts-permissions.md) (điểm vào), [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_list_state.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_permissions_cubit.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_permissions_screen.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/permissions/account_permissions_state.dart` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `mobile/lib/screens/reports/profit_report_cubit.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/reports/profit_report_screen.dart` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/reports/profit_report_state.dart` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `mobile/lib/screens/warranty/warranty_lookup_cubit.dart` | [orders](flows/orders.md) (file) |
 | `mobile/lib/screens/warranty/warranty_lookup_screen.dart` | [orders](flows/orders.md) (điểm vào) |
+| `mobile/lib/screens/warranty/warranty_lookup_state.dart` | [orders](flows/orders.md) (file) |
 | `mobile/pubspec.yaml` | [build-ci](flows/build-ci.md) (file) |
+| `mobile/test/api/api_error_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/generated_client_drift_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/http_accounts_port_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/api/http_audit_logs_port_test.dart` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `mobile/test/api/http_auth_port_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/api/http_catalog_port_test.dart` | [catalog](flows/catalog.md) (test) |
+| `mobile/test/api/http_contracts_port_test.dart` | [contracts](flows/contracts.md) (test) |
+| `mobile/test/api/http_dashboard_port_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/api/http_inventory_port_test.dart` | [inventory](flows/inventory.md) (test) |
+| `mobile/test/api/http_invoices_port_test.dart` | [invoices](flows/invoices.md) (test) |
+| `mobile/test/api/http_me_port_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/api/http_orders_port_test.dart` | [orders](flows/orders.md) (test) |
+| `mobile/test/api/http_password_port_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/api/http_payments_port_test.dart` | [payments](flows/payments.md) (test) |
+| `mobile/test/api/http_port_errors_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/http_profit_report_port_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/api/http_stack_loopback_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/http_stock_vouchers_port_test.dart` | [inventory](flows/inventory.md) (test) |
+| `mobile/test/api/http_warranty_port_test.dart` | [orders](flows/orders.md) (test) |
+| `mobile/test/api/no_network_outside_transport_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/session_store_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/sparse_bodies_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/api/transport_test.dart` | [api-client](flows/api-client.md) (test) |
+| `mobile/test/app/app_routes_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/app/composition_root_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/app/order_routes_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/app/pns_app_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/app/session_cubit_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/app/signed_in_app_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/app/unmount_while_port_pending_test.dart` | [app-shell](flows/app-shell.md) (test) |
 | `mobile/test/design_system/app_tabs_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/components/behavior_interaction_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/components/components_render_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/components/invariant_guard_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/components/money_text_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/icons/app_icons_test.dart` | [design-system](flows/design-system.md) (test) |
+| `mobile/test/design_system/session/permissions_cubit_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `mobile/test/design_system/session_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
 | `mobile/test/design_system/shell_behavior_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/shell_invariants_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/shell_render_test.dart` | [design-system](flows/design-system.md) (test) |
 | `mobile/test/design_system/tokens/app_tokens_test.dart` | [design-system](flows/design-system.md) (test) |
+| `mobile/test/screens/account/profile_cubit_test.dart` | [auth-session](flows/auth-session.md) (test) |
 | `mobile/test/screens/account/profile_screen_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/screens/audit/audit_log_cubit_test.dart` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `mobile/test/screens/audit/audit_log_screen_test.dart` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `mobile/test/screens/auth/forgot_password_cubit_test.dart` | [auth-session](flows/auth-session.md) (test) |
 | `mobile/test/screens/auth/forgot_password_screen_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/screens/auth/login_cubit_test.dart` | [auth-session](flows/auth-session.md) (test) |
 | `mobile/test/screens/auth/login_screen_test.dart` | [auth-session](flows/auth-session.md) (test) |
+| `mobile/test/screens/contracts/contracts_cubit_test.dart` | [contracts](flows/contracts.md) (test) |
+| `mobile/test/screens/contracts/contracts_screen_test.dart` | [contracts](flows/contracts.md) (test) |
+| `mobile/test/screens/customers/customer_detail_cubit_test.dart` | [customers](flows/customers.md) (test) |
+| `mobile/test/screens/customers/customer_list_cubit_test.dart` | [customers](flows/customers.md) (test) |
+| `mobile/test/screens/customers/customer_pick_cubit_test.dart` | [customers](flows/customers.md) (test) |
 | `mobile/test/screens/customers/customer_screens_test.dart` | [customers](flows/customers.md) (test) |
+| `mobile/test/screens/dashboard/dashboard_cubit_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/screens/dashboard/dashboard_screen_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/screens/inventory/inventory_cubit_test.dart` | [inventory](flows/inventory.md) (test) |
 | `mobile/test/screens/inventory/inventory_screen_test.dart` | [inventory](flows/inventory.md) (test) |
+| `mobile/test/screens/inventory/stock_vouchers_cubit_test.dart` | [inventory](flows/inventory.md) (test) |
 | `mobile/test/screens/inventory/stock_vouchers_screen_test.dart` | [inventory](flows/inventory.md) (test) |
+| `mobile/test/screens/invoices/invoice_detail_cubit_test.dart` | [invoices](flows/invoices.md) (test) |
+| `mobile/test/screens/invoices/invoice_detail_screen_test.dart` | [invoices](flows/invoices.md) (test) |
+| `mobile/test/screens/invoices/invoices_cubit_test.dart` | [invoices](flows/invoices.md) (test) |
+| `mobile/test/screens/invoices/invoices_screen_test.dart` | [invoices](flows/invoices.md) (test) |
+| `mobile/test/screens/menu/menu_cubit_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/screens/menu/menu_screen_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/screens/menu_screens_cubit_wiring_test.dart` | [app-shell](flows/app-shell.md) (test) |
 | `mobile/test/screens/orders/create_quote_screen_test.dart` | [orders](flows/orders.md) (test) |
+| `mobile/test/screens/orders/discount_approval_cubit_test.dart` | [orders](flows/orders.md) (test) |
 | `mobile/test/screens/orders/discount_approval_screen_test.dart` | [orders](flows/orders.md) (test) |
 | `mobile/test/screens/orders/order_detail_attachments_test.dart` | [orders](flows/orders.md) (test) |
 | `mobile/test/screens/orders/order_detail_cancel_test.dart` | [orders](flows/orders.md) (test) |
@@ -505,12 +822,51 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `mobile/test/screens/orders/order_status_change_screen_test.dart` | [orders](flows/orders.md) (test) |
 | `mobile/test/screens/orders/order_stock_issue_test.dart` | [inventory](flows/inventory.md) (test) |
 | `mobile/test/screens/orders/quote_stock_check_test.dart` | [inventory](flows/inventory.md) (test) |
+| `mobile/test/screens/payments/payment_schedule_cubit_test.dart` | [payments](flows/payments.md) (test) |
+| `mobile/test/screens/payments/payment_schedule_screen_test.dart` | [payments](flows/payments.md) (test) |
+| `mobile/test/screens/permissions/account_form_cubit_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/permissions/account_form_screen_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/permissions/account_list_cubit_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/permissions/account_list_screen_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/permissions/account_permissions_cubit_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/permissions/account_permissions_screen_test.dart` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `mobile/test/screens/reports/profit_report_cubit_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/screens/reports/profit_report_screen_test.dart` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `mobile/test/screens/unmount_while_port_pending_menu_screens_test.dart` | [app-shell](flows/app-shell.md) (test) |
+| `mobile/test/screens/warranty/warranty_lookup_cubit_test.dart` | [orders](flows/orders.md) (test) |
 | `mobile/test/screens/warranty/warranty_lookup_screen_test.dart` | [orders](flows/orders.md) (test) |
 | `web/index.html` | [build-ci](flows/build-ci.md) (file) |
 | `web/package.json` | [build-ci](flows/build-ci.md) (file) |
+| `web/src/api/api-error.ts` | [api-client](flows/api-client.md) (file) |
+| `web/src/api/client.ts` | [api-client](flows/api-client.md) (file) |
+| `web/src/api/download.ts` | [api-client](flows/api-client.md) (file) |
+| `web/src/api/generated/schema.d.ts` | [api-client](flows/api-client.md) (file) |
+| `web/src/api/http-accounts-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/api/http-audit-logs-port.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `web/src/api/http-auth-port.ts` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/api/http-catalog-port.ts` | [catalog](flows/catalog.md) (file) |
+| `web/src/api/http-contracts-port.ts` | [contracts](flows/contracts.md) (file) |
+| `web/src/api/http-customer-sources-port.ts` | [customers](flows/customers.md) (file) |
+| `web/src/api/http-customers-port.ts` | [customers](flows/customers.md) (file) |
+| `web/src/api/http-dashboard-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `web/src/api/http-inventory-port.ts` | [inventory](flows/inventory.md) (file) |
+| `web/src/api/http-invoices-port.ts` | [invoices](flows/invoices.md) (file) |
+| `web/src/api/http-me-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/api/http-orders-port.ts` | [orders](flows/orders.md) (file) |
+| `web/src/api/http-password-port.ts` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/api/http-payments-port.ts` | [payments](flows/payments.md) (file) |
+| `web/src/api/http-profit-report-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `web/src/api/http-settings-port.ts` | [system-settings](flows/system-settings.md) (file) |
+| `web/src/api/http-stock-vouchers-port.ts` | [inventory](flows/inventory.md) (file) |
+| `web/src/api/http-warranty-port.ts` | [orders](flows/orders.md) (file) |
+| `web/src/api/session-store.ts` | [api-client](flows/api-client.md) (file) |
+| `web/src/api/transport.ts` | [api-client](flows/api-client.md) (điểm vào), [api-client](flows/api-client.md) (file) |
+| `web/src/app/AppRoutes.tsx` | [app-shell](flows/app-shell.md) (điểm vào), [app-shell](flows/app-shell.md) (file) |
+| `web/src/app/routes.ts` | [app-shell](flows/app-shell.md) (file) |
 | `web/src/design-system/a11y/a11y.css` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/components/AttachmentGallery.tsx` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/components/Banner.tsx` | [design-system](flows/design-system.md) (file) |
+| `web/src/design-system/components/BarChart.tsx` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/components/Button.tsx` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/components/Card.tsx` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/components/CartLineRow.tsx` | [design-system](flows/design-system.md) (file) |
@@ -545,24 +901,40 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `web/src/design-system/icons/sprite.ts` | [design-system](flows/design-system.md) (file) |
 | `web/src/design-system/session/PermissionsProvider.tsx` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `web/src/design-system/session/SessionGatingExample.tsx` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/design-system/session/accounts-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/design-system/session/audit-logs-port.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `web/src/design-system/session/auth-port.ts` | [auth-session](flows/auth-session.md) (file) |
 | `web/src/design-system/session/catalog-port.ts` | [catalog](flows/catalog.md) (file) |
+| `web/src/design-system/session/contracts-port.ts` | [contracts](flows/contracts.md) (file) |
 | `web/src/design-system/session/customer-sources-port.ts` | [customers](flows/customers.md) (file) |
 | `web/src/design-system/session/customers-port.ts` | [customers](flows/customers.md) (file) |
+| `web/src/design-system/session/dashboard-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `web/src/design-system/session/fake-accounts-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/design-system/session/fake-audit-logs-port.ts` | [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `web/src/design-system/session/fake-auth-port.ts` | [auth-session](flows/auth-session.md) (file) |
 | `web/src/design-system/session/fake-catalog-port.ts` | [catalog](flows/catalog.md) (file) |
+| `web/src/design-system/session/fake-contracts-port.ts` | [contracts](flows/contracts.md) (file) |
 | `web/src/design-system/session/fake-customer-sources-port.ts` | [customers](flows/customers.md) (file) |
 | `web/src/design-system/session/fake-customers-port.ts` | [customers](flows/customers.md) (file) |
+| `web/src/design-system/session/fake-dashboard-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `web/src/design-system/session/fake-inventory-port.ts` | [inventory](flows/inventory.md) (file) |
+| `web/src/design-system/session/fake-invoices-port.ts` | [invoices](flows/invoices.md) (file) |
 | `web/src/design-system/session/fake-me-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `web/src/design-system/session/fake-orders-port.ts` | [orders](flows/orders.md) (file) |
 | `web/src/design-system/session/fake-password-port.ts` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/design-system/session/fake-payments-port.ts` | [payments](flows/payments.md) (file) |
+| `web/src/design-system/session/fake-profit-report-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `web/src/design-system/session/fake-settings-port.ts` | [system-settings](flows/system-settings.md) (file) |
 | `web/src/design-system/session/fake-stock-vouchers-port.ts` | [inventory](flows/inventory.md) (file) |
 | `web/src/design-system/session/fake-warranty-port.ts` | [orders](flows/orders.md) (file) |
 | `web/src/design-system/session/index.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `web/src/design-system/session/inventory-port.ts` | [inventory](flows/inventory.md) (file) |
+| `web/src/design-system/session/invoices-port.ts` | [invoices](flows/invoices.md) (file) |
 | `web/src/design-system/session/me-port.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `web/src/design-system/session/orders-port.ts` | [orders](flows/orders.md) (file), [inventory](flows/inventory.md) (file) |
 | `web/src/design-system/session/password-port.ts` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/design-system/session/payments-port.ts` | [payments](flows/payments.md) (file) |
+| `web/src/design-system/session/profit-report-port.ts` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `web/src/design-system/session/session.ts` | [accounts-permissions](flows/accounts-permissions.md) (file) |
 | `web/src/design-system/session/settings-port.ts` | [system-settings](flows/system-settings.md) (file) |
 | `web/src/design-system/session/stock-vouchers-port.ts` | [inventory](flows/inventory.md) (file) |
@@ -583,19 +955,28 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `web/src/main.tsx` | [auth-session](flows/auth-session.md) (điểm vào) |
 | `web/src/screens/account/ProfileScreen.tsx` | [auth-session](flows/auth-session.md) (điểm vào) |
 | `web/src/screens/account/profile.css` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/screens/audit/AuditLogScreen.tsx` | [domain-events-audit](flows/domain-events-audit.md) (điểm vào), [domain-events-audit](flows/domain-events-audit.md) (file) |
+| `web/src/screens/audit/audit.css` | [domain-events-audit](flows/domain-events-audit.md) (file) |
 | `web/src/screens/auth/ForgotPasswordScreen.tsx` | [auth-session](flows/auth-session.md) (điểm vào) |
 | `web/src/screens/auth/LoginScreen.tsx` | [auth-session](flows/auth-session.md) (điểm vào) |
 | `web/src/screens/auth/forgot-password.css` | [auth-session](flows/auth-session.md) (file) |
 | `web/src/screens/auth/login.css` | [auth-session](flows/auth-session.md) (file) |
+| `web/src/screens/contracts/ContractsScreen.tsx` | [contracts](flows/contracts.md) (điểm vào), [contracts](flows/contracts.md) (file) |
+| `web/src/screens/contracts/contracts.css` | [contracts](flows/contracts.md) (file) |
 | `web/src/screens/customers/CustomerDetailScreen.tsx` | [customers](flows/customers.md) (điểm vào) |
 | `web/src/screens/customers/CustomerListScreen.tsx` | [customers](flows/customers.md) (điểm vào) |
 | `web/src/screens/customers/CustomerPickScreen.tsx` | [customers](flows/customers.md) (điểm vào) |
 | `web/src/screens/customers/customers.css` | [customers](flows/customers.md) (file) |
+| `web/src/screens/dashboard/DashboardScreen.tsx` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `web/src/screens/dashboard/dashboard.css` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `web/src/screens/inventory/InventoryScreen.tsx` | [inventory](flows/inventory.md) (điểm vào) |
 | `web/src/screens/inventory/StockVouchersScreen.tsx` | [inventory](flows/inventory.md) (điểm vào) |
 | `web/src/screens/inventory/format-gio.ts` | [inventory](flows/inventory.md) (file) |
 | `web/src/screens/inventory/inventory.css` | [inventory](flows/inventory.md) (file) |
 | `web/src/screens/inventory/stock-vouchers.css` | [inventory](flows/inventory.md) (file) |
+| `web/src/screens/invoices/InvoiceDetailScreen.tsx` | [invoices](flows/invoices.md) (file) |
+| `web/src/screens/invoices/InvoicesScreen.tsx` | [invoices](flows/invoices.md) (điểm vào), [invoices](flows/invoices.md) (file) |
+| `web/src/screens/invoices/invoices.css` | [invoices](flows/invoices.md) (file) |
 | `web/src/screens/orders/CreateQuoteScreen.tsx` | [orders](flows/orders.md) (điểm vào) |
 | `web/src/screens/orders/DiscountApprovalScreen.tsx` | [orders](flows/orders.md) (điểm vào) |
 | `web/src/screens/orders/OrderDetailScreen.tsx` | [orders](flows/orders.md) (điểm vào) |
@@ -608,18 +989,66 @@ File nào thuộc flow nào. Dùng `crew-docs where <file>` để tra từ dòng
 | `web/src/screens/orders/orders.css` | [orders](flows/orders.md) (file) |
 | `web/src/screens/orders/stock-issue-preview.tsx` | [inventory](flows/inventory.md) (file) |
 | `web/src/screens/orders/stock-issue.css` | [inventory](flows/inventory.md) (file) |
+| `web/src/screens/payments/PaymentScheduleScreen.tsx` | [payments](flows/payments.md) (điểm vào), [payments](flows/payments.md) (file) |
+| `web/src/screens/payments/payment-schedule.css` | [payments](flows/payments.md) (file) |
+| `web/src/screens/permissions/AccountFormScreen.tsx` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/screens/permissions/PermissionsScreen.tsx` | [accounts-permissions](flows/accounts-permissions.md) (điểm vào), [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/screens/permissions/permissions.css` | [accounts-permissions](flows/accounts-permissions.md) (file) |
+| `web/src/screens/reports/ProfitReportScreen.tsx` | [dashboard-reports](flows/dashboard-reports.md) (điểm vào), [dashboard-reports](flows/dashboard-reports.md) (file) |
+| `web/src/screens/reports/reports.css` | [dashboard-reports](flows/dashboard-reports.md) (file) |
 | `web/src/screens/settings/CustomerSourceConfigScreen.tsx` | [customers](flows/customers.md) (dùng chung), [system-settings](flows/system-settings.md) (dùng chung) |
 | `web/src/screens/settings/settings.css` | [customers](flows/customers.md) (dùng chung), [system-settings](flows/system-settings.md) (dùng chung) |
 | `web/src/screens/warranty/WarrantyLookupScreen.tsx` | [orders](flows/orders.md) (điểm vào) |
 | `web/src/screens/warranty/format-ngay.ts` | [orders](flows/orders.md) (file) |
 | `web/src/screens/warranty/warranty-lookup.css` | [orders](flows/orders.md) (file) |
+| `web/src/test/account-form-screen.test.tsx` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `web/src/test/api-client-drift.test.ts` | [api-client](flows/api-client.md) (test) |
+| `web/src/test/app-entry.test.tsx` | [app-shell](flows/app-shell.md) (test) |
+| `web/src/test/app-routes.test.tsx` | [app-shell](flows/app-shell.md) (test) |
+| `web/src/test/audit-log-screen.test.tsx` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `web/src/test/bar-chart.test.tsx` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `web/src/test/composition-root.test.ts` | [app-shell](flows/app-shell.md) (test) |
+| `web/src/test/contracts-screen.test.tsx` | [contracts](flows/contracts.md) (test) |
 | `web/src/test/css-class-coverage.test.ts` | [design-system](flows/design-system.md) (test) |
+| `web/src/test/customer-screens.test.tsx` | [customers](flows/customers.md) (test) |
+| `web/src/test/dashboard-screen.test.tsx` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `web/src/test/forgot-password-screen.test.tsx` | [auth-session](flows/auth-session.md) (test) |
+| `web/src/test/http-accounts-port.test.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `web/src/test/http-audit-logs-port.test.ts` | [domain-events-audit](flows/domain-events-audit.md) (test) |
+| `web/src/test/http-auth-port.test.ts` | [auth-session](flows/auth-session.md) (test) |
+| `web/src/test/http-catalog-port.test.ts` | [catalog](flows/catalog.md) (test) |
+| `web/src/test/http-contracts-port.test.ts` | [contracts](flows/contracts.md) (test) |
+| `web/src/test/http-customer-sources-port.test.ts` | [customers](flows/customers.md) (test) |
+| `web/src/test/http-customers-port.test.ts` | [customers](flows/customers.md) (test) |
+| `web/src/test/http-dashboard-port.test.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `web/src/test/http-inventory-port.test.ts` | [inventory](flows/inventory.md) (test) |
+| `web/src/test/http-invoices-port.test.ts` | [invoices](flows/invoices.md) (test) |
+| `web/src/test/http-me-port.test.ts` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `web/src/test/http-orders-port.test.ts` | [orders](flows/orders.md) (test) |
+| `web/src/test/http-password-port.test.ts` | [auth-session](flows/auth-session.md) (test) |
+| `web/src/test/http-payments-port.test.ts` | [payments](flows/payments.md) (test) |
+| `web/src/test/http-port-errors.test.ts` | [api-client](flows/api-client.md) (test) |
+| `web/src/test/http-profit-report-port.test.ts` | [dashboard-reports](flows/dashboard-reports.md) (test) |
+| `web/src/test/http-settings-port.test.ts` | [system-settings](flows/system-settings.md) (test) |
+| `web/src/test/http-stock-vouchers-port.test.ts` | [inventory](flows/inventory.md) (test) |
+| `web/src/test/http-warranty-port.test.ts` | [orders](flows/orders.md) (test) |
 | `web/src/test/inventory-screen.test.tsx` | [inventory](flows/inventory.md) (test) |
+| `web/src/test/invoice-detail-screen.test.tsx` | [invoices](flows/invoices.md) (test) |
+| `web/src/test/invoices-screen.test.tsx` | [invoices](flows/invoices.md) (test) |
+| `web/src/test/login-screen.test.tsx` | [auth-session](flows/auth-session.md) (test) |
 | `web/src/test/money.test.tsx` | [design-system](flows/design-system.md) (test) |
+| `web/src/test/no-network-outside-transport.test.ts` | [api-client](flows/api-client.md) (test) |
+| `web/src/test/no-public-file-link.test.ts` | [api-client](flows/api-client.md) (test) |
 | `web/src/test/order-stock-issue.test.tsx` | [inventory](flows/inventory.md) (test) |
+| `web/src/test/payment-schedule-screen.test.tsx` | [payments](flows/payments.md) (test) |
+| `web/src/test/permissions-screen.test.tsx` | [accounts-permissions](flows/accounts-permissions.md) (test) |
+| `web/src/test/profit-report-screen.test.tsx` | [dashboard-reports](flows/dashboard-reports.md) (test) |
 | `web/src/test/quote-stock-check.test.tsx` | [inventory](flows/inventory.md) (test) |
 | `web/src/test/screens-render.test.tsx` | [design-system](flows/design-system.md) (test) |
+| `web/src/test/sidebar-nav-context.test.tsx` | [app-shell](flows/app-shell.md) (test) |
 | `web/src/test/stock-vouchers-screen.test.tsx` | [inventory](flows/inventory.md) (test) |
+| `web/src/test/transport.test.ts` | [api-client](flows/api-client.md) (test) |
+| `web/src/vite-env.d.ts` | [build-ci](flows/build-ci.md) (file) |
 | `web/tsconfig.json` | [build-ci](flows/build-ci.md) (file) |
 | `web/vite.config.ts` | [build-ci](flows/build-ci.md) (file) |
 <!-- crew-docs:files:end -->

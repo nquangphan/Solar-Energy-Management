@@ -32,7 +32,7 @@ HTTP (JWT bắt buộc):
 - `DELETE /customer-sources/:id` — `CustomerSourcesController.deactivate`, `settings.manage`, 204 (tắt, không xoá).
 - `POST /customer-sources/:id/reactivate` — `CustomerSourcesController.reactivate`, `settings.manage`, 200.
 
-Màn hình (chạy trên fake port; web chưa có router/port HTTP, mobile chưa có `main.dart`):
+Màn hình (nối vào app thật qua `HttpCustomersPort` và `HttpCustomerSourcesPort`; test dùng fake port):
 
 - Web: `CustomerListScreen`, `CustomerDetailScreen`, `CustomerPickScreen` (tra SĐT ⇒ chọn khách cũ hoặc tạo
   mới tại chỗ; API để lại cho báo giá là `onSelect(customer)`), và `CustomerSourceConfigScreen` (shared với
@@ -137,6 +137,18 @@ Port client chưa có thao tác sửa khách (`PATCH`); `CustomerDetailScreen` w
 - domain-events-audit: `EventBus`, `AuditSubscriber`.
 - backend-platform: `PrismaService`, `AppException` / error envelope, `ValidationPipe` (`whitelist`).
 - design-system: component, shell, gating; text-guard trong `design-system/screens/`.
+
+## Mở rộng: trạng thái màn mobile và port thật
+
+Màn khách hàng trên mobile giữ trạng thái trong cubit (`*_cubit.dart`, `*_state.dart`); port thật đi qua client sinh tự động.
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `mobile/lib/screens/customers/customer_list_cubit.dart`, `customer_list_state.dart` | Trạng thái danh sách khách (mobile) |
+| `mobile/lib/screens/customers/customer_detail_cubit.dart`, `customer_detail_state.dart` | Trạng thái chi tiết khách (mobile) |
+| `mobile/lib/screens/customers/customer_pick_cubit.dart`, `customer_pick_state.dart` | Trạng thái màn chọn khách (mobile) |
+| `mobile/lib/api/http_customers_port.dart` | Port thật (mobile) |
+| `web/src/api/http-customers-port.ts`, `web/src/api/http-customer-sources-port.ts` | Port thật khách hàng và nguồn khách (web) |
 
 ## Tests
 

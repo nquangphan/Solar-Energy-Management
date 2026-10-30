@@ -104,6 +104,35 @@ Không có route, màn hình hay CLI. Flow được kích hoạt khi:
 - catalog, customers, orders, inventory, system-settings: producer các event liệt kê ở trên.
 - backend-platform: `PrismaService`/`PrismaModule`, `AppModule` nối ba module của flow này.
 
+## Mở rộng: màn và API đọc nhật ký audit
+
+Phần đọc nhật ký (FR-20, Epic 8). Ghi vẫn là `AuditService` qua `AuditSubscriber`; phần đọc không ghi gì.
+
+- `GET /audit-logs` (`AuditController.list`, cần `audit.read`). Lọc `targetType` (`AUDIT_TARGET_TYPES`), `from` / `to`
+  theo ngày Việt Nam (gồm cả ngày cuối), `page` từ 1, `pageSize` tối đa 100.
+- `AuditLogReadService` chỉ dùng `findMany` / `count`; một snapshot cho cả trang và tổng, một truy vấn tra actor của cả trang.
+- `auditChanges` (`domain/audit-changes.ts`) dựng diff phẳng "trước → sau" theo đường dẫn lá. Trường giá vốn (`AUDIT_COST_FIELDS`)
+  bị bỏ khỏi `changes` khi người đọc thiếu `costs.view`; `AUDIT_MONEY_FIELDS` liệt kê các trường tiền trong payload.
+- `auditEventLabel` (`AUDIT_EVENT_LABELS`) cho nhãn tiếng Việt của từng loại event.
+- Index `audit_logs_occurred_at_idx` (migration `20261030090000_add_audit_logs_occurred_at_index`) phục vụ lọc theo ngày.
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `backend/src/audit/audit.controller.ts` | Route `GET /audit-logs` (`AuditController`) |
+| `backend/src/audit/audit-log-read.service.ts` | Đọc nhật ký, phân trang (`AuditLogReadService`) |
+| `backend/src/audit/domain/audit-changes.ts` | Diff phẳng trước → sau; che trường tiền và giá vốn (`auditChanges`) |
+| `backend/src/audit/domain/audit-event-labels.ts` | Nhãn tiếng Việt của event (`AUDIT_EVENT_LABELS`, `auditEventLabel`) |
+| `backend/src/audit/domain/audit-target-types.ts` | Danh sách loại đối tượng để lọc (`AUDIT_TARGET_TYPES`) |
+| `backend/src/audit/dto/audit-log-entry.dto.ts`, `audit-change.dto.ts`, `audit-log-list-response.dto.ts` | Bản ghi, dòng thay đổi và response danh sách |
+| `backend/src/audit/dto/list-audit-logs-query.dto.ts` | Query lọc và phân trang |
+| `backend/prisma/migrations/20261030090000_add_audit_logs_occurred_at_index/migration.sql` | Index theo `occurred_at` |
+| `mobile/lib/screens/audit/audit_log_screen.dart`, `audit_log_cubit.dart`, `audit_log_state.dart` | Màn Nhật ký audit (mobile) |
+| `mobile/lib/design_system/session/audit_logs_port.dart`, `fake_audit_logs_port.dart` | Port và fake (mobile) |
+| `mobile/lib/api/http_audit_logs_port.dart` | Port thật (mobile) |
+| `web/src/screens/audit/AuditLogScreen.tsx`, `web/src/screens/audit/audit.css` | Màn Nhật ký audit và style (web) |
+| `web/src/design-system/session/audit-logs-port.ts`, `fake-audit-logs-port.ts` | Port và fake (web) |
+| `web/src/api/http-audit-logs-port.ts` | Port thật (web) |
+
 ## Tests
 
 **Backend hermetic (Jest, mock Prisma)**

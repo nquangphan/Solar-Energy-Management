@@ -40,7 +40,7 @@ Route `:id/reactivate` và `:id/items` được khai TRƯỚC route `:id` trần
 
 Màn hình: flow này chưa có màn quản lý danh mục riêng. Web/mobile chỉ có port ĐỌC (`CatalogPort`) cho
 picker "Chọn từ danh mục" / "Chọn gói vật tư" trong `CreateQuoteScreen` (web) và `create_quote_screen.dart`
-(mobile), chạy trên `FakeCatalogPort` (web chưa có router/port HTTP, mobile chưa có `main.dart`).
+(mobile), nối vào `HttpCatalogPort` ở app thật (web và mobile); test dùng `FakeCatalogPort`.
 
 ## Các bước
 
@@ -142,6 +142,13 @@ picker "Chọn từ danh mục" / "Chọn gói vật tư" trong `CreateQuoteScre
 - auth-session: JWT, `PermissionsGuard`, `@RequirePermissions`.
 - domain-events-audit: `EventBus`, `AuditSubscriber`.
 - backend-platform: `PrismaService`, `AppException` / error envelope, `ValidationPipe`.
+
+## Mở rộng: port thật
+
+| Đường dẫn | Vai trò |
+|-----------|---------|
+| `mobile/lib/api/http_catalog_port.dart` | `CatalogPort` thật qua client sinh tự động (mobile) |
+| `web/src/api/http-catalog-port.ts` | `HttpCatalogPort` (web) |
 
 ## Tests
 
